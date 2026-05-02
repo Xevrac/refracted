@@ -1,0 +1,22 @@
+<div class="guides-layout-container">
+    
+    <div class="guides-sidebar">
+        <div class="sidebar-button-list">
+            
+            <button class="btn-sidebar-item" 
+                    ng-repeat="book in guideBooks"
+                    ng-class="{'active': activeGuideId == book.id}"
+                    ng-click="setActiveGuide(book.id)">
+                {{ book.title }}
+            </button>
+            
+        </div>
+    </div>
+    
+    <div class="guides-main-panel">
+        
+        <div class="guides-scroll-area" ng-bind-html-unsafe="getCurrentGuideHtml()"></div>
+        
+    </div>
+    
+</div>

@@ -1,0 +1,109 @@
+/* =========================================================================
+   1. COLLAPSED WIDGET VIEW
+   ========================================================================= */
+.cc-news-widget {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 450px;
+    z-index: 20;
+    /* Uses the same 1px diagonal trick as the sidebar */
+    background-color: rgba(10, 10, 10, 0.85); 
+    background-image: -webkit-linear-gradient(135deg, #1c1c1c 25%, transparent 25%, transparent 50%, #1c1c1c 50%, #1c1c1c 75%, transparent 75%, transparent);
+    background-size: 4px 4px;
+}
+
+.news-header {
+    background: #000;
+    height: 35px;
+    line-height: 35px;
+    padding: 0 15px;
+}
+.news-globe-icon { width: 16px; height: 16px; vertical-align: middle; margin-right: 8px; margin-top: -2px;}
+.news-title { color: #fff; font-weight: bold; font-style: italic; font-size: 15px; vertical-align: middle; font-family: 'Eurostile-Hea', 'Eurostile-Med', sans-serif; }
+
+.news-subheader {
+    color: #808080;
+    font-size: 12px;
+    font-family: 'Eurostile-Med', sans-serif;
+    padding: 12px 15px;
+    border-bottom: 1px solid #1a1a1a;
+    line-height: 1.35;
+}
+
+.news-list { list-style: none; margin: 0; padding: 0; }
+.news-item {
+    display: block;
+    padding: 15px;
+    border-bottom: 1px solid #1a1a1a;
+    cursor: pointer;
+    color: #c4c4c4;
+    font-size: 13px;
+    font-family: 'Eurostile-Med', sans-serif;
+    line-height: 1.35;
+}
+
+/* Hover state mimics the sidebar hover */
+.news-item:hover {
+    background-color: rgba(30, 30, 30, 0.6);
+    background-image: -webkit-linear-gradient(135deg, #313131 25%, transparent 25%, transparent 50%, #313131 50%, #313131 75%, transparent 75%, transparent);
+    background-size: 4px 4px;
+    color: #fff;
+}
+
+.news-item-thumb {
+    float: left;
+    width: 65px;
+    height: 45px;
+    border: 1px solid #d99525; /* Orange border from screenshot */
+    background: #000;
+}
+.news-item-thumb img { width: 100%; height: 100%; display: block; }
+
+.news-item-text { line-height: normal; padding-top: 15px;}
+.news-item-text.has-thumb { line-height: 45px; padding-top: 0; margin-left: 80px; }
+
+
+/* =========================================================================
+   2. EXPANDED FULL ARTICLE VIEW
+   ========================================================================= */
+.cc-news-full-panel {
+    /* Stretches perfectly to fill the cc-map-area */
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10, 10, 10, 0.95); /* Solid clean background for readability */
+    padding: 40px;
+    z-index: 30;
+    overflow-y: auto;
+}
+
+.article-title { color: #fff; font-size: 28px; margin: 0 0 5px 0; font-weight: normal; }
+.article-date { color: #888; font-size: 14px; font-weight: normal; margin: 0 0 30px 0; }
+
+.article-content { color: #bcbcbc; font-size: 13px; line-height: 1.55; font-family: 'Eurostile-Med', sans-serif; }
+.article-content p { margin-bottom: 20px; }
+
+/* Back to Main Button (Docked Bottom Right relative to the map area) */
+.btn-back-to-main {
+    position: absolute;
+    bottom: 25px;
+    right: 25px;
+    padding: 8px 30px;
+    border-radius: 20px; /* Pill shape */
+    border: 1px solid #555;
+    background: -webkit-linear-gradient(top, #3a3a3a, #111);
+    color: #ccc;
+    font-weight: bold;
+    font-size: 11px;
+    cursor: pointer;
+    -webkit-transition: all 0.2s;
+    transition: all 0.2s;
+}
+.btn-back-to-main:hover {
+    color: #fff;
+    border-color: #888;
+    background: -webkit-linear-gradient(top, #4a4a4a, #222);
+}

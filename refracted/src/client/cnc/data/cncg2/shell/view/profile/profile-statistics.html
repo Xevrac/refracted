@@ -1,0 +1,88 @@
+<div class="profile-stats-container">
+    
+    <div class="stats-left-title">FACTIONS</div>
+    
+    <div class="stats-main-box">
+        
+        <div class="stats-band-logos">
+            <div class="stats-faction-btn"
+                 ng-repeat="faction in playerFactions"
+                 ng-class="{'active': statsActiveFaction == faction.id}"
+                 ng-click="setStatsFaction(faction.id)">
+                <img ng-src="{{ faction.icon }}" alt="{{ faction.name }}">
+            </div>
+        </div>
+
+        <div class="stats-band-wl">
+            <div class="stats-wl-bar-wrap">
+                <div class="stats-wl-fill-win" style="width: {{ getWinPct(statsActiveFaction) }}%;"></div>
+                
+                <div class="stats-wl-text text-win">
+                    WINS: {{ factionStats[statsActiveFaction].wins }}
+                </div>
+                <div class="stats-wl-text text-loss">
+                    LOSSES: {{ factionStats[statsActiveFaction].losses }}
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-band-grid clearfix">
+            
+            <div class="stats-col">
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Average income/min:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].income }}</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Structures built:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].structBuilt }}</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Structures destroyed:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].structDestroyed }}</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Structures lost:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].structLost }}</span>
+                </div>
+            </div>
+            
+            <div class="stats-col">
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Total xp earned:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].xp }}</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Total resources gathered:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].resources }}</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Units built:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].unitsBuilt }}</span>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Units destroyed:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].unitsDestroyed }}</span>
+                </div>
+            </div>
+            
+            <div class="stats-col">
+                <div class="stat-row">
+                    <div class="stat-icon-wrap"><img src="view/image/debugPinkRect.png" class="stat-icon-img"></div>
+                    <span class="stat-label">Units lost:</span> 
+                    <span class="stat-value">{{ factionStats[statsActiveFaction].unitsLost }}</span>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+</div>

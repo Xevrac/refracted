@@ -1,0 +1,26 @@
+<div class="rank-bars-module">
+    
+    <div class="rank-row clearfix" ng-repeat="faction in playerFactions">
+        
+        <div class="bar-structure-wrap">
+            
+            <img ng-src="{{ faction.icon }}" class="rank-icon-overlap" alt="{{ faction.name }}">
+            
+            <div class="rank-bar-bg">
+                
+                <div class="rank-fill" 
+                     ng-class="activeFaction == faction.id ? 'fill-' + faction.color : 'fill-gray'" 
+                     style="width: {{ faction.progress }}%;">
+                </div>
+                
+                <span class="rank-label" ng-if="showOverviewLabel">{{ faction.name }}</span>
+                
+                <span class="rank-level">{{ faction.level }}</span>
+                
+            </div>
+            
+        </div>
+        
+    </div>
+    
+</div>

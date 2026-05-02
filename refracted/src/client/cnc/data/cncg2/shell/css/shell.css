@@ -1,0 +1,105 @@
+        @font-face {
+            font-family: 'Eurostile LT Std Demi';
+            src: url('../fonts/EurostileLTStd-Demi.otf') format('opentype');
+        }
+
+        body {
+            background-image: url('../images/maintenance/background.jpg');
+            background-size: cover;
+            color: white;
+            font-family: 'Eurostile LT Std Demi';
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin-left: 2em;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        p {
+            margin: 10px 0;
+        }
+
+        .logo {
+            width: 512px; /* Adjust the width as needed */
+            height: auto; /* Maintain aspect ratio */
+            margin-top: 2em; /* Move to the bottom */
+        }
+
+        .victory-logo {
+            width: 256px; /* Adjust the width as needed */
+            height: auto; /* Maintain aspect ratio */
+            margin-top: auto; /* Move to the bottom */
+        }
+
+        a.button-link {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 16px;
+            text-align: center;
+            text-decoration: none;
+            background-color: #007BFF; /* Set your desired background color */
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-bottom: 1em;
+        }
+
+        a.button-link:hover {
+            background-color: #0056b3; /* Set your desired hover background color */
+        }
+
+        .slider-container {
+        /*margin: 20px auto;*/
+        }
+
+        input[type="range"] {
+            width: calc(100% - 30px);
+            -webkit-appearance: none;
+            appearance: none;
+            height: 10px;
+            border-radius: 5px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+            float: left;
+            transform-origin: 0% 50%; /* Adjust the transform origin for the "zoom in" effect */
+            transform: scale(4); /* Scale to make it look like 0% to 15% occupies the full width */
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4caf50;
+            cursor: pointer;
+            margin-left: -10px; /* Adjust thumb position for better centering */
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #4caf50;
+            cursor: pointer;
+            margin-left: -10px; /* Adjust thumb position for better centering */
+        }
+
+        /* Add styles for version */
+        #version {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: #888;
+        }

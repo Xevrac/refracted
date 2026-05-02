@@ -1,0 +1,147 @@
+/* =========================================================================
+   PROFILE - STATISTICS TAB
+   ========================================================================= */
+.profile-stats-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 30px; 
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* Left Sidebar Title outside the main box */
+.stats-left-title {
+    position: absolute;
+    left: 30px; top: 40px; 
+    font-size: 12px; 
+    color: #999; 
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-weight: bold;
+}
+
+/* The Main Dark Box */
+.stats-main-box {
+    position: absolute;
+    left: 120px; right: 30px; top: 30px; bottom: 30px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid #111;
+    border-top: 1px solid #222;
+}
+
+/* =========================================================================
+   BAND 1: Faction Logos with Radiant Glow
+   ========================================================================= */
+.stats-band-logos {
+    text-align: center;
+    padding: 20px 0;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.stats-faction-btn {
+    display: inline-block;
+    width: 90px; height: 90px;
+    margin: 0 15px;
+    cursor: pointer;
+    border-radius: 45px; /* Fully circular for the gradient */
+    -webkit-transition: background 0.3s ease;
+    transition: background 0.3s ease;
+}
+
+/* The white radiant gradient behind the active logo */
+.stats-faction-btn.active {
+    background: -webkit-radial-gradient(center, ellipse cover, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 60%);
+}
+
+.stats-faction-btn img {
+    width: 60px; height: 60px;
+    margin-top: 15px;
+    /* Small shadow to pop the icon off the white glow */
+    -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+}
+
+/* =========================================================================
+   BAND 2: Win / Loss Bar
+   ========================================================================= */
+.stats-band-wl {
+    padding: 15px 20px;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.stats-wl-bar-wrap {
+    position: relative;
+    height: 24px;
+    /* Base background acts as the "Losses" side (Dark Red) */
+    background: #660000; 
+    border: 1px solid #111;
+}
+
+/* The solid Red block on the left acting as the "Wins" side */
+.stats-wl-fill-win {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: #cc0000;
+    border-right: 1px solid #111;
+}
+
+.stats-wl-text {
+    position: absolute;
+    top: 0; bottom: 0;
+    line-height: 24px;
+    color: #fff;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 11px;
+    padding: 0 10px;
+    z-index: 5; /* Sits above the colored bars */
+    text-shadow: 1px 1px 1px #000;
+}
+.stats-wl-text.text-win { left: 0; }
+.stats-wl-text.text-loss { right: 0; }
+
+/* =========================================================================
+   BAND 3: Stats Data Grid
+   ========================================================================= */
+.stats-band-grid {
+    padding: 20px;
+}
+
+.stats-col {
+    float: left;
+    width: 33%;
+}
+
+.stat-row {
+    margin-bottom: 20px;
+    height: 30px;
+    line-height: 30px;
+}
+
+/* The dark grey circular background for the icons */
+.stat-icon-wrap {
+    float: left;
+    width: 30px; height: 30px;
+    border-radius: 15px;
+    background: #333;
+    margin-right: 10px;
+    text-align: center;
+    border: 1px solid #111;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.stat-icon-img {
+    width: 16px; height: 16px;
+    margin-top: 6px;
+}
+
+.stat-label {
+    color: #aaa;
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    margin-right: 5px;
+}
+
+/* Bright green text for the numerical data */
+.stat-value {
+    color: #66cc00;
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+}

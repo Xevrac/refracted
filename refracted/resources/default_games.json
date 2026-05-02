@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "games": [
+    {
+      "id": "bf-labs",
+      "name": "Battlefield Labs",
+      "protocol": "Fire2Frame",
+      "frostbite_build": "2024-1.2",
+      "blaze_build": "18.3.0",
+      "redirector_tls": true,
+      "enabled_services": ["LSX", "Blaze", "gRPC", "Web", "QoS", "RTM"]
+    },
+    {
+      "id": "cnc",
+      "name": "Command & Conquer",
+      "protocol": "FireFrame",
+      "frostbite_build": "1015362",
+      "blaze_build": "3.19.4.0",
+      "redirector_tls": true,
+      "enabled_services": ["Blaze", "Web", "QoS", "RTM"],
+      "service_ports": {
+        "blaze_gosredirector": 42127
+      }
+    }
+  ]
+}

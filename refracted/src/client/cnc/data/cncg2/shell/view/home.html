@@ -1,0 +1,148 @@
+<div class="cc-dashboard" ng-controller="DashboardController">
+    
+    <div class="cc-header-banner">
+        
+        <div class="cc-profile-cluster">
+            <div class="username-wrapper">
+                <div class="profile-backdrop"></div>
+                <h5 class="cc-username">{{ playerName }}</h5>
+            </div>
+            <button type="button" class="btn btn-avatar-texture" title="Edit Avatar"></button>
+            
+            <div class="rank-bars-stack">
+                <div ng-include="'view/rank-bars.html'" ng-init="showOverviewLabel = false"></div>
+            </div>
+            
+            <div class="wins-box">
+                <small>WINS</small>
+                <h2>{{ wins }}</h2>
+            </div>
+        </div>
+
+        <div class="cc-center-cluster">
+            <div class="left-docked-items">
+                <button class="btn btn-portrait-texture" title="Select portrait"></button>
+                <button class="btn btn-faction-texture" title="Select Faction"></button>
+            </div>
+            <div class="play-btn-stack">
+                <button class="btn btn-massive-play">PLAY</button>
+                <div class="play-dropdown-wrapper">
+                    <button class="btn btn-play-dropdown" data-toggle="dropdown">
+                        <span class="mode-text">{{ selectedMode }}</span>
+                        <img src="images/chevron_down.svg" class="mode-arrow" width="16" height="10" alt="">
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a href="" ng-click="setMode('PVP')">PVP</a></li>
+                        <li><a href="" ng-click="setMode('PVE')">PVE</a></li>
+                        <li><a href="" ng-click="setMode('1v1')">1v1</a></li>
+                        <li><a href="" ng-click="setMode('Team Battle')">Team Battle</a></li>
+                        <li><a href="" ng-click="setMode('Onslaught')">Onslaught</a></li>
+                        <li><a href="" ng-click="setMode('Custom Skirmish')">Custom Skirmish</a></li>
+                        <li><a href="" ng-click="setMode('Practice PvE')">Practice PvE</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="right-docked-items">
+                <div class="premium-badge-wrapper">
+                    <img src="view/image/trans_gray_dark_tex.png" alt="" class="premium-bg-img">
+                    <div class="premium-overlay-text">
+                        {{ premiumDays }} DAYS <button class="btn btn-mini btn-add-premium">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cc-party-cluster text-right">
+            <button type="button" class="btn btn-create-party">
+                <img src="images/create-a-party.png" alt="Create a party" class="btn-create-party-art" width="204" height="107">
+            </button>
+        </div>
+    </div>
+
+    <div class="cc-nav-row">
+        <div class="cc-nav-centered-wrapper">
+            <ul class="cc-main-nav">
+                <li ng-class="{'active': activeTab == 'LIVE'}"><a href="" ng-click="setTab('LIVE')">LIVE</a></li>
+                <li ng-class="{'active': activeTab == 'PROFILE'}"><a href="" ng-click="setTab('PROFILE')">PROFILE</a></li>
+                <li ng-class="{'active': activeTab == 'CUSTOMIZE'}"><a href="" ng-click="setTab('CUSTOMIZE')">CUSTOMIZE</a></li>
+                <li ng-class="{'active': activeTab == 'WATCH'}"><a href="" ng-click="setTab('WATCH')">WATCH</a></li>
+                <li ng-class="{'active': activeTab == 'LEARN'}"><a href="" ng-click="setTab('LEARN')">LEARN</a></li>
+                <li ng-class="{'active': activeTab == 'SUPPORT'}"><a href="" ng-click="setTab('SUPPORT')">SUPPORT</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="cc-subnav-row" ng-show="hasSubnavRow()">
+        <div class="cc-nav-centered-wrapper">
+            <ul class="cc-subnav cc-subnav--under-profile" ng-show="activeTab == 'PROFILE'">
+                <li ng-class="{'active': activeSubTab == 'OVERVIEW'}"><a href="" ng-click="setSubTab('OVERVIEW')">OVERVIEW</a></li>
+                <li ng-class="{'active': activeSubTab == 'STATISTICS'}"><a href="" ng-click="setSubTab('STATISTICS')">STATISTICS</a></li>
+                <li ng-class="{'active': activeSubTab == 'MATCH HISTORY'}"><a href="" ng-click="setSubTab('MATCH HISTORY')">MATCH HISTORY</a></li>
+                <li ng-class="{'active': activeSubTab == 'ACHIEVEMENTS'}"><a href="" ng-click="setSubTab('ACHIEVEMENTS')">ACHIEVEMENTS</a></li>
+                <li ng-class="{'active': activeSubTab == 'LEADERBOARDS'}"><a href="" ng-click="setSubTab('LEADERBOARDS')">LEADERBOARDS</a></li>
+            </ul>
+            <ul class="cc-subnav cc-subnav--under-customize" ng-show="activeTab == 'CUSTOMIZE'">
+                <li ng-class="{'active': activeSubTab == 'GENERALS'}"><a href="" ng-click="setSubTab('GENERALS')">GENERALS</a></li>
+                <li ng-class="{'active': activeSubTab == 'MODIFY GENERALS'}"><a href="" ng-click="setSubTab('MODIFY GENERALS')">MODIFY GENERALS</a></li>
+                <li ng-class="{'active': activeSubTab == 'HISTORY'}"><a href="" ng-click="setSubTab('HISTORY')">HISTORY</a></li>
+            </ul>
+            
+            <ul class="cc-subnav cc-subnav--under-learn" ng-show="activeTab == 'LEARN'">
+                <li ng-class="{'active': activeSubTab == 'PLAY TUTORIAL'}"><a href="" ng-click="setSubTab('PLAY TUTORIAL')">PLAY TUTORIAL</a></li>
+                <li ng-class="{'active': activeSubTab == 'GUIDES'}"><a href="" ng-click="setSubTab('GUIDES')">GUIDES</a></li>
+            </ul>
+
+            <ul class="cc-subnav cc-subnav--under-support" ng-show="activeTab == 'SUPPORT'">
+                <li ng-class="{'active': activeSubTab == 'FAQ'}"><a href="" ng-click="setSubTab('FAQ')">FAQ</a></li>
+                <li ng-class="{'active': activeSubTab == 'TROUBLESHOOT'}"><a href="" ng-click="setSubTab('TROUBLESHOOT')">TROUBLESHOOT</a></li>
+            </ul>
+            
+        </div>
+    </div>
+
+    <div class="cc-content-area" ng-class="{'cc-content-area--no-subnav': !hasSubnavRow()}">
+        
+        <div class="cc-map-area">
+            
+            <div class="cc-live-tab" ng-show="activeTab == 'LIVE'">
+                <img ng-src="{{ previousLiveImage }}" class="live-bg-image-bottom" alt="Live Background Prev">
+                <img ng-src="{{ currentLiveImage }}" class="live-bg-image-top" ng-class="{'fade-in': isFading}" alt="Live Background Current">
+                <div class="live-slider-dots">
+                    <span class="live-dot" ng-repeat="img in liveImages track by $index" ng-class="{'active': $index == currentLiveImageIndex}" ng-click="setLiveImage($index)"></span>
+                </div>
+                <div ng-include="'view/newsbar.html'"></div>
+            </div>
+
+            <div class="cc-profile-tab" ng-show="activeTab == 'PROFILE'" ng-controller="ProfileController">
+                <div ng-include="'view/profile/profile-overview.html'" ng-show="activeSubTab == 'OVERVIEW'"></div>
+                <div ng-include="'view/profile/profile-statistics.html'" ng-show="activeSubTab == 'STATISTICS'"></div>
+                <div ng-include="'view/profile/profile-match-history.html'" ng-show="activeSubTab == 'MATCH HISTORY'"></div>
+                <div ng-include="'view/profile/profile-achievements.html'" ng-show="activeSubTab == 'ACHIEVEMENTS'"></div>
+                <div ng-include="'view/profile/profile-leaderboards.html'" ng-show="activeSubTab == 'LEADERBOARDS'"></div>
+            </div>
+            
+            <div class="cc-learn-tab" ng-show="activeTab == 'LEARN'">
+                <div ng-include="'view/learn/learn-main.html'"></div>
+            </div>
+
+            <div class="cc-support-tab" ng-show="activeTab == 'SUPPORT'">
+                <div ng-include="'view/support/support-main.html'"></div>
+            </div>
+            
+        </div>
+        
+        <div class="cc-sidebar" ng-class="{'map-open': mapOpen}" ng-include="'view/sidebar.html'"></div>
+    </div>
+
+</div>
+
+<div class="cc-footer">
+    
+    <button class="btn-cnc-credits" ng-click="openCredits()"></button>
+    <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-click="openDebug()"></button>
+    <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-click="toggleAlertPopup()"></button>
+    <div class="alert-popup-box" ng-show="alertPopupOpen">
+        <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator.</p>
+    </div>
+    
+</div>

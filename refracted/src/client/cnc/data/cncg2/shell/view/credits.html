@@ -1,0 +1,30 @@
+<div class="credits-modal-overlay" ng-show="creditsOpen">
+    
+    <div class="credits-modal-box" ng-controller="CreditsController">
+        
+        <button class="btn-credits-close" ng-click="closeCredits()"></button>
+        
+        <div class="credits-header">
+            <img src="view/image/victory_logo.png" alt="Victory Games" class="victory-logo">
+            <div class="credits-divider"></div>
+        </div>
+        
+        <div class="credits-scroll-area">
+            
+            <div class="credits-category-block" ng-repeat="categoryBlock in creditsData">
+                <h2 class="credit-category">{{ categoryBlock.category }}</h2>
+                
+                <div class="credits-section-block" ng-repeat="section in categoryBlock.sections">
+                    <h3 class="credit-subcategory">{{ section.subtitle }}</h3>
+                    
+                    <div class="credits-role-block" ng-repeat="entry in section.entries">
+                        <div class="credit-role">{{ entry.role }}</div>
+                        <div class="credit-name">{{ entry.name }}</div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+</div>

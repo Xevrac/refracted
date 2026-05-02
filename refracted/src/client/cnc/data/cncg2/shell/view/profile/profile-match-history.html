@@ -1,0 +1,41 @@
+<div class="profile-match-history-container">
+    
+    <div class="mh-header-row">
+        <div class="mh-col-defeat">DEFEAT</div>
+        <div class="mh-col-date">DATE</div>
+        <div class="mh-col-victory">VICTORY</div>
+    </div>
+    
+    <div class="mh-list-scroll">
+        <div class="mh-row" ng-repeat="match in matchHistoryData">
+            
+            <div class="mh-col-defeat">
+                <div class="mh-bar-track track-right">
+                    <div class="rank-fill fill-red" style="width: {{ match.defPct }}%; right: 0; left: auto;"></div>
+                    
+                    <span class="mh-bar-text text-right" ng-show="match.defeats > 0">
+                        {{ match.defeats }} DEFEAT<span ng-show="match.defeats > 1">S</span>
+                    </span>
+                    <span class="mh-bar-text text-right" ng-show="match.defeats == 0">0 DEFEATS</span>
+                </div>
+            </div>
+            
+            <div class="mh-col-date">
+                <div class="mh-date-pill">{{ match.date }}</div>
+            </div>
+            
+            <div class="mh-col-victory">
+                <div class="mh-bar-track track-left">
+                    <div class="rank-fill fill-green" style="width: {{ match.vicPct }}%; left: 0; right: auto;"></div>
+                    
+                    <span class="mh-bar-text text-left" ng-show="match.victories > 0">
+                        {{ match.victories }} VICTORY<span ng-show="match.victories > 1">IES</span>
+                    </span>
+                    <span class="mh-bar-text text-left" ng-show="match.victories == 0">0 VICTORIES</span>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+</div>

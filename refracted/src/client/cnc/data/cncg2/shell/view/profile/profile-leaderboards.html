@@ -1,0 +1,59 @@
+<div class="profile-leaderboards-container">
+    
+    <div class="lb-table-wrapper lb-near-me">
+        
+        <div class="lb-header">
+            <div class="lb-col col-rank">RANK</div>
+            <div class="lb-col col-player">PLAYER</div>
+            <div class="lb-col col-level">LEVEL</div>
+            <div class="lb-col col-wins">WINS</div>
+            <div class="lb-col col-losses">LOSSES</div>
+            <div class="lb-col col-rating">RATING</div>
+        </div>
+        
+        <div class="lb-body">
+            <div class="lb-row" ng-repeat="user in leaderboardNearMe" ng-class="{'is-me-highlight': user.isMe}">
+                <div class="lb-col col-rank">{{ user.rank }}</div>
+                <div class="lb-col col-player" ng-class="{'text-bright-green': user.isMe}">{{ user.name }}</div>
+                <div class="lb-col col-level">{{ user.level }}</div>
+                <div class="lb-col col-wins text-bright-green">{{ user.wins }}</div>
+                <div class="lb-col col-losses text-bright-red">{{ user.losses }}</div>
+                <div class="lb-col col-rating">{{ user.rating }}</div>
+            </div>
+        </div>
+        
+    </div>
+
+    <div class="lb-table-wrapper lb-top-50">
+        
+        <div class="lb-header">
+            <div class="lb-col col-rank">RANK</div>
+            <div class="lb-col col-player">PLAYER</div>
+            <div class="lb-col col-level">LEVEL</div>
+            <div class="lb-col col-wins">WINS</div>
+            <div class="lb-col col-losses">LOSSES</div>
+            <div class="lb-col col-rating">RATING</div>
+        </div>
+        
+        <div class="lb-body scrollable">
+            <div class="lb-row" ng-repeat="user in leaderboardTop" ng-class="{'is-me-highlight': user.isMe}">
+                <div class="lb-col col-rank">
+                    
+                    <span class="lb-medal medal-gold" ng-if="user.rank == 1">{{ user.rank }}</span>
+                    <span class="lb-medal medal-silver" ng-if="user.rank == 2">{{ user.rank }}</span>
+                    <span class="lb-medal medal-bronze" ng-if="user.rank == 3">{{ user.rank }}</span>
+                    
+                    <span ng-if="user.rank > 3">{{ user.rank }}</span>
+                    
+                </div>
+                <div class="lb-col col-player">{{ user.name }}</div>
+                <div class="lb-col col-level">{{ user.level }}</div>
+                <div class="lb-col col-wins text-bright-green">{{ user.wins }}</div>
+                <div class="lb-col col-losses text-bright-red">{{ user.losses }}</div>
+                <div class="lb-col col-rating">{{ user.rating }}</div>
+            </div>
+        </div>
+        
+    </div>
+
+</div>

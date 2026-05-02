@@ -1,0 +1,149 @@
+<div class="cc-sidebar" ng-controller="DashboardController">
+    
+    <div class="friend-context-menu" ng-show="friendContextMenu.open" ng-style="{top: friendContextMenu.y + 'px', left: friendContextMenu.x + 'px'}">
+        <div class="menu-title">COMMANDS</div>
+        <ul>
+            <li class="menu-action" ng-click="closeFriendContextMenu()">Invite to Party</li>
+            <li class="divider"></li>
+            <li class="menu-action" ng-click="closeFriendContextMenu()">View Profile</li>
+            <li class="menu-action" ng-click="closeFriendContextMenu()">Send Whisper</li>
+        </ul>
+    </div>
+
+    <div class="cc-sidebar-tabs-wrap">
+        <ul class="cc-sidebar-tabs">
+            <li ng-class="{'active': sidebarActiveTab == 'FEEDS'}"><a href="" ng-click="setSidebarTab('FEEDS')">Feeds</a></li>
+            <li ng-class="{'active': sidebarActiveTab == 'FRIENDS'}"><a href="" ng-click="setSidebarTab('FRIENDS')">Friends</a></li>
+            <li ng-class="{'active': sidebarActiveTab == 'CHAT'}"><a href="" ng-click="setSidebarTab('CHAT')">Chat</a></li>
+        </ul>
+    </div>
+
+    <div class="cc-sidebar-content">
+        
+        <div class="sidebar-tab-pane" ng-show="sidebarActiveTab == 'FEEDS'">
+            <table class="table cc-feeds-table">
+                <tbody>
+                    <tr ng-repeat="feed in feedsData">
+                        <td>
+                            {{ feed.text }} <span class="feed-highlight">{{ feed.highlight }}</span>
+                        </td>
+                        <td class="text-right feed-time">{{ feed.time }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="feeds-promo-block">
+                <p>Check your friend's activities</p>
+                <button class="btn-glow-green">FIND FRIENDS</button>
+            </div>
+        </div>
+
+        <div class="sidebar-tab-pane" ng-show="sidebarActiveTab == 'FRIENDS'" style="position: relative; height: 100%;">
+            
+            <div class="friends-scroll-area">
+                <div class="friend-group-header" ng-click="toggleFriendGroup('playing')">- Playing (0)</div>
+                
+                <div class="friend-group-header active-header" ng-click="toggleFriendGroup('online')">- Online ({{ friendsOnline.length }})</div>
+                <div class="friend-list" ng-show="friendsGroups.online">
+                    
+                    <div class="friend-item clearfix" 
+                         ng-repeat="friend in friendsOnline"
+                         ng-class="{'selected': selectedFriendId == friend.id}"
+                         ng-click="selectFriend(friend); openFriendContextMenu(friend, $event)"
+                         ng-right-click="selectFriend(friend); openFriendContextMenu(friend, $event)">
+                        
+                        <div class="friend-avatar">
+                            <img ng-src="{{ friend.avatar }}" alt="Avatar">
+                        </div>
+                        <div class="friend-info">
+                            <span class="friend-name">{{ friend.name }}</span>
+                            <span class="friend-status">{{ friend.status }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="friend-group-header" ng-click="toggleFriendGroup('offline')">- Offline ({{ friendsOffline.length }})</div>
+                <div class="friend-list offline-list" ng-show="friendsGroups.offline">
+                    
+                    <div class="friend-item clearfix" 
+                         ng-repeat="friend in friendsOffline"
+                         ng-class="{'selected': selectedFriendId == friend.id}"
+                         ng-click="selectFriend(friend); openFriendContextMenu(friend, $event)"
+                         ng-right-click="selectFriend(friend); openFriendContextMenu(friend, $event)">
+                        
+                        <div class="friend-avatar">
+                            <img ng-src="{{ friend.avatar }}" alt="Avatar">
+                        </div>
+                        <div class="friend-info">
+                            <span class="friend-name">{{ friend.name }}</span>
+                            <span class="friend-status">{{ friend.status }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="friends-bottom-action">
+                <button class="btn-glow-green">FIND FRIENDS</button>
+            </div>
+        </div>
+
+        <div class="sidebar-tab-pane" ng-show="sidebarActiveTab == 'CHAT'" style="height: 100%; position: relative;">
+            <div class="sidebar-top-lists">
+                <button class="btn-sidebar-header">+ FIND FRIENDS</button>
+                <table class="table table-condensed cc-room-table" ng-show="joinedRoom">
+                    <tbody>
+                        <tr class="chat-joined-room">
+                            <td style="color:#ccc; padding-left: 20px;">{{ joinedRoom.name }}</td>
+                            <td class="text-right"><button class="btn-leave" ng-click="leaveRoom()">X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button class="btn-sidebar-header">+ Available Public Rooms</button>
+                <table class="table table-condensed table-hover cc-room-table">
+                    <tbody>
+                        <tr ng-repeat="room in publicRooms" ng-hide="joinedRoom && joinedRoom.name == room.name">
+                            <td>{{ room.name }}</td>
+                            <td class="text-right"><button class="btn btn-mini btn-join" ng-click="joinRoom(room)">JOIN</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="chat-area" ng-show="joinedRoom">
+                <div class="chat-population">0 People in the room</div>
+                <div class="chat-history">
+                    <div class="chat-message" ng-repeat="msg in chatMessages">
+                        <span class="chat-user">{{ msg.user }}:</span> <span style="color:#888;">{{ msg.text }}</span>
+                    </div>
+                </div>
+                <div class="chat-input-wrapper">
+                    <form ng-submit="sendMessage()" style="margin:0;">
+                        <input type="text" class="chat-input" ng-model="newChatMessage" placeholder="">
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cc-map-collapsible">
+        <div class="map-panel-trigger clearfix" ng-click="toggleMap()">
+            <div class="map-trigger-info pull-left">
+                <span class="antenna-glyph">(i)</span>
+                <span class="online-label">ONLINE:</span>
+                <strong class="text-white">{{ onlinePlayers }}</strong>
+            </div>
+            <div class="map-trigger-arrow pull-right">
+                <span class="expand-arrow" ng-class="{'arrow-open': mapOpen}">&#9660;</span>
+            </div>
+        </div>
+        <div class="map-container-wrap">
+            <div class="world-map-wrapper">
+                <img src="view/image/debugPinkRect.png" alt="World Map" class="world-map-img">
+                <div class="map-orb orb-1"></div>
+                <div class="map-orb orb-2"></div>
+                <div class="map-orb orb-3"></div>
+                <div class="map-orb orb-4"></div>
+                <div class="map-orb orb-5"></div>
+            </div>
+        </div>
+    </div>
+    
+</div>

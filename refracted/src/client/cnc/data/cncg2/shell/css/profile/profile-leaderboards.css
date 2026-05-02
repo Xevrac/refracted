@@ -1,0 +1,157 @@
+/* =========================================================================
+   PROFILE - LEADERBOARDS TAB
+   ========================================================================= */
+.profile-leaderboards-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 30px; 
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* =========================================================================
+   TABLE CONTAINERS
+   ========================================================================= */
+.lb-table-wrapper {
+    width: 100%;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid #222;
+    border-top: 1px solid #333;
+    -webkit-box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+}
+
+.lb-near-me {
+    height: 180px; /* Fixed height for 5 items + header */
+    margin-bottom: 25px;
+}
+
+.lb-top-50 {
+    position: absolute;
+    top: 235px; /* Sits beneath Near Me table */
+    bottom: 30px;
+    left: 30px;
+    right: 30px;
+    width: auto;
+}
+
+/* =========================================================================
+   TABLE HEADER & ROWS
+   ========================================================================= */
+.lb-header {
+    height: 35px;
+    line-height: 35px;
+    border-bottom: 1px solid #333;
+}
+
+.lb-header .lb-col {
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    color: #888;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.lb-body {
+    width: 100%;
+}
+.lb-body.scrollable {
+    position: absolute;
+    top: 36px; /* Below header */
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.lb-row {
+    position: relative; /* Crucial for absolute box-shadow layering */
+    height: 28px;
+    line-height: 28px;
+    color: #ccc;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 13px;
+}
+
+/* =========================================================================
+   COLUMNS (Grid alignment - BOX MODEL FIXED)
+   ========================================================================= */
+.lb-col { 
+    float: left; 
+    text-align: center; 
+    
+    /* CRITICAL FIX: Forces padding inside the % boundary so columns don't wrap */
+    -webkit-box-sizing: border-box; 
+    box-sizing: border-box; 
+}
+
+/* Widths total exactly 100% */
+.col-rank   { width: 12%; }
+.col-player { width: 33%; text-align: left !important; padding-left: 20px;}
+.col-level  { width: 10%; }
+.col-wins   { width: 15%; }
+.col-losses { width: 15%; }
+.col-rating { width: 15%; }
+
+/* Typography Utilities */
+.text-bright-green { color: #55aa00 !important; }
+.text-bright-red { color: #cc0000 !important; }
+
+/* =========================================================================
+   HIGHLIGHTED USER ROW (Green Glow Inset)
+   ========================================================================= */
+.is-me-highlight {
+    background: rgba(85, 170, 0, 0.08); /* Faint green tint */
+    border-top: 1px solid #4a912a;
+    border-bottom: 1px solid #4a912a;
+    /* Soft green inner glow bounding the active user row */
+    -webkit-box-shadow: inset 0 0 10px rgba(85, 170, 0, 0.4);
+    box-shadow: inset 0 0 10px rgba(85, 170, 0, 0.4);
+    /* Bring to front so borders render properly */
+    z-index: 10; 
+}
+
+
+/* =========================================================================
+   PURE CSS 3D METALLIC MEDALS (Top 3)
+   ========================================================================= */
+.lb-medal {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+    border-radius: 10px;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-weight: bold;
+    font-size: 11px;
+    text-align: center;
+    vertical-align: middle;
+    /* Small drop shadow so the coin pops off the dark background */
+    -webkit-filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));
+}
+
+/* Gold */
+.medal-gold {
+    background: -webkit-radial-gradient(center, ellipse cover, #e6c52a 0%, #684a0d 100%);
+    -webkit-box-shadow: inset 0 0 4px #000;
+    box-shadow: inset 0 0 4px #000;
+    color: #ffeba1;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.8);
+}
+
+/* Silver */
+.medal-silver {
+    background: -webkit-radial-gradient(center, ellipse cover, #dcdcdc 0%, #555555 100%);
+    -webkit-box-shadow: inset 0 0 4px #000;
+    box-shadow: inset 0 0 4px #000;
+    color: #ffffff;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.8);
+}
+
+/* Bronze */
+.medal-bronze {
+    background: -webkit-radial-gradient(center, ellipse cover, #d37330 0%, #5c290b 100%);
+    -webkit-box-shadow: inset 0 0 4px #000;
+    box-shadow: inset 0 0 4px #000;
+    color: #ffbf8c;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.8);
+}

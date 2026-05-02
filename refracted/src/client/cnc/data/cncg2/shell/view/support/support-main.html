@@ -1,0 +1,9 @@
+<div class="support-container" ng-controller="SupportController">
+    
+    <div class="support-scroll-area">
+        <div ng-include="'view/support/faq.html'" ng-show="activeSubTab == 'FAQ'"></div>
+        
+        <div ng-include="'view/support/troubleshoot.html'" ng-show="activeSubTab == 'TROUBLESHOOT'"></div>
+    </div>
+    
+</div>

@@ -1,0 +1,348 @@
+/* ---------------------------------------------------------------------------
+   Floating dock — only if you add .cnc-probe--float to the dock (e.g. in-game)
+   --------------------------------------------------------------------------- */
+.cnc-probe-dock.cnc-probe--float {
+    position: fixed;
+    right: 8px;
+    bottom: 8px;
+    z-index: 10050;
+    max-width: min(96vw, 780px);
+    border-radius: 6px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+}
+
+/* Shared: probe content */
+.cnc-probe-dock {
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #e4e4e4;
+    background: #18181e;
+    border: 1px solid #3a3a48;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+/* full-page: lighter panel (see .cnc-debug-container overrides) */
+.cnc-debug-container .cnc-probe-dock {
+    width: 100%;
+    background: rgba(24, 24, 30, 0.58);
+    border-color: rgba(80, 80, 95, 0.45);
+}
+.cnc-debug-container .cnc-probe-dock .probe-head {
+    background: rgba(36, 36, 44, 0.85);
+}
+
+.cnc-probe-dock .probe-head {
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    -webkit-box-pack: start;
+    justify-content: flex-start;
+    padding: 12px 16px;
+    background: #22222a;
+    border-bottom: 1px solid #3a3a44;
+    gap: 12px;
+}
+.cnc-probe-dock .probe-title {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.3px;
+    color: #f0c040;
+}
+.cnc-probe-dock .probe-body {
+    overflow: auto;
+    padding: 0;
+    display: none;
+}
+.cnc-probe-dock.cnc-probe-open .probe-body { display: block; }
+
+.cnc-probe-dock h4 {
+    margin: 22px 0 10px 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #7ec8ff;
+    border-bottom: 1px solid #3a3a48;
+    padding-bottom: 6px;
+    clear: both;
+}
+.cnc-probe-dock h4:first-of-type { margin-top: 0; }
+
+.cnc-probe-dock h5.cnc-probe-subhead,
+.cnc-probe--page h5.cnc-probe-subhead {
+    margin: 16px 0 6px 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #9ab8d4;
+    clear: both;
+}
+.cnc-probe-dock p.cnc-probe-blaze-create-hint,
+.cnc-probe--page p.cnc-probe-blaze-create-hint {
+    font-size: 12px;
+    margin: 0 0 8px 0;
+}
+
+.cnc-probe-dock .probe-body > p,
+.cnc-probe-dock .probe-hint {
+    color: #b8b8c0;
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 0 0 10px 0;
+}
+.cnc-probe-dock .probe-row { margin: 0 0 10px 0; display: flex; flex-wrap: wrap; gap: 8px 10px; -webkit-box-align: center; align-items: center; }
+.cnc-probe-dock .probe-row--tight { gap: 6px 8px; }
+.cnc-probe-dock .cnc-probe-label { font-size: 12px; color: #9898a8; white-space: nowrap; margin: 0; padding: 0; }
+.cnc-probe-dock button.probe-btn.probe-btn--primary,
+.cnc-probe--page button.probe-btn.probe-btn--primary {
+    border-color: #4a7a9e;
+    background: linear-gradient(180deg, #355a78 0%, #2a4a62 100%);
+}
+.cnc-probe-dock button.probe-btn {
+    background: #2e2e38;
+    color: #f0f0f0;
+    border: 1px solid #5a5a6a;
+    border-radius: 3px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    line-height: 1.3;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.cnc-probe-dock button.probe-btn:hover { background: #3c3c4a; border-color: #707088; }
+.cnc-probe-dock button.probe-warn { border-color: #a85; color: #ffcc9a; }
+.cnc-probe-dock input[type="text"] {
+    background: #121218;
+    color: #e8e8e8;
+    border: 1px solid #4a4a55;
+    padding: 6px 10px;
+    width: 200px;
+    max-width: 100%;
+    font-size: 13px;
+    font-family: Consolas, "Courier New", monospace;
+    border-radius: 2px;
+}
+.cnc-probe-dock #debugOutput, .cnc-probe-dock #cnc-probe-mono-out {
+    background: #0c0c10;
+    border: 1px solid #3a3a45;
+    padding: 12px 14px;
+    min-height: 80px;
+    max-height: 45vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #a8e0d0;
+    font-family: Consolas, "Courier New", monospace;
+    border-radius: 2px;
+}
+.cnc-probe-dock textarea.cnc-probe-cmd {
+    width: 100%;
+    min-height: 72px;
+    background: #0c0c10;
+    color: #e6e6e6;
+    border: 1px solid #4a4a55;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    resize: vertical;
+    padding: 10px 12px;
+    font-family: Consolas, "Courier New", monospace;
+    border-radius: 2px;
+}
+.cnc-probe-dock textarea.cnc-probe-cmd--short {
+    min-height: 44px;
+    padding: 6px 10px;
+}
+.cnc-probe--page .probe-row input[type="text"].cnc-probe-cmd--inline {
+    width: auto;
+    -webkit-box-flex: 1;
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+}
+.cnc-probe-dock .probe-hint { color: #9a9aa4; }
+
+/* ---------------------------------------------------------------------------
+   Full-page layout (debug.html) — top-left main column, not a floating card
+   --------------------------------------------------------------------------- */
+body.cnc-debug-standalone {
+    margin: 0;
+    min-height: 100vh;
+    background-color: #0a0a0c;
+    background-image: url('../images/cnc_background.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    font-size: 14px;
+    color: #d8d8d8;
+}
+
+.cnc-debug-chrome {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 14px;
+    padding: 6px 10px 8px 10px;
+    background: rgba(20, 20, 26, 0.78);
+    border-bottom: 1px solid #333;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+.cnc-debug-chrome .cnc-debug-back { color: #7ec8ff; text-decoration: none; }
+.cnc-debug-chrome .cnc-debug-back:hover { text-decoration: underline; }
+
+.cnc-debug-page {
+    padding: 0;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    min-height: calc(100vh - 40px);
+    width: 100%;
+}
+
+.cnc-debug-container {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cnc-probe--page {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 4px;
+    box-shadow: none;
+}
+
+.cnc-probe--page .probe-body {
+    max-height: none;
+    padding: 4px 8px 16px 8px;
+}
+
+.cnc-probe--page .probe-head {
+    padding: 4px 8px 6px 8px;
+}
+
+/* Full-width button bands: grow/shrink so rows use the viewport, not a narrow column */
+.cnc-probe--page .probe-row {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-orient: horizontal;
+    -webkit-box-direction: normal;
+    -ms-flex-direction: row;
+    flex-direction: row;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+    width: 100%;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    margin: 0 0 8px 0;
+    gap: 8px;
+    align-items: stretch;
+    -webkit-box-align: stretch;
+}
+.cnc-probe--page .probe-row > .probe-btn {
+    -webkit-box-flex: 0;
+    -ms-flex: 1 1 190px;
+    flex: 1 1 190px;
+    min-width: 150px !important;
+    max-width: 240px;
+    width: auto;
+    display: block;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    text-align: center;
+}
+.cnc-probe--page .probe-row .probe-hint,
+.cnc-probe--page .probe-row input[type="text"] {
+    -webkit-box-flex: 0;
+    -ms-flex: 0 0 auto;
+    flex: 0 0 auto;
+}
+.cnc-probe--page .probe-row input[type="text"] {
+    -webkit-box-flex: 1;
+    -ms-flex: 1 1 200px;
+    flex: 1 1 200px;
+    min-width: 120px;
+    max-width: 400px;
+}
+
+.cnc-probe--page h4 {
+    margin: 12px 0 6px 0;
+    width: 100%;
+}
+.cnc-probe--page h4:first-of-type {
+    margin-top: 4px;
+}
+
+.cnc-debug-container .cnc-probe-dock .probe-body > p:first-child { margin-top: 0; }
+
+.cnc-debug-container .cnc-probe-dock #cnc-probe-mono-out {
+    max-height: min(50vh, 480px);
+}
+
+.cnc-probe--page .probe-body > p { font-size: 13px; }
+
+/* ---------------------------------------------------------------------------
+   Floating output modal (draggable; opaque so page UI does not bleed through)
+   --------------------------------------------------------------------------- */
+.cnc-probe-output-modal {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-width: none;
+    height: min(42vh, 360px);
+    z-index: 10120;
+    background: #12121a;
+    border: 1px solid rgba(90, 90, 110, 0.6);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+.cnc-probe-output-head {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px 0 10px;
+    background: #1c1c26;
+    border-bottom: 1px solid rgba(90, 90, 105, 0.6);
+    cursor: move;
+    user-select: none;
+}
+.cnc-probe-output-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f0c040;
+    letter-spacing: 0.02em;
+}
+.cnc-probe-output-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.cnc-probe-output-actions .probe-btn {
+    padding: 4px 9px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+#cnc-probe-modal-out {
+    height: calc(100% - 36px);
+    overflow: auto;
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #a8e0d0;
+    font-size: 13px;
+    line-height: 1.45;
+    font-family: Consolas, "Courier New", monospace;
+    box-sizing: border-box;
+    background: #0c0c10;
+}

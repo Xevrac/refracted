@@ -1,0 +1,79 @@
+<div class="profile-overview-container">
+    
+    <div class="profile-top-tier">
+        <div class="overview-avatar">
+            <img src="view/image/guest_avatar.svg" alt="">
+        </div>
+        
+        <div class="overview-identity">
+            <h3>{{ playerName }}</h3>
+            <div class="overview-stats-small">
+                <span>{{ wins }} WINS</span><br>
+                <span style="color:#666;">{{ profileOverview.generalsUnlocked }} / {{ profileOverview.generalsTotal }} GENERALS</span>
+            </div>
+        </div>
+
+        <div class="overview-faction-bars">
+            <div ng-include="'view/rank-bars.html'" ng-init="showOverviewLabel = true"></div>
+        </div>
+
+        <div class="overview-premium-badge">
+            <img src="view/image/trans_gray_dark_tex.png" alt="">
+        </div>
+    </div>
+
+    <div class="profile-mid-tier">
+        <h4 class="tier-header">FACTION OVERVIEW</h4>
+        
+        <div class="faction-columns">
+            <div class="faction-col" ng-repeat="faction in playerFactions">
+                <div class="faction-icon">
+                    <img ng-src="{{ faction.icon }}" alt="{{ faction.name }}">
+                </div>
+                <div class="faction-name">{{ faction.name }}</div>
+                <div class="faction-wins">{{ profileOverview.wins }} WINS</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-bottom-tier">
+        
+        <div class="bottom-col-left">
+            <div class="tier-header-row">
+                <h4 class="tier-header">ACHIEVEMENT PROGRESS</h4>
+                <a href="" class="more-link">MORE &gt;&gt;</a>
+            </div>
+            
+            <div class="achievement-list">
+                <div class="ach-item" ng-repeat="ach in profileOverview.achievements">
+                    <div class="ach-name">{{ ach.name }}</div>
+                    <div class="ach-icon" ng-class="{'locked': ach.locked}">
+                        <img src="view/image/med_gray_tex.jpg" alt="">
+                        <span class="ach-multiplier" ng-if="ach.multiplier">{{ ach.multiplier }}</span>
+                    </div>
+                    <div class="progress progress-ach" ng-if="!ach.locked">
+                        <div class="bar" style="width: {{ ach.progress }}%; background-color:#888;"></div>
+                    </div>
+                    <div class="progress-empty" ng-if="ach.locked"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-col-right">
+            <div class="tier-header-row">
+                <h4 class="tier-header">RECENT GAMES</h4>
+                <a href="" class="more-link">MORE &gt;&gt;</a>
+            </div>
+            
+            <div class="recent-games-list">
+                <div class="recent-game-row clearfix" ng-repeat="game in profileOverview.recentGames">
+                    <img src="view/image/dark_gray_tex.jpg" alt="" class="match-icon">
+                    <span class="match-date">{{ game.date }}</span>
+                    <span class="match-result text-error">{{ game.result }}</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</div>

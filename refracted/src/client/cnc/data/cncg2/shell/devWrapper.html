@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Command & Conquer™</title>
+    <link rel="stylesheet" href="./css/shell.css">
+    <script src="./js/src.js"></script>
+</head>
+<body>
+    <img class="logo" src="./images/maintenance/logo.png" alt="Logo">
+    <hr>
+    <h1>Dev</h1>
+    <p>Placeholder</p>
+    <p>RtsClientSettings.DebugShell = True</p>
+    <img class="victory-logo" src="./images/maintenance/victory_logo.png" alt="Victory Logo">
+    <hr>
+    <h1>Nav</h1>
+
+    <a class="button-link" href="./angular/index.html">Start AngularJS UI</a>
+    <a class="button-link" href="./devFunctions.html">Debug</a>
+    <a class="button-link" href="./ingame_menu.html">Options</a>
+    <a class="button-link" onclick="quitClient()" href="#">Quit</a>
+
+    <hr>
+    <h1>Functions</h1>
+    <button onclick="refreshWindow()">Refresh</button>
+    <hr>
+    <h1>Expression Explorer</h1>
+    <input type="text" id="expressionInput" placeholder="Shell expression">
+    <button onclick="executeExpression()">Execute</button>
+    <button onclick="ShowObjects()">List Objects</button>
+    <div id="resultBox"></div>
+    <div id="version">Shell v1.2.2 | Xevrac</div>
+</body>
+
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Command & Conquer™</title>
+    <link rel="stylesheet" href="./css/shell.css">
+    <script src="./js/src.js"></script>
+</head>
+
+<body>
+    <img class="logo" src="./images/maintenance/logo.png" alt="Logo">
+    <hr>
+    <h1>Settings</h1>
+    <button onclick="getOptions()">getOptions</button>
+    <button onclick="FrontEndFullscreenTrue()">FrontEndFullscreenTrue</button>
+    <button onclick="FrontEndFullscreenFalse()">FrontEndFullscreenFalse</button>
+    <button onclick="SetFullscreenDimensions()">SetFullscreenDimensions</button>
+    <button onclick="SetWindowedDimensions()">SetWindowedDimensions</button>
+    <h2>Sound</h2>
+    <div class="slider-container">
+        <div class="slider-background"></div>
+        <label for="volumeSlider">Master Volume:</label>
+        <input type="range" id="volumeSlider" min="0" max="100" step="1" value="0" oninput="updateVolume(this.value)">
+        <span id="volumeValue">0%</span>
+    </div>
+    <br>
+    <br>
+    <div>
+        <a class="button-link" onclick="applyAudio()" href="#">applyAudio</a>
+        <a class="button-link" onclick="save()" href="#">Save</a>
+        <a class="button-link" onclick="discard()" href="#">Discard</a>
+        <a class="button-link" href="./devWrapper.html">Back</a>
+    </div>
+    <div id="version">Shell v1.2.2 | Xevrac</div>
+</body>
+</html>

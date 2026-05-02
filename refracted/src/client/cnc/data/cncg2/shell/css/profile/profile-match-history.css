@@ -1,0 +1,97 @@
+/* =========================================================================
+   PROFILE - MATCH HISTORY TAB
+   ========================================================================= */
+.profile-match-history-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 30px; 
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* Header Definitions */
+.mh-header-row {
+    position: relative;
+    height: 40px; 
+    line-height: 40px;
+    background: -webkit-linear-gradient(top, #2a2a2a, #111);
+    border: 1px solid #000;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 14px; 
+    font-weight: bold; 
+    text-transform: uppercase;
+    margin-bottom: 15px;
+    -webkit-box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.mh-col-defeat { position: absolute; left: 0; width: 40%; text-align: center; color: #cc0000; }
+.mh-col-date { position: absolute; left: 40%; width: 20%; text-align: center; color: #888; }
+.mh-col-victory { position: absolute; right: 0; width: 40%; text-align: center; color: #66cc00; }
+
+/* Scrollable Container for the Matches */
+.mh-list-scroll { 
+    position: absolute; 
+    top: 85px; bottom: 30px; left: 30px; right: 30px; 
+    overflow-y: auto; 
+}
+
+/* Individual Row Alignment */
+.mh-row { 
+    position: relative; 
+    height: 44px; 
+    margin-bottom: 5px; 
+}
+
+.mh-row .mh-col-defeat, 
+.mh-row .mh-col-date, 
+.mh-row .mh-col-victory { 
+    top: 0; height: 100%; 
+}
+
+/* The Black Track for Defeat/Victory Bars */
+.mh-bar-track {
+    position: absolute; 
+    top: 5px; bottom: 5px;
+    background: #000; 
+    border: 1px solid #111;
+    -webkit-box-shadow: 0 0 0 1px #2a2a2a; box-shadow: 0 0 0 1px #2a2a2a;
+    overflow: hidden;
+}
+
+/* Dock Defeat track to the right side of the left column (near the date) */
+.mh-bar-track.track-right { right: 5px; left: 0; }
+
+/* Dock Victory track to the left side of the right column (near the date) */
+.mh-bar-track.track-left { left: 5px; right: 0; }
+
+/* The text sitting inside the Defeat/Victory bars */
+.mh-bar-text {
+    position: absolute; 
+    top: 0; bottom: 0; 
+    line-height: 32px;
+    color: #fff; 
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 13px; 
+    font-weight: bold; 
+    font-style: italic;
+    text-transform: uppercase;
+    text-shadow: 1px 1px 1px #000;
+    z-index: 5; 
+}
+.mh-bar-text.text-right { right: 15px; }
+.mh-bar-text.text-left { left: 15px; }
+
+/* Center Metallic Date Pill */
+.mh-date-pill {
+    margin: 5px 0; 
+    height: 32px; 
+    line-height: 32px;
+    background: -webkit-linear-gradient(top, #555, #222);
+    border: 1px solid #111; 
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    color: #ddd; 
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 12px; 
+    font-weight: bold; 
+    text-shadow: 1px 1px 1px #000;
+}

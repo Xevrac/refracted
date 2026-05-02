@@ -1,0 +1,195 @@
+/* =========================================================================
+   SIDEBAR CONTAINER (Widened to 410px)
+   ========================================================================= */
+.cc-sidebar { position: absolute; right: 0; top: 0; bottom: 0; width: 410px; background: rgba(0,0,0,0.85); border-left: 1px solid #222; }
+
+/* =========================================================================
+   REUSABLE 1px CSS PATTERN GENERATOR
+   ========================================================================= */
+.sidebar-pattern-bg, 
+.cc-sidebar-tabs > li > a, 
+.cc-sidebar-content,  
+.chat-area, 
+.map-panel-trigger {
+    background-color: rgba(8, 8, 8, 0.78);
+    background-image: -webkit-linear-gradient(135deg, rgba(255,255,255,0.025) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.025) 50%, rgba(255,255,255,0.025) 75%, transparent 75%, transparent);
+    background-size: 6px 6px;
+}
+
+.sidebar-pattern-bg-hover:hover, 
+.cc-sidebar-tabs > li > a:hover, 
+.cc-room-table tbody tr:hover, 
+.map-panel-trigger:hover,
+.friend-group-header:hover {
+    background-color: rgba(28, 32, 36, 0.72);
+    background-image: -webkit-linear-gradient(135deg, rgba(255,255,255,0.035) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.035) 50%, rgba(255,255,255,0.035) 75%, transparent 75%, transparent);
+    background-size: 6px 6px;
+    cursor: pointer;
+}
+
+/* =========================================================================
+   SIDEBAR TABS
+   ========================================================================= */
+/* No solid fill here — li margins would show as flat grey; gaps show .cc-sidebar instead */
+.cc-sidebar-tabs-wrap { position: absolute; top: 0; left: 0; right: 0; height: 38px; background: transparent; border-bottom: 1px solid #333; }
+.cc-sidebar-tabs { display: -webkit-box; -webkit-box-orient: horizontal; margin: 0; padding: 0; width: 100%; height: 35px; background: transparent; }
+.cc-sidebar-tabs > li { display: block; -webkit-box-flex: 1; text-align: center; }
+.cc-sidebar-tabs > li + li { margin-left: 5px; }
+
+.cc-sidebar-tabs > li > a {
+    display: block; height: 35px; line-height: 35px; border: none; border-radius: 0;
+    color: #6e6e6e; font-weight: bold; font-size: 13px;
+    font-family: 'Eurostile-Hea', 'Eurostile-Med', sans-serif;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0; margin: 0;
+    text-shadow: 0 1px 0 #000;
+}
+.cc-sidebar-tabs > li > a:hover { color: #a8a8a8; }
+.cc-sidebar-tabs > li.active > a, .cc-sidebar-tabs > li.active > a:hover { 
+    background-color: rgba(30,30,30,0.9); 
+    background-image: -webkit-linear-gradient(135deg, #313131 25%, transparent 25%, transparent 50%, #313131 50%, #313131 75%, transparent 75%, transparent);
+    color: #fff; border-bottom: 2px solid #4a7aa8; 
+    text-shadow: 0 0 6px rgba(255,255,255,0.35);
+}
+
+/* =========================================================================
+   SIDEBAR CONTENT 
+   ========================================================================= */
+.cc-sidebar-content { position: absolute; top: 38px; bottom: 40px; left: 0; right: 0; overflow: hidden; -webkit-transition: bottom 0.3s ease; transition: bottom 0.3s ease; }
+.cc-sidebar.map-open .cc-sidebar-content { bottom: 170px; }
+
+.sidebar-tab-pane { width: 100%; height: 100%; }
+.sidebar-top-lists { position: absolute; top: 0; left: 0; right: 0; overflow-y: auto; }
+.btn-sidebar-header { display: block; width: 100%; text-align: left; font-weight: bold; font-size: 11px; padding: 0; height: 24px; line-height: 24px; text-indent: 10px; border: none; border-bottom: 1px solid #000; color: #aaa; background: transparent; }
+
+.cc-room-table { margin: 0; width: 100%; border-bottom: 1px solid #000; border-collapse: collapse; }
+.cc-room-table td { border-top: 1px solid #1a1a1a; border-bottom: 1px solid #000; color: #9a9a9a; font-size: 13px; vertical-align: middle; height: 32px; padding: 0; }
+.cc-room-table tbody tr { background-color: transparent; background-image: none; }
+.cc-room-table td:first-child { padding-left: 40px; color: #ccc; }
+.cc-room-table td.text-right { width: 60px; padding-right: 10px;}
+.btn-join { font-weight: bold; border-radius: 0; }
+
+/* =========================================================================
+   FEEDS UI
+   ========================================================================= */
+.cc-feeds-table { margin: 0; width: 100%; border-collapse: collapse; }
+.cc-feeds-table td { padding: 15px 15px 12px 20px; border-top: 1px solid #222; border-bottom: 1px solid #000; color: #ccc; font-size: 12px; }
+.cc-feeds-table tbody tr { background-color: transparent; background-image: none; }
+.feed-highlight { color: #d99525; font-weight: bold; margin-left: 3px; }
+.feed-time { color: #555; font-size: 10px; vertical-align: bottom; width: 80px; padding-right: 15px !important;}
+.feeds-promo-block { text-align: center; padding: 25px 0; border-top: 1px solid #222; }
+.feeds-promo-block p { color: #fff; font-weight: bold; font-size: 12px; margin-bottom: 10px; text-shadow: 0 1px 2px #000; }
+
+/* The 2011 WebKit Glowing Green Button */
+.btn-glow-green { display: inline-block; width: 200px; height: 34px; line-height: 32px; color: #fff; font-weight: bold; font-size: 13px; border: 1px solid #000; border-radius: 4px; background-color: #2b591b; background-image: -webkit-linear-gradient(top, #4a912a 0%, #204512 50%, #15330a 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 15px rgba(74, 255, 42, 0.4); text-shadow: 0 1px 1px #000; cursor: pointer; -webkit-transition: all 0.2s ease; transition: all 0.2s ease; }
+.btn-glow-green:hover { background-image: -webkit-linear-gradient(top, #5eb537 0%, #2a5c18 50%, #1a400c 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 20px rgba(74, 255, 42, 0.6); }
+
+/* =========================================================================
+   FRIENDS UI
+   ========================================================================= */
+/* Leaves a 60px gap at the bottom for the fixed button row */
+.friends-scroll-area { position: absolute; top: 0; bottom: 60px; left: 0; right: 0; overflow-y: auto; }
+.friend-group-header { padding: 8px 15px; color: #b0b0b0; font-size: 13px; font-family: 'Eurostile-Med', sans-serif; border-top: 1px solid #222; border-bottom: 1px solid #000; background: rgba(255,255,255,0.02); cursor: pointer; }
+.friend-group-header.active-header { background: rgba(255,255,255,0.1); }
+.friend-item { padding: 9px 14px; border-bottom: 1px solid #141414; cursor: pointer; }
+.friend-item:hover { background-color: rgba(255,255,255,0.03); }
+.friend-avatar { float: left; width: 34px; height: 34px; border: 1px solid #4a912a; background: #000; cursor: pointer; }
+.friend-avatar img { width: 100%; height: 100%; display: block; }
+.friend-info { float: left; margin-left: 10px; line-height: 1.2; padding-top: 1px; }
+.friend-name { color: #d8d8d8; font-size: 12px; display: block; margin-bottom: 1px; font-family: 'Eurostile-Med', sans-serif; }
+.friend-status { color: #b9b9b9; font-size: 11px; display: block; font-family: 'Eurostile-Med', sans-serif; line-height: 1.25; }
+
+/* Docks strictly to the bottom of the Friends Tab */
+.friends-bottom-action { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; text-align: center; padding-top: 13px; border-top: 1px solid #222; background: rgba(0,0,0,0.9); -webkit-box-sizing: border-box; box-sizing: border-box; }
+
+/* =========================================================================
+   CHAT UI 
+   ========================================================================= */
+.chat-area { position: absolute; top: 180px; bottom: 0; left: 0; right: 0; border-top: 1px solid #333; }
+.chat-population { position: absolute; top: 0; left: 0; right: 0; height: 25px; line-height: 25px; text-align: center; color: #909090; font-size: 12px; border-bottom: 1px dashed #333; text-decoration: underline; background: rgba(0,0,0,0.5); }
+.chat-history { position: absolute; top: 26px; bottom: 40px; left: 0; right: 0; padding: 8px 10px; overflow-y: auto; font-size: 12px; color: #a5a5a5; line-height: 1.3; background: transparent; }
+.chat-message { margin-bottom: 2px; line-height: 1.3; }
+.chat-user { color: #4ca3e6; font-weight: bold; } 
+.chat-input-wrapper { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; padding: 5px; border-top: 1px solid #333; background: #000; -webkit-box-sizing: border-box; box-sizing: border-box; }
+.chat-input { width: 100%; height: 30px; -webkit-box-sizing: border-box; box-sizing: border-box; background: #111; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 0; margin: 0; font-size: 12px; }
+.chat-input:focus { border-color: #4ca3e6; outline: none; }
+.chat-joined-room { background: rgba(255,255,255,0.08) !important; background-image: none !important;}
+.btn-leave { font-weight: bold; font-size: 14px; border-radius: 0; color: #888; background: transparent; border: none; cursor: pointer; }
+.btn-leave:hover { color: #fff; }
+
+/* =========================================================================
+   COLLAPSIBLE MAP PANEL 
+   ========================================================================= */
+.cc-map-collapsible { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; -webkit-transition: height 0.3s ease; transition: height 0.3s ease; overflow: hidden; border-top: 1px solid #333; }
+.cc-sidebar.map-open .cc-map-collapsible { height: 170px; }
+.map-panel-trigger { display: block; width: 100%; text-align: left; height: 40px; line-height: 40px; padding: 0 10px; -webkit-box-sizing: border-box; box-sizing: border-box; border-bottom: 1px solid #000; color: #fff; }
+.map-trigger-info * { vertical-align: middle; }
+.antenna-glyph { font-weight: bold; font-family: monospace; color: #aaa; margin-right: 5px; }
+.online-label { color: #888; font-size: 11px; margin-right: 3px;}
+.expand-arrow { display: inline-block; font-size: 10px; color: #aaa; -webkit-transition: -webkit-transform 0.3s; transition: transform 0.3s; }
+.arrow-open { -webkit-transform: rotate(180deg); transform: rotate(180deg); }
+
+.map-container-wrap { width: 100%; height: 130px; }
+.world-map-wrapper { position: relative; width: 100%; height: 100%; overflow: hidden; background: #000; }
+.world-map-img { width: 100%; height: 100%; display: block; opacity: 0.6; }
+
+@-webkit-keyframes orb-blink { 0% { opacity: 0.2; } 50% { opacity: 1.0; -webkit-transform: scale(1.1); } 100% { opacity: 0.2; } }
+.map-orb { position: absolute; width: 10px; height: 10px; border-radius: 5px; background: #ffcc00; box-shadow: 0 0 10px #ffcc00; border: 1px solid #fff; -webkit-animation: orb-blink 2s infinite ease-in-out; }
+.orb-1 { top: 30%; left: 15%; }
+.orb-2 { top: 40%; left: 35%; -webkit-animation-delay: 0.3s; }
+.orb-3 { top: 25%; left: 60%; -webkit-animation-delay: 0.6s; }
+.orb-4 { top: 60%; left: 75%; -webkit-animation-delay: 0.9s; }
+.orb-5 { top: 50%; left: 25%; -webkit-animation-delay: 1.2s; }
+
+/* =========================================================================
+   APPENDED LOGIC: SELECTION, OFFLINE GRAY-OUT, CONTEXT MENU
+   ========================================================================= */
+
+/* Selection State */
+.friend-item.selected {
+    background-color: #053F76;
+    border-bottom: 1px solid #042e56;
+}
+.friend-item.selected .friend-name { color: #fff; }
+.friend-item.selected .friend-status { color: #ccc; }
+
+/* Offline Grayscale Effect */
+.offline-list .friend-avatar img { -webkit-filter: grayscale(1); filter: grayscale(1); opacity: 0.5; }
+.offline-list .friend-name { color: #888; }
+.offline-list .friend-status { color: #666; }
+
+/* Selection overrides Grayscale */
+.offline-list .friend-item.selected .friend-avatar img { -webkit-filter: none; filter: none; opacity: 1; }
+.offline-list .friend-item.selected .friend-name { color: #fff; }
+.offline-list .friend-item.selected .friend-status { color: #ccc; }
+
+/* Context Menu */
+.cc-sidebar .friend-context-menu {
+    position: fixed; /* Binds perfectly to event.clientX / clientY */
+    width: 160px;
+    background-color: rgba(10, 10, 10, 0.95);
+    border: 1px solid #2a2a2a;
+    -webkit-box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+    z-index: 2000; 
+}
+
+.friend-context-menu .menu-title {
+    height: 25px; line-height: 25px;
+    background-color: #000;
+    color: #888; font-family: 'Eurostile-Hea', Arial, sans-serif; font-size: 11px; font-weight: bold; text-transform: uppercase;
+    text-align: center; border-bottom: 1px solid #222;
+}
+
+.friend-context-menu ul { list-style: none; margin: 0; padding: 3px 0; }
+.friend-context-menu ul li.divider { height: 1px; background: #222; margin: 3px 0; }
+
+.friend-context-menu .menu-action {
+    display: block; padding: 0 15px; height: 26px; line-height: 26px;
+    color: #ccc; font-size: 12px;
+    cursor: pointer; -webkit-transition: none; transition: none;
+}
+.friend-context-menu .menu-action:hover {
+    background-color: #053F76;
+    color: #fff;
+}

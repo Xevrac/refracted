@@ -1,0 +1,106 @@
+/* =========================================================================
+   RANK BARS COMPONENT (Overlapping Icon & Inner Text)
+   ========================================================================= */
+
+.rank-bars-module { 
+    width: 100%; 
+}
+
+.rank-row { 
+    position: relative;
+    margin-bottom: 6px; 
+    height: 18px; /* Fixed height based on crop reference */
+}
+
+/* This pushes the actual bar rightward, giving space for the icon to hang left */
+.bar-structure-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    padding-left: 12px; 
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* The Overlapping Symbol/Image (Sits exactly on the left edge of the wrapper) */
+.rank-icon-overlap {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    margin-top: -10px; /* Vertically center the 20px icon */
+    width: 20px;
+    height: 20px;
+    z-index: 10; /* Important: Sits above the bar entirely */
+    /* Tiny drop shadow makes the icon pop out from the bar edge */
+    -webkit-filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.8));
+}
+
+/* The dark background track itself */
+.rank-bar-bg { 
+    position: relative;
+    width: 135px; /* Control bar length */
+    height: 100%; 
+    background: #000; 
+    border: 1px solid #111;
+    -webkit-box-shadow: 0 0 0 1px #2a2a2a; box-shadow: 0 0 0 1px #2a2a2a; /* Thin outer border ring */
+    overflow: hidden; /* Ensures the fill doesn't bleed outside */
+}
+
+.rank-fill { 
+    position: absolute; 
+    top: 0; left: 0; bottom: 0; 
+    z-index: 1;
+}
+
+/* =========================================================================
+   HARD STOP 50% GLOSS GRADIENTS (From image reference)
+   ========================================================================= */
+/* Red (APA) */
+.fill-red { 
+    background: -webkit-linear-gradient(top, #a3221e 0%, #a3221e 50%, #6d110f 51%, #6d110f 100%); 
+}
+
+/* Blue (EU) */
+.fill-blue { 
+    background: -webkit-linear-gradient(top, #4b7db3 0%, #4b7db3 50%, #295589 51%, #295589 100%); 
+}
+
+/* Green (GLA) */
+.fill-green { 
+    background: -webkit-linear-gradient(top, #7ca54e 0%, #7ca54e 50%, #52752e 51%, #52752e 100%); 
+}
+
+/* Neutral Gray (Inactive) */
+.fill-gray { 
+    background: -webkit-linear-gradient(top, #555 0%, #555 50%, #333 51%, #333 100%); 
+}
+
+/* =========================================================================
+   INNER TYPOGRAPHY
+   ========================================================================= */
+/* Faction text inside the bar */
+.rank-label { 
+    position: absolute; 
+    left: 14px; /* Placed exactly to the right of the overlapping icon */
+    top: 0; bottom: 0; 
+    line-height: 16px; 
+    color: #fff; 
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 11px; 
+    letter-spacing: 1px;
+    z-index: 5;
+    text-shadow: 1px 1px 1px #000;
+}
+
+/* The Number inside the track (Far right) */
+.rank-level { 
+    position: absolute; 
+    right: 5px; top: 0; bottom: 0; 
+    line-height: 16px; 
+    color: #fff; 
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 12px; 
+    font-weight: bold;
+    font-style: italic; /* Mimics the slanted number from the crop */
+    z-index: 5; 
+    text-shadow: 1px 1px 1px #000;
+}

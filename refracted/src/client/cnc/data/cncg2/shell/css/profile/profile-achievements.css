@@ -1,0 +1,135 @@
+/* =========================================================================
+   PROFILE - ACHIEVEMENTS TAB
+   ========================================================================= */
+.profile-achievements-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 30px; 
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* Left Sidebar Title outside the main box */
+.ach-left-title {
+    position: absolute;
+    left: 30px; top: 35px; 
+    font-size: 14px; 
+    color: #ccc; 
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    text-transform: uppercase;
+}
+
+/* The Main Dark Box */
+.ach-main-box {
+    position: absolute;
+    left: 30px; right: 30px; top: 60px; bottom: 30px;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid #1a1a1a;
+    border-top: 1px solid #333; /* Slight highlight on top edge */
+}
+
+/* =========================================================================
+   ACHIEVEMENT GRID & CARDS
+   ========================================================================= */
+.ach-grid {
+    padding: 20px;
+}
+
+.ach-card {
+    float: left;
+    width: 120px;
+    text-align: center;
+    margin-right: 15px;
+    margin-bottom: 30px;
+}
+
+.ach-card-title {
+    height: 40px; /* Allows up to 2 lines of text */
+    line-height: 1.2;
+    color: #aaa;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+/* =========================================================================
+   ICON & NATIVE WEBKIT REFLECTION
+   ========================================================================= */
+.ach-icon-wrapper {
+    position: relative;
+    width: 60px; height: 60px;
+    margin: 0 auto;
+    
+    /* * The legendary 2011 WebKit Box Reflect! 
+     * Creates a mirrored fade directly beneath the element.
+     */
+    -webkit-box-reflect: below 2px -webkit-linear-gradient(transparent, transparent 40%, rgba(255,255,255,0.4));
+}
+
+.ach-icon-img {
+    width: 100%; height: 100%;
+    border-radius: 30px;
+    border: 2px solid #555;
+    background: #000;
+    display: block;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* Locked State Desaturation */
+.ach-icon-wrapper.locked .ach-icon-img {
+    opacity: 0.4;
+    -webkit-filter: grayscale(100%);
+    border-color: #333;
+}
+
+.ach-locked-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 30px;
+    color: #fff;
+    text-shadow: 0 0 5px #000;
+    z-index: 5;
+}
+
+/* =========================================================================
+   MULTIPLIER PILL BADGES
+   ========================================================================= */
+.ach-multiplier {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    margin-left: -18px; /* Center perfectly over the top edge */
+    width: 36px;
+    height: 16px;
+    line-height: 14px;
+    background: #000;
+    color: #fff;
+    border: 1px solid #fff;
+    border-radius: 8px; /* Pill shape */
+    font-size: 10px;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    text-align: center;
+    z-index: 10;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    
+    /* Supports the multiline 10:00\nX badge in your screenshot */
+    white-space: pre-wrap; 
+}
+
+/* =========================================================================
+   PROGRESS BAR (Sits in the reflection space below)
+   ========================================================================= */
+.ach-progress-wrap {
+    position: relative;
+    width: 60px;
+    height: 6px;
+    background: #000;
+    border: 1px solid #333;
+    margin: 25px auto 0 auto; /* Pushes it down into the reflection area */
+    z-index: 20; /* Ensure it stays clickable above the visual reflection */
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+.ach-progress-fill {
+    height: 100%;
+    background: #666;
+}

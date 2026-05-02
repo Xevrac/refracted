@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html ng-app='CCApp'>
+<head>
+    <meta charset="utf-8">
+    <title>Command & Conquer - Precision UI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <script src='lib/jquery/jquery-1.9.1-min.js'></script>
+    <script src='lib/angular/angular.min.js'></script>
+    <script src='lib/angular/angular-resource.min.js'></script>
+    <script src='lib/bootstrap/bootstrap.min.js'></script>
+    
+    <script src='lib/shell.js'></script>
+
+    <link rel='stylesheet' href='lib/bootstrap/bootstrap.min.css'>
+    <link rel='stylesheet' href='lib/bootstrap/bootstrap-responsive.min.css'>
+    <link rel='stylesheet' href='css/style.css'>
+    <link rel='stylesheet' href='css/sidebar.css'>
+    <link rel='stylesheet' href='css/newsbar.css'>
+    <link rel='stylesheet' href='css/options.css'>
+    <link rel='stylesheet' href='css/rank-bars.css'>
+    <link rel='stylesheet' href='css/credits.css'> <link rel='stylesheet' href='css/profile/profile.css'> 
+    <link rel='stylesheet' href='css/profile/profile-match-history.css'>
+    <link rel='stylesheet' href='css/profile/profile-statistics.css'>
+    <link rel='stylesheet' href='css/profile/profile-achievements.css'>
+    <link rel='stylesheet' href='css/profile/profile-leaderboards.css'>
+    
+    <link rel='stylesheet' href='css/support/support.css'> 
+    <link rel='stylesheet' href='css/learn/learn.css'> 
+    <link rel='stylesheet' href='css/pre-landing.css'>
+    <script src='js/cnc-blaze-state.js'></script>
+    <script src='js/cnc-pre-landing.js'></script>
+    <script src='app.js'></script>
+    <script src='options.js'></script>
+    <script src='profile.js'></script> 
+    <script src='support.js'></script>
+    <script src='learn.js'></script> 
+    <script src='credits.js'></script>
+</head>
+
+<body class="cc-theme" ng-controller="RootController">
+    
+    <div id="cc-pre-landing" class="cc-pre-landing" ng-class="{'cc-pre-landing--art': preLandingUseArt, 'cc-pre-landing--shell': preLandingHasShell}" ng-show="!preLandingComplete">
+        <div class="cc-pre-landing__inner">
+            <div class="cc-pre-landing__brand">
+                <div class="cc-pre-landing__spinner" role="status" aria-label="Loading"></div>
+                <h1 class="cc-pre-landing__title">COMMAND &amp; CONQUER</h1>
+            </div>
+            <p class="cc-pre-landing__tagline">{{ preLandingTagline }}</p>
+            <div class="cc-pre-landing__statusBox">
+                <p class="cc-pre-landing__status">{{ preLandingStatus }}</p>
+            </div>
+            <p class="cc-pre-landing__hint">Persona: sessionStorage cnc_blaze_dsnm, URL ?cncDsnm=, window.__CNC_BLAZE, or postMessage cnc:persona.</p>
+        </div>
+    </div>
+
+    <div class="cc-app-root" ng-cloak ng-show="preLandingComplete">
+    <div class="cc-top-bar">
+        <div class="cc-currency-block">
+            <div class="cc-currency-segment">
+                <span class="cc-currency-pill cc-currency-pill--vp" title="VP">VP</span>
+                <div class="cc-currency-value-box">
+                    <strong class="text-white currency-value">1,000</strong>
+                </div>
+            </div>
+            <button type="button" class="btn btn-mini btn-add-currency" title="Add" aria-label="Add currency">+</button>
+            <div class="cc-currency-segment">
+                <span class="cc-currency-pill cc-currency-pill--cp" title="CP">CP</span>
+                <div class="cc-currency-value-box">
+                    <strong class="text-white currency-value">950</strong>
+                </div>
+            </div>
+        </div>
+        <div class="cc-logo-block">
+            <img src="images/cnc_title.png" alt="Command & Conquer Logo" class="cc-logo-image">
+        </div>
+        <div class="cc-persona-block" ng-cloak>
+            <div class="cc-persona-name">{{ playerName }}</div>
+            <div class="cc-persona-email">{{ blazeEmail || '' }}</div>
+        </div>
+        <div class="cc-options-block text-right">
+            <div class="build-info-block" aria-label="Build information">
+                <div class="build-info-line">CNC_RL/150805</div>
+                <div class="build-info-line">cncprod150805</div>
+                <div class="build-info-line">prd/rel_k/152085</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-options" ng-click="openOptions()">OPTIONS</button>
+        </div>
+    </div>
+
+    <div ng-view class="cc-main-view"></div>
+
+    <div ng-include="'view/options.html'"></div>
+    
+    <div ng-include="'view/credits.html'"></div>
+    </div>
+
+</body>
+</html>

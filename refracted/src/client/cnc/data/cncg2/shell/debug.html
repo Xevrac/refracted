@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html ng-app="CncDebugPage">
+<head>
+    <meta charset="utf-8">
+    <title>Command &amp; Conquer — debug probe</title>
+    <link rel="stylesheet" href="css/debug-probe.css">
+    <script src="lib/angular/angular.min.js"></script>
+    <script src="lib/shell.js"></script>
+    <script src="js/cnc-blaze-state.js"></script>
+    <script src="js/debug-probe.js"></script>
+    <script>
+        angular.module("CncDebugPage", []);
+    </script>
+</head>
+<body class="cnc-debug-standalone">
+    <div class="cnc-debug-chrome">
+        <a class="cnc-debug-back" href="index.html">← Shell</a>
+    </div>
+    <div class="cnc-debug-page">
+        <div class="cnc-debug-container" ng-include="'view/debug-probe.html'"></div>
+    </div>
+</body>
+</html>

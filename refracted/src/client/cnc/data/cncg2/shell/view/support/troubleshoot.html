@@ -1,0 +1,8 @@
+<div class="support-block" ng-repeat="item in troubleshootList">
+    <h3>{{ item.question }}</h3>
+    <p ng-if="item.text">{{ item.text }}</p>
+    
+    <ul ng-if="item.bullets">
+        <li ng-repeat="bullet in item.bullets">{{ bullet }}</li>
+    </ul>
+</div>

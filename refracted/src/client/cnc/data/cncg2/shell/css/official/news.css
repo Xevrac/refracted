@@ -1,0 +1,435 @@
+#news_subnav_cont
+{
+    height: 40px;
+    position: relative;
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/dark_gray_tex.jpg) repeat left top;
+
+}
+
+#btn_news_nav_left, #btn_news_nav_right
+{
+    height: 40px;
+    width: 62px;
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/media_subnav_arrow_left.png) no-repeat left top;
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: pointer;
+    border-bottom: solid 1px #5b5b5b;
+}
+
+#btn_news_nav_right
+{
+    top: 0;
+    left: 927px;
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/media_subnav_arrow_right.png) no-repeat left top;
+}
+
+
+#news_subnav_cont ul
+{
+    position: absolute;
+    left: 62px;
+    width: 865px;
+    height: 40px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/trans_gray_tex.png) repeat left top;
+    border-bottom: solid 1px #5b5b5b;
+}
+
+#news_subnav_cont ul li
+{
+    width: 172.5px;
+    height: 40px;
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/trans_gray_tex.png) repeat left top;
+    float: left;
+    cursor: pointer;
+    text-align: center;
+    line-height: 40px;
+
+    font-family: 'Eurostile-Med', 'Arial', sans-serif;
+    font-size: 16px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-bottom: solid 1px #5b5b5b;
+}
+
+/*
+*  to hide the arrows
+*/
+#btn_news_nav_left, #btn_news_nav_right
+{
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/dark_gray_tex.jpg) repeat left top;
+    cursor: inherit;
+}
+
+/*---------------------------------------------*/
+
+#news_subnav_cont ul li.news_sub_selected
+{
+
+    border-bottom: solid 1px #0f81e8;
+}
+
+#news_subnav_cont ul li img
+{
+    margin-bottom: -2px;
+    margin-right: 3px;
+}
+#news_subnav_cont ul li a:link, #news_subnav_cont ul li a:visited
+{
+    color: #fff;
+    text-decoration: none;
+    text-shadow: none;
+}
+#news_subnav_cont ul li a:active, #news_subnav_cont ul li a:hover
+{
+    color: #0f81e8;
+    text-decoration: none;
+    text-shadow: none;
+}
+
+#news_featured_carousel_cont
+{
+    height:290px;
+    width: 100%;
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/trans_white_tex.png) repeat top left;
+    border-bottom: 1px solid #0f81e8;
+    position: relative;
+    overflow: hidden;
+}
+
+#news_article_list_cont
+{
+    margin: 0;
+    padding: 0;
+    border: 0;
+    height: auto;
+    width: auto;
+    float: left;
+    list-style: none;
+}
+
+#news_article_list_cont li
+{
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/trans_white_tex.png) repeat top left;
+    height: 168px;
+    width: 720px;
+    margin-bottom: 20px;
+    cursor: pointer;
+}
+
+#news_right_promo_cont
+{
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/trans_white_tex.png) repeat top left;
+    height: 544px;
+    width: 245px;
+    float: right;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+
+#news_right_promo_cont img
+{
+    height: 100%;
+    width: auto;
+}
+
+#news_image_cont
+{
+    border-bottom: 1px solid #0f81e8;
+    width: 754px;
+    margin: 0;
+    padding: 0;
+}
+
+#news_image_cont img
+{
+    width: 754px;
+    height: auto;
+    display: block;
+}
+#news_article_cont
+{
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/trans_white_tex.png) repeat top left;
+    width: 754px;
+    height: auto;
+}
+
+.left_content_cell, .right_content_cell
+{
+    float: left;
+}
+
+.left_content_cell
+{
+    width:754px;
+}
+
+.right_content_cell
+{
+    width: 234px;
+    height: auto;
+}
+
+#news_right_article_list_cont
+{
+    background: transparent url(/web/20131031171852im_/http://www.commandandconquer.com/images/light_gray_tex.jpg) repeat top left;
+}
+
+.news_detail_post_category
+{
+    font-family: 'Eurostile-Hea';
+    color: #0f81e8;
+    font-size: 17px;
+    text-transform: uppercase;
+}
+
+.news_post_date
+{
+    font-family: 'Eurostile-Med';
+    color: #fff;
+    font-size: 17px;
+    margin-right: 0;
+    margin-left: 9px;
+    float: none;
+    text-transform: uppercase;
+}
+
+#news_article_cont h1
+{
+    margin: 0;
+    padding: 0;
+    font-family: 'Eurostile-Med';
+    color: #fff;
+    font-size: 28px;
+}
+
+.news_detail_post_content
+{
+    font-family: 'Arial', sans-serif;
+    font-size: 13px;
+    color: #fff;
+    line-height: 19px;
+   margin-top: 20px;
+}
+.news_detail_post_content img
+{
+    display: block;
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+
+#news_detail_social_btns
+{
+    float: right;
+}
+
+.news_detail_post_navgation
+{
+    text-align: right;
+}
+
+#news_right_article_list_cont ul
+{
+    list-style: none;
+    margin: 0;
+    padding: 10px 0;
+    font-family: 'Eurostile-Med';
+    color: #fff;
+    font-size: 17px;
+}
+
+#news_right_article_list_cont ul li
+{
+    margin: 10px 12px;
+    text-transform: uppercase;
+}
+
+#news_right_article_list_cont ul li a:link, #news_right_article_list_cont ul li a:visited
+{
+    color: #fff;
+    text-decoration: none;
+}
+
+#news_right_article_list_cont ul li a:hover, #news_right_article_list_cont ul li a:active, a:link, a:visited
+{
+    color: #0f81e8;
+    text-decoration: none;
+}
+
+#btn_prev_article, #btn_next_article
+{
+    display: none;
+}
+
+.news_detail_post_title
+{
+    margin: 0;
+    padding: 0;
+    font-family: 'Eurostile-Med';
+    color: #fff;
+    font-size: 17px;
+}
+
+#news_article_list_cont
+{
+    font-family: 'Eurostile-Med';
+    color: #fff;
+}
+
+.news_list_post_image
+{
+    float: left;
+    height: 166px;
+    width: 255px;
+    text-align: center;
+    line-height: 166px;
+    max-height: 166px;
+    overflow: hidden;
+}
+
+.news_list_post_image img
+{
+    width: 216px;
+    height: auto;
+    vertical-align: middle;
+}
+
+.news_list_top_line
+{
+    position: relative;
+    top: 8px;
+    height: auto;
+    margin-bottom: 10px;
+}
+
+.news_list_post_category
+{
+    font-size: 9px;
+    color: #0f81e8;
+    text-transform: uppercase;
+}
+
+#news_article_list_cont .news_post_date
+{
+    font-size: 9px;
+}
+
+.news_list_post_title
+{
+    text-transform: uppercase;
+    margin: 0 0;
+    font-size: 14px;
+}
+
+.news_list_post_content, .news_list_post_read_more_link a, .no_more_posts
+{
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    margin-top: 15px;
+    margin-right: 30px;
+}
+.no_more_posts
+{
+    color: #5a5a5a;
+}
+
+.news_list_post_read_more_link
+{
+    margin-top: 15px;
+}
+
+.news_list_post_read_more_link a
+{
+    text-decoration: none;
+    color: #fff;
+}
+
+#news_article_list_cont li.news_list_pagination
+{
+    height: auto;
+    text-align: center;
+    padding-top: 15px;
+    padding-bottom: 15px;
+}
+
+#news_featured_carousel
+{
+    list-style: none;
+    margin: 0 0;
+    padding: 0 0;
+    width: auto;
+    position: absolute;
+}
+
+#news_featured_carousel li
+{
+    height: 290px;
+    width: 988px;
+    float: left;
+}
+.news_list_post_image_med, .news_list_post_image_med img
+{
+    height: auto;
+    width: 368px;
+    line-height: 239px;
+    float: left;
+    margin-right: 20px;
+}
+
+#news_featured_carousel .news_list_post_category,#news_featured_carousel .news_post_date
+{
+    font-size: 12px;
+    font-family: Eurostile-Med;
+}
+
+#news_featured_carousel .news_list_post_title
+{
+    font-size: 19px;
+    color: #fff;
+    font-family: Eurostile-Med;
+}
+
+#news_featured_carousel .news_list_post_content
+{
+    font-size: 14px;
+    color: #fff;
+    font-family: Eurostile-Med;
+}
+
+#news_featured_carousel .news_list_top_line
+{
+    margin-top: -15px;
+}
+
+#featured_news_carousel_dots
+{
+    position: absolute;
+    top: 245px;
+    list-style: none;
+    margin: 0 0;
+    padding: 0 0;
+    height: 40px;
+    width: 200px;
+    /*border: 1px solid #ff0;*/
+    white-space: nowrap;
+    overflow: visible;
+}
+
+#featured_news_carousel_dots .carousel_dot
+{
+    font-family: Arial;
+    font-size: 42px;
+    height: 15px;
+    width: 15px;
+    color: #9b9a99;/*#0078e5*/
+    cursor: pointer;
+    float: left;
+}

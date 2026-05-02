@@ -1,0 +1,64 @@
+/* =========================================================================
+   SUPPORT TAB
+   ========================================================================= */
+.cc-support-tab {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 20;
+}
+
+.support-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    padding: 30px;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+    background: rgba(10, 10, 10, 0.85); /* Solid backdrop behind panels */
+}
+
+/* Scroll wrapper for the massive text blocks */
+.support-scroll-area {
+    position: absolute;
+    top: 30px; left: 30px; right: 30px; bottom: 30px;
+    overflow-y: auto;
+    padding-right: 15px; /* Leave room for scrollbar */
+}
+
+/* Individual Content Blocks */
+.support-block {
+    background: rgba(0, 0, 0, 0.6); /* Slightly translucent */
+    border: 1px solid #333;
+    padding: 20px 25px;
+    margin-bottom: 15px;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* UPGRADED TYPOGRAPHY FOR QUESTIONS */
+.support-block h3 {
+    color: #fff;
+    font-family: 'Eurostile-Hea', Arial, sans-serif; /* Mapped to bold font */
+    font-size: 24px; /* Increased size */
+    font-weight: bold;
+    margin: 0 0 15px 0;
+    line-height: 1.2;
+    text-shadow: 1px 1px 2px #000; /* Subtle drop shadow for depth */
+}
+
+.support-block p, 
+.support-block li {
+    color: #aaa;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+/* Specific styling for the Faction bullet points */
+.support-block ul {
+    margin: 10px 0 10px 20px;
+    padding: 0;
+    list-style-type: disc;
+}
+
+.support-block li { 
+    margin-bottom: 8px; 
+}

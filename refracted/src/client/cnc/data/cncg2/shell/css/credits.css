@@ -1,0 +1,105 @@
+/* =========================================================================
+   CREDITS OVERLAY & MODAL
+   ========================================================================= */
+.credits-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 9999;
+}
+
+.credits-modal-box {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 600px; height: 450px;
+    margin: -225px 0 0 -300px;
+    background: rgba(10, 10, 10, 0.95);
+    border: 1px solid #333;
+    box-shadow: 0 0 40px #000;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+
+/* Uses the same Red X PNG logic as the Options menu */
+.btn-credits-close {
+    position: absolute;
+    top: -12px; right: -12px;
+    width: 32px; height: 32px;
+    background-color: transparent;
+    background-image: url('../view/image/Red_x_button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    border-radius: 16px;
+    z-index: 10;
+    padding: 0;
+}
+.btn-credits-close:hover { -webkit-filter: brightness(1.2); }
+
+/* =========================================================================
+   CREDITS HEADER (Logo & Line)
+   ========================================================================= */
+.credits-header {
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 80px;
+    padding: 20px 25px 0 25px;
+}
+
+.victory-logo {
+    width: 128px;
+    height: 60px;
+    display: block;
+}
+
+.credits-divider {
+    position: absolute;
+    bottom: 0; left: 25px; right: 25px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* =========================================================================
+   CREDITS SCROLL & TYPOGRAPHY
+   ========================================================================= */
+.credits-scroll-area {
+    position: absolute;
+    top: 85px; bottom: 20px; left: 25px; right: 10px;
+    overflow-y: auto;
+    padding-right: 15px; /* Scrollbar padding */
+}
+
+/* Big Category Font */
+.credit-category {
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 20px;
+    color: #fff;
+    margin: 25px 0 15px 0;
+    font-weight: normal;
+}
+
+/* Small Subcategory Font */
+.credit-subcategory {
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 14px;
+    color: #aaa;
+    margin: 15px 0 10px 0;
+    font-weight: normal;
+}
+
+/* Smallest Subcategory Font (Role) */
+.credit-role {
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+    color: #777;
+    margin-top: 10px;
+    text-transform: uppercase;
+}
+
+/* Name (Matches Subcategory font family/size, but brighter) */
+.credit-name {
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 14px;
+    color: #ddd;
+    margin-top: 2px;
+}

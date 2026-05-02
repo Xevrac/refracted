@@ -1,0 +1,53 @@
+<div class="cc-news-widget" ng-hide="activeNewsArticle">
+    
+    <div class="news-header">
+        <img src="images/icon_globe.svg" alt="" class="news-globe-icon">
+        <span class="news-title">NEWS</span>
+    </div>
+    
+    <div class="news-subheader">
+        The Latest in the world of C&C
+    </div>
+
+    <ul class="news-list">
+        <li class="news-item clearfix" ng-repeat="news in newsEntries" ng-click="openArticle(news)">
+            
+            <div class="news-item-thumb" ng-if="news.hasImage">
+                <img src="view/image/light_gray_tex.jpg" alt="">
+            </div>
+            
+            <div class="news-item-text" ng-class="{'has-thumb': news.hasImage}">
+                {{ news.title }}
+            </div>
+        </li>
+    </ul>
+</div>
+
+<div class="cc-news-full-panel" ng-show="activeNewsArticle">
+    
+    <h1 class="article-title">{{ activeNewsArticle.title }}</h1>
+    <h4 class="article-date">{{ activeNewsArticle.date }}</h4>
+    
+    <div class="article-content">
+        <p>{{ activeNewsArticle.content }}</p>
+        
+        <p><span style="text-decoration: underline;">Balance Changes</span><br>
+        A significant amount of the abilities and upgrades have been updated, changing a lot of the abilities to now be available as soon as the unit is produced.</p>
+        
+        <ul style="color: #888;">
+            <li>APA
+                <ul>
+                    <li>Urban Assault Team<br>Gun Emplacement is no longer an upgrade.</li>
+                </ul>
+            </li>
+            <li>EU
+                <ul>
+                    <li>Recon Squad<br>Entrench is no longer an upgrade and is available by default.</li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    <button class="btn-back-to-main" ng-click="closeArticle()">BACK TO MAIN</button>
+
+</div>

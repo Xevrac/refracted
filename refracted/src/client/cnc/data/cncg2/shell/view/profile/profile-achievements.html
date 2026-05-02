@@ -1,0 +1,32 @@
+<div class="profile-achievements-container">
+    
+    <div class="ach-left-title">YOUR ACHIEVEMENTS</div>
+    
+    <div class="ach-main-box">
+        
+        <div class="ach-grid clearfix">
+            
+            <div class="ach-card" ng-repeat="ach in achievementsList">
+                
+                <div class="ach-card-title">{{ ach.name }}</div>
+                
+                <div class="ach-icon-wrapper" ng-class="{'locked': ach.locked}">
+                    <img ng-src="{{ ach.icon }}" class="ach-icon-img" alt="{{ ach.name }}">
+                    
+                    <div class="ach-multiplier" ng-if="ach.multiplier !== ''">{{ ach.multiplier }}</div>
+                    
+                    <div class="ach-locked-overlay" ng-if="ach.locked">
+                        <span style="font-size:32px; line-height:60px;">&#128274;</span>
+                    </div>
+                </div>
+
+                <div class="ach-progress-wrap" ng-if="ach.locked">
+                    <div class="ach-progress-fill" style="width: {{ ach.progress }}%;"></div>
+                </div>
+                
+            </div>
+
+        </div>
+        
+    </div>
+</div>

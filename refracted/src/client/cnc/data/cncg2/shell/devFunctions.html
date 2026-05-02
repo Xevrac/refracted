@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Command & Conquer™</title>
+    <link rel="stylesheet" href="./css/shell.css">
+    <script src="./js/src.js"></script>
+</head>
+
+<body>
+    <img class="logo" src="./images/maintenance/logo.png" alt="Logo">
+    <hr>
+    <h1>Debug Menu</h1>
+    <p>RtsClientSettings.DebugShell = True</p>
+    <h1>Frostbite Functions</h1>
+    <button onclick="toggleDrawScreenInfo()">DrawInfo</button>
+    <button onclick="toggleFpsIncrease()">MaxSimFps</button>
+    <button onclick="createGame()">createGame</button>
+    <hr>
+    <h1>Shell Access Layer</h1>
+    <button onclick="createBlazeGame()">blazeCreateGame</button>
+    <button onclick="blazeJoinGame()">blazeJoinGame</button>
+    <button onclick="blazeJoinGame2()">blazeJoinGame2</button>
+    <button onclick="blazeAuthenticate()">blazeAuthenticate</button>
+    <button onclick="tokenAuthenticate()">tokenAuthenticate</button>
+    <button onclick="getConfig()">getConfig</button>
+    <button onclick="quitSession()">quitSession</button>
+    <button onclick="surrenderSession()">surrenderSession</button>
+    <br>
+    <br>
+    <a class="button-link" href="./devWrapper.html">Back</a>
+    <hr>
+    <h1>Response</h1>    
+    <div id="debugOutput"></div>
+    <div id="version">Shell v1.2.2 | Xevrac</div>
+</body>
+</html>

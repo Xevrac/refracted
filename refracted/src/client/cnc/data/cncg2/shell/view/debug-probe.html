@@ -1,0 +1,225 @@
+<div id="cnc-probe-dock" class="cnc-probe-dock cnc-probe--page cnc-probe-open">
+    <div class="probe-head">
+        <span class="probe-title">Debug</span>
+    </div>
+    <div class="probe-body">
+
+        <h4>JS &amp; shell</h4>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.logAvailability()">log shell + gameclient</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.inspectBridgeObjects()">inspect bridge</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.inspectShellCallbackContract()">inspect shell callback</button>
+        </div>
+        <div class="probe-row">
+            <input type="text" class="cnc-probe-cmd cnc-probe-cmd--inline" id="cnc-probe-shell-url-line" placeholder="shell url e.g. /blaze" value="/blaze" style="min-width:220px;flex:1;" />
+            <button class="probe-btn" type="button" onclick="CncProbe.onShellUrlLine()">run url</button>
+        </div>
+        <div class="probe-row">
+            <input type="text" class="cnc-probe-cmd cnc-probe-cmd--inline" id="cnc-probe-shell-resource-line" placeholder="_resource e.g. /usersettings/save" value="/usersettings/save" style="min-width:220px;flex:1;" />
+            <button class="probe-btn" type="button" onclick="CncProbe.onShellResourceLine()">run _resource</button>
+        </div>
+
+        <h4>RtsClient</h4>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">gid</label>
+            <input type="text" id="cnc-probe-rt-gid" value="1" style="width:3.5rem;flex:0 0 auto;" />
+            <label class="cnc-probe-label">join host</label>
+            <input type="text" id="cnc-probe-join-host" value="localhost" style="min-width:100px;flex:1;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.rtVersion()">version</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtTestEvaluatorPerformance()">testEvaluatorPerformance</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtIsConnected()">isConnectedToServer</button>
+        </div>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">cam x/y/z</label>
+            <input type="text" id="cnc-probe-cam-x" value="0" style="width:3rem;flex:0 0 auto;" />
+            <input type="text" id="cnc-probe-cam-y" value="0" style="width:3rem;flex:0 0 auto;" />
+            <input type="text" id="cnc-probe-cam-z" value="0" style="width:3rem;flex:0 0 auto;" />
+            <button class="probe-btn" type="button" onclick="CncProbe.rtSetCameraLookAt()">setCameraLookAt</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtSaveProfileSettings()">saveProfileSettings</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtEnableAutoCam()">enableAutoCam</button>
+        </div>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label" title="Full path to level.cfg">cfg</label>
+            <input type="text" id="cnc-probe-create-cfg" class="cnc-probe-cmd--inline" value="C:\CNCO\level.cfg" style="min-width:140px;flex:1;" />
+            <label class="cnc-probe-label" title="Engine level path">level</label>
+            <input type="text" id="cnc-probe-create-level" class="cnc-probe-cmd--inline" value="levels/SP/Alpha_Tutorial/Alpha_Tutorial" style="min-width:200px;flex:2;" />
+            <label class="cnc-probe-label">pid</label>
+            <input type="text" id="cnc-probe-create-playerid" value="1" style="width:2.5rem;flex:0 0 auto;" />
+        </div>
+        <p class="probe-hint">After <strong>createGame</strong> the client may sit in <code>WaitingForLevel</code> (black screen). Use Experimental <strong>GameReady + createGame</strong> for the safe shell+game sequence. Avoid <strong>RtsClient.joinGame</strong> against Refracted alone — it needs a <em>game server</em> TCP host, not Blaze; otherwise the client fatals.</p>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.rtJoinGameFromInputs()">joinGame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtCreateLocal()">createGame</button>
+            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.rtEndGame()">endGame</button>
+            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.rtSurrender()">surrenderGame</button>
+            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.rtQuit()">quit</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.testClientJoinMultiplayer()">test client.joinMultiplayer</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.testClientDisconnect()">test client.disconnect</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Online.Name')">Online.Name</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Client.Name')">Client.Name</button>
+        </div>
+        <div class="probe-row">
+            <textarea class="cnc-probe-cmd cnc-probe-cmd--short" id="cnc-probe-gameclient-line" rows="2" placeholder="gameclient line">RtsClient.version</textarea>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.onGameLine()">run gameclient line</button>
+        </div>
+
+        <h4>RtsClient.blaze</h4>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">Blaze proto</label>
+            <input type="text" id="cnc-probe-blaze-proto" value="3.19.4.0" style="min-width:90px;flex:1;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.rtsUseBlaze()">RtsClientSettings.UseBlaze</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtGetHouseColors()">getSelectableHouseColors</button>
+        </div>
+
+        <h5 class="cnc-probe-subhead">blazeCreateGame</h5>
+        <p class="probe-hint cnc-probe-blaze-create-hint">Thin client needs <strong>three</strong> tokens (<code>gameName</code>, <code>numPlayers</code>, <code>levelName</code>). The in-engine usage line only shows two.</p>
+        <div class="probe-row probe-row--tight cnc-probe-blaze-create-row">
+            <label class="cnc-probe-label" for="cnc-probe-blaze-gname">game name</label>
+            <input type="text" id="cnc-probe-blaze-gname" value="XEVRAC" class="cnc-probe-cmd--inline" style="flex:1;min-width:100px;max-width:none;" />
+            <label class="cnc-probe-label" for="cnc-probe-blaze-players">players</label>
+            <input type="text" id="cnc-probe-blaze-players" value="2" class="cnc-probe-cmd--inline" style="width:48px;flex:0;max-width:64px;" />
+        </div>
+        <div class="probe-row probe-row--tight cnc-probe-blaze-create-row">
+            <label class="cnc-probe-label" for="cnc-probe-blaze-level">level</label>
+            <input type="text" id="cnc-probe-blaze-level" class="cnc-probe-cmd--inline" value="levels/SP/Alpha_Tutorial/Alpha_Tutorial" style="flex:1;min-width:200px;max-width:none;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.rtBlazeCreate()">blazeCreateGame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeCreateUrl()" title="POSTs /blaze/createGame via shellaccesslayer (URL-based, bypasses gameclient).">blazeCreateGame (URL)</button>
+        </div>
+
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeLogin()">blazeLogin</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeSetProtoFromInput()">blazeSetProtocolVersion</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeJoinFromInput()">blazeJoinGame</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetPlayersFromInput()">blazeGetPlayers</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetGames()">blazeGetGames</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeSetAttr()">blazeSetPlayerAttribute</button>
+        </div>
+
+        <h4>Blaze (shell HTTP)</h4>
+        <div class="probe-row">
+            <input type="text" id="cnc-probe-email" value="user@example.com" style="min-width:140px;flex:0 1 180px;" />
+            <input type="text" id="cnc-probe-pass" value="test" style="min-width:80px;flex:0 1 100px;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="(function(){var e=document.getElementById('cnc-probe-email').value||'user@example.com',p=document.getElementById('cnc-probe-pass').value||'test';CncProbe.blazeAuth(e,p);})()">/blaze/authenticate</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeLogout()">/blaze/logout</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeBase()">GET /blaze</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeCreate()">/blaze/createGame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeJoin(1)">/blaze/joinGame</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.getConfig()">/config/</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setShellUrlAndRun('/options/graphics/get')">/options/graphics/get</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.sessionQuit()">/session/quit</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.sessionSurrender()">/session/surrender</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.salamanderGameReady()">/salamander GameReady</button>
+        </div>
+
+        <h4>Experimental</h4>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.startWs(9000)">startWebsocketListener 9000</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.startWs(9876)">startWebsocketListener 9876</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.toggleInspector()">toggleInspector</button>
+        </div>
+        <p class="probe-hint">Bulk: <strong>GameReady + createGame</strong> matches what Refracted can do. <strong>+ joinGame</strong> only with a real listening game host.</p>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.rtCreateLocal()">createGame local (level.cfg)</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.localSalamanderGameReadyAndCreate('localhost')">GameReady + createGame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtJoinLocal('localhost')">joinGame 1 localhost</button>
+            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.localHostAndJoinWithGameServer('localhost')">+ joinGame (needs game server)</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.toggleDrawScreenInfo()">DrawScreenInfo + histogram toggle</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.toggleFpsIncrease()">MaxSim/Variable fps toggle</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.renderFps(true)">DrawFps on</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.renderFps(false)">DrawFps off</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.renderInfo(true)">DrawInfo on</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.coreLog('Debug')">Core.LogLevel Debug</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Render.DrawFps true')">Render.DrawFps true</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Render.DrawInfo true')">Render.DrawInfo true</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Render.DrawScreenInfo true')">Render.DrawScreenInfo true</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Render.DrawFpsHistogram true')">Render.DrawFpsHistogram true</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('GameTime.MaxSimFps 60')">GameTime.MaxSimFps 60</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('GameTime.MaxVariableFps 60')">GameTime.MaxVariableFps 60</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('GameTime.MaxInactiveVariableFps 60')">GameTime.MaxInactiveVariableFps 60</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Rts.CancelHotKeyOpensOptions false')">Rts.CancelHotKeyOpensOptions false</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('client.disconnect')">client.disconnect (line)</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('client.restartFromLastCheckpoint')">client.restartFromLastCheckpoint</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('DebugCam.toggleToFreeCamera')">DebugCam.toggleToFreeCamera</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('DebugCam.toggleToRTSCamera')">DebugCam.toggleToRTSCamera</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Input.startRecording')">Input.startRecording</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('Input.stopRecording')">Input.stopRecording</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('TextureStreaming.DrawStatsEnable true')">TextureStreaming.DrawStatsEnable</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('MeshStreaming.DrawStatsEnable true')">MeshStreaming.DrawStatsEnable</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setGameLine('WorldRender.DrawDebugLightStats true')">WorldRender.DrawDebugLightStats</button>
+        </div>
+
+        <h4>Settings</h4>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.getOptions()">/options/graphics/get</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.frontEndFullscreen(true)">shellfullscreen true</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.frontEndFullscreen(false)">shellfullscreen false</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.gameFullscreen(true)">gamefullscreen true</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.gameFullscreen(false)">gamefullscreen false</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.setFullscreenDimensions(1920,1080)">fullscreen 1920×1080</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.setWindowedDimensions(1920,1080)">windowed 1920×1080</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.applyAudio()">/usersettings/applyAudio</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.saveSettings()">/usersettings/save</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.discardSettings()">/usersettings/discard</button>
+        </div>
+        <div class="probe-row">
+            <input type="text" id="cnc-probe-getvalue-key" value="Render.DrawFps" style="min-width:160px;flex:0 1 200px;" />
+            <button class="probe-btn" type="button" onclick="CncProbe.onGameGetValue()">getValue</button>
+        </div>
+        <div class="probe-row">
+            <input type="text" id="cnc-probe-setvalue-key" value="Render.DrawFps" style="min-width:140px;flex:0 1 180px;" />
+            <input type="text" id="cnc-probe-setvalue-value" value="false" style="min-width:80px;flex:0 1 120px;" />
+            <button class="probe-btn" type="button" onclick="CncProbe.onGameSetValue()">setValue</button>
+        </div>
+
+        <h4>Output</h4>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.dumpOutputToLog()">Save output to file</button>
+        </div>
+    </div>
+</div>
+
+<div id="cnc-probe-output-modal" class="cnc-probe-output-modal">
+    <div id="cnc-probe-output-drag" class="cnc-probe-output-head">
+        <span class="cnc-probe-output-title">Output</span>
+        <div class="cnc-probe-output-actions">
+            <button class="probe-btn" type="button" onclick="CncProbe.dumpOutputToLog()">Save to file</button>
+        </div>
+    </div>
+    <div id="cnc-probe-modal-out"></div>
+</div>
