@@ -50,6 +50,14 @@ These profiles ship as defaults (you can adjust the list in your local configura
 
 If a game is not listed here, it is not part of the default supported set yet.
 
+# Media 
+
+<img width="1201" height="831" alt="Refracted" src="https://github.com/user-attachments/assets/10533d00-2a7e-4eee-83d5-f5289906f145" />
+
+<br>
+
+<img width="1199" height="833" alt="Refracted 2" src="https://github.com/user-attachments/assets/940c03bd-4853-4613-85f3-c4a612dffdca" />
+
 ## Important disclaimer (EA, titles, and software)
 
 **Refracted is an independent, community project.** It is **not** affiliated with, endorsed by, or sponsored by Electronic Arts Inc. or any other rights holder. **Battlefield**, **Command & Conquer**, and other game names are trademarks of their respective owners.
