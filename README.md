@@ -52,6 +52,7 @@ If a game is not listed here, it is not part of the default supported set yet.
 
 <img width="1201" height="831" alt="Refracted" src="https://github.com/user-attachments/assets/10533d00-2a7e-4eee-83d5-f5289906f145" />
 
+
 <img width="1199" height="833" alt="Refracted 2" src="https://github.com/user-attachments/assets/940c03bd-4853-4613-85f3-c4a612dffdca" />
 
 ## Important disclaimer (EA, titles, and software)
