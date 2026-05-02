@@ -8,6 +8,8 @@
 
 Refracted's purpose is to preserve video games against time. Examples have arisen over time where we see core infrastructure is shutdown and games no longer function at all as a result for one reason or another.
 
+**Disclaimer (Prism):** Client-side interaction uses **Prism**, a companion to Refracted. The sourcecode for Prism is **private**. Purpose-made compiled builds for supported titles will be **coming soon**.
+
 ### Related tooling
 
 Refracted emulates **backend** services on your machine. The game client must still be directed to that machine (for example via hosts or DNS, or client-side patching). **Prism** is a separate companion effort focused on client-side hooks and patching for workflows that use Refracted; its **source is not in this repository**. Any prebuilt Prism binaries are distributed on their own release channels when available.
