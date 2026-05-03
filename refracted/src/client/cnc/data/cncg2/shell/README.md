@@ -1,6 +1,7 @@
 # Command & Conquer - Main menu user interface
 ## Utilizes EAWebKit 13.2.1.0
 > Source Code for EAWebKit is readily available from EA via GPL and closest available version is [13.2.0.0](https://gpl.ea.com/packages/EAWebKit_13.3.2.0.0.zip)
+
 Stack:
 * Jquery `1.9.1`
 * AngularJS `1.1.5`
