@@ -354,7 +354,8 @@ impl TdfTreeParser {
             0x6 => Self::parse_union(data, &tag_clone, pos)?, // UNION
             0x7 => Self::parse_int64(data, &tag_clone, pos)?,
             0x8 => Self::parse_blob(data, &tag_clone, pos)?, // BLOB (alternative)
-            0x9 => Self::parse_float(data, &tag_clone, pos)?,
+            // Type 0x09 is Blaze **OBJECT_ID** (3× varint): matches [`TdfEncoder::encode_object_id`] and [`TdfEncoder::skip_field`] (not IEEE float).
+            0x9 => Self::parse_object_id_raw(data, &tag_clone, pos)?,
             0xA => Self::parse_time(data, &tag_clone, pos)?,
             0xB => Self::parse_struct(data, &tag_clone, pos)?, // STRUCT (without length, just null terminator)
             _ => {
@@ -520,6 +521,7 @@ impl TdfTreeParser {
         Ok((node, 8))
     }
     
+    #[allow(dead_code)] // Legacy: type 0x09 is OBJECT_ID on the wire; floats use a different subtype in this codebase.
     fn parse_float(data: &[u8], tag: &str, pos: &mut usize) -> BlazeResult<(TdfTreeNode, usize)> {
         if data.len() - *pos < 4 {
             return Err(BlazeError::TdfEncoding("Not enough data for float".to_string()));
@@ -1301,7 +1303,7 @@ impl TdfTreeParser {
             0x6 => Self::parse_union(data, "VALU", pos)?.0,
             0x7 => Self::parse_int64(data, "VALU", pos)?.0,
             0x8 => Self::parse_blob(data, "VALU", pos)?.0,
-            0x9 => Self::parse_float(data, "VALU", pos)?.0,
+            0x9 => Self::parse_object_id_raw(data, "VALU", pos)?.0,
             0xA => Self::parse_time(data, "VALU", pos)?.0,
             0xB => Self::parse_struct(data, "VALU", pos)?.0,
             _ => {

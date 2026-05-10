@@ -6,13 +6,18 @@ use bytes::Bytes;
 
 
 /// Handle unhandled command - returns empty response and logs
-fn handle_unhandled_command(component: u16, command: u16, payload: &[u8]) -> BlazeResult<Bytes> {
+fn handle_unhandled_command(
+    component: u16,
+    command: u16,
+    payload: &[u8],
+    incoming_seq: Option<u64>,
+) -> BlazeResult<Bytes> {
     let component_name = components::get_component_name(component);
     let command_name = components::get_command_name(component, command)
         .unwrap_or_else(|| format!("UnknownCommand({})", command));
     
-    // Check if this is a new discovery
     let is_new = discovery::check_and_record(component, command);
+    discovery::record_first_seen_seq_if_new(is_new, component, command, incoming_seq);
     
     if is_new {
         crate::console_println!(
@@ -39,11 +44,21 @@ fn handle_unhandled_command(component: u16, command: u16, payload: &[u8]) -> Bla
 }
 
 /// Route packet to appropriate handler
-pub fn handle_packet(packet: &Fire2FramePacket) -> BlazeResult<Bytes> {
-    handle_packet_fields(packet.header.component, packet.header.command, &packet.payload)
+pub fn handle_packet(packet: &Fire2FramePacket, incoming_seq: Option<u64>) -> BlazeResult<Bytes> {
+    handle_packet_fields(
+        packet.header.component,
+        packet.header.command,
+        &packet.payload,
+        incoming_seq,
+    )
 }
 
-pub fn handle_packet_fields(component: u16, command: u16, payload: &[u8]) -> BlazeResult<Bytes> {
+pub fn handle_packet_fields(
+    component: u16,
+    command: u16,
+    payload: &[u8],
+    incoming_seq: Option<u64>,
+) -> BlazeResult<Bytes> {
     // Client-first dispatch: each title module can fully shape any command/response.
     if let Some(result) = crate::client::handle_packet_fields(component, command, payload) {
         return result;
@@ -51,7 +66,7 @@ pub fn handle_packet_fields(component: u16, command: u16, payload: &[u8]) -> Bla
 
     match (component, command) {
         (0, 0) => Err(BlazeError::ConnectionClosed),
-        _ => handle_unhandled_command(component, command, payload),
+        _ => handle_unhandled_command(component, command, payload, incoming_seq),
     }
 }
 

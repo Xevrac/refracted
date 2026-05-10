@@ -149,6 +149,7 @@ async fn handle_grpc_proxy_connection(
             .as_secs_f64();
 
         let captured_request = CapturedGrpc {
+            capture_seq: 0,
             timestamp,
             direction: GrpcDirection::ClientToServer,
             method: method.clone(),
@@ -235,6 +236,7 @@ async fn handle_grpc_proxy_connection(
         let resp_protobuf_data = resp_decoded.protobuf_chunks.first().cloned();
 
         let captured_response = CapturedGrpc {
+            capture_seq: 0,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()

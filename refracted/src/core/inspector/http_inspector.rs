@@ -2,11 +2,78 @@
 
 use crate::core::inspector::inspector_module::*;
 use egui::Color32;
+use std::collections::HashSet;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HttpListDirectionFilter {
+    #[default]
+    All,
+    ClientToServer,
+    ServerToClient,
+}
+
+impl HttpListDirectionFilter {
+    fn matches(self, d: HttpDirection) -> bool {
+        match self {
+            HttpListDirectionFilter::All => true,
+            HttpListDirectionFilter::ClientToServer => d == HttpDirection::ClientToServer,
+            HttpListDirectionFilter::ServerToClient => d == HttpDirection::ServerToClient,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            HttpListDirectionFilter::All => "All directions",
+            HttpListDirectionFilter::ClientToServer => "Client→Server",
+            HttpListDirectionFilter::ServerToClient => "Server→Client",
+        }
+    }
+}
+
+fn http_row_matches(h: &CapturedHttp, filter_trim: &str, dir: HttpListDirectionFilter) -> bool {
+    if !dir.matches(h.direction) {
+        return false;
+    }
+    let ft = filter_trim.trim();
+    if ft.is_empty() {
+        return true;
+    }
+    let f = ft.to_lowercase();
+    let status_s = h
+        .status_code
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    let hay = format!(
+        "{} {} {} {} {} {} seq={}",
+        h.direction.to_string(),
+        h.method,
+        h.path,
+        h.host,
+        h.body_size,
+        status_s,
+        h.capture_seq
+    )
+    .to_lowercase();
+    if hay.contains(&f) {
+        return true;
+    }
+    if f.chars().all(|c| c.is_ascii_hexdigit()) && f.len() >= 4 && f.len() % 2 == 0 {
+        if let Ok(pat) = hex::decode(&f) {
+            if !pat.is_empty() && pat.len() <= h.body.len() {
+                return h.body.windows(pat.len()).any(|w| w == pat.as_slice());
+            }
+        }
+    }
+    false
+}
 
 /// State for HTTP inspector UI
 pub struct HttpInspectorState {
     pub selected_index: Option<usize>,
     pub show_plaintext: bool,
+    pub list_filter: String,
+    pub direction_filter: HttpListDirectionFilter,
+    pub pinned_seq: HashSet<u64>,
 }
 
 impl HttpInspectorState {
@@ -14,6 +81,9 @@ impl HttpInspectorState {
         Self {
             selected_index: None,
             show_plaintext: false,
+            list_filter: String::new(),
+            direction_filter: HttpListDirectionFilter::default(),
+            pinned_seq: HashSet::new(),
         }
     }
 }
@@ -38,19 +108,27 @@ pub fn render_http_inspector(
     state: &mut HttpInspectorState,
     buffer: HttpBuffer,
 ) {
-    let http_list = {
+    let (http_list, total_n) = {
         let buf = buffer.lock();
-        buf.iter()
+        let total_n = buf.len();
+        let mut rows: Vec<(usize, CapturedHttp)> = buf
+            .iter()
             .enumerate()
-            .rev()
             .map(|(i, h)| (i, h.clone()))
-            .collect::<Vec<_>>()
+            .filter(|(_, h)| http_row_matches(h, &state.list_filter, state.direction_filter))
+            .collect();
+        rows.sort_by(|(ia, ha), (ib, hb)| {
+            let ap = state.pinned_seq.contains(&ha.capture_seq);
+            let bp = state.pinned_seq.contains(&hb.capture_seq);
+            ap.cmp(&bp).then_with(|| ib.cmp(ia))
+        });
+        (rows, total_n)
     };
     let count = http_list.len();
 
     // Top toolbar
     ui.horizontal(|ui| {
-        ui.label(format!("Packets: {}", count));
+        ui.label(format!("HTTP (showing {} / {} in buffer)", count, total_n));
         ui.checkbox(&mut state.show_plaintext, "Plaintext");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Copy to clipboard button
@@ -66,6 +144,7 @@ pub fn render_http_inspector(
                     output.push_str(&format!("  Path: {}\n", http.path));
                     output.push_str(&format!("  Host: {}\n", http.host));
                     output.push_str(&format!("  Body Size: {} bytes\n", http.body_size));
+                    output.push_str(&format!("  Capture seq: {}\n", http.capture_seq));
                     if let Some(status) = http.status_code {
                         output.push_str(&format!("  Status Code: {}\n", status));
                     }
@@ -95,6 +174,7 @@ pub fn render_http_inspector(
                     output.push_str(&format!("  Path: {}\n", http.path));
                     output.push_str(&format!("  Host: {}\n", http.host));
                     output.push_str(&format!("  Body Size: {} bytes\n", http.body_size));
+                    output.push_str(&format!("  Capture seq: {}\n", http.capture_seq));
                     if let Some(status) = http.status_code {
                         output.push_str(&format!("  Status Code: {}\n", status));
                     }
@@ -126,8 +206,37 @@ pub fn render_http_inspector(
                 let mut buf = buffer.lock();
                 buf.clear();
                 state.selected_index = None;
+                state.pinned_seq.clear();
             }
         });
+    });
+
+    ui.horizontal(|ui| {
+        ui.label("Filter:");
+        ui.add(
+            egui::TextEdit::singleline(&mut state.list_filter)
+                .desired_width(220.0)
+                .hint_text("path, host, status, seq, hex…"),
+        );
+        egui::ComboBox::from_id_source("http_dir_filter")
+            .selected_text(state.direction_filter.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut state.direction_filter,
+                    HttpListDirectionFilter::All,
+                    HttpListDirectionFilter::All.label(),
+                );
+                ui.selectable_value(
+                    &mut state.direction_filter,
+                    HttpListDirectionFilter::ClientToServer,
+                    HttpListDirectionFilter::ClientToServer.label(),
+                );
+                ui.selectable_value(
+                    &mut state.direction_filter,
+                    HttpListDirectionFilter::ServerToClient,
+                    HttpListDirectionFilter::ServerToClient.label(),
+                );
+            });
     });
 
     ui.separator();
@@ -156,29 +265,45 @@ pub fn render_http_inspector(
                             String::new()
                         };
 
-                        let response = ui.selectable_label(
-                            is_selected,
-                            format!(
-                                "[{}] {} {} | {} bytes{}",
-                                http.direction.to_string(),
-                                http.method,
-                                http.path,
-                                http.body_size,
-                                status_str
-                            ),
-                        );
+                        ui.horizontal(|ui| {
+                            let pinned = state.pinned_seq.contains(&http.capture_seq);
+                            if ui
+                                .selectable_label(pinned, "📌")
+                                .on_hover_text("Pin / unpin")
+                                .clicked()
+                            {
+                                if pinned {
+                                    state.pinned_seq.remove(&http.capture_seq);
+                                } else {
+                                    state.pinned_seq.insert(http.capture_seq);
+                                }
+                            }
 
-                        if response.clicked() {
-                            state.selected_index = Some(*idx);
-                        }
-
-                        if is_selected {
-                            ui.painter().rect_filled(
-                                response.rect,
-                                0.0,
-                                direction_color.linear_multiply(0.2),
+                            let response = ui.selectable_label(
+                                is_selected,
+                                format!(
+                                    "[{}] {} {} | {} bytes{} | seq={}",
+                                    http.direction.to_string(),
+                                    http.method,
+                                    http.path,
+                                    http.body_size,
+                                    status_str,
+                                    http.capture_seq
+                                ),
                             );
-                        }
+
+                            if response.clicked() {
+                                state.selected_index = Some(*idx);
+                            }
+
+                            if is_selected {
+                                ui.painter().rect_filled(
+                                    response.rect,
+                                    0.0,
+                                    direction_color.linear_multiply(0.2),
+                                );
+                            }
+                        });
                     }
                 });
         });

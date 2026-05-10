@@ -176,6 +176,7 @@ fn capture_qos_grpc_record(
         .unwrap_or_default()
         .as_secs_f64();
     capture_grpc(CapturedGrpc {
+        capture_seq: 0,
         timestamp,
         direction,
         method: method.to_string(),

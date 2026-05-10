@@ -141,6 +141,33 @@ impl TdfEncoder {
         None
     }
 
+    /// Root-level TDF tags without a full tree parse (uses [`Self::skip_field`]).
+    /// Tuple: `(tag, type_byte, start_offset, total_field_byte_length)`.
+    pub fn scan_root_level_fields(data: &[u8]) -> Vec<(String, u8, usize, usize)> {
+        let mut out = Vec::new();
+        let mut pos = 0usize;
+        while pos + 4 <= data.len() {
+            match Self::root_field_label_and_type(&data[pos..]) {
+                Some((ref tag, type_byte)) => {
+                    let start = pos;
+                    pos += 4;
+                    let skip = match Self::skip_field(&data[pos..], type_byte) {
+                        Ok(s) => s,
+                        Err(_) => {
+                            pos = start.saturating_add(1);
+                            continue;
+                        }
+                    };
+                    let total_len = (pos - start) + skip;
+                    pos += skip;
+                    out.push((tag.clone(), type_byte, start, total_len));
+                }
+                None => pos += 1,
+            }
+        }
+        out
+    }
+
     /// Decode a variable-length integer
     pub fn decode_varint(data: &[u8]) -> BlazeResult<(u64, usize)> {
         if data.is_empty() {
@@ -219,7 +246,7 @@ impl TdfEncoder {
         result.put_u8(tag_encoded[1]);
         result.put_u8(tag_encoded[2]);
         result.put_u8(0x07);
-        result.put_i64(value.to_be());
+        result.put_slice(&value.to_be_bytes());
         result.freeze()
     }
 
@@ -783,7 +810,8 @@ impl TdfEncoder {
         if data.len() < pos + 3 {
             return false;
         }
-        let expected = Self::make_tag(tag.trim());
+        // Do not `trim()` — the 4th character (e.g. trailing space in `GID `) is part of the packed label.
+        let expected = Self::make_tag(tag);
         data[pos..pos + 3] == expected
     }
     
@@ -860,6 +888,27 @@ impl TdfEncoder {
             pos += 4;
         }
         
+        None
+    }
+
+    /// First INTEGER (`0x00` varint) or BIGINT (**`0x07`**, BE `i64`) for `tag` — **linear scan** (works inside null-terminated structs; does not rely on [`Self::decode_struct_data`]).
+    pub fn find_long_field(data: &[u8], tag: &str) -> Option<i64> {
+        let mut i = 0usize;
+        while i + 4 <= data.len() {
+            if Self::wire_tag_matches_at(data, i, tag) {
+                let tb = data[i + 3];
+                if tb == 0x0 {
+                    if let Ok((value, _)) = Self::decode_varint(&data[i + 4..]) {
+                        return Some(value as i64);
+                    }
+                } else if tb == 0x07 && i + 12 <= data.len() {
+                    if let Ok(eight) = <[u8; 8]>::try_from(&data[i + 4..i + 12]) {
+                        return Some(i64::from_be_bytes(eight));
+                    }
+                }
+            }
+            i += 1;
+        }
         None
     }
 

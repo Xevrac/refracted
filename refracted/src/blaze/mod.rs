@@ -17,6 +17,6 @@ pub mod tdf;
 // Re-export commonly used types
 pub use components::{get_component_name, get_command_name};
 pub use errors::{get_error_name, get_error_code, create_error_response};
-pub use protocol::{Fire2FramePacket, Fire2FrameHeader, MessageType};
+pub use protocol::{Fire2FrameHeader, Fire2FramePacket, MessageType};
 pub use tdf::TdfEncoder;
 

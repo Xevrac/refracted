@@ -3,11 +3,74 @@
 use crate::core::inspector::inspector_module::*;
 use crate::grpc::{grpc_body_decode_capture, peel_grpc_data_frames_detailed};
 use egui::Color32;
+use std::collections::HashSet;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GrpcListDirectionFilter {
+    #[default]
+    All,
+    ClientToServer,
+    ServerToClient,
+}
+
+impl GrpcListDirectionFilter {
+    fn matches(self, d: GrpcDirection) -> bool {
+        match self {
+            GrpcListDirectionFilter::All => true,
+            GrpcListDirectionFilter::ClientToServer => d == GrpcDirection::ClientToServer,
+            GrpcListDirectionFilter::ServerToClient => d == GrpcDirection::ServerToClient,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            GrpcListDirectionFilter::All => "All directions",
+            GrpcListDirectionFilter::ClientToServer => "Client→Server",
+            GrpcListDirectionFilter::ServerToClient => "Server→Client",
+        }
+    }
+}
+
+fn grpc_row_matches(g: &CapturedGrpc, filter_trim: &str, dir: GrpcListDirectionFilter) -> bool {
+    if !dir.matches(g.direction) {
+        return false;
+    }
+    let ft = filter_trim.trim();
+    if ft.is_empty() {
+        return true;
+    }
+    let f = ft.to_lowercase();
+    let hay = format!(
+        "{} {} {} {} {} {} seq={}",
+        g.direction.to_string(),
+        g.method,
+        g.path,
+        g.host,
+        g.body_size,
+        g.grpc_status.as_deref().unwrap_or(""),
+        g.capture_seq
+    )
+    .to_lowercase();
+    if hay.contains(&f) {
+        return true;
+    }
+    if f.chars().all(|c| c.is_ascii_hexdigit()) && f.len() >= 4 && f.len() % 2 == 0 {
+        if let Ok(pat) = hex::decode(f.replace(' ', "")) {
+            if !pat.is_empty() && pat.len() <= g.body.len() {
+                return g.body.windows(pat.len()).any(|w| w == pat.as_slice());
+            }
+        }
+    }
+    false
+}
 
 /// State for gRPC inspector UI
 pub struct GrpcInspectorState {
     pub selected_index: Option<usize>,
     pub show_plaintext: bool,
+    pub list_filter: String,
+    pub direction_filter: GrpcListDirectionFilter,
+    pub pinned_seq: HashSet<u64>,
     /// Listener → Toolkit Make (gRPC), same pattern as Blaze `open_make_from_index`.
     pub open_make_from_index: Option<usize>,
 }
@@ -17,6 +80,9 @@ impl GrpcInspectorState {
         Self {
             selected_index: None,
             show_plaintext: false,
+            list_filter: String::new(),
+            direction_filter: GrpcListDirectionFilter::default(),
+            pinned_seq: HashSet::new(),
             open_make_from_index: None,
         }
     }
@@ -37,19 +103,27 @@ pub fn render_grpc_inspector(
     state: &mut GrpcInspectorState,
     buffer: GrpcBuffer,
 ) {
-    let grpc_list = {
+    let (grpc_list, total_n) = {
         let buf = buffer.lock();
-        buf.iter()
+        let total_n = buf.len();
+        let mut rows: Vec<(usize, CapturedGrpc)> = buf
+            .iter()
             .enumerate()
-            .rev()
             .map(|(i, g)| (i, g.clone()))
-            .collect::<Vec<_>>()
+            .filter(|(_, g)| grpc_row_matches(g, &state.list_filter, state.direction_filter))
+            .collect();
+        rows.sort_by(|(ia, ga), (ib, gb)| {
+            let ap = state.pinned_seq.contains(&ga.capture_seq);
+            let bp = state.pinned_seq.contains(&gb.capture_seq);
+            ap.cmp(&bp).then_with(|| ib.cmp(ia))
+        });
+        (rows, total_n)
     };
     let count = grpc_list.len();
 
     // Top toolbar
     ui.horizontal(|ui| {
-        ui.label(format!("gRPC Requests/Responses: {}", count));
+        ui.label(format!("gRPC (showing {} / {} in buffer)", count, total_n));
         ui.checkbox(&mut state.show_plaintext, "Plaintext");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // Copy to clipboard button
@@ -65,6 +139,7 @@ pub fn render_grpc_inspector(
                     output.push_str(&format!("  Path: {}\n", grpc.path));
                     output.push_str(&format!("  Host: {}\n", grpc.host));
                     output.push_str(&format!("  Body Size: {} bytes\n", grpc.body_size));
+                    output.push_str(&format!("  Capture seq: {}\n", grpc.capture_seq));
                     output.push_str(&format!("  Compressed: {}\n", grpc.is_compressed));
                     if let Some(ref status) = grpc.grpc_status {
                         output.push_str(&format!("  gRPC Status: {}\n", status));
@@ -100,6 +175,7 @@ pub fn render_grpc_inspector(
                     output.push_str(&format!("  Path: {}\n", grpc.path));
                     output.push_str(&format!("  Host: {}\n", grpc.host));
                     output.push_str(&format!("  Body Size: {} bytes\n", grpc.body_size));
+                    output.push_str(&format!("  Capture seq: {}\n", grpc.capture_seq));
                     output.push_str(&format!("  Compressed: {}\n", grpc.is_compressed));
                     if let Some(ref status) = grpc.grpc_status {
                         output.push_str(&format!("  gRPC Status: {}\n", status));
@@ -138,8 +214,37 @@ pub fn render_grpc_inspector(
                 buf.clear();
                 state.selected_index = None;
                 state.open_make_from_index = None;
+                state.pinned_seq.clear();
             }
         });
+    });
+
+    ui.horizontal(|ui| {
+        ui.label("Filter:");
+        ui.add(
+            egui::TextEdit::singleline(&mut state.list_filter)
+                .desired_width(220.0)
+                .hint_text("path, host, method, seq, hex…"),
+        );
+        egui::ComboBox::from_id_source("grpc_dir_filter")
+            .selected_text(state.direction_filter.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut state.direction_filter,
+                    GrpcListDirectionFilter::All,
+                    GrpcListDirectionFilter::All.label(),
+                );
+                ui.selectable_value(
+                    &mut state.direction_filter,
+                    GrpcListDirectionFilter::ClientToServer,
+                    GrpcListDirectionFilter::ClientToServer.label(),
+                );
+                ui.selectable_value(
+                    &mut state.direction_filter,
+                    GrpcListDirectionFilter::ServerToClient,
+                    GrpcListDirectionFilter::ServerToClient.label(),
+                );
+            });
     });
 
     ui.separator();
@@ -162,28 +267,44 @@ pub fn render_grpc_inspector(
                             GrpcDirection::ServerToClient => Color32::from_rgb(255, 150, 100),
                         };
 
-                        let response = ui.selectable_label(
-                            is_selected,
-                            format!(
-                                "[{}] {} {} | {} bytes",
-                                grpc.direction.to_string(),
-                                grpc.method,
-                                grpc.path,
-                                grpc.body_size
-                            ),
-                        );
+                        ui.horizontal(|ui| {
+                            let pinned = state.pinned_seq.contains(&grpc.capture_seq);
+                            if ui
+                                .selectable_label(pinned, "📌")
+                                .on_hover_text("Pin / unpin")
+                                .clicked()
+                            {
+                                if pinned {
+                                    state.pinned_seq.remove(&grpc.capture_seq);
+                                } else {
+                                    state.pinned_seq.insert(grpc.capture_seq);
+                                }
+                            }
 
-                        if response.clicked() {
-                            state.selected_index = Some(*idx);
-                        }
-
-                        if is_selected {
-                            ui.painter().rect_filled(
-                                response.rect,
-                                0.0,
-                                direction_color.linear_multiply(0.2),
+                            let response = ui.selectable_label(
+                                is_selected,
+                                format!(
+                                    "[{}] {} {} | {} bytes | seq={}",
+                                    grpc.direction.to_string(),
+                                    grpc.method,
+                                    grpc.path,
+                                    grpc.body_size,
+                                    grpc.capture_seq
+                                ),
                             );
-                        }
+
+                            if response.clicked() {
+                                state.selected_index = Some(*idx);
+                            }
+
+                            if is_selected {
+                                ui.painter().rect_filled(
+                                    response.rect,
+                                    0.0,
+                                    direction_color.linear_multiply(0.2),
+                                );
+                            }
+                        });
                     }
                 });
         });

@@ -145,6 +145,11 @@ impl Fire2FrameHeader {
         })
     }
 
+    #[inline]
+    pub fn packed_msg_type_user_byte(&self) -> u8 {
+        (self.msg_type.to_u8() << 5) | (self.user_index as u8 & 0x1f)
+    }
+
     /// Convert header to bytes
     pub fn to_bytes(&self) -> Bytes {
         let mut buf = BytesMut::with_capacity(Self::HEADER_SIZE);
@@ -168,7 +173,7 @@ impl Fire2FrameHeader {
         buf.put_u8(msg_num_bytes[3]);
 
         // Message type (3 bits) + User index (5 bits)
-        buf.put_u8((self.msg_type.to_u8() << 5) | (self.user_index as u8 & 0x1f));
+        buf.put_u8(self.packed_msg_type_user_byte());
 
         // Options
         buf.put_u8(self.options);

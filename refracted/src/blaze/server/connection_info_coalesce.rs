@@ -159,8 +159,8 @@ pub fn key_b2c_keepalive_reply() -> String {
 }
 
 #[inline]
-pub fn key_b2c_toolkit_inject(component: u16, command: u16, msg_num: u32, msg_ty: &str, wire_len: usize) -> String {
-    format!("B2C|TOOLKIT|{component}|{command}|{msg_ty}|{msg_num}|{wire_len}")
+pub fn key_b2c_blaze_inject(component: u16, command: u16, msg_num: u32, msg_ty: &str, wire_len: usize) -> String {
+    format!("B2C|INJECT|{component}|{command}|{msg_ty}|{msg_num}|{wire_len}")
 }
 
 #[inline]

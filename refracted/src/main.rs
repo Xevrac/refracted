@@ -1607,6 +1607,14 @@ fn accounts_window(ctx: &egui::Context, open: &mut bool) {
             
             ui.vertical(|ui| {
                 ui.heading("User Profiles");
+                ui.label(
+                    egui::RichText::new(
+                        "Nucleus layer for profile data use when emulating Blaze.",
+                    )
+                    .small()
+                    .weak(),
+                );
+                ui.add_space(4.0);
 
                 if session_locked {
                     ui.add_space(4.0);

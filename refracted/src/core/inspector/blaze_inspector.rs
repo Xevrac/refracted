@@ -1,9 +1,91 @@
 // Blaze Inspector - UI for viewing captured Blaze packets with TDF parsing
 
-use crate::blaze::tdf::TdfTreeNode;
+use crate::blaze::tdf::{TdfEncoder, TdfTreeNode};
+use crate::common::discovery;
 use crate::core::inspector::inspector_module::*;
-use egui;
+use egui::{Color32, Frame, Layout, Margin, Sense, Stroke, Ui, Vec2};
 use std::collections::HashSet;
+
+/// Height for a vertical scroll region; parent panes set max height from the window.
+fn scroll_area_max_h(ui: &egui::Ui) -> f32 {
+    let h = ui.available_height();
+    if h.is_finite() {
+        h.max(24.0)
+    } else {
+        320.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BlazeListDirectionFilter {
+    #[default]
+    All,
+    ClientToBlaze,
+    BlazeToClient,
+}
+
+impl BlazeListDirectionFilter {
+    fn matches(self, d: PacketDirection) -> bool {
+        match self {
+            BlazeListDirectionFilter::All => true,
+            BlazeListDirectionFilter::ClientToBlaze => d == PacketDirection::ClientToBlaze,
+            BlazeListDirectionFilter::BlazeToClient => d == PacketDirection::BlazeToClient,
+        }
+    }
+
+    /// ASCII-only labels (unicode arrows show as tofu in some Windows UI fonts).
+    fn label(self) -> &'static str {
+        match self {
+            BlazeListDirectionFilter::All => "All directions",
+            BlazeListDirectionFilter::ClientToBlaze => "Client -> Blaze",
+            BlazeListDirectionFilter::BlazeToClient => "Blaze <- Client",
+        }
+    }
+}
+
+fn blaze_filter_icon(ui: &mut Ui) -> egui::Response {
+    let size = Vec2::splat(18.0);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let color = ui.visuals().weak_text_color();
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter_at(rect);
+        let stroke = Stroke::new(1.2, color);
+        let m = 2.5_f32;
+        let top = rect.top() + m;
+        let mid = rect.center().y;
+        let bot = rect.bottom() - m;
+        let cx = rect.center().x;
+        let x0 = rect.left() + m;
+        let x1 = rect.right() - m;
+        let w = rect.width() - 2.0 * m;
+        p.line_segment([egui::pos2(x0, top), egui::pos2(x1, top)], stroke);
+        let pinch = w * 0.22;
+        p.line_segment([egui::pos2(x0, top), egui::pos2(cx - pinch, mid)], stroke);
+        p.line_segment([egui::pos2(x1, top), egui::pos2(cx + pinch, mid)], stroke);
+        p.line_segment([egui::pos2(cx - pinch, mid), egui::pos2(cx + pinch, mid)], stroke);
+        let stem = w * 0.1;
+        p.line_segment([egui::pos2(cx - stem, mid), egui::pos2(cx - stem, bot)], stroke);
+        p.line_segment([egui::pos2(cx + stem, mid), egui::pos2(cx + stem, bot)], stroke);
+        p.line_segment([egui::pos2(cx - stem, bot), egui::pos2(cx + stem, bot)], stroke);
+    }
+    response.on_hover_text("Filter packets (text, 0x…, hex bytes)")
+}
+
+fn blaze_bidir_arrow_glyph(ui: &mut Ui, color: Color32) -> egui::Response {
+    let size = Vec2::new(22.0, 18.0);
+    let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter_at(rect);
+        let stroke = Stroke::new(1.25, color);
+        let cx = rect.center().x;
+        let cy = rect.center().y;
+        let half = (rect.width() * 0.28).max(4.0);
+        let span = half * 1.45;
+        painter.arrow(egui::pos2(cx - half, cy), Vec2::new(span, 0.0), stroke);
+        painter.arrow(egui::pos2(cx + half, cy), Vec2::new(-span, 0.0), stroke);
+    }
+    resp.on_hover_text("All directions")
+}
 
 /// State for the Blaze inspector UI
 pub struct BlazeInspectorState {
@@ -12,6 +94,13 @@ pub struct BlazeInspectorState {
     pub selected_tdf_path: Vec<usize>,
     pub expanded_tdf_nodes: HashSet<Vec<usize>>,
     pub tdf_parse_error: Option<String>,
+    /// Root-level tag/type scan when full [`TdfTreeParser`] fails ([`TdfEncoder::scan_root_level_fields`]).
+    pub tdf_root_scan: Option<Vec<(String, u8, usize, usize)>>,
+    parse_done_key: Option<(usize, u64)>,
+    pub list_filter: String,
+    pub direction_filter: BlazeListDirectionFilter,
+    pub pinned_seq: HashSet<u64>,
+    pub jump_to_capture_seq: Option<u64>,
     /// Set when user clicks **Inspect**; parent toolkit consumes and jumps to Make.
     pub open_make_from_index: Option<usize>,
 }
@@ -24,9 +113,73 @@ impl BlazeInspectorState {
             selected_tdf_path: Vec::new(),
             expanded_tdf_nodes: HashSet::new(),
             tdf_parse_error: None,
+            tdf_root_scan: None,
+            parse_done_key: None,
+            list_filter: String::new(),
+            direction_filter: BlazeListDirectionFilter::default(),
+            pinned_seq: HashSet::new(),
+            jump_to_capture_seq: None,
             open_make_from_index: None,
         }
     }
+}
+
+fn payload_contains_hex_pattern(payload: &[u8], hex_lower: &str) -> bool {
+    let digits: String = hex_lower.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+    if digits.len() < 4 || digits.len() % 2 != 0 {
+        return false;
+    }
+    let Ok(pat) = hex::decode(&digits) else {
+        return false;
+    };
+    if pat.is_empty() || pat.len() > payload.len() {
+        return false;
+    }
+    payload.windows(pat.len()).any(|w| w == pat.as_slice())
+}
+
+fn blaze_packet_matches_filter(
+    p: &CapturedPacket,
+    filter_trim: &str,
+    dir: BlazeListDirectionFilter,
+) -> bool {
+    if !dir.matches(p.direction) {
+        return false;
+    }
+    let ft = filter_trim.trim();
+    if ft.is_empty() {
+        return true;
+    }
+    let f = ft.to_lowercase();
+    let cmd = p.command_name.as_deref().unwrap_or("");
+    let hay = format!(
+        "{} {} {} {:04x} {:04x} {} {} seq={}",
+        p.direction.to_string(),
+        cmd,
+        p.msg_type,
+        p.component,
+        p.command,
+        p.msg_num,
+        p.payload_size,
+        p.capture_seq,
+    )
+    .to_lowercase();
+    if hay.contains(&f) {
+        return true;
+    }
+    if let Ok(raw) = u64::from_str_radix(&f, 16) {
+        let matches_raw = p.component as u64 == raw
+            || p.command as u64 == raw
+            || p.msg_num as u64 == raw
+            || p.capture_seq == raw;
+        if f.len() <= 4 && matches_raw {
+            return true;
+        }
+    }
+    if f.chars().all(|c| c.is_ascii_hexdigit()) {
+        return payload_contains_hex_pattern(&p.payload, &f);
+    }
+    false
 }
 
 /// Convert bytes to plaintext, falling back to hex if invalid UTF-8
@@ -55,24 +208,45 @@ pub fn render_blaze_inspector(
     let packets: Vec<CapturedPacket> = packet_buffer.lock().clone();
     let packet_count = packets.len();
 
+    if let Some(jump) = state.jump_to_capture_seq.take() {
+        for (i, p) in packets.iter().enumerate() {
+            if p.capture_seq == jump {
+                state.selected_packet_index = Some(i);
+                state.parse_done_key = None;
+                state.tdf_tree = None;
+                state.tdf_root_scan = None;
+                state.tdf_parse_error = None;
+                state.selected_tdf_path.clear();
+                state.expanded_tdf_nodes.clear();
+                break;
+            }
+        }
+    }
+
     if let Some(idx) = state.selected_packet_index {
         if let Some(packet) = packets.get(idx) {
-            if state.tdf_tree.is_none() {
-                if !packet.payload.is_empty() {
+            let key = (idx, packet.capture_seq);
+            let need_parse = state.parse_done_key != Some(key);
+            if need_parse {
+                state.tdf_tree = None;
+                state.tdf_root_scan = None;
+                state.tdf_parse_error = None;
+                state.selected_tdf_path.clear();
+                if packet.payload.is_empty() {
+                    state.tdf_parse_error = Some("Empty payload (0 bytes) found".to_string());
+                } else {
                     let payload_clone = packet.payload.clone();
-                    let parse_result = std::panic::catch_unwind(|| {
-                        TdfTreeParser::parse_packet(&payload_clone)
-                    });
+                    let parse_result =
+                        std::panic::catch_unwind(|| TdfTreeParser::parse_packet(&payload_clone));
 
                     match parse_result {
                         Ok(Ok(tree)) => {
                             state.tdf_tree = Some(tree);
-                            state.tdf_parse_error = None;
-                            state.selected_tdf_path.clear();
+                            state.tdf_root_scan = None;
                         }
                         Ok(Err(e)) => {
                             let error_msg = format!(
-                                "Failed to parse TDF:\nPayload size: {} bytes\nMetadata size: {} bytes\nRaw size: {} bytes\nError: {:?}",
+                                "Failed to parse TDF:\nPayload size: {} bytes\nMetadata size: {} bytes\nRaw size: {} bytes\nError: {:?}\n\nRoot-level tag scan (best-effort) is shown beside this message.",
                                 packet.payload.len(),
                                 packet.metadata_size,
                                 packet.raw_packet.len(),
@@ -81,10 +255,12 @@ pub fn render_blaze_inspector(
                             eprintln!("{}", error_msg);
                             state.tdf_tree = None;
                             state.tdf_parse_error = Some(error_msg);
+                            state.tdf_root_scan =
+                                Some(TdfEncoder::scan_root_level_fields(&packet.payload));
                         }
                         Err(_) => {
                             let error_msg = format!(
-                                "Panic detected!\nPayload size: {} bytes\nMetadata size: {} bytes\nRaw size: {} bytes\n\nThis indicates an unexpected panic in the parser. Please report this issue.",
+                                "Panic detected!\nPayload size: {} bytes\nMetadata size: {} bytes\nRaw size: {} bytes\n\nThis indicates an unexpected panic in the parser. Root-level tag scan is shown beside this message.",
                                 packet.payload.len(),
                                 packet.metadata_size,
                                 packet.raw_packet.len()
@@ -92,27 +268,39 @@ pub fn render_blaze_inspector(
                             eprintln!("{}", error_msg);
                             state.tdf_tree = None;
                             state.tdf_parse_error = Some(error_msg);
+                            state.tdf_root_scan =
+                                Some(TdfEncoder::scan_root_level_fields(&packet.payload));
                         }
                     }
-                } else {
-                    state.tdf_tree = None;
-                    state.tdf_parse_error = Some("Empty payload (0 bytes) found".to_string());
                 }
+                state.parse_done_key = Some(key);
             }
         }
     } else {
         state.tdf_tree = None;
         state.tdf_parse_error = None;
+        state.tdf_root_scan = None;
         state.selected_tdf_path.clear();
+        state.parse_done_key = None;
     }
 
     let (packet_list, selected_packet_data, tdf_tree_clone) = {
-        let packet_list: Vec<(usize, CapturedPacket)> = packets
+        let mut rows: Vec<(usize, CapturedPacket)> = packets
             .iter()
             .enumerate()
-            .rev()
             .map(|(i, p)| (i, p.clone()))
+            .filter(|(_, p)| {
+                blaze_packet_matches_filter(p, &state.list_filter, state.direction_filter)
+            })
             .collect();
+        rows.sort_by(|(_ia, pa), (_ib, pb)| {
+            let ap = state.pinned_seq.contains(&pa.capture_seq);
+            let bp = state.pinned_seq.contains(&pb.capture_seq);
+            // Pinned first; within a group, newest (higher buffer index) first.
+            bp.cmp(&ap).then_with(|| pb.capture_seq.cmp(&pa.capture_seq))
+        });
+
+        let packet_list = rows;
 
         let selected_packet_data = if let Some(idx) = state.selected_packet_index {
             packets.get(idx).map(|p| {
@@ -156,6 +344,7 @@ pub fn render_blaze_inspector(
                     output.push_str(&format!("  Message Number: {}\n", packet.msg_num));
                     output.push_str(&format!("  Message Type: {}\n", packet.msg_type));
                     output.push_str(&format!("  Payload Size: {} bytes\n", packet.payload_size));
+                    output.push_str(&format!("  Capture seq: {}\n", packet.capture_seq));
                     output.push_str(&format!("  Timestamp: {:.3}\n", packet.timestamp));
                     output.push_str("\n  Hex:\n");
                     let hex_dump = format_hex_dump(&packet.payload, 4096);
@@ -185,6 +374,7 @@ pub fn render_blaze_inspector(
                     output.push_str(&format!("  Message Number: {}\n", packet.msg_num));
                     output.push_str(&format!("  Message Type: {}\n", packet.msg_type));
                     output.push_str(&format!("  Payload Size: {} bytes\n", packet.payload_size));
+                    output.push_str(&format!("  Capture seq: {}\n", packet.capture_seq));
                     output.push_str(&format!("  Timestamp: {:.3}\n", packet.timestamp));
                     output.push_str("\n  Hex:\n");
                     let hex_dump = format_hex_dump(&packet.payload, 4096);
@@ -214,9 +404,14 @@ pub fn render_blaze_inspector(
                 buf.clear();
                 state.selected_packet_index = None;
                 state.tdf_tree = None;
+                state.tdf_root_scan = None;
+                state.tdf_parse_error = None;
+                state.parse_done_key = None;
                 state.selected_tdf_path.clear();
                 state.expanded_tdf_nodes.clear();
                 state.open_make_from_index = None;
+                state.pinned_seq.clear();
+                discovery::clear_discovery_tracking();
                 return;
             }
 
@@ -236,19 +431,151 @@ pub fn render_blaze_inspector(
         });
     });
 
+    egui::CollapsingHeader::new("Discovery")
+        .default_open(false)
+        .show(ui, |ui| {
+            let rows = discovery::discovery_export_rows();
+            ui.label(format!(
+                "{} distinct unhandled component/command pairs this session.",
+                rows.len()
+            ));
+            ui.horizontal(|ui| {
+                if ui.button("Copy JSON").clicked() {
+                    ctx.copy_text(discovery::discovery_json());
+                }
+                if ui.button("Copy CSV").clicked() {
+                    ctx.copy_text(discovery::discovery_csv());
+                }
+                if ui.button("Save JSON…").clicked() {
+                    let file = rfd::FileDialog::new()
+                        .add_filter("JSON", &["json"])
+                        .set_file_name("blaze_discovery.json")
+                        .save_file();
+                    if let Some(path) = file {
+                        let _ = std::fs::write(&path, discovery::discovery_json());
+                    }
+                }
+                if ui.button("Save CSV…").clicked() {
+                    let file = rfd::FileDialog::new()
+                        .add_filter("CSV", &["csv"])
+                        .set_file_name("blaze_discovery.csv")
+                        .save_file();
+                    if let Some(path) = file {
+                        let _ = std::fs::write(&path, discovery::discovery_csv());
+                    }
+                }
+            });
+            egui::ScrollArea::vertical()
+                .max_height(160.0)
+                .show(ui, |ui| {
+                    for r in rows {
+                        ui.horizontal(|ui| {
+                            ui.monospace(format!(
+                                "0x{:04x} / 0x{:04x}",
+                                r.component, r.command
+                            ));
+                            ui.label(egui::RichText::new(&r.command_label).small());
+                            if let Some(seq) = r.first_seen_capture_seq {
+                                if ui.small_button("Go to capture").clicked() {
+                                    state.jump_to_capture_seq = Some(seq);
+                                }
+                            } else {
+                                ui.label(
+                                    egui::RichText::new("(no seq — ring buffer full?)").weak().small(),
+                                );
+                            }
+                        });
+                    }
+                });
+        });
+
+    ui.horizontal(|ui| {
+        blaze_filter_icon(ui);
+        ui.add(
+            egui::TextEdit::singleline(&mut state.list_filter)
+                .desired_width(220.0)
+                .hint_text("text, 0x…, or hex bytes"),
+        );
+        let dir_glyph_color = ui.visuals().strong_text_color();
+        ui.horizontal(|ui| {
+            if matches!(
+                state.direction_filter,
+                BlazeListDirectionFilter::All
+            ) {
+                blaze_bidir_arrow_glyph(ui, dir_glyph_color);
+            }
+            egui::ComboBox::from_id_source("blaze_dir_filter")
+                .selected_text(state.direction_filter.label())
+                .show_ui(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        blaze_bidir_arrow_glyph(ui, dir_glyph_color);
+                        ui.selectable_value(
+                            &mut state.direction_filter,
+                            BlazeListDirectionFilter::All,
+                            BlazeListDirectionFilter::All.label(),
+                        );
+                    });
+                    ui.selectable_value(
+                        &mut state.direction_filter,
+                        BlazeListDirectionFilter::ClientToBlaze,
+                        BlazeListDirectionFilter::ClientToBlaze.label(),
+                    );
+                    ui.selectable_value(
+                        &mut state.direction_filter,
+                        BlazeListDirectionFilter::BlazeToClient,
+                        BlazeListDirectionFilter::BlazeToClient.label(),
+                    );
+                });
+        });
+        let shown = packet_list.len();
+        ui.label(egui::RichText::new(format!("Showing {shown} / {packet_count}")).weak());
+    });
+
     ui.separator();
 
-    // Three-panel horizontal layout: Packet list | TDF Tree | Field Details
-    ui.columns(3, |columns| {
-        // Left panel: Packet list
-        render_packet_list(&mut columns[0], &packet_list, state);
-
-        // Middle panel: TDF Tree
-        render_tdf_tree_panel(&mut columns[1], &tdf_tree_clone, state, &packets);
-
-        // Right panel: Field Details
-        render_field_details_panel(&mut columns[2], &tdf_tree_clone, &selected_packet_data, state);
-    });
+    // Three panels: cap total height to the remaining central-panel space so inner scroll areas
+    // get a finite max height (large TDF trees scroll instead of expanding the window).
+    let row_w = ui.available_width().max(1.0);
+    let mut fill_h = ui.available_height();
+    if !fill_h.is_finite() || fill_h < 8.0 {
+        fill_h = (ctx.screen_rect().height() * 0.5).clamp(200.0, 2000.0);
+    }
+    let fill_h = fill_h.max(120.0);
+    let sep_w = ui.spacing().item_spacing.x.max(6.0);
+    let gap_total = sep_w * 2.0;
+    let usable = (row_w - gap_total).max(120.0);
+    let w_list = (usable * 0.34).clamp(160.0, row_w * 0.52);
+    let w_tdf = (usable * 0.34).clamp(140.0, row_w * 0.42);
+    let w_details = (usable - w_list - w_tdf).max(120.0);
+    ui.allocate_ui_with_layout(
+        egui::vec2(row_w, fill_h),
+        Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = sep_w;
+                ui.vertical(|ui| {
+                    ui.set_width(w_list);
+                    ui.set_min_height(fill_h);
+                    ui.set_max_height(fill_h);
+                    render_packet_list(ui, &packet_list, state);
+                });
+                ui.separator();
+                ui.vertical(|ui| {
+                    ui.set_width(w_tdf);
+                    ui.set_min_height(fill_h);
+                    ui.set_max_height(fill_h);
+                    render_tdf_tree_panel(ui, &tdf_tree_clone, state, &packets);
+                });
+                ui.separator();
+                ui.vertical(|ui| {
+                    ui.set_width(w_details);
+                    ui.set_min_height(fill_h);
+                    ui.set_max_height(fill_h);
+                    render_field_details_panel(ui, &tdf_tree_clone, &selected_packet_data, state);
+                });
+            });
+        },
+    );
 }
 
 /// Render the packet list panel
@@ -261,50 +588,105 @@ fn render_packet_list(
         ui.heading("Packet List");
         ui.separator();
 
+        let clip_w = ui.available_width();
+        let list_scroll_h = scroll_area_max_h(ui);
         egui::ScrollArea::vertical()
             .id_source("packet_list_scroll")
+            .max_height(list_scroll_h)
+            .drag_to_scroll(false)
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 for (idx, packet) in packet_list {
-                    let is_selected = state.selected_packet_index == Some(*idx);
+                    // Stable ids per logical packet so pin/selection survive row resorting.
+                    ui.push_id(packet.capture_seq, |ui| {
+                        let is_selected = state.selected_packet_index == Some(*idx);
 
-                    let direction_color = match packet.direction {
-                        PacketDirection::ClientToBlaze => egui::Color32::from_rgb(100, 150, 255),
-                        PacketDirection::BlazeToClient => egui::Color32::from_rgb(255, 150, 100),
-                    };
+                        let direction_color = match packet.direction {
+                            PacketDirection::ClientToBlaze => {
+                                egui::Color32::from_rgb(100, 150, 255)
+                            }
+                            PacketDirection::BlazeToClient => {
+                                egui::Color32::from_rgb(255, 150, 100)
+                            }
+                        };
 
-                    let cmd_display = if let Some(ref cmd_name) = packet.command_name {
-                        format!("{}", cmd_name)
-                    } else {
-                        format!("Component={}, Command={}", packet.component, packet.command)
-                    };
+                        let cmd_display = if let Some(ref cmd_name) = packet.command_name {
+                            format!("{}", cmd_name)
+                        } else {
+                            format!("Component={}, Command={}", packet.component, packet.command)
+                        };
 
-                    // Format direction with proper arrow character
-                    let direction_str = packet.direction.to_string();
-
-                    let response = ui.selectable_label(
-                        is_selected,
-                        format!(
-                            "[{}] {} | {} | Size: {} bytes | MsgNum: {}",
-                            direction_str, cmd_display, packet.msg_type, packet.payload_size, packet.msg_num
-                        ),
-                    );
-
-                    if response.clicked() {
-                        state.selected_packet_index = Some(*idx);
-                        state.tdf_tree = None; // Force re-parse
-                        state.selected_tdf_path.clear();
-                        state.expanded_tdf_nodes.clear();
-                    }
-
-                    // Highlight with direction color
-                    if is_selected {
-                        ui.painter().rect_filled(
-                            response.rect,
-                            0.0,
-                            direction_color.linear_multiply(0.2),
+                        let direction_str = packet.direction.to_string();
+                        let summary = format!(
+                            "[{}] {} | {} | Size: {} bytes | MsgNum: {} | seq={}",
+                            direction_str,
+                            cmd_display,
+                            packet.msg_type,
+                            packet.payload_size,
+                            packet.msg_num,
+                            packet.capture_seq
                         );
-                    }
+
+                        ui.set_max_width(clip_w);
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 2.0;
+                            let pinned = state.pinned_seq.contains(&packet.capture_seq);
+                            let pin_tooltip = if pinned {
+                                "Unpin row"
+                            } else {
+                                "Pin row (keeps near top)"
+                            };
+                            // Same pattern as grpc_inspector — small frameless Buttons often lose
+                            // clicks inside ScrollArea on some platforms.
+                            if ui
+                                .add_sized(
+                                    Vec2::new(20.0, 20.0),
+                                    egui::SelectableLabel::new(pinned, "📌"),
+                                )
+                                .on_hover_text(pin_tooltip)
+                                .clicked()
+                            {
+                                if pinned {
+                                    state.pinned_seq.remove(&packet.capture_seq);
+                                } else {
+                                    state.pinned_seq.insert(packet.capture_seq);
+                                }
+                            }
+
+                            let rest_w = ui.available_width().max(1.0);
+
+                            let fill = if is_selected {
+                                direction_color.linear_multiply(0.2)
+                            } else {
+                                egui::Color32::TRANSPARENT
+                            };
+
+                            Frame::none()
+                                .fill(fill)
+                                .inner_margin(Margin::symmetric(2.0, 1.0))
+                                .show(ui, |ui| {
+                                    ui.set_min_width(rest_w);
+                                    ui.set_max_width(rest_w);
+                                    let response = ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&summary).monospace().size(11.5),
+                                        )
+                                        .truncate(true)
+                                        .sense(Sense::click()),
+                                    );
+
+                                    if response.clicked() {
+                                        state.selected_packet_index = Some(*idx);
+                                        state.parse_done_key = None;
+                                        state.tdf_tree = None;
+                                        state.tdf_root_scan = None;
+                                        state.tdf_parse_error = None;
+                                        state.selected_tdf_path.clear();
+                                        state.expanded_tdf_nodes.clear();
+                                    }
+                                });
+                        });
+                    });
                 }
             });
     });
@@ -326,13 +708,37 @@ fn render_tdf_tree_panel(
                     let text = format_tdf_tree_as_text(tree);
                     ui.output_mut(|o| o.copied_text = text);
                 }
+            } else if state
+                .tdf_root_scan
+                .as_ref()
+                .is_some_and(|s| !s.is_empty())
+            {
+                if ui
+                    .button("📋")
+                    .on_hover_text("Copy root-level tag scan")
+                    .clicked()
+                {
+                    let mut t = String::from("Root-level TDF fields (tag scan):\n");
+                    for (tag, ty, off, len) in state.tdf_root_scan.as_deref().unwrap() {
+                        t.push_str(&format!(
+                            "{} type=0x{:02X} start={} total_len={}\n",
+                            tag.trim_end(),
+                            ty,
+                            off,
+                            len
+                        ));
+                    }
+                    ui.output_mut(|o| o.copied_text = t);
+                }
             }
         });
         ui.separator();
 
         if let Some(ref tree) = tdf_tree_clone {
+            let tdf_scroll_h = scroll_area_max_h(ui);
             egui::ScrollArea::vertical()
                 .id_source("tdf_tree_scroll")
+                .max_height(tdf_scroll_h)
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {
                     // Use monospace font for tree display
@@ -364,6 +770,52 @@ fn render_tdf_tree_panel(
                     state.expanded_tdf_nodes = new_expanded;
                     state.selected_tdf_path = new_selected;
                 });
+        } else if state
+            .tdf_root_scan
+            .as_ref()
+            .is_some_and(|s| !s.is_empty())
+        {
+            ui.label(
+                egui::RichText::new("Root-level tag scan (no full tree — see parse error below if any).")
+                    .weak()
+                    .small(),
+            );
+            let tag_scan_h = scroll_area_max_h(ui);
+            egui::ScrollArea::vertical()
+                .id_source("tdf_tag_scan_scroll")
+                .max_height(tag_scan_h)
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    ui.style_mut().text_styles.insert(
+                        egui::TextStyle::Body,
+                        egui::FontId::monospace(11.0),
+                    );
+                    for (tag, ty, off, len) in state.tdf_root_scan.as_deref().unwrap() {
+                        ui.label(format!(
+                            "{}  type={:#04x}  @{}  (+{} B)",
+                            tag.trim_end(),
+                            ty,
+                            off,
+                            len
+                        ));
+                    }
+                });
+            if let Some(ref error_msg) = state.tdf_parse_error {
+                ui.separator();
+                ui.label("Parse error:");
+                let err_h = scroll_area_max_h(ui).min(220.0).max(60.0);
+                egui::ScrollArea::vertical()
+                    .id_source("tdf_err_below_scan")
+                    .max_height(err_h)
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new(error_msg)
+                                .family(egui::FontFamily::Monospace)
+                                .size(10.0)
+                                .color(egui::Color32::RED),
+                        );
+                    });
+            }
         } else if state.selected_packet_index.is_some() {
             // Show parsing status, error, or empty payload message
             ui.vertical(|ui| {
@@ -373,8 +825,10 @@ fn render_tdf_tree_panel(
                     let is_empty_payload = error_msg == "Empty payload (0 bytes) found";
                     if is_info {
                         ui.add_space(5.0);
+                        let s = scroll_area_max_h(ui);
                         egui::ScrollArea::vertical()
                             .id_source("tdf_info_scroll")
+                            .max_height(s)
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 ui.label(
@@ -386,8 +840,10 @@ fn render_tdf_tree_panel(
                             });
                     } else if is_empty_payload {
                         ui.add_space(5.0);
+                        let s = scroll_area_max_h(ui);
                         egui::ScrollArea::vertical()
                             .id_source("tdf_error_scroll")
+                            .max_height(s)
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 ui.label(
@@ -399,8 +855,10 @@ fn render_tdf_tree_panel(
                             });
                     } else {
                         ui.add_space(5.0);
+                        let s = scroll_area_max_h(ui);
                         egui::ScrollArea::vertical()
                             .id_source("tdf_error_scroll")
+                            .max_height(s)
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 ui.label(
@@ -415,7 +873,9 @@ fn render_tdf_tree_panel(
                     if ui.button("Clear Selection").clicked() {
                         state.selected_packet_index = None;
                         state.tdf_tree = None;
+                        state.tdf_root_scan = None;
                         state.tdf_parse_error = None;
+                        state.parse_done_key = None;
                     }
                 } else {
                     // Show parsing status or empty payload
@@ -440,7 +900,9 @@ fn render_tdf_tree_panel(
                             if ui.button("Cancel & Clear Selection").clicked() {
                                 state.selected_packet_index = None;
                                 state.tdf_tree = None;
+                                state.tdf_root_scan = None;
                                 state.tdf_parse_error = None;
+                                state.parse_done_key = None;
                             }
                         }
                     }
@@ -562,8 +1024,10 @@ fn render_field_details(ui: &mut egui::Ui, node: &TdfTreeNode) {
         ui.label(egui::RichText::new("Value:").heading());
         ui.add_space(5.0);
 
+        let field_scroll_h = scroll_area_max_h(ui);
         egui::ScrollArea::vertical()
             .id_source("field_details_scroll")
+            .max_height(field_scroll_h)
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 // Limit value display length to prevent UI freezing
@@ -640,8 +1104,10 @@ fn render_packet_details(
         ui.label(egui::RichText::new("Hex:").heading());
         ui.add_space(5.0);
 
+        let hex_scroll_h = scroll_area_max_h(ui);
         egui::ScrollArea::vertical()
             .id_source("hex_dump_scroll")
+            .max_height(hex_scroll_h)
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 let display_text = format_hex_dump(payload, 4096);

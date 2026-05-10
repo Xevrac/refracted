@@ -1,6 +1,6 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Traffic inspection mode: local emulator captures vs proxied upstream capture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +32,8 @@ pub enum InspectorType {
 /// Blaze packet capture structures
 #[derive(Debug, Clone)]
 pub struct CapturedPacket {
+    /// Monotonic id assigned when the packet enters the toolkit buffer (stable if the ring drops older rows).
+    pub capture_seq: u64,
     pub timestamp: f64,
     pub direction: PacketDirection,
     pub component: u16,
@@ -90,6 +92,7 @@ pub enum ToolkitMakeTab {
 /// Captured gRPC request/response
 #[derive(Debug, Clone)]
 pub struct CapturedGrpc {
+    pub capture_seq: u64,
     pub timestamp: f64,
     pub direction: GrpcDirection,
     pub method: String,
@@ -123,6 +126,7 @@ impl GrpcDirection {
 /// Captured HTTP request/response
 #[derive(Debug, Clone)]
 pub struct CapturedHttp {
+    pub capture_seq: u64,
     pub timestamp: f64,
     pub direction: HttpDirection,
     pub method: String,
@@ -152,6 +156,7 @@ impl HttpDirection {
 /// Captured LSX request/response
 #[derive(Debug, Clone)]
 pub struct CapturedLsx {
+    pub capture_seq: u64,
     pub timestamp: f64,
     pub direction: LsxDirection,
     pub method: String,
@@ -181,6 +186,12 @@ impl LsxDirection {
 pub type GrpcBuffer = Arc<Mutex<Vec<CapturedGrpc>>>;
 pub type HttpBuffer = Arc<Mutex<Vec<CapturedHttp>>>;
 pub type LsxBuffer = Arc<Mutex<Vec<CapturedLsx>>>;
+
+static NEXT_TOOLKIT_CAPTURE_SEQ: AtomicU64 = AtomicU64::new(1);
+
+fn next_toolkit_capture_seq() -> u64 {
+    NEXT_TOOLKIT_CAPTURE_SEQ.fetch_add(1, Ordering::Relaxed)
+}
 
 // Global buffers
 static GLOBAL_PACKET_BUFFER: parking_lot::Mutex<Option<PacketBuffer>> = parking_lot::const_mutex(None);
@@ -228,8 +239,10 @@ pub fn get_global_lsx_buffer() -> Option<LsxBuffer> {
     GLOBAL_LSX_BUFFER.lock().clone()
 }
 
-/// Capture a Blaze packet
-pub fn capture_packet(packet: CapturedPacket) {
+/// Capture a Blaze packet; returns the assigned [`CapturedPacket::capture_seq`] when buffered.
+pub fn capture_packet(mut packet: CapturedPacket) -> Option<u64> {
+    let seq = next_toolkit_capture_seq();
+    packet.capture_seq = seq;
     if let Some(buffer) = get_global_packet_buffer() {
         let mut buf = buffer.lock();
         buf.push(packet);
@@ -238,49 +251,60 @@ pub fn capture_packet(packet: CapturedPacket) {
             let remove_count = len - 1000;
             buf.drain(0..remove_count);
         }
+        return Some(seq);
     }
+    None
 }
 
-/// Capture a gRPC request/response
-pub fn capture_grpc(grpc: CapturedGrpc) {
+/// Capture a gRPC request/response; returns [`CapturedGrpc::capture_seq`] when buffered.
+pub fn capture_grpc(mut grpc: CapturedGrpc) -> Option<u64> {
+    let seq = next_toolkit_capture_seq();
+    grpc.capture_seq = seq;
     if let Some(buffer) = get_global_grpc_buffer() {
         let mut buf = buffer.lock();
         buf.push(grpc);
-        
-        // Keep only last 1000 entries
+
         let len = buf.len();
         if len > 1000 {
             buf.drain(0..len - 1000);
         }
+        return Some(seq);
     }
+    None
 }
 
-/// Capture an HTTP request/response
-pub fn capture_http(http: CapturedHttp) {
+/// Capture an HTTP request/response; returns [`CapturedHttp::capture_seq`] when buffered.
+pub fn capture_http(mut http: CapturedHttp) -> Option<u64> {
+    let seq = next_toolkit_capture_seq();
+    http.capture_seq = seq;
     if let Some(buffer) = get_global_http_buffer() {
         let mut buf = buffer.lock();
         buf.push(http);
-        
-        // Keep only last 1000 entries
+
         let len = buf.len();
         if len > 1000 {
             buf.drain(0..len - 1000);
         }
+        return Some(seq);
     }
+    None
 }
 
-/// Capture an LSX request/response
-pub fn capture_lsx(lsx: CapturedLsx) {
+/// Capture an LSX request/response; returns [`CapturedLsx::capture_seq`] when buffered.
+pub fn capture_lsx(mut lsx: CapturedLsx) -> Option<u64> {
+    let seq = next_toolkit_capture_seq();
+    lsx.capture_seq = seq;
     if let Some(buffer) = get_global_lsx_buffer() {
         let mut buf = buffer.lock();
         buf.push(lsx);
-        
-        // Keep only last 1000 entries
+
         let len = buf.len();
         if len > 1000 {
             buf.drain(0..len - 1000);
         }
+        return Some(seq);
     }
+    None
 }
 
 /// Proxy configuration for research mode

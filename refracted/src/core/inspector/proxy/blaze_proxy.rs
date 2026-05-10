@@ -208,6 +208,7 @@ fn parse_blaze_packet(
     };
 
     Ok(CapturedPacket {
+        capture_seq: 0,
         timestamp,
         direction,
         component: header.component,

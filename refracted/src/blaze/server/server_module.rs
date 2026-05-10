@@ -1,8 +1,9 @@
 use crate::crypto::SessionState;
 use crate::common::error::{io_is_expected_peer_close, BlazeError, BlazeResult};
 use crate::blaze::protocol::{
-    build_get_server_instance_reply, find_get_server_instance, Fire2FrameHeader, Fire2FramePacket,
-    MessageType, RedirectorWire,
+    build_get_server_instance_reply, compact_blaze_envelope,
+    find_get_server_instance, Fire2FrameHeader, Fire2FramePacket, FireFramePacket, MessageType,
+    RedirectorWire,
 };
 use crate::blaze::handlers::{
     handle_packet, handle_packet_fields, handle_user_session_extended_data_update,
@@ -13,7 +14,7 @@ use crate::blaze::handlers::{
 };
 use crate::blaze::server::connection_info_coalesce::{
     key_b2c_idle_user_session_ex, key_b2c_keepalive_reply, key_b2c_notif, key_b2c_reply,
-    key_b2c_toolkit_inject, key_c2b, key_c2b_keepalive, key_fire_b2c, key_fire_c2b, CoalescedBlazeInfo,
+    key_b2c_blaze_inject, key_c2b, key_c2b_keepalive, key_fire_b2c, key_fire_c2b, CoalescedBlazeInfo,
     PingBurstCoalescer,
 };
 use crate::core::inspector::{capture_packet, CapturedPacket, PacketDirection};
@@ -157,6 +158,7 @@ fn capture_outgoing_packet(packet: &Fire2FramePacket, raw_data: &[u8]) {
         .map(|s| s.to_string());
     
     capture_packet(CapturedPacket {
+        capture_seq: 0,
         timestamp,
         direction: PacketDirection::BlazeToClient,
         component: packet.header.component,
@@ -513,7 +515,7 @@ impl BlazeProtocolServer {
         let mut ping_burst = PingBurstCoalescer::new_scoped(&scoped_key);
 
         let mut chunk = vec![0u8; 4096];
-        let mut inject_rx = crate::blaze::server::toolkit_inject::subscribe_toolkit_blaze_wire();
+        let mut inject_rx = crate::blaze::server::inject_bus::subscribe();
 
         loop {
             tokio::select! {
@@ -541,7 +543,7 @@ impl BlazeProtocolServer {
                                     capture_outgoing_packet(&pkt, &data);
                                     let mt = pkt.header.msg_type.to_string();
                                     let wl = data.len();
-                                    let inj_key = key_b2c_toolkit_inject(
+                                    let inj_key = key_b2c_blaze_inject(
                                         pkt.header.component,
                                         pkt.header.command,
                                         pkt.header.msg_num,
@@ -854,7 +856,8 @@ impl BlazeProtocolServer {
                     .unwrap_or_default()
                     .as_secs_f64();
                 
-                capture_packet(CapturedPacket {
+                let incoming_seq = capture_packet(CapturedPacket {
+                    capture_seq: 0,
                     timestamp,
                     direction: PacketDirection::ClientToBlaze,
                     component: header.component,
@@ -884,7 +887,11 @@ impl BlazeProtocolServer {
                     packet.header.component, packet.header.command);
 
                 let packet_for_handler = packet.clone();
-                let handle_result = tokio::task::spawn_blocking(move || handle_packet(&packet_for_handler)).await;
+                let inc_seq = incoming_seq;
+                let handle_result = tokio::task::spawn_blocking(move || {
+                    handle_packet(&packet_for_handler, inc_seq)
+                })
+                .await;
 
                 match handle_result {
                     Ok(Ok(response_payload)) => {
@@ -1437,7 +1444,8 @@ impl BlazeProtocolServer {
                                 info_coalesce.log(&key_b2c_notif(0x0004, 0x14, pl), line);
                             }
                             capture_outgoing_packet(&setup_packet, &setup_data);
-                            if !blaze_write_only(
+                            // **`blaze_send` flushes** each Fire2 envelope; **`blaze_write_only`** can coalesce with the prior REPLY/cipher layer and confuse TLS clients that decrypt **packet-at-a-time**.
+                            if !blaze_send(
                                 &mut stream,
                                 &setup_data,
                                 addr,
@@ -1456,7 +1464,7 @@ impl BlazeProtocolServer {
                             // For join flow, create local game via setup before state-change notify.
                             sleep(Duration::from_millis(15)).await;
 
-                            if !blaze_write_only(
+                            if !blaze_send(
                                 &mut stream,
                                 &gstate_data,
                                 addr,
@@ -1512,7 +1520,7 @@ impl BlazeProtocolServer {
                                 info_coalesce.log(&key_b2c_notif(0x0004, 0x47, pl), line);
                             }
                             capture_outgoing_packet(&phost_packet, &phost_data);
-                            if !blaze_write_only(
+                            if !blaze_send(
                                 &mut stream,
                                 &phost_data,
                                 addr,
@@ -1635,22 +1643,172 @@ impl BlazeProtocolServer {
         let scoped_key = format!("BLAZE_FIRE|{}", addr);
         let mut info_coalesce = CoalescedBlazeInfo::new_scoped(&scoped_key);
         let mut ping_burst = PingBurstCoalescer::new_scoped(&scoped_key);
+        let mut inject_rx = crate::blaze::server::inject_bus::subscribe();
+        let mut chunk = vec![0u8; 4096];
         loop {
-            let mut chunk = vec![0u8; 4096];
-            let n = match timeout(Duration::from_secs(15), stream.read(&mut chunk)).await {
-                Ok(Ok(n)) => n,
-                Ok(Err(e)) => {
-                    if io_is_expected_peer_close(&e) {
+            tokio::select! {
+                recv_inj = inject_rx.recv() => {
+                    match recv_inj {
+                        Ok(wire_plain) => {
+                            if wire_plain.is_empty() {
+                                continue;
+                            }
+                            match compact_blaze_envelope::normalize_for_compact_listener(&wire_plain)
+                            {
+                                Ok(compact) => {
+                                    let ts = SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs_f64();
+
+                                    let meta = if let Ok(pkt) = Fire2FramePacket::from_bytes(&wire_plain)
+                                    {
+                                        let cmd_name = crate::blaze::components::get_command_name(
+                                            pkt.header.component,
+                                            pkt.header.command,
+                                        )
+                                        .map(|s| s.to_string());
+                                        Some((
+                                            pkt.header.component,
+                                            pkt.header.command,
+                                            pkt.header.msg_num,
+                                            pkt.header.msg_type.to_string().into(),
+                                            pkt.payload.to_vec(),
+                                            pkt.header.metadata_size,
+                                            cmd_name,
+                                        ))
+                                    } else if let Ok(ff) = FireFramePacket::from_bytes(&wire_plain) {
+                                        let cmd_name = crate::blaze::components::get_command_name(
+                                            ff.header.component,
+                                            ff.header.command,
+                                        )
+                                        .map(|s| s.to_string());
+                                        let mt_label =
+                                            MessageType::from_u8(ff.header.msg_type).to_string();
+                                        Some((
+                                            ff.header.component,
+                                            ff.header.command,
+                                            ff.header.msg_num,
+                                            mt_label.into(),
+                                            ff.payload.to_vec(),
+                                            0u16,
+                                            cmd_name,
+                                        ))
+                                    } else if let Some((c, cmd, _, qtype, pkt_id, pay)) =
+                                        compact_blaze_envelope::split_compact_envelope(&compact)
+                                    {
+                                        let cmd_name = crate::blaze::components::get_command_name(c, cmd)
+                                            .map(|s| s.to_string());
+                                        Some((
+                                            c,
+                                            cmd,
+                                            pkt_id as u32,
+                                            format!("q{:04x}", qtype),
+                                            pay.to_vec(),
+                                            0u16,
+                                            cmd_name,
+                                        ))
+                                    } else {
+                                        None
+                                    };
+
+                                    let Some((
+                                        component,
+                                        command,
+                                        msg_num,
+                                        msg_ty,
+                                        payload,
+                                        metadata_size,
+                                        cmd_name,
+                                    )) = meta
+                                    else {
+                                        warn!(
+                                            "[Blaze] toolkit inject: could not derive metadata for capture"
+                                        );
+                                        continue;
+                                    };
+
+                                    let msg_ty_log = msg_ty.clone();
+                                    capture_packet(CapturedPacket {
+                                        capture_seq: 0,
+                                        timestamp: ts,
+                                        direction: PacketDirection::BlazeToClient,
+                                        component,
+                                        command,
+                                        msg_num,
+                                        msg_type: msg_ty,
+                                        payload_size: payload.len(),
+                                        payload,
+                                        raw_packet: compact.clone(),
+                                        command_name: cmd_name.clone(),
+                                        metadata_size,
+                                    });
+                                    let wl = compact.len();
+                                    let inj_key = key_b2c_blaze_inject(
+                                        component,
+                                        command,
+                                        msg_num,
+                                        &msg_ty_log,
+                                        wl,
+                                    );
+                                    let inj_line = match &cmd_name {
+                                        Some(nm) => format!(
+                                            "[Blaze→Client] {} toolkit inject (compact listener) Component={}, Command={}, Size={}, MsgType={}, MsgNum={}",
+                                            nm,
+                                            component,
+                                            command,
+                                            wl,
+                                            msg_ty_log,
+                                            msg_num,
+                                        ),
+                                        None => format!(
+                                            "[Blaze→Client] toolkit inject (compact listener) Component={}, Command={}, Size={}, MsgType={}, MsgNum={}",
+                                            component,
+                                            command,
+                                            wl,
+                                            msg_ty_log,
+                                            msg_num,
+                                        ),
+                                    };
+                                    info_coalesce.log(&inj_key, inj_line);
+                                    if !blaze_send(
+                                        &mut stream,
+                                        &compact,
+                                        addr,
+                                        name,
+                                        "toolkit inject (compact)",
+                                    )
+                                    .await?
+                                    {
+                                        return Ok(());
+                                    }
+                                }
+                                Err(e) => warn!(
+                                    "[Blaze] toolkit inject not valid for compact listener: {}",
+                                    e
+                                ),
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {}
+                    }
+                }
+
+                read_res = timeout(Duration::from_secs(15), stream.read(&mut chunk)) => {
+                    let n = match read_res {
+                        Ok(Ok(n)) => n,
+                        Ok(Err(e)) => {
+                            if io_is_expected_peer_close(&e) {
+                                return Ok(());
+                            }
+                            return Err(BlazeError::Io(e));
+                        }
+                        Err(_) => continue,
+                    };
+                    if n == 0 {
                         return Ok(());
                     }
-                    return Err(BlazeError::Io(e));
-                }
-                Err(_) => continue,
-            };
-            if n == 0 {
-                return Ok(());
-            }
-            buffer.extend_from_slice(&chunk[..n]);
+                    buffer.extend_from_slice(&chunk[..n]);
 
             // Legacy FireFrame envelope:
             // Size(u16) + Component(u16) + Command(u16) + Error(u16) + QType(u16) + PacketId(u16)
@@ -1707,7 +1865,8 @@ impl BlazeProtocolServer {
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs_f64();
-                capture_packet(CapturedPacket {
+                let fire_incoming_seq = capture_packet(CapturedPacket {
+                    capture_seq: 0,
                     timestamp,
                     direction: PacketDirection::ClientToBlaze,
                     component,
@@ -1721,7 +1880,8 @@ impl BlazeProtocolServer {
                     metadata_size: 0,
                 });
 
-                let response_payload = handle_packet_fields(component, command, &payload)?;
+                let response_payload =
+                    handle_packet_fields(component, command, &payload, fire_incoming_seq)?;
 
                 let mut response_data = Vec::with_capacity(12 + response_payload.len());
                 let response_size = response_payload.len() as u16;
@@ -1733,6 +1893,7 @@ impl BlazeProtocolServer {
                 response_data.extend_from_slice(&packet_id.to_be_bytes());
                 response_data.extend_from_slice(&response_payload);
                 capture_packet(CapturedPacket {
+                    capture_seq: 0,
                     timestamp: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
@@ -1800,6 +1961,7 @@ impl BlazeProtocolServer {
                             .unwrap_or_default()
                             .as_secs_f64();
                         capture_packet(CapturedPacket {
+                            capture_seq: 0,
                             timestamp: ts,
                             direction: PacketDirection::BlazeToClient,
                             component: push.component,
@@ -1844,6 +2006,7 @@ impl BlazeProtocolServer {
                 {
                     for push in crate::client::cnc::fireframe::pushes_after_login_persona()? {
                         capture_packet(CapturedPacket {
+                            capture_seq: 0,
                             timestamp: SystemTime::now()
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_default()
@@ -1888,6 +2051,8 @@ impl BlazeProtocolServer {
                 }
 
                 let _ = buffer.split_to(total_packet_size);
+            }
+                }
             }
         }
     }

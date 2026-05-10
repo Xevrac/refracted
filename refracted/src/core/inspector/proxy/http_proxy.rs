@@ -137,6 +137,7 @@ async fn handle_http_proxy_connection(
     };
 
     let captured_request = CapturedHttp {
+        capture_seq: 0,
         timestamp,
         direction: HttpDirection::ClientToServer,
         method: method.clone(),
@@ -224,6 +225,7 @@ async fn handle_http_proxy_connection(
     };
 
     let captured_response = CapturedHttp {
+        capture_seq: 0,
         timestamp: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()

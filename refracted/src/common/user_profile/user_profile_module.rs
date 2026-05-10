@@ -199,6 +199,10 @@ pub fn create_new_profile() -> UserProfile {
 pub fn sync_profile_to_session() {
     use crate::session::{set_user_session, UserSession};
     let profile = get_current_profile();
+    crate::nucleus::log_nucleus_to_blaze(format!(
+        "session fields from profile `{}` (persona_id={}, user_id={})",
+        profile.display_name, profile.persona_id, profile.user_id
+    ));
     set_user_session(UserSession {
         jwt_token: None,
         user_id: profile.user_id,

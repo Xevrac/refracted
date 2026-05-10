@@ -4,6 +4,7 @@
 //! - Fire2Frame: 16-byte header format (newer)
 //! - FireFrame: 12-byte header format (older)
 
+pub mod compact_blaze_envelope;
 pub mod fire2frame;
 pub mod fireframe;
 pub mod redirector;

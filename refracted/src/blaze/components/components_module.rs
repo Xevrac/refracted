@@ -39,6 +39,10 @@ pub fn get_component_name(component_id: u16) -> &'static str {
         2050 => "PacksComponent", // 0x802
         2051 => "InventoryComponent", // 0x803
         30722 => "UserSessions", // 0x7802
+        69 => "DynamicMessagingComponent", // core/69
+        70 => "WebofferSurveyComponent", // core/70
+        71 => "TickerComponent", // core/71
+        1002 => "NucleusIdentityComponent", // core/1002
         _ => "UnknownComponent",
     }
 }
@@ -234,6 +238,8 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (7, 5) => Some(format!("{}.getStatsByGroup", component_name)),
         (7, 6) => Some(format!("{}.getDateRange", component_name)),
         (7, 7) => Some(format!("{}.getEntityCount", component_name)),
+        (7, 8) => Some(format!("{}.updateStats", component_name)),
+        (7, 9) => Some(format!("{}.wipeStats", component_name)),
         (7, 10) => Some(format!("{}.getLeaderboardGroup", component_name)),
         (7, 11) => Some(format!("{}.getLeaderboardFolderGroup", component_name)),
         (7, 12) => Some(format!("{}.getLeaderboard", component_name)),
@@ -249,6 +255,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (7, 22) => Some(format!("{}.getCenteredLeaderboardRaw", component_name)),
         (7, 23) => Some(format!("{}.getFilteredLeaderboardRaw", component_name)),
         (7, 24) => Some(format!("{}.changeKeyscopeValue", component_name)),
+        (7, 25) => Some(format!("{}.getEntityRank", component_name)),
         
         // ClubsComponent (11)
         (11, 1100) => Some(format!("{}.createClub", component_name)),
@@ -279,6 +286,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (11, 3100) => Some(format!("{}.declinePetition", component_name)),
         (11, 3200) => Some(format!("{}.revokePetition", component_name)),
         (11, 3300) => Some(format!("{}.joinClub", component_name)),
+        (11, 3310) => Some(format!("{}.joinOrPetitionClub", component_name)),
         (11, 3400) => Some(format!("{}.getClubRecordbook", component_name)),
         (11, 3410) => Some(format!("{}.resetClubRecords", component_name)),
         (11, 3500) => Some(format!("{}.updateMemberOnlineStatus", component_name)),
@@ -300,6 +308,24 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (11, 5000) => Some(format!("{}.disbandClub", component_name)),
         (11, 5100) => Some(format!("{}.getNewsForClubs", component_name)),
         (11, 5200) => Some(format!("{}.getPetitionsForClubs", component_name)),
+        (11, 5300) => Some(format!("{}.getClubTickerMessagesForClubs", component_name)),
+        (11, 5400) => Some(format!("{}.countMessagesForClubs", component_name)),
+        (11, 5500) => Some(format!("{}.getMemberOnlineStatus", component_name)),
+        (11, 5600) => Some(format!("{}.getMemberStatusInClub", component_name)),
+        (11, 5700) => Some(format!("{}.logEvent", component_name)),
+        (11, 5800) => Some(format!("{}.wipeStats", component_name)),
+        
+        // GameReportLegacyComponent (12 / 0xC)
+        (12, 1) => Some(format!("{}.submitGameReport", component_name)),
+        (12, 2) => Some(format!("{}.submitOfflineGameReport", component_name)),
+        (12, 3) => Some(format!("{}.submitGameEvents", component_name)),
+        (12, 4) => Some(format!("{}.getGameReports", component_name)),
+        (12, 5) => Some(format!("{}.getGameReportView", component_name)),
+        (12, 6) => Some(format!("{}.getGameReportViewInfo", component_name)),
+        (12, 7) => Some(format!("{}.getGameReportViewInfoList", component_name)),
+        (12, 8) => Some(format!("{}.getGameReportTypes", component_name)),
+        (12, 100) => Some(format!("{}.submitTrustedMidGameReport", component_name)),
+        (12, 101) => Some(format!("{}.submitTrustedEndGameReport", component_name)),
         
         // MessagingComponent (15)
         (15, 1) => Some(format!("{}.sendMessage", component_name)),
@@ -307,6 +333,20 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (15, 3) => Some(format!("{}.purgeMessages", component_name)),
         (15, 4) => Some(format!("{}.touchMessages", component_name)),
         (15, 5) => Some(format!("{}.getMessages", component_name)),
+        (15, 6) => Some(format!("{}.sendSourceMessage", component_name)),
+        (15, 7) => Some(format!("{}.sendGlobalMessage", component_name)),
+        
+        // TournamentsComponent (23 / 0x17)
+        (23, 1) => Some(format!("{}.getTournaments", component_name)),
+        (23, 2) => Some(format!("{}.getAllTournaments", component_name)),
+        (23, 3) => Some(format!("{}.getMemberCounts", component_name)),
+        (23, 4) => Some(format!("{}.getTrophies", component_name)),
+        (23, 5) => Some(format!("{}.getMyTournamentId", component_name)),
+        (23, 6) => Some(format!("{}.joinTournament", component_name)),
+        (23, 7) => Some(format!("{}.leaveTournament", component_name)),
+        (23, 8) => Some(format!("{}.resetTournament", component_name)),
+        (23, 9) => Some(format!("{}.getMyTournamentDetails", component_name)),
+        (23, 10) => Some(format!("{}.resetAllTournamentMembers", component_name)),
         
         // UserSessions (30722 / 0x7802)
         (30722, 1) => Some(format!("{}.UserSessionExtendedDataUpdate", component_name)), // Notification
@@ -370,6 +410,26 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (2051, 1) => Some(format!("{}.getItems", component_name)), // 0x01
         (2051, 5) => Some(format!("{}.drainConsumeable", component_name)),
         (2051, 6) => Some(format!("{}.getTemplate", component_name)), // 0x06
+        
+        // NucleusIdentityComponent (1002) — core/1002
+        (1002, 1) => Some(format!("{}.updateEntitlement", component_name)),
+        (1002, 2) => Some(format!("{}.updatePersona", component_name)),
+        (1002, 3) => Some(format!("{}.deletePersona", component_name)),
+        (1002, 4) => Some(format!("{}.getOptin", component_name)),
+        (1002, 5) => Some(format!("{}.postOptin", component_name)),
+        (1002, 6) => Some(format!("{}.deleteOptin", component_name)),
+        (1002, 7) => Some(format!("{}.getAccount", component_name)),
+        (1002, 8) => Some(format!("{}.getAccountEntitlements", component_name)),
+        (1002, 9) => Some(format!("{}.getPersonaEntitlements", component_name)),
+        (1002, 10) => Some(format!("{}.getEntitlement", component_name)),
+        (1002, 11) => Some(format!("{}.postEntitlement", component_name)),
+        (1002, 12) => Some(format!("{}.searchOrPostEntitlement", component_name)),
+        (1002, 13) => Some(format!("{}.postEntitlementPersonaLink", component_name)),
+        (1002, 14) => Some(format!("{}.postProfileInfo", component_name)),
+        (1002, 15) => Some(format!("{}.getProfileInfo", component_name)),
+        (1002, 16) => Some(format!("{}.getPid", component_name)),
+        (1002, 17) => Some(format!("{}.getPersonaList", component_name)),
+        (1002, 19) => Some(format!("{}.getPersonaInfo", component_name)),
         
         _ => None,
     }

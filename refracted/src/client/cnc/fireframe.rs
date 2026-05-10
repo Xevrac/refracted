@@ -27,34 +27,25 @@ pub fn notification_envelope(component: u16, command: u16, payload: &[u8]) -> Ve
 pub fn pushes_after_reset_dedicated_server(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> {
     let gid = super::cnc_extract_reset_game_id(request);
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameStateChange + NotifyGameSetup + NotifyPlatformHostInitialized after resetDedicatedServer (gid={})",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized after resetDedicatedServer (gid={})",
         gid
     );
 
-    let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_RESETABLE)?;
-    let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
-    let pl0 = wire_gstate.len();
-
+    // Same order as `joinGame`: **NotifyGameSetup first** so `mGameMap` has the game before
+    // `NotifyGameStateChange` / platform-host notifies (avoids "unknown local game" GMGR warnings).
     let setup = super::build_game_manager_notify_game_setup(request, gid)?;
     let wire_setup = notification_envelope(0x0004, 0x0014, &setup);
-    let pl1 = wire_setup.len();
+    let pl_setup = wire_setup.len();
+
+    let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_RESETABLE)?;
+    let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
+    let pl_gstate = wire_gstate.len();
 
     let phost = super::build_game_manager_notify_platform_host_initialized(gid)?;
     let wire_phost = notification_envelope(0x0004, 0x0047, &phost);
-    let pl2 = wire_phost.len();
+    let pl_phost = wire_phost.len();
 
     Ok(vec![
-        OutgoingPush {
-            wire: wire_gstate,
-            component: 0x0004,
-            command: 0x0064,
-            tdf_body: gstate.to_vec(),
-            blaze_send_label: "NotifyGameStateChange after resetDedicatedServer",
-            info_log_line: format!(
-                "[Blaze→Client] GameManager.NotifyGameStateChange Component=4, Command=100, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl0
-            ),
-        },
         OutgoingPush {
             wire: wire_setup,
             component: 0x0004,
@@ -63,7 +54,18 @@ pub fn pushes_after_reset_dedicated_server(request: &[u8]) -> BlazeResult<Vec<Ou
             blaze_send_label: "NotifyGameSetup after resetDedicatedServer",
             info_log_line: format!(
                 "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl1
+                pl_setup
+            ),
+        },
+        OutgoingPush {
+            wire: wire_gstate,
+            component: 0x0004,
+            command: 0x0064,
+            tdf_body: gstate.to_vec(),
+            blaze_send_label: "NotifyGameStateChange after resetDedicatedServer",
+            info_log_line: format!(
+                "[Blaze→Client] GameManager.NotifyGameStateChange Component=4, Command=100, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                pl_gstate
             ),
         },
         OutgoingPush {
@@ -74,7 +76,7 @@ pub fn pushes_after_reset_dedicated_server(request: &[u8]) -> BlazeResult<Vec<Ou
             blaze_send_label: "NotifyPlatformHostInitialized after resetDedicatedServer",
             info_log_line: format!(
                 "[Blaze→Client] GameManager.NotifyPlatformHostInitialized Component=4, Command=71, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl2
+                pl_phost
             ),
         },
     ])

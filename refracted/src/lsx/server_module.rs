@@ -273,6 +273,7 @@ impl LsxServer {
                 
                 use crate::core::inspector::inspector_module::{capture_lsx, CapturedLsx, LsxDirection};
                 capture_lsx(CapturedLsx {
+                    capture_seq: 0,
                     timestamp,
                     direction: LsxDirection::ClientToServer,
                     method: method.clone(),
@@ -413,6 +414,7 @@ impl LsxServer {
                 
                 use crate::core::inspector::inspector_module::{capture_lsx, CapturedLsx, LsxDirection};
                 capture_lsx(CapturedLsx {
+                    capture_seq: 0,
                     timestamp,
                     direction: LsxDirection::ServerToClient,
                     method: format!("{}_Response", method),

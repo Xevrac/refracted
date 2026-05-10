@@ -398,6 +398,7 @@ pub fn handle_packet_fields(
         (0x0005, 0x0001) => Some(handle_redirector_get_server_instance(payload)),
         // UtilComponent::preAuth
         (0x0009, 0x0007) => Some(handle_util_preauth(payload)),
+        // Blaze::Rooms — hub assigns component id at runtime (~`0x7800` segment). Extend when discovery captures `(id,opcode)`.
         _ => None,
     }
 }
@@ -1146,12 +1147,7 @@ pub fn build_user_sessions_user_added_notification() -> BlazeResult<Bytes> {
 const GSTA_PRE_GAME: i32 = 1;
 pub(crate) const GSTA_RESETABLE: i32 = 7;
 
-// NQOS `NATT` (NAT type) — CNC clients expect NAT_TYPE_NONE (5) post-QoS.
-const NATT_NAT_TYPE_NONE: i32 = 5;
-
 const PROS_STAT_ACTIVE_CONNECTING: i32 = 2; // ACTIVE_CONNECTING
-
-const CNC_GAME_PROTOCOL_VERSION: &str = "cncprod150805";
 
 fn cnc_new_uuid_v4_string() -> String {
     let mut b = [0u8; 16];
@@ -1221,8 +1217,6 @@ pub fn build_game_manager_notify_game_setup(
     request_payload: &[u8],
     gid: i64,
 ) -> BlazeResult<Bytes> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
     let session = crate::session::get_user_session();
     let uid_i32 = cnc_notify_host_persona_i32();
     let uid = uid_i32 as i64;
@@ -1232,16 +1226,13 @@ pub fn build_game_manager_notify_game_setup(
         session.display_name.as_str()
     };
 
-    // Echo create-request fields where useful; notify `VSTR` uses protocol default unless client sent a real value.
+    // Echo create-request **`GNAM` / ATTR / VOIP / UUID`; **`GAME`** skeleton matches **`notify_game_setup_join`**.
     let gnam = TdfEncoder::find_string_field(request_payload, "GNAM")
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Skirmish".to_string());
-    let gset = TdfEncoder::find_int_field(request_payload, "GSET").unwrap_or(0);
     let voip = TdfEncoder::find_int_field(request_payload, "VOIP").unwrap_or(0);
-    let ntop_game = TdfEncoder::find_int_field(request_payload, "NTOP").unwrap_or(NTOP_DEFAULT);
-    let vstr_notify = TdfEncoder::find_string_field(request_payload, "VSTR")
-        .filter(|s| !s.is_empty() && s != "1")
-        .unwrap_or_else(|| CNC_GAME_PROTOCOL_VERSION.to_string());
+    // CNC `GameBase` / `NotifyGameSetup` uses the same topology as `resetDedicatedServer`: dedicated, not peer-hosted.
+    let ntop_game = NTOP_CLIENT_SERVER_DEDICATED;
     let game_uuid = cnc_resolve_notify_game_uuid(request_payload);
 
     // HNET endpoints: INIP from `CreateGameRequest`; EXIP from `updateNetworkInfo`, else our QoS
@@ -1250,9 +1241,9 @@ pub fn build_game_manager_notify_game_setup(
     let ips = TdfEncoder::scan_all_int_fields(request_payload, "IP  ");
     let ports = TdfEncoder::scan_all_int_fields(request_payload, "PORT");
     let host_inip_ip = ips.get(1).copied().unwrap_or(0);
-    let _host_inip_port_from_request = ports.get(1).copied().unwrap_or(0);
+    let host_inip_port_from_request = ports.get(1).copied().unwrap_or(0);
     let req_exip_ip = ips.first().copied().unwrap_or(0);
-    let _req_exip_port = ports.first().copied().unwrap_or(0);
+    let req_exip_port = ports.first().copied().unwrap_or(0);
 
     let host_exip_ip = session
         .network_exip_ip
@@ -1266,15 +1257,20 @@ pub fn build_game_manager_notify_game_setup(
         .or_else(|| req_exip_ip.ne(&0).then_some(req_exip_ip))
         .unwrap_or(0);
 
-    // Dev override: game endpoint port aligned with local dedicated server UDP; prefer a user setting when exposed in UI.
-    let host_inip_port = CNC_TEST_DEDICATED_PORT;
-    let host_exip_port = CNC_TEST_DEDICATED_PORT;
+    // Mirror the request's INIP/EXIP ports verbatim; only fall back to the dev port when the request
+    // actually sent 0 (or wasn't an IpPairAddress union). Hardcoding CNC_TEST_DEDICATED_PORT (25200)
+    // for both meant the client never saw the real listener (3659) it advertised in CreateGameRequest.
+    let host_inip_port = if host_inip_port_from_request != 0 {
+        host_inip_port_from_request
+    } else {
+        CNC_TEST_DEDICATED_PORT
+    };
+    let host_exip_port = if req_exip_port != 0 {
+        req_exip_port
+    } else {
+        host_inip_port
+    };
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    let now_i32 = now.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     let gid_i32 = gid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
     let build_endpoint = |ip: i32, port: i32| -> Vec<u8> {
@@ -1284,8 +1280,6 @@ pub fn build_game_manager_notify_game_setup(
         out
     };
 
-    // `GAME` field order must match CNC `GameBase` / `NotifyGameSetup`: **ADMN, ATTR, CAP, CRIT, GID**, … then tail
-    // **XNNC** / **XSES**. Skipping **ATTR**/**CRIT** shifts all following tags (empty **UUID**, **REAS** → union 127).
     let mut game = Vec::new();
     game.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[uid]));
     if let Some(raw) = TdfEncoder::extract_top_level_field_bytes(request_payload, "ATTR") {
@@ -1299,20 +1293,11 @@ pub fn build_game_manager_notify_game_setup(
     game.extend_from_slice(&TdfEncoder::encode_long_list("CAP\0", &[0x20, 0]));
     if let Some(raw) = TdfEncoder::extract_top_level_field_bytes(request_payload, "CRIT") {
         game.extend_from_slice(&raw);
-    } else {
-        game.extend_from_slice(&encode_struct_list("CRIT", &[]));
     }
-    game.extend_from_slice(&TdfEncoder::encode_long("GID\0", gid));
+    game.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     game.extend_from_slice(&TdfEncoder::encode_string("GNAM", &gnam));
-    game.extend_from_slice(&TdfEncoder::encode_int("GPVH", 666));
-    game.extend_from_slice(&TdfEncoder::encode_int("GSET", gset));
-    game.extend_from_slice(&TdfEncoder::encode_int("GSID", 1));
     game.extend_from_slice(&TdfEncoder::encode_int("GSTA", GSTA_RESETABLE));
-    game.extend_from_slice(&TdfEncoder::encode_string("GTYP", ""));
-    game.extend_from_slice(&TdfEncoder::encode_string("GURL", ""));
 
-    // Stock `GameSetup`-style notify uses **LIST of STRUCT** rows (EXIP + INIP). CNC `CreateGameRequest`
-    // often sends **LIST of UNION** (`VALU`); copying that shape yields empty `HNET` in the RTS client.
     let mut hnet_row = Vec::new();
     hnet_row.extend_from_slice(&TdfEncoder::encode_struct(
         "EXIP",
@@ -1322,78 +1307,25 @@ pub fn build_game_manager_notify_game_setup(
         "INIP",
         &build_endpoint(host_inip_ip, host_inip_port),
     ));
+    game.extend_from_slice(&encode_union_list("HNET", HNET_UNION_MEMBER_VALU, &[hnet_row]));
 
-    if let Some(raw_hnet) = TdfEncoder::extract_top_level_field_bytes(request_payload, "HNET").filter(|b| {
-        b.len() >= 11 && b[3] == 0x04 && b[4] == 0x03
-    }) {
-        game.extend_from_slice(&raw_hnet);
-    } else {
-        game.extend_from_slice(&encode_struct_list("HNET", &[hnet_row]));
-    }
-
-    game.extend_from_slice(&TdfEncoder::encode_int("HSES", 13666));
-    game.extend_from_slice(&TdfEncoder::encode_int("IGNO", 0));
-    game.extend_from_slice(&encode_struct_list("MATR", &[]));
-    game.extend_from_slice(&TdfEncoder::encode_int("MCAP", 0x20));
-
-    let mut nqos = Vec::new();
-    nqos.extend_from_slice(&TdfEncoder::encode_int("DBPS", 0));
-    nqos.extend_from_slice(&TdfEncoder::encode_int("NATT", NATT_NAT_TYPE_NONE));
-    nqos.extend_from_slice(&TdfEncoder::encode_int("UBPS", 0));
-    game.extend_from_slice(&TdfEncoder::encode_struct("NQOS", &nqos));
-
-    game.extend_from_slice(&TdfEncoder::encode_int("NRES", 0));
     game.extend_from_slice(&TdfEncoder::encode_int("NTOP", ntop_game));
-    game.extend_from_slice(&TdfEncoder::encode_string("PGID", ""));
-    game.extend_from_slice(&TdfEncoder::encode_struct("PGSR", &[]));
-
-    let mut phst = Vec::new();
-    phst.extend_from_slice(&TdfEncoder::encode_int("HPID", uid_i32));
-    phst.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
-    game.extend_from_slice(&TdfEncoder::encode_struct("PHST", &phst));
-
-    game.extend_from_slice(&TdfEncoder::encode_int("PRES", 1));
-    game.extend_from_slice(&TdfEncoder::encode_string("PSAS", "wv"));
-    game.extend_from_slice(&TdfEncoder::encode_int("QCAP", 0x10));
-    game.extend_from_slice(&TdfEncoder::encode_int("SEED", 0x2CF2_048F));
-    game.extend_from_slice(&TdfEncoder::encode_int("TCAP", 0x10));
-
-    let mut thst = Vec::new();
-    thst.extend_from_slice(&TdfEncoder::encode_int("HPID", uid_i32));
-    thst.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
-    game.extend_from_slice(&TdfEncoder::encode_struct("THST", &thst));
-
-    game.extend_from_slice(&TdfEncoder::encode_long_list("TIDS", &[1, 2]));
     game.extend_from_slice(&TdfEncoder::encode_string("UUID", &game_uuid));
     game.extend_from_slice(&TdfEncoder::encode_int("VOIP", voip));
-    game.extend_from_slice(&TdfEncoder::encode_string("VSTR", &vstr_notify));
-    game.extend_from_slice(&TdfEncoder::encode_struct("XNNC", &[]));
-    game.extend_from_slice(&TdfEncoder::encode_struct("XSES", &[]));
 
     let mut pros_entry = Vec::new();
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("EXID", uid_i32));
-    pros_entry.extend_from_slice(&TdfEncoder::encode_int("GID\0", gid_i32));
+    pros_entry.extend_from_slice(&TdfEncoder::encode_int("GID ", gid_i32));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("LOC\0", 0));
     pros_entry.extend_from_slice(&TdfEncoder::encode_string("NAME", display_name));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("PID\0", uid_i32));
-    let pnet = encode_union_struct("PNET", 2, "VALU", |valu| {
-        valu.extend_from_slice(&TdfEncoder::encode_struct(
-            "EXIP",
-            &build_endpoint(host_exip_ip, host_exip_port),
-        ));
-        valu.extend_from_slice(&TdfEncoder::encode_struct("INIP", &build_endpoint(host_inip_ip, host_inip_port)));
-    });
-    pros_entry.extend_from_slice(&pnet);
-    pros_entry.extend_from_slice(&TdfEncoder::encode_int("SID\0", 0));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("SLOT", 0));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("STAT", PROS_STAT_ACTIVE_CONNECTING));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("TIDX", 0xFFFF));
-    pros_entry.extend_from_slice(&TdfEncoder::encode_int("TIME", now_i32));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("UID\0", uid_i32));
 
-    let reas = encode_union_struct("REAS", 0, "VALU", |valu| {
-        valu.extend_from_slice(&TdfEncoder::encode_int("DCTX", 0));
-    });
+    // REAS member 127 = INVALID_MEMBER sentinel → client treats as "canceled or timed out".
+    let reas = encode_reas_dataless();
 
     let mut response = Vec::new();
     response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
@@ -1434,7 +1366,8 @@ pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes>
         &indexmap::IndexMap::new(),
     ));
     game.extend_from_slice(&TdfEncoder::encode_long_list("CAP\0", &[0x20, 0]));
-    game.extend_from_slice(&encode_struct_list("CRIT", &[]));
+    // CRIT (visit_type 0x00 = MAP) MUST NOT be sent as empty LIST<STRUCT>; it aborts the GAME
+    // unmarshal in onNotifyGameSetup. Omit to keep the field at the constructor default.
     game.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     game.extend_from_slice(&TdfEncoder::encode_string("GNAM", "Skirmish"));
     game.extend_from_slice(&TdfEncoder::encode_int("GSTA", GSTA_RESETABLE));
@@ -1447,19 +1380,15 @@ pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes>
         "INIP",
         &build_endpoint(host_inip_ip, host_inip_port),
     ));
-    game.extend_from_slice(&encode_struct_list("HNET", &[hnet_row]));
+    game.extend_from_slice(&encode_union_list("HNET", HNET_UNION_MEMBER_VALU, &[hnet_row]));
     game.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_CLIENT_SERVER_DEDICATED));
     game.extend_from_slice(&TdfEncoder::encode_string("UUID", &cnc_new_uuid_v4_string()));
     game.extend_from_slice(&TdfEncoder::encode_int("VOIP", 0));
 
-    let mut phst = Vec::new();
-    phst.extend_from_slice(&TdfEncoder::encode_int("HPID", uid_i32));
-    phst.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
-    game.extend_from_slice(&TdfEncoder::encode_struct("PHST", &phst));
 
     let mut pros_entry = Vec::new();
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("EXID", uid_i32));
-    pros_entry.extend_from_slice(&TdfEncoder::encode_int("GID\0", gid_i32));
+    pros_entry.extend_from_slice(&TdfEncoder::encode_int("GID ", gid_i32));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("LOC\0", 0));
     pros_entry.extend_from_slice(&TdfEncoder::encode_string("NAME", display_name));
     pros_entry.extend_from_slice(&TdfEncoder::encode_int("PID\0", uid_i32));
@@ -1472,9 +1401,7 @@ pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes>
     response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
     response.extend_from_slice(&encode_struct_list("PROS", &[pros_entry]));
     response.extend_from_slice(&encode_struct_list("QUEU", &[]));
-    response.extend_from_slice(&encode_union_struct("REAS", 0, "VALU", |valu| {
-        valu.extend_from_slice(&TdfEncoder::encode_int("DCTX", 0));
-    }));
+    response.extend_from_slice(&encode_reas_dataless());
     Ok(Bytes::from(response))
 }
 
@@ -1493,6 +1420,20 @@ pub fn build_game_manager_notify_platform_host_initialized(gid: i64) -> BlazeRes
     response.extend_from_slice(&TdfEncoder::encode_int("PHID", phid));
     response.extend_from_slice(&TdfEncoder::encode_int("PHST", 0));
     Ok(Bytes::from(response))
+}
+
+/// Emit `REAS = UNION{ DATALESS_CONTEXT(0): DCTX }` for the reset/create success path.
+/// Wire: `REAS(3) + 0x06(UNION) + 0x00(member 0) + DCTX(3) + 0x00(INTEGER) + varint(0)`.
+fn encode_reas_dataless() -> Bytes {
+    let reas_tag = TdfEncoder::make_tag("REAS");
+    let mut out = Vec::new();
+    out.push(reas_tag[0]);
+    out.push(reas_tag[1]);
+    out.push(reas_tag[2]);
+    out.push(0x06);
+    out.push(0x00);
+    out.extend_from_slice(&TdfEncoder::encode_int("DCTX", 0));
+    Bytes::from(out)
 }
 
 fn encode_union_struct(
@@ -1530,6 +1471,25 @@ fn encode_struct_list(tag: &str, structs: &[Vec<u8>]) -> Vec<u8> {
     }
     out
 }
+
+fn encode_union_list(tag: &str, member_byte: u8, structs: &[Vec<u8>]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let tag_encoded = TdfEncoder::make_tag(tag);
+    out.push(tag_encoded[0]);
+    out.push(tag_encoded[1]);
+    out.push(tag_encoded[2]);
+    out.push(0x4);
+    out.push(0x3);
+    out.extend_from_slice(&TdfEncoder::encode_varint(structs.len() as u64));
+    for s in structs {
+        out.push(member_byte);
+        out.extend_from_slice(s);
+        out.push(0x00);
+    }
+    out
+}
+
+const HNET_UNION_MEMBER_VALU: u8 = 0x02;
 
 #[cfg(test)]
 mod notify_game_setup_tests {
@@ -1579,6 +1539,36 @@ mod notify_game_setup_tests {
         assert!(u.len() >= 8 && u != ".", "{}", u);
     }
 
+    // Regression: REAS=127 is `INVALID_MEMBER` → client cancels the freshly built game
+    // ("canceled or timed out locally"). Reset path must use DATALESS_CONTEXT (member 0)
+    // carrying DCTX so `onNotifyGameSetup` binds the game and accepts followup notifies.
+    #[test]
+    fn notify_setup_reas_is_dataless_not_cancel_sentinel() {
+        let payload = build_game_manager_notify_game_setup(&[], 1).expect("encode");
+        let reas_tag = TdfEncoder::make_tag("REAS");
+        let cancel_needle: [u8; 6] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0xbf, 0x01];
+        assert!(
+            !payload.windows(cancel_needle.len()).any(|w| w == cancel_needle),
+            "REAS must not carry union member 127 (INVALID_MEMBER) — that is the cancel sentinel"
+        );
+        let dctx_needle: [u8; 5] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x00];
+        assert!(
+            payload.windows(dctx_needle.len()).any(|w| w == dctx_needle),
+            "REAS must encode UNION member 0 (DATALESS_CONTEXT)"
+        );
+    }
+
+    #[test]
+    fn notify_setup_join_reas_is_dataless_not_cancel_sentinel() {
+        let payload = build_game_manager_notify_game_setup_join(1).expect("encode");
+        let reas_tag = TdfEncoder::make_tag("REAS");
+        let cancel_needle: [u8; 6] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0xbf, 0x01];
+        assert!(
+            !payload.windows(cancel_needle.len()).any(|w| w == cancel_needle),
+            "join REAS must not carry union member 127"
+        );
+    }
+
     #[test]
     fn notify_setup_core_fields_decode() {
         let mut req = Vec::new();
@@ -1588,7 +1578,14 @@ mod notify_game_setup_tests {
         let tree = TdfTreeParser::parse_packet(&payload).expect("parse");
         assert!(find_tag(&tree, "GAME").is_some(), "GAME root missing");
         assert!(find_tag(&tree, "GNAM").is_some(), "GNAM missing from GAME");
-        assert_eq!(TdfEncoder::find_int_field(&payload, "GID\0"), Some(1));
+        let mut needle = Vec::new();
+        needle.extend_from_slice(&TdfEncoder::make_tag("GID "));
+        needle.push(0x00);
+        needle.extend_from_slice(&TdfEncoder::encode_varint(1u64));
+        assert!(
+            payload.windows(needle.len()).any(|w| w == needle.as_slice()),
+            "nested GAME.GID must match JoinGameResponse: GID space + INTEGER + varint 1"
+        );
     }
 
     #[test]

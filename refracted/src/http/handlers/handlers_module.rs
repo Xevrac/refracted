@@ -334,6 +334,7 @@ impl HttpHandler {
             let cap = grpc_body_decode_capture(body);
 
             let grpc_capture = CapturedGrpc {
+                capture_seq: 0,
                 timestamp,
                 direction: GrpcDirection::ClientToServer,
                 method: method.to_string(),
@@ -351,6 +352,7 @@ impl HttpHandler {
         } else {
             // Capture HTTP request
             let http_capture = CapturedHttp {
+                capture_seq: 0,
                 timestamp,
                 direction: HttpDirection::ClientToServer,
                 method: method.to_string(),
@@ -3049,6 +3051,7 @@ impl HttpResponse {
             let cap = grpc_body_decode_capture(&self.body);
 
             let grpc_response = CapturedGrpc {
+                capture_seq: 0,
                 timestamp,
                 direction: GrpcDirection::ServerToClient,
                 method: method.to_string(),
@@ -3070,6 +3073,7 @@ impl HttpResponse {
             response_headers.push(("Content-Length".to_string(), self.body.len().to_string()));
 
             let http_response = CapturedHttp {
+                capture_seq: 0,
                 timestamp,
                 direction: HttpDirection::ServerToClient,
                 method: method.to_string(),

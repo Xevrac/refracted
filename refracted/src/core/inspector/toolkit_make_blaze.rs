@@ -1,6 +1,6 @@
 use crate::blaze::protocol::fire2frame::{get_command_name, Fire2FramePacket, NAMED_BLAZE_COMMANDS};
-use crate::blaze::protocol::MessageType;
-use crate::blaze::server::toolkit_inject::broadcast_toolkit_blaze_wire;
+use crate::blaze::protocol::{FireFramePacket, MessageType};
+use crate::blaze::server::inject_bus::broadcast;
 use crate::blaze::tdf::{TdfEncoder, TdfTreeNode, TdfTreeParser};
 use crate::core::inspector::blaze_inspector::tdf_tree_to_plaintext;
 use crate::core::inspector::inspector_module::{format_hex_dump, CapturedPacket};
@@ -53,8 +53,29 @@ pub enum BlazeMakeUIMode {
     Advanced,
 }
 
+/// Wire layout for Make → Blaze: **Fire2Frame** (newer 16-byte header) or **FireFrame** (12-byte header).
+///
+/// A shorter u16-length "compact envelope" exists only inside the emulator for certain FireFrame-mode
+/// TCP listeners (`blaze::protocol::compact_blaze_envelope`); inject still accepts Fire2Frame/FireFrame bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BlazeToolkitWireFormat {
+    #[default]
+    Fire2Frame,
+    FireFrame,
+}
+
+impl BlazeToolkitWireFormat {
+    fn label(self) -> &'static str {
+        match self {
+            BlazeToolkitWireFormat::Fire2Frame => "Fire2Frame",
+            BlazeToolkitWireFormat::FireFrame => "FireFrame",
+        }
+    }
+}
+
 pub struct BlazeMakeWorkbenchState {
     pub ui_mode: BlazeMakeUIMode,
+    pub wire_format: BlazeToolkitWireFormat,
     pub component_s: String,
     pub command_s: String,
     pub msg_num_s: String,
@@ -82,6 +103,7 @@ impl Default for BlazeMakeWorkbenchState {
     fn default() -> Self {
         Self {
             ui_mode: BlazeMakeUIMode::Easy,
+            wire_format: BlazeToolkitWireFormat::default(),
             component_s: "0x0009".into(),
             command_s: "0x0002".into(),
             msg_num_s: "1".into(),
@@ -187,17 +209,36 @@ fn try_make_fire2_packet(state: &BlazeMakeWorkbenchState) -> Result<Fire2FramePa
     Ok(Fire2FramePacket::new_send(c, cmd, num, state.msg_ty, payload))
 }
 
-fn apply_build_outputs(state: &mut BlazeMakeWorkbenchState, pkt: &Fire2FramePacket) {
-    let wire = pkt.to_bytes();
-    state.payload_hex = Some(hex::encode(pkt.payload.as_ref()));
-    state.wire_hex = Some(hex::encode(wire.as_ref()));
+fn apply_build_outputs_wire(state: &mut BlazeMakeWorkbenchState, wire: &[u8]) {
+    match build_tdf_payload(state) {
+        Ok(p) => state.payload_hex = Some(hex::encode(p.as_ref())),
+        Err(_) => state.payload_hex = None,
+    }
+    state.wire_hex = Some(hex::encode(wire));
     state.build_err = None;
     refresh_preview(state);
 }
 
+fn try_make_wire_bytes(state: &BlazeMakeWorkbenchState) -> Result<Vec<u8>, String> {
+    match state.wire_format {
+        BlazeToolkitWireFormat::Fire2Frame => {
+            let pkt = try_make_fire2_packet(state)?;
+            Ok(pkt.to_bytes().to_vec())
+        }
+        BlazeToolkitWireFormat::FireFrame => {
+            let payload = build_tdf_payload(state)?;
+            let c = parse_u16_radix(&state.component_s)?;
+            let cmd = parse_u16_radix(&state.command_s)?;
+            let num = parse_u32_radix(&state.msg_num_s)?;
+            let pkt = FireFramePacket::new_send(c, cmd, num, state.msg_ty.to_u8(), payload);
+            Ok(pkt.to_bytes().to_vec())
+        }
+    }
+}
+
 fn build_or_err(state: &mut BlazeMakeWorkbenchState) -> Result<(), String> {
-    let pkt = try_make_fire2_packet(state)?;
-    apply_build_outputs(state, &pkt);
+    let wire = try_make_wire_bytes(state)?;
+    apply_build_outputs_wire(state, &wire);
     Ok(())
 }
 
@@ -449,6 +490,17 @@ fn kind_easy_title(kind: TdfMakeFieldKind) -> &'static str {
 
 fn render_envelope(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState) -> bool {
     let prev_preset_on = state.use_preset;
+    let format_row = ui.horizontal(|ui| {
+        ui.label("Wire");
+        egui::ComboBox::from_id_source("blaze_wire_fmt")
+            .selected_text(state.wire_format.label())
+            .show_ui(ui, |ui| {
+                use BlazeToolkitWireFormat as W;
+                ui.selectable_value(&mut state.wire_format, W::Fire2Frame, W::Fire2Frame.label());
+                ui.selectable_value(&mut state.wire_format, W::FireFrame, W::FireFrame.label());
+            });
+    });
+
     let preset_row = ui.horizontal(|ui| {
         ui.checkbox(&mut state.use_preset, "Preset");
         if state.use_preset {
@@ -519,7 +571,9 @@ fn render_envelope(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState) -> bo
             });
     });
 
-    let env_changed = preset_row.response.changed() || fields_row.response.changed();
+    let env_changed = format_row.response.changed()
+        || preset_row.response.changed()
+        || fields_row.response.changed();
 
     if let Ok(c) = parse_u16_radix(&state.component_s) {
         if let Ok(cmd) = parse_u16_radix(&state.command_s) {
@@ -591,16 +645,15 @@ fn render_make_actions(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState, c
         if ui
             .button(egui::RichText::new("Send to client").strong())
             .on_hover_text(
-                "Push plaintext Fire2Frame on the emulator inject bus; each Blaze TCP client encrypts with c_out if needed.",
+                "Broadcast assembled bytes on the inject bus (Fire2Frame or FireFrame, per Wire). TLS listeners encrypt when needed; FireFrame-profile paths may re-framing internally.",
             )
             .clicked()
         {
             state.blaze_action_note = None;
-            match try_make_fire2_packet(state) {
-                Ok(pkt) => {
-                    apply_build_outputs(state, &pkt);
-                    let wire = pkt.to_bytes().to_vec();
-                    match broadcast_toolkit_blaze_wire(wire) {
+            match try_make_wire_bytes(state) {
+                Ok(wire) => {
+                    apply_build_outputs_wire(state, &wire);
+                    match broadcast(wire) {
                         Ok(n) => {
                             state.blaze_action_note =
                                 Some(format!("Inject sent ({} subscriber(s)).", n));
@@ -617,23 +670,24 @@ fn render_make_actions(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState, c
             }
         }
 
-        match try_make_fire2_packet(state) {
-            Ok(pkt) => {
+        match try_make_wire_bytes(state) {
+            Ok(wire) => {
                 if ui
                     .small_button("Copy wire (hex)")
                     .on_hover_text("Rebuild wire from current fields into clipboard.")
                     .clicked()
                 {
-                    apply_build_outputs(state, &pkt);
-                    ctx.copy_text(hex::encode(pkt.to_bytes()));
+                    apply_build_outputs_wire(state, &wire);
+                    ctx.copy_text(hex::encode(&wire));
                 }
                 if ui
                     .small_button("Copy payload (hex)")
                     .on_hover_text("TDF payload only (decoded bytes as hex).")
                     .clicked()
                 {
-                    apply_build_outputs(state, &pkt);
-                    ctx.copy_text(hex::encode(pkt.payload.as_ref()));
+                    if let Ok(p) = build_tdf_payload(state) {
+                        ctx.copy_text(hex::encode(p.as_ref()));
+                    }
                 }
             }
             Err(_) => {
@@ -648,17 +702,20 @@ fn render_make_actions(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState, c
             .clicked()
         {
             state.blaze_action_note = None;
-            match try_make_fire2_packet(state) {
-                Ok(pkt) => {
-                    apply_build_outputs(state, &pkt);
-                    let raw = pkt.to_bytes();
+            match try_make_wire_bytes(state) {
+                Ok(wire) => {
+                    apply_build_outputs_wire(state, &wire);
+                    let name = match state.wire_format {
+                        BlazeToolkitWireFormat::Fire2Frame => "blaze_fire2frame.bin",
+                        BlazeToolkitWireFormat::FireFrame => "blaze_fireframe.bin",
+                    };
                     let file = rfd::FileDialog::new()
                         .add_filter("Binary", &["bin"])
                         .add_filter("All files", &["*"])
-                        .set_file_name("blaze_fire2frame.bin")
+                        .set_file_name(name)
                         .save_file();
                     if let Some(path) = file {
-                        if let Err(e) = std::fs::write(path, raw) {
+                        if let Err(e) = std::fs::write(path, wire) {
                             state.blaze_action_note = Some(format!("Save failed: {}", e));
                         } else {
                             state.blaze_action_note = Some("Wire saved.".into());
@@ -945,7 +1002,7 @@ pub fn render_blaze_make(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState,
             .heading()
             .size(15.0),
     );
-    ui.label(egui::RichText::new("Construct Fire2Frame envelopes and TDF payloads.").weak().size(11.0));
+    ui.label(egui::RichText::new("Construct payloads to send to client.").weak().size(11.0));
 
     ui.horizontal(|ui| {
         ui.label("Mode");
