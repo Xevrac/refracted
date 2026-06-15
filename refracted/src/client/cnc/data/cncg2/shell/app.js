@@ -16,7 +16,8 @@ var ccConfig = function($routeProvider) {
 var CCApp = angular.module('CCApp', ['ngResource']).config(ccConfig);
 
 CCApp.run(function ($rootScope) {
-    $rootScope.preLandingComplete = false;
+    var preDone = window.CncPreLanding && CncPreLanding.isSessionDone && CncPreLanding.isSessionDone();
+    $rootScope.preLandingComplete = !!preDone;
     if (window.CncPreLanding && CncPreLanding.getTagline) {
         $rootScope.preLandingTagline = CncPreLanding.getTagline();
     } else {
@@ -70,6 +71,14 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
     }
 
     $timeout(function () {
+        if (window.CncPreLanding && CncPreLanding.shouldRunPreLanding && !CncPreLanding.shouldRunPreLanding()) {
+            $rootScope.preLandingComplete = true;
+            if (window.CncBlazeState && CncBlazeState.applyExternalHints) {
+                CncBlazeState.applyExternalHints();
+            }
+            syncBlaze();
+            return;
+        }
         if (typeof CncPreLanding === 'undefined' || !CncPreLanding.run) {
             $rootScope.$apply(function () {
                 $rootScope.preLandingComplete = true;

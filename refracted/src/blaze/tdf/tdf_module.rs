@@ -1088,6 +1088,71 @@ impl TdfEncoder {
         None
     }
 
+    /// Decode a string→string TDF map body (type byte already consumed): `key_type val_type count (key val)*`
+    pub fn decode_string_string_map_untagged(
+        data: &[u8],
+    ) -> BlazeResult<indexmap::IndexMap<String, String>> {
+        use indexmap::IndexMap;
+        if data.len() < 3 {
+            return Err(BlazeError::TdfEncoding(
+                "string-string map too short".into(),
+            ));
+        }
+        if data[0] != 0x1 || data[1] != 0x1 {
+            return Err(BlazeError::TdfEncoding(format!(
+                "expected string-string map, got key_type=0x{:02x} val_type=0x{:02x}",
+                data[0], data[1]
+            )));
+        }
+        let (map_len, varint_len) = Self::decode_varint(&data[2..])?;
+        let mut offset = 2 + varint_len;
+        let mut out = IndexMap::new();
+        for _ in 0..map_len {
+            let (key_len, key_varint_len) = Self::decode_varint(&data[offset..])?;
+            offset += key_varint_len;
+            let key_end = offset + key_len as usize;
+            if key_end > data.len() {
+                return Err(BlazeError::TdfEncoding("map key truncated".into()));
+            }
+            let key = Self::decode_null_terminated_string(&data[offset..key_end])?;
+            offset = key_end;
+            let (val_len, val_varint_len) = Self::decode_varint(&data[offset..])?;
+            offset += val_varint_len;
+            let val_end = offset + val_len as usize;
+            if val_end > data.len() {
+                return Err(BlazeError::TdfEncoding("map value truncated".into()));
+            }
+            let value = Self::decode_null_terminated_string(&data[offset..val_end])?;
+            offset = val_end;
+            out.insert(key, value);
+        }
+        Ok(out)
+    }
+
+    /// Top-level `ATTR` (or other tag) string→string map in a TDF struct payload.
+    pub fn find_string_string_map_field(
+        data: &[u8],
+        tag: &str,
+    ) -> Option<indexmap::IndexMap<String, String>> {
+        let mut pos = 0;
+        while pos + 4 <= data.len() {
+            if Self::wire_tag_matches_at(data, pos, tag) && data[pos + 3] == 0x5 {
+                return Self::decode_string_string_map_untagged(&data[pos + 4..]).ok();
+            }
+            let type_byte = data[pos + 3];
+            match Self::skip_field(&data[pos + 3..], type_byte) {
+                Ok(skipped) => pos += 3 + skipped,
+                Err(_) => break,
+            }
+        }
+        None
+    }
+
+    fn decode_null_terminated_string(data: &[u8]) -> BlazeResult<String> {
+        let end = data.iter().position(|&b| b == 0).unwrap_or(data.len());
+        Ok(String::from_utf8_lossy(&data[..end]).into_owned())
+    }
+
     /// Find and extract a string field by tag name
     /// This searches through TDF fields recursively, including nested structs
     pub fn find_string_field(data: &[u8], tag: &str) -> Option<String> {

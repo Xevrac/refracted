@@ -322,7 +322,7 @@ fn build_preset_request_sample(component: u16, command: u16) -> Vec<u8> {
         (0x0004, 0x03) => {
             v.extend_from_slice(&TdfEncoder::encode_int("JGS ", 0));
         }
-        (0x0004, 0x11) => {}
+        (0x0004, 0x14) => {}
         (0, 0) => {}
         _ => {}
     }

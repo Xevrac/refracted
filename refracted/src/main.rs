@@ -212,6 +212,8 @@ struct RefractedApp {
     auto_scroll: bool,
     selected_tab: String,
     selected_blaze_session: Option<u64>,
+    sessions_sub_view: String,
+    selected_dedicated_pool: Option<u64>,
     shutdown_tx: Option<broadcast::Sender<()>>,
     server_handle: Option<tokio::task::JoinHandle<()>>, // Track server task to wait for completion
     last_line_count: usize,
@@ -303,6 +305,8 @@ impl RefractedApp {
             auto_scroll: true,
             selected_tab: "Shell".to_string(),
             selected_blaze_session: None,
+            sessions_sub_view: "clients".to_string(),
+            selected_dedicated_pool: None,
             shutdown_tx: None,
             server_handle: None,
             last_line_count: 0,
@@ -637,6 +641,28 @@ impl RefractedApp {
     }
 
     fn show_sessions(&mut self, _ctx: &egui::Context, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.selectable_value(
+                &mut self.sessions_sub_view,
+                "clients".to_string(),
+                "Blaze clients",
+            );
+            ui.selectable_value(
+                &mut self.sessions_sub_view,
+                "pool".to_string(),
+                "Dedicated pool",
+            );
+        });
+        ui.separator();
+
+        if self.sessions_sub_view == "pool" {
+            self.show_dedicated_pool(ui);
+        } else {
+            self.show_blaze_clients(ui);
+        }
+    }
+
+    fn show_blaze_clients(&mut self, ui: &mut egui::Ui) {
         use chrono::TimeZone;
         use refracted::session::blaze_sessions;
         use refracted::session::session_module::{
@@ -768,6 +794,128 @@ impl RefractedApp {
                     }
                 } else {
                     ui.label("Select a session to view details.");
+                }
+            });
+        });
+    }
+
+    fn show_dedicated_pool(&mut self, ui: &mut egui::Ui) {
+        use chrono::TimeZone;
+        use refracted::client::cnc::dedicated_pool;
+
+        let entries = dedicated_pool::list_entries();
+        let idle_n = entries
+            .iter()
+            .filter(|e| e.state == dedicated_pool::DedicatedPoolState::Idle)
+            .count();
+        let in_use_n = entries
+            .iter()
+            .filter(|e| e.state == dedicated_pool::DedicatedPoolState::InUse)
+            .count();
+
+        if let Some(sel) = self.selected_dedicated_pool {
+            if !entries.iter().any(|e| e.blaze_session_id == sel) {
+                self.selected_dedicated_pool = None;
+            }
+        }
+
+        ui.horizontal(|ui| {
+            ui.heading("Dedicated server pool");
+            ui.label(format!(
+                "Tracked: {} · Idle: {} · In use: {}",
+                entries.len(),
+                idle_n,
+                in_use_n
+            ));
+        });
+        let clnt_hint = ui.label(
+            egui::RichText::new("CLNT value must contain \"server\" in PreAuth payload to be eligible for this pool.")
+                .color(egui::Color32::from_rgb(255, 190, 90)),
+        );
+        clnt_hint.on_hover_text(
+            "Dedicated-server Blaze sessions are identified by a loose match on CLNT \
+(containing server / Server). Exact client names are not required for now.",
+        );
+        ui.separator();
+
+        ui.columns(2, |cols| {
+            cols[0].vertical(|ui| {
+                ui.label(egui::RichText::new("Servers").heading());
+                egui::ScrollArea::vertical()
+                    .id_source("dedicated_pool_list")
+                    .auto_shrink([false; 2])
+                    .show(ui, |ui| {
+                        if entries.is_empty() {
+                            ui.label("No dedicated servers tracked yet.");
+                            return;
+                        }
+                        for e in &entries {
+                            let sel = self.selected_dedicated_pool == Some(e.blaze_session_id);
+                            let name = e
+                                .display_name
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|n| !n.is_empty())
+                                .unwrap_or("—");
+                            let clnt = e
+                                .clnt
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|n| !n.is_empty())
+                                .unwrap_or("—");
+                            let label = format!(
+                                "#{} {} {} [{}] {}",
+                                e.blaze_session_id,
+                                name,
+                                e.peer,
+                                e.state.label(),
+                                clnt
+                            );
+                            if ui.selectable_label(sel, label).clicked() {
+                                self.selected_dedicated_pool = Some(e.blaze_session_id);
+                            }
+                        }
+                    });
+            });
+
+            cols[1].vertical(|ui| {
+                ui.label(egui::RichText::new("Details").heading());
+                ui.separator();
+                let detail = self
+                    .selected_dedicated_pool
+                    .and_then(dedicated_pool::get_entry);
+                if let Some(e) = detail {
+                    let when = chrono::Utc
+                        .timestamp_opt(e.last_event_unix_secs as i64, 0)
+                        .single()
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                        .unwrap_or_else(|| e.last_event_unix_secs.to_string());
+
+                    ui.label(format!("Session ID: {}", e.blaze_session_id));
+                    ui.label(format!("Peer: {}", e.peer));
+                    if let Some(ref clnt) = e.clnt {
+                        ui.label(format!("CLNT: {}", clnt));
+                    }
+                    ui.label(format!("State: {}", e.state.label()));
+                    ui.label(format!("Last event: {}", when));
+                    ui.label(format!(
+                        "Creator registered: {}",
+                        if e.creator_registered { "yes" } else { "no" }
+                    ));
+                    if let Some(gid) = e.current_gid {
+                        ui.label(format!("Game ID: {}", gid));
+                    }
+                    if let Some(ref gn) = e.game_name {
+                        ui.label(format!("Game name: {}", gn));
+                    }
+                    if let Some(ref n) = e.display_name {
+                        ui.label(format!("Persona: {}", n));
+                    }
+                    if let Some(pid) = e.persona_id {
+                        ui.label(format!("Persona ID: {}", pid));
+                    }
+                } else {
+                    ui.label("Select a server to view pool status.");
                 }
             });
         });

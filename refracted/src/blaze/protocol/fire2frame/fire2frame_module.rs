@@ -295,7 +295,7 @@ pub const NAMED_BLAZE_COMMANDS: &[NamedBlazeCommand] = &[
     NamedBlazeCommand { component: 0x7802, command: 0x08, name: "UserSessions.updateHardwareFlags" },
     NamedBlazeCommand { component: 0x7802, command: 0x3c, name: "UserSessions.setClientState" },
     NamedBlazeCommand { component: 0x0004, command: 0x03, name: "GameManager.advanceGameState" },
-    NamedBlazeCommand { component: 0x0004, command: 0x11, name: "GameManager.returnDedicatedServerToPool" },
+    NamedBlazeCommand { component: 0x0004, command: 0x14, name: "GameManager.returnDedicatedServerToPool" },
     NamedBlazeCommand { component: 0, command: 0, name: "Disconnect" },
 ];
 

@@ -48,7 +48,7 @@
             <label class="cnc-probe-label">pid</label>
             <input type="text" id="cnc-probe-create-playerid" value="1" style="width:2.5rem;flex:0 0 auto;" />
         </div>
-        <p class="probe-hint">After <strong>createGame</strong> the client may sit in <code>WaitingForLevel</code> (black screen). Use Experimental <strong>GameReady + createGame</strong> for the safe shell+game sequence. Avoid <strong>RtsClient.joinGame</strong> against Refracted alone — it needs a <em>game server</em> TCP host, not Blaze; otherwise the client fatals.</p>
+        <p class="probe-hint">After <strong>createGame</strong> the client may sit in <code>WaitingForLevel</code> (black screen). Use the <strong>Salamander</strong> section for <code>GameReady + createGame</code>. Avoid <strong>RtsClient.joinGame</strong> against Refracted alone — it needs a real game-server TCP host.</p>
         <div class="probe-row">
             <button class="probe-btn" type="button" onclick="CncProbe.rtJoinGameFromInputs()">joinGame</button>
             <button class="probe-btn" type="button" onclick="CncProbe.rtCreateLocal()">createGame</button>
@@ -80,22 +80,13 @@
             <button class="probe-btn" type="button" onclick="CncProbe.rtsUseBlaze()">RtsClientSettings.UseBlaze</button>
             <button class="probe-btn" type="button" onclick="CncProbe.rtGetHouseColors()">getSelectableHouseColors</button>
         </div>
-
-        <h5 class="cnc-probe-subhead">blazeCreateGame</h5>
-        <p class="probe-hint cnc-probe-blaze-create-hint">Thin client needs <strong>three</strong> tokens (<code>gameName</code>, <code>numPlayers</code>, <code>levelName</code>). The in-engine usage line only shows two.</p>
-        <div class="probe-row probe-row--tight cnc-probe-blaze-create-row">
-            <label class="cnc-probe-label" for="cnc-probe-blaze-gname">game name</label>
-            <input type="text" id="cnc-probe-blaze-gname" value="XEVRAC" class="cnc-probe-cmd--inline" style="flex:1;min-width:100px;max-width:none;" />
-            <label class="cnc-probe-label" for="cnc-probe-blaze-players">players</label>
-            <input type="text" id="cnc-probe-blaze-players" value="2" class="cnc-probe-cmd--inline" style="width:48px;flex:0;max-width:64px;" />
-        </div>
-        <div class="probe-row probe-row--tight cnc-probe-blaze-create-row">
-            <label class="cnc-probe-label" for="cnc-probe-blaze-level">level</label>
-            <input type="text" id="cnc-probe-blaze-level" class="cnc-probe-cmd--inline" value="levels/SP/Alpha_Tutorial/Alpha_Tutorial" style="flex:1;min-width:200px;max-width:none;" />
+        <p class="probe-hint">Console path: <code>RtsClient.blazeCreateGame</code> needs three args (<code>gameName</code>, <code>numPlayers</code>, <code>levelName</code>).</p>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label" for="cnc-probe-blaze-level">levelName</label>
+            <input type="text" id="cnc-probe-blaze-level" class="cnc-probe-cmd--inline" value="levels/SP/Alpha_Tutorial/Alpha_Tutorial" style="flex:1;min-width:200px;" />
         </div>
         <div class="probe-row">
             <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.rtBlazeCreate()">blazeCreateGame</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeCreateUrl()" title="POSTs /blaze/createGame via shellaccesslayer (URL-based, bypasses gameclient).">blazeCreateGame (URL)</button>
         </div>
 
         <div class="probe-row">
@@ -105,28 +96,122 @@
         </div>
         <div class="probe-row">
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetPlayersFromInput()">blazeGetPlayers</button>
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.probeAddAi()">Add AI</button>
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetGames()">blazeGetGames</button>
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeSetAttr()">blazeSetPlayerAttribute</button>
         </div>
 
-        <h4>Blaze (shell HTTP)</h4>
-        <div class="probe-row">
-            <input type="text" id="cnc-probe-email" value="user@example.com" style="min-width:140px;flex:0 1 180px;" />
-            <input type="text" id="cnc-probe-pass" value="test" style="min-width:80px;flex:0 1 100px;" />
+        <h4>Blaze shell</h4>
+        <p class="probe-hint"><strong>CNC dispatches Blaze via <code>url: '/blaze/…'</code></strong> (see <code>shell.js</code> / <code>src.js</code>). Buttons below build that URL. The old <code>_module:'blaze', _resource:'creategame'</code> shape is <strong>not wired</strong> on this build — it logs Request but never reaches GMGR.</p>
+        <p class="probe-hint">Dedicated-server <code>createGame</code> URL → <code>resetDedicatedServer</code> (0x0019). Same Blaze TCP hub as startup auth.</p>
+
+        <h5 class="cnc-probe-subhead">authenticate · tokenauthenticate · games</h5>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">email</label>
+            <input type="text" id="cnc-probe-blaze-email" value="user@example.com" style="min-width:140px;flex:1;" />
+            <label class="cnc-probe-label">password</label>
+            <input type="text" id="cnc-probe-blaze-pass" value="test" style="min-width:80px;flex:0 1 100px;" />
         </div>
         <div class="probe-row">
-            <button class="probe-btn" type="button" onclick="(function(){var e=document.getElementById('cnc-probe-email').value||'user@example.com',p=document.getElementById('cnc-probe-pass').value||'test';CncProbe.blazeAuth(e,p);})()">/blaze/authenticate</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.blazeLogout()">/blaze/logout</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.blazeBase()">GET /blaze</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.blazeCreate()">/blaze/createGame</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.blazeJoin(1)">/blaze/joinGame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellAuthenticate()">authenticate</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellTokenAuthenticate()">tokenauthenticate</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellGames()">games</button>
         </div>
+
+        <h5 class="cnc-probe-subhead">creategame · joinGame</h5>
+        <p class="probe-hint"><strong>createGame</strong> → <code>resetDedicatedServer</code> — you are already in the game. <strong>Do not click joinGame</strong> after create (shell returns <code>GAMEMANAGER_ERR_ALREADY_GAME_MEMBER</code>).</p>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label" for="cnc-probe-blaze-gname">gameName</label>
+            <input type="text" id="cnc-probe-blaze-gname" value="XEVRAC" class="cnc-probe-cmd--inline" style="flex:1;min-width:100px;" />
+            <label class="cnc-probe-label" for="cnc-probe-blaze-players">players</label>
+            <input type="text" id="cnc-probe-blaze-players" value="2" class="cnc-probe-cmd--inline" style="width:48px;flex:0;" />
+            <label class="cnc-probe-label" for="cnc-probe-blaze-gameid">gameID</label>
+            <input type="text" id="cnc-probe-blaze-gameid" value="1" class="cnc-probe-cmd--inline" style="width:48px;flex:0;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.blazeShellCreateGame()">creategame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellJoinGame()">joinGame</button>
+        </div>
+
+        <h5 class="cnc-probe-subhead">Blaze shell URL route (explicit)</h5>
+        <p class="probe-hint">Same wire as the buttons above — explicit <code>url:</code> for side-by-side testing. Includes broken <code>_module</code> path for comparison.</p>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeUrlAuthenticate()">url authenticate</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeUrlTokenAuthenticate()">url tokenauthenticate</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeUrlGames()">url games</button>
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.blazeUrlCreateGame()">url createGame</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeUrlJoinGame()">url joinGame</button>
+            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.blazeModuleCreateGame()">_module creategame (broken)</button>
+        </div>
+
+        <h5 class="cnc-probe-subhead">Pre-game lobby (test UI)</h5>
+        <p class="probe-hint">Skirmish lobby replica — host slot from Blaze session; faction/team via setPlayerAttributes. Prism idle pump required for getFullGameData in-game.</p>
+        <div class="probe-row">
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.openLobbyTest()">Open skirmish lobby</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetPlayers('1')">blazeGetPlayers (gid 1)</button>
+        </div>
+
+        <h5 class="cnc-probe-subhead">Add AI player (GMGR 0x0026)</h5>
+        <p class="probe-hint"><strong>Add AI</strong> hits Refracted <code>/cnc/probe-add-ai</code> (same roster + join notifies as retail GMGR 0x26). No <code>/blaze/addAi</code> shell route in the exe. Create game first, then Add AI → <strong>blazeGetPlayers (roster)</strong> or AI slot.</p>
+        <div class="probe-row">
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.probeAddAi()">Add AI</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.syncAiFromGetPlayers()">blazeGetPlayers (roster)</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.logAddAiHelp()">?</button>
+        </div>
+
+        <h5 class="cnc-probe-subhead">attribute (cmd 7 player · cmd 10 game)</h5>
+        <p class="probe-hint">Low-level attr RPC — use attribute fields below for faction/slot. Fields: <code>gameID</code>, <code>playerID</code>, <code>key</code>, <code>value</code>.</p>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">gameID</label>
+            <input type="text" id="cnc-probe-blaze-attr-gid" value="1" style="width:3rem;flex:0;" />
+            <span class="probe-hint" id="cnc-probe-lobby-pid-display" style="flex:1;font-family:monospace;font-size:11px;">—</span>
+        </div>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">key</label>
+            <input type="text" id="cnc-probe-blaze-attr-key" value="testKey" style="min-width:80px;flex:1;" />
+            <label class="cnc-probe-label">value</label>
+            <input type="text" id="cnc-probe-blaze-attr-val" value="testVal" style="min-width:80px;flex:1;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellSetPlayerAttribute()">attribute (player)</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellSetGameAttribute()">attribute (game)</button>
+        </div>
+
+        <h5 class="cnc-probe-subhead">event/game · event/player</h5>
+        <p class="probe-hint">Internal Blaze shell event hooks (not Blaze RPC). See the <strong>Salamander</strong> section for session attributes like <code>GameReady</code>.</p>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellEventGame()">event/game</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.blazeShellEventPlayer()">event/player</button>
+        </div>
+
+        <h4>Salamander (<code>_module: salamander</code>)</h4>
+        <p class="probe-hint">Shell <code>_module: salamander</code>, <code>_resource: attribute</code> — sets player/session attributes (e.g. <code>GameReady</code> host). Not Blaze; handled by <code>RtsWebKitShellAccessLayer_invokeApi</code> in the client.</p>
+        <div class="probe-row probe-row--tight">
+            <label class="cnc-probe-label">playerID</label>
+            <input type="text" id="cnc-probe-salamander-pid" value="999" style="width:4rem;flex:0;" />
+            <label class="cnc-probe-label">key</label>
+            <input type="text" id="cnc-probe-salamander-key" value="GameReady" style="min-width:90px;flex:1;" />
+            <label class="cnc-probe-label">value</label>
+            <input type="text" id="cnc-probe-salamander-val" value="localhost" style="min-width:100px;flex:1;" />
+        </div>
+        <div class="probe-row">
+            <button class="probe-btn" type="button" onclick="CncProbe.salamanderAttribute()">attribute</button>
+            <button class="probe-btn" type="button" onclick="CncProbe.salamanderGameReady()">GameReady</button>
+        </div>
+        <p class="probe-hint">Sequences using <code>RtsClient.createGame</code> from the RtsClient section above. Safe with Refracted: <strong>GameReady + createGame</strong> (no TCP join).</p>
+        <div class="probe-row">
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.salamanderGameReadyAndCreate()">GameReady + createGame</button>
+            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.salamanderGameReadyCreateAndJoin()">GameReady + createGame + joinGame</button>
+        </div>
+
+        <h4>Shell routes (non-Blaze)</h4>
         <div class="probe-row">
             <button class="probe-btn" type="button" onclick="CncProbe.getConfig()">/config/</button>
             <button class="probe-btn" type="button" onclick="CncProbe.setShellUrlAndRun('/options/graphics/get')">/options/graphics/get</button>
             <button class="probe-btn" type="button" onclick="CncProbe.sessionQuit()">/session/quit</button>
             <button class="probe-btn" type="button" onclick="CncProbe.sessionSurrender()">/session/surrender</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.salamanderGameReady()">/salamander GameReady</button>
         </div>
 
         <h4>Experimental</h4>
@@ -134,13 +219,6 @@
             <button class="probe-btn" type="button" onclick="CncProbe.startWs(9000)">startWebsocketListener 9000</button>
             <button class="probe-btn" type="button" onclick="CncProbe.startWs(9876)">startWebsocketListener 9876</button>
             <button class="probe-btn" type="button" onclick="CncProbe.toggleInspector()">toggleInspector</button>
-        </div>
-        <p class="probe-hint">Bulk: <strong>GameReady + createGame</strong> matches what Refracted can do. <strong>+ joinGame</strong> only with a real listening game host.</p>
-        <div class="probe-row">
-            <button class="probe-btn" type="button" onclick="CncProbe.rtCreateLocal()">createGame local (level.cfg)</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.localSalamanderGameReadyAndCreate('localhost')">GameReady + createGame</button>
-            <button class="probe-btn" type="button" onclick="CncProbe.rtJoinLocal('localhost')">joinGame 1 localhost</button>
-            <button class="probe-btn probe-warn" type="button" onclick="CncProbe.localHostAndJoinWithGameServer('localhost')">+ joinGame (needs game server)</button>
         </div>
         <div class="probe-row">
             <button class="probe-btn" type="button" onclick="CncProbe.toggleDrawScreenInfo()">DrawScreenInfo + histogram toggle</button>

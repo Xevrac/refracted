@@ -146,22 +146,38 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 14) => Some(format!("{}.listGames", component_name)),
         (4, 15) => Some(format!("{}.setPlayerCustomData", component_name)),
         (4, 16) => Some(format!("{}.createGameTemplate", component_name)),
+        // EA stock id 17; CNC `returnDedicatedServerToPool` is RPC id **20** (0x14).
         (4, 17) => Some(format!("{}.returnDedicatedServerToPool", component_name)),
         (4, 18) => Some(format!("{}.leaveGame", component_name)),
         (4, 19) => Some(format!("{}.selectHost", component_name)),
-        // Stock EA: 0x14 = migrateHost. C&C Blaze 3.19.x uses the same id for async NotifyGameSetup.
         (4, 20) => Some(format!(
             "{}.{}",
             component_name,
             if crate::common::game::get_current_game_id().as_str() == "cnc" {
-                "NotifyGameSetup"
+                "returnDedicatedServerToPool/NotifyGameSetup"
             } else {
                 "migrateHost"
             }
         )),
-        (4, 21) => Some(format!("{}.updateGameHostMigrationStatus", component_name)),
+        (4, 21) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyPlayerJoining"
+            } else {
+                "updateGameHostMigrationStatus"
+            }
+        )),
         (4, 22) => Some(format!("{}.resetDedicatedServer", component_name)),
-        (4, 23) => Some(format!("{}.updateGameSession", component_name)),
+        (4, 23) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyPlayerJoiningQueue"
+            } else {
+                "updateGameSession"
+            }
+        )),
         (4, 24) => Some(format!("{}.banPlayer", component_name)),
         // CNC Blaze 3.19.x uses command 25 for `resetDedicatedServer` (CreateGameRequest / JoinGameResponse); EA uses 22.
         (4, 25) => Some(format!(
@@ -187,7 +203,8 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 27) => Some(format!("{}.removePlayerFromBannedList", component_name)),
         (4, 28) => Some(format!("{}.clearBannedList", component_name)),
         (4, 29) => Some(format!("{}.getBannedPlayers", component_name)),
-        (4, 30) => Some(format!("{}.addQueuedPlayerToGame", component_name)),
+        // CNC notify id 30 = NotifyPlayerJoinCompleted; RPC addQueuedPlayerToGame is id 38 (0x26).
+        (4, 30) => Some(format!("{}.NotifyPlayerJoinCompleted", component_name)),
         (4, 31) => Some(format!("{}.updateGameName", component_name)),
         (4, 32) => Some(format!("{}.ejectHost", component_name)),
         (4, 33) => Some(format!("{}.updateGameHostMigrationStart", component_name)),
@@ -195,12 +212,21 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 35) => Some(format!("{}.getGameDataFromId", component_name)),
         (4, 36) => Some(format!("{}.getGameDataFromIdList", component_name)),
         (4, 37) => Some(format!("{}.writeGameData", component_name)),
-        (4, 38) => Some(format!("{}.readGameData", component_name)),
+        (4, 38) => Some(format!("{}.addQueuedPlayerToGame", component_name)),
         (4, 39) => Some(format!("{}.lockGameForJoining", component_name)),
         (4, 40) => Some(format!("{}.unlockGameForJoining", component_name)),
         (4, 41) => Some(format!("{}.setGameModRegister", component_name)), // 0x29
         (4, 42) => Some(format!("{}.getGameListSubscription", component_name)),
         (4, 100) => Some(format!("{}.getGameListSnapshot", component_name)), // 0x64
+        (4, 201) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyGameListUpdate"
+            } else {
+                "notifyGameListUpdate"
+            }
+        )),
         (4, 43) => Some(format!("{}.destroyGameList", component_name)),
         (4, 44) => Some(format!("{}.getFullGameData", component_name)),
         (4, 45) => Some(format!("{}.getMatchmakingConfig", component_name)),

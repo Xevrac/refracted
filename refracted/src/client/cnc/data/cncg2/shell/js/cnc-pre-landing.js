@@ -78,6 +78,37 @@
         return /[?&]skipLogin=1(?!\d)/.test(location.search) || /[?&]skipPreLanding=1/.test(location.search);
     }
 
+    var SESSION_DONE_KEY = 'cnc_shell_prelanding_done';
+
+    function isSessionDone() {
+        try {
+            return sessionStorage.getItem(SESSION_DONE_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function markSessionDone() {
+        try {
+            sessionStorage.setItem(SESSION_DONE_KEY, '1');
+        } catch (e) { /* empty */ }
+    }
+
+    /** Call when a match ends so the next frontend load shows the login splash again. */
+    function scheduleReturnFromMatch() {
+        try {
+            sessionStorage.removeItem(SESSION_DONE_KEY);
+        } catch (e) { /* empty */ }
+    }
+
+    /** True when the full login splash + authenticate chain should run. */
+    function shouldRunPreLanding() {
+        if (shouldSkip()) {
+            return false;
+        }
+        return !isSessionDone();
+    }
+
     function runShellStep(st, onDone, timeoutMs) {
         if (!hasShell() || !window.CncBlazeState) {
             onDone();
@@ -193,11 +224,18 @@
             var statusAnimator = createStatusAnimator(setStatus);
             function done() {
                 statusAnimator.stop();
+                markSessionDone();
                 scheduleDone(onDone, tStart);
             }
 
+            if (!shouldRunPreLanding()) {
+                statusAnimator.stop();
+                onDone();
+                return;
+            }
             if (shouldSkip()) {
                 statusAnimator.stop();
+                markSessionDone();
                 onDone();
                 return;
             }
@@ -221,6 +259,10 @@
                     done
                 );
             }, 100);
-        }
+        },
+
+        isSessionDone: isSessionDone,
+        shouldRunPreLanding: shouldRunPreLanding,
+        scheduleReturnFromMatch: scheduleReturnFromMatch
     };
 })(window);

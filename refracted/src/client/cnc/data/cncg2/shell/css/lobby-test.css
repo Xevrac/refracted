@@ -1,0 +1,883 @@
+/* Skirmish lobby — full-viewport C&C pre-game (game WebView + standalone) */
+
+html.cnc-lobby-page,
+html.cnc-lobby-page body.cnc-lobby-standalone,
+body.cnc-lobby-standalone.cc-theme {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #000;
+    background-image: url('../images/cnc_background.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed;
+    font-size: 15px;
+}
+
+.cnc-lobby-mount {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+}
+
+.cnc-lobby-standalone {
+    --lobby-chrome-h: 32px;
+}
+
+.cnc-lobby-chrome {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    height: var(--lobby-chrome-h);
+    padding: 0 18px;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    background: rgba(8, 12, 18, 0.97);
+    border-bottom: 1px solid rgba(72, 88, 110, 0.5);
+}
+
+.cnc-lobby-chrome__link {
+    margin-right: 18px;
+    color: #8ec8f0;
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.cnc-lobby-standalone .cnc-lobby-root {
+    top: var(--lobby-chrome-h);
+}
+
+.cnc-lobby-root {
+    --lobby-panel: rgba(12, 16, 24, 0.92);
+    --lobby-panel-inner: rgba(6, 9, 14, 0.72);
+    --lobby-border: rgba(88, 104, 128, 0.48);
+    --lobby-border-strong: rgba(110, 140, 180, 0.62);
+    --lobby-blue: #1a7fd4;
+    --lobby-blue-dim: #0d4a7a;
+    --lobby-blue-glow: rgba(26, 127, 212, 0.35);
+    --lobby-text: #e8ecf0;
+    --lobby-muted: #9aa3ae;
+    --lobby-rail-w: clamp(300px, 26vw, 410px);
+    --lobby-hud-h: 52px;
+    --lobby-bar-h: 80px;
+    --lobby-btn-radius: 3px;
+
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    z-index: 10;
+    color: var(--lobby-text);
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.cnc-lobby-backdrop {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: #000;
+    background-image: url('../images/cnc_background.png');
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+}
+
+.cnc-lobby-scrim {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0.72) 100%);
+    pointer-events: none;
+}
+
+/* HUD strip */
+.cnc-lobby-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: var(--lobby-rail-w);
+    z-index: 5;
+    height: var(--lobby-hud-h);
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    padding: 0 32px;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.35) 72%, transparent 100%);
+    pointer-events: none;
+}
+
+.cnc-lobby-hud > * {
+    pointer-events: auto;
+}
+
+.cnc-lobby-hud__left {
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    gap: 18px;
+}
+
+.cnc-lobby-badge {
+    font-family: 'Eurostile-Hea', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 9px 22px;
+    border-radius: var(--lobby-btn-radius);
+    background: linear-gradient(180deg, rgba(26, 90, 150, 0.55), rgba(10, 50, 90, 0.88));
+    border: 1px solid var(--lobby-border-strong);
+    color: #b8dcf8;
+}
+
+.cnc-lobby-hud__sep {
+    width: 1px;
+    height: 24px;
+    background: var(--lobby-border);
+}
+
+.cnc-lobby-hud__mode {
+    font-size: 15px;
+    color: var(--lobby-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* Main stage */
+.cnc-lobby-stage {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: -webkit-box;
+    display: flex;
+    min-height: 0;
+}
+
+.cnc-lobby-battle {
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-orient: vertical;
+    flex-direction: column;
+    padding: calc(var(--lobby-hud-h) + 12px) 32px 0;
+}
+
+.cnc-lobby-rail {
+    -webkit-box-flex: 0;
+    flex: 0 0 var(--lobby-rail-w);
+    width: var(--lobby-rail-w);
+    min-height: 0;
+    position: relative;
+    border-left: 1px solid rgba(56, 64, 76, 0.95);
+    background: rgba(0, 0, 0, 0.72);
+    box-shadow: -12px 0 36px rgba(0, 0, 0, 0.5);
+}
+
+.cnc-lobby-rail .cc-sidebar,
+.cnc-lobby-sidebar {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: auto !important;
+    border-left: none;
+    border-radius: 0;
+}
+
+/* Theater */
+.cnc-lobby-theater {
+    -webkit-box-flex: 0;
+    flex: 0 0 26vh;
+    min-height: 200px;
+    max-height: 280px;
+    display: -webkit-box;
+    display: flex;
+    margin-bottom: 20px;
+    border: 2px solid var(--lobby-border);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.cnc-lobby-theater__visual {
+    -webkit-box-flex: 0;
+    flex: 0 0 42%;
+    min-width: 300px;
+    background: url('../images/cnc_background.png') center center / cover no-repeat;
+    border-right: 1px solid var(--lobby-border);
+    position: relative;
+}
+
+.cnc-lobby-theater__visual::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(90deg, transparent 35%, rgba(10, 14, 20, 0.96) 100%);
+}
+
+.cnc-lobby-theater__body {
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-orient: vertical;
+    flex-direction: column;
+    -webkit-box-pack: center;
+    justify-content: center;
+    -webkit-box-align: center;
+    align-items: center;
+    text-align: center;
+    padding: 24px 36px;
+    background-color: rgba(0, 0, 0, 0.45);
+    background-image:
+        repeating-linear-gradient(45deg, transparent 0, transparent 4px, rgba(255, 255, 255, 0.014) 4px, rgba(255, 255, 255, 0.014) 5px);
+}
+
+.cnc-lobby-theater__copy {
+    width: 100%;
+}
+
+.cnc-lobby-theater__eyebrow {
+    margin: 0 0 10px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--lobby-muted);
+}
+
+.cnc-lobby-theater__title {
+    margin: 0;
+    font-family: 'Eurostile-Hea', sans-serif;
+    font-size: 48px;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.05;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.85);
+}
+
+.cnc-lobby-theater__path {
+    margin: 12px 0 0;
+    font-size: 12px;
+    font-family: monospace;
+    color: #6f7a86;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cnc-lobby-pills {
+    display: -webkit-box;
+    display: flex;
+    gap: 10px;
+    -webkit-box-wrap: wrap;
+    flex-wrap: wrap;
+    -webkit-box-pack: center;
+    justify-content: center;
+    margin-top: 18px;
+    width: 100%;
+}
+
+.cnc-lobby-pills button {
+    font-family: 'Eurostile-Med', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 11px 22px;
+    border-radius: var(--lobby-btn-radius);
+    border: 1px solid var(--lobby-border);
+    background: rgba(0, 0, 0, 0.5);
+    color: var(--lobby-muted);
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.cnc-lobby-pills button.active {
+    background: linear-gradient(180deg, rgba(30, 100, 160, 0.5), rgba(12, 55, 95, 0.88));
+    border-color: var(--lobby-blue);
+    color: #fff;
+    box-shadow: 0 0 14px var(--lobby-blue-glow);
+}
+
+/* Arena */
+.cnc-lobby-arena {
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: stretch;
+    align-items: stretch;
+    gap: 20px;
+    min-height: 260px;
+    margin-bottom: 12px;
+}
+
+.cnc-lobby-team-panel {
+    -webkit-box-flex: 1;
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    min-height: 0;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-orient: vertical;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px 22px 18px;
+    border: 2px solid var(--lobby-border);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.55);
+    background-image:
+        repeating-linear-gradient(45deg, transparent 0, transparent 4px, rgba(255, 255, 255, 0.012) 4px, rgba(255, 255, 255, 0.012) 5px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.cnc-lobby-team-panel__head {
+    -webkit-box-flex: 0;
+    flex: 0 0 auto;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-pack: justify;
+    justify-content: space-between;
+    -webkit-box-align: center;
+    align-items: center;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(72, 88, 110, 0.28);
+}
+
+.cnc-lobby-team-label {
+    font-family: 'Eurostile-Hea', sans-serif;
+    font-size: 17px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--lobby-muted);
+}
+
+.cnc-lobby-team-count {
+    font-size: 14px;
+    color: #7f8996;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: var(--lobby-btn-radius);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(72, 88, 110, 0.35);
+}
+
+.cnc-lobby-divider {
+    -webkit-box-flex: 0;
+    flex: 0 0 56px;
+    width: 56px;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-orient: vertical;
+    flex-direction: column;
+    -webkit-box-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    justify-content: center;
+    gap: 10px;
+    align-self: stretch;
+    padding: 0;
+}
+
+.cnc-lobby-divider__line {
+    width: 1px;
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    min-height: 40px;
+    background: linear-gradient(180deg, transparent, var(--lobby-border-strong), transparent);
+}
+
+.cnc-lobby-divider__text {
+    font-family: 'Eurostile-Bla', sans-serif;
+    font-size: 26px;
+    color: #5f6b7a;
+    letter-spacing: 0.24em;
+    padding: 6px 0;
+}
+
+.cnc-lobby-slot-card {
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    min-height: 220px;
+    border-radius: 4px;
+    border: 2px dashed rgba(96, 108, 124, 0.5);
+    background: rgba(0, 0, 0, 0.42);
+    position: relative;
+    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+.cnc-lobby-slot-card.occupied {
+    border-style: solid;
+    border-color: var(--lobby-border);
+    background: rgba(0, 0, 0, 0.58);
+}
+
+.cnc-lobby-slot-card.selected {
+    border-color: var(--lobby-blue);
+    box-shadow: 0 0 0 1px var(--lobby-blue-glow), inset 0 0 32px rgba(26, 127, 212, 0.1);
+}
+
+.cnc-lobby-slot-card.faction-usa { border-left-width: 5px; border-left-color: #3a7bd5; }
+.cnc-lobby-slot-card.faction-apa { border-left-width: 5px; border-left-color: #c0392b; }
+.cnc-lobby-slot-card.faction-eu { border-left-width: 5px; border-left-color: #2980b9; }
+.cnc-lobby-slot-card.faction-gla { border-left-width: 5px; border-left-color: #d4a017; }
+
+.cnc-lobby-slot-card__empty {
+    height: 100%;
+    min-height: 196px;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-orient: vertical;
+    flex-direction: column;
+    -webkit-box-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 32px 28px;
+    color: #727d8a;
+    font-size: 15px;
+    text-align: center;
+}
+
+.cnc-lobby-slot-card__empty-icon {
+    width: 52px;
+    height: 52px;
+    line-height: 50px;
+    text-align: center;
+    border-radius: 4px;
+    border: 2px solid var(--lobby-border);
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 26px;
+    color: #8a96a4;
+}
+
+.cnc-lobby-slot-card__empty-label {
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #7a8492;
+}
+
+.cnc-lobby-slot-card__actions {
+    display: -webkit-box;
+    display: flex;
+    gap: 12px;
+    -webkit-box-pack: center;
+    justify-content: center;
+    margin-top: 6px;
+}
+
+.cnc-lobby-slot-action {
+    min-width: 124px !important;
+    height: 36px !important;
+    font-size: 13px !important;
+    padding: 0 20px !important;
+}
+
+.cnc-lobby-slot-card__filled {
+    height: 100%;
+    min-height: 216px;
+    display: -webkit-box;
+    display: flex;
+    padding: 24px 24px 20px;
+    gap: 20px;
+    -webkit-box-align: center;
+    align-items: center;
+}
+
+.cnc-lobby-slot-card__avatar {
+    -webkit-box-flex: 0;
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    border-radius: 4px;
+    background: #121820 url('../view/image/guest_avatar.svg') center / cover no-repeat;
+    border: 2px solid #3a4550;
+    box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6);
+}
+
+.cnc-lobby-slot-card__avatar.faction-usa { border-color: #3a7bd5; }
+.cnc-lobby-slot-card__avatar.faction-apa { border-color: #c0392b; }
+.cnc-lobby-slot-card__avatar.faction-eu { border-color: #2980b9; }
+.cnc-lobby-slot-card__avatar.faction-gla { border-color: #d4a017; }
+
+.cnc-lobby-slot-card__info {
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-top: 2px;
+}
+
+.cnc-lobby-slot-card__role {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--lobby-blue);
+    margin-bottom: 10px;
+    padding: 3px 8px;
+    border-radius: var(--lobby-btn-radius);
+    background: rgba(26, 127, 212, 0.12);
+    border: 1px solid rgba(26, 127, 212, 0.28);
+}
+
+.cnc-lobby-slot-card__codename {
+    display: block;
+    font-family: 'Eurostile-Hea', sans-serif;
+    font-size: 32px;
+    letter-spacing: 0.05em;
+    line-height: 1.12;
+    color: #fff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+
+.cnc-lobby-slot-card__name {
+    display: block;
+    margin-top: 10px;
+    font-size: 16px;
+    color: var(--lobby-muted);
+}
+
+.cnc-lobby-slot-card__kick {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--lobby-border);
+    border-radius: var(--lobby-btn-radius);
+    background: rgba(255, 255, 255, 0.06);
+    color: #8a939e;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.cnc-lobby-ready {
+    margin-top: 20px;
+    max-width: 280px;
+}
+
+.cnc-lobby-ready__track {
+    height: 8px;
+    border-radius: 2px;
+    background: rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+    border: 1px solid rgba(72, 88, 110, 0.35);
+}
+
+.cnc-lobby-ready__track span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--lobby-blue-dim), var(--lobby-blue));
+}
+
+.cnc-lobby-ready__label {
+    display: block;
+    margin-top: 10px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6f7a86;
+}
+
+.cnc-lobby-factions {
+    display: -webkit-box;
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    -webkit-box-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.cnc-lobby-faction-chip {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 10px 18px;
+    border-radius: var(--lobby-btn-radius);
+    border: 1px solid #3a424c;
+    background: rgba(0, 0, 0, 0.5);
+    color: #8a939e;
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.2;
+    min-width: 52px;
+}
+
+.cnc-lobby-faction-chip.active { color: #fff; border-color: #aaa; }
+.cnc-lobby-faction-chip.swatch-usa { border-color: #3a7bd5; color: #8ab4f0; }
+.cnc-lobby-faction-chip.swatch-apa { border-color: #c0392b; color: #f0a0a0; }
+.cnc-lobby-faction-chip.swatch-eu { border-color: #2980b9; color: #8ac0e8; }
+.cnc-lobby-faction-chip.swatch-gla { border-color: #d4a017; color: #e8c868; }
+
+.cnc-lobby-diff {
+    margin-top: 18px;
+    display: -webkit-box;
+    display: flex;
+    gap: 8px;
+    -webkit-box-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.cnc-lobby-diff button {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    border-radius: var(--lobby-btn-radius);
+    border: 1px solid var(--lobby-border);
+    background: rgba(0, 0, 0, 0.45);
+    color: #7a8492;
+    cursor: pointer;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.cnc-lobby-diff button.active {
+    border-color: var(--lobby-blue);
+    color: #fff;
+    background: rgba(26, 127, 212, 0.18);
+}
+
+/* Squarer retail shell buttons inside lobby */
+.cnc-lobby-root .btn.btn-options {
+    display: -webkit-inline-box !important;
+    display: -ms-inline-flexbox !important;
+    display: inline-flex !important;
+    -webkit-box-align: center !important;
+    -ms-flex-align: center !important;
+    align-items: center !important;
+    -webkit-box-pack: center !important;
+    -ms-flex-pack: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+    line-height: 1.2 !important;
+    border-radius: var(--lobby-btn-radius) !important;
+    -webkit-border-radius: var(--lobby-btn-radius) !important;
+    min-width: 114px;
+    height: 36px !important;
+    padding: 0 22px !important;
+    font-size: 14px !important;
+    letter-spacing: 0.06em;
+    background-size: 100% 100% !important;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+}
+
+.cnc-lobby-root .btn.btn-massive-green.cnc-lobby-start {
+    display: -webkit-inline-box !important;
+    display: -ms-inline-flexbox !important;
+    display: inline-flex !important;
+    -webkit-box-align: center !important;
+    -ms-flex-align: center !important;
+    align-items: center !important;
+    -webkit-box-pack: center !important;
+    -ms-flex-pack: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 280px !important;
+    height: 54px !important;
+    line-height: 1.15 !important;
+    font-size: 22px !important;
+    font-weight: normal !important;
+    padding: 0 40px !important;
+    margin: 0 !important;
+    border-radius: 4px !important;
+    letter-spacing: 0.04em;
+    text-align: center !important;
+}
+
+.cnc-lobby-start:disabled {
+    opacity: 0.42;
+    cursor: default;
+}
+
+.cnc-lobby-exit {
+    min-width: 124px !important;
+    height: 40px !important;
+    font-size: 14px !important;
+    padding: 0 28px !important;
+    position: relative;
+    z-index: 1;
+}
+
+.cnc-lobby-toast {
+    -webkit-box-flex: 0;
+    flex: 0 0 auto;
+    margin: 0 0 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-family: monospace;
+    color: #9ab4cc;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(72, 88, 110, 0.35);
+    border-radius: 4px;
+}
+
+.cnc-lobby-bar {
+    -webkit-box-flex: 0;
+    flex: 0 0 var(--lobby-bar-h);
+    height: var(--lobby-bar-h);
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-align: center;
+    align-items: center;
+    position: relative;
+    margin: 0 -32px;
+    padding: 0 32px;
+    border-top: 2px solid var(--lobby-border);
+    background: rgba(0, 0, 0, 0.82);
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.cnc-lobby-bar__center {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-pack: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.cnc-lobby-bar__center .cnc-lobby-start {
+    pointer-events: auto;
+}
+
+.cnc-lobby-bar__online {
+    margin-left: auto;
+    position: relative;
+    z-index: 1;
+    font-size: 13px;
+    color: #6f7886;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+}
+
+@media (max-width: 1100px) {
+    .cnc-lobby-theater__title {
+        font-size: 38px;
+    }
+
+    .cnc-lobby-theater__visual {
+        -webkit-box-flex: 0;
+        flex: 0 0 36%;
+        min-width: 220px;
+    }
+
+    .cnc-lobby-slot-card__codename {
+        font-size: 28px;
+    }
+}
+
+@media (max-width: 900px) {
+    .cnc-lobby-battle {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .cnc-lobby-bar {
+        margin-left: -20px;
+        margin-right: -20px;
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .cnc-lobby-stage {
+        -webkit-box-orient: vertical;
+        flex-direction: column;
+    }
+
+    .cnc-lobby-hud {
+        right: 0;
+        padding: 0 20px;
+    }
+
+    .cnc-lobby-rail {
+        -webkit-box-flex: 0;
+        flex: 0 0 200px;
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid rgba(56, 64, 76, 0.9);
+    }
+
+    .cnc-lobby-arena {
+        -webkit-box-orient: vertical;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .cnc-lobby-divider {
+        -webkit-box-orient: horizontal;
+        flex-direction: row;
+        -webkit-box-flex: 0;
+        flex: 0 0 44px;
+        width: 100%;
+    }
+
+    .cnc-lobby-divider__line {
+        width: auto;
+        height: 1px;
+        min-height: 0;
+        -webkit-box-flex: 1;
+        flex: 1 1 auto;
+        background: linear-gradient(90deg, transparent, var(--lobby-border-strong), transparent);
+    }
+
+    .cnc-lobby-slot-card__actions {
+        -webkit-box-orient: vertical;
+        flex-direction: column;
+        width: 100%;
+        max-width: 220px;
+    }
+
+    .cnc-lobby-slot-card__actions .btn {
+        width: 100%;
+    }
+}

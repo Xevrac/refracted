@@ -31,6 +31,9 @@ pub struct BlazeSessionEntry {
     pub user_id: Option<u64>,
     pub persona_id: Option<u64>,
     pub email: Option<String>,
+    /// Blaze client name/type string from request `CLNT` (e.g. `RtsBlazeClient` vs dedicated server).
+    #[serde(default)]
+    pub clnt: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +48,7 @@ pub struct BlazeSessionInfo {
     pub user_id: Option<u64>,
     pub persona_id: Option<u64>,
     pub email: Option<String>,
+    pub clnt: Option<String>,
     pub build_profile: String,
     pub build_source: String,
 }
@@ -110,6 +114,7 @@ fn entry_to_info(e: BlazeSessionEntry, build_profile: String, build_source: Stri
         user_id: e.user_id,
         persona_id: e.persona_id,
         email: e.email,
+        clnt: e.clnt.clone(),
         build_profile,
         build_source,
     }
@@ -135,6 +140,7 @@ pub fn register(peer: std::net::SocketAddr, listener: &str) -> u64 {
             user_id: None,
             persona_id: None,
             email: None,
+            clnt: None,
         },
     );
     drop(m);
@@ -196,6 +202,43 @@ pub fn set_crypto_enabled(id: u64, enabled: bool) -> bool {
     drop(m);
     persist_sessions_to_disk();
     true
+}
+
+/// If a Util `preAuth` payload contains `CLNT`, persist it on the Blaze session row.
+pub fn note_clnt_if_preauth(id: u64, component: u16, command: u16, payload: &[u8]) {
+    if component != 0x0009 || command != 0x0007 {
+        return;
+    }
+    note_clnt_from_payload(id, payload);
+}
+
+fn note_clnt_from_payload(id: u64, payload: &[u8]) {
+    let Some(clnt) = crate::blaze::tdf::TdfEncoder::find_string_field(payload, "CLNT") else {
+        return;
+    };
+    let clnt = clnt.trim().to_string();
+    if clnt.is_empty() {
+        return;
+    }
+    let changed = {
+        let mut m = registry().lock();
+        let Some(e) = m.get_mut(&id) else {
+            return;
+        };
+        if e.clnt.as_deref() == Some(clnt.as_str()) {
+            false
+        } else {
+            e.clnt = Some(clnt.clone());
+            true
+        }
+    };
+    if !changed {
+        return;
+    }
+    persist_sessions_to_disk();
+    if crate::common::game::get_current_game_id().as_str() == "cnc" {
+        crate::client::cnc::dedicated_pool::on_clnt_updated(id, &clnt);
+    }
 }
 
 pub fn mark_authenticated(id: u64) {

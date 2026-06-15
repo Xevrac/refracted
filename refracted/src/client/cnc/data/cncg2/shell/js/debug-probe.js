@@ -20,11 +20,30 @@
         /** For shell / HTTP JSON results */
         shellResult: function (res) {
             try {
-                CncProbe.log('RESPONSE: ' + JSON.stringify(res, null, 2));
+                var msg = 'RESPONSE: ' + JSON.stringify(res, null, 2);
+                if (res && typeof res === 'object' && ('status' in res || 'success' in res || 'error' in res)) {
+                    msg += '\n\nShell status: ' + (res.status != null ? res.status : '—')
+                        + ' | success: ' + (res.success != null ? res.success : '—')
+                        + (res.error ? (' | error: ' + res.error) : '');
+                }
+                CncProbe.log(msg);
             } catch (e) {
                 CncProbe.log('RESPONSE: ' + String(res));
             }
+            if (res && typeof res === 'object') {
+                var blob = JSON.stringify(res);
+                if (blob.indexOf('ALREADY_GAME_MEMBER') >= 0) {
+                    CncProbe._inBlazeGame = true;
+                }
+                if (res.success === true || res.status === 0) {
+                    if (CncProbe._pendingBlazeCreate) {
+                        CncProbe._inBlazeGame = true;
+                        CncProbe._pendingBlazeCreate = false;
+                    }
+                }
+            }
             if (window.CncBlazeState) CncBlazeState.onShellResult(res);
+            if (window.CncProbe && CncProbe.lobbyRefreshPidDisplay) CncProbe.lobbyRefreshPidDisplay();
         },
         hasShell: function () {
             return typeof shellaccesslayer !== 'undefined' && shellaccesslayer && typeof shellaccesslayer.execute === 'function';
@@ -302,54 +321,458 @@
         }
     };
 
-    // ---- HTTP / shellaccesslayer (Blaze & session) ----
-    CncProbe.blazeBase = function () { CncProbe.runShell({ _response: CncProbe.shellResult, url: '/blaze' }); };
-    CncProbe.blazeAuth = function (email, password) {
-        email = email || 'user@example.com';
-        password = password || 'test';
-        CncProbe.runShell({ _response: CncProbe.shellResult, url: '/blaze/authenticate?email=' + encodeURIComponent(email) + '&password=' + encodeURIComponent(password) });
-    };
-    CncProbe.blazeLogout = function () {
-        var completed = false;
-        CncProbe.log('Attempting logout via /blaze/logout (url style)...');
-        CncProbe.runShell({
-            url: '/blaze/logout',
-            _response: function (res) {
-                completed = true;
-                CncProbe.shellResult(res);
+    // ---- Blaze shell — CNC routes GMGR via url: '/blaze/…' (not _module short names) ----
+    CncProbe.blazeUrlFromResource = function (resource, params) {
+        params = params || {};
+        var res = String(resource || '').trim();
+        var key = res.toLowerCase();
+        var pathByResource = {
+            authenticate: '/blaze/authenticate',
+            tokenauthenticate: '/blaze/tokenauthenticate',
+            games: '/blaze/games',
+            creategame: '/blaze/createGame',
+            joingame: '/blaze/joinGame',
+            attribute: '/blaze/attribute'
+        };
+        var base;
+        if (pathByResource[key]) {
+            base = pathByResource[key];
+        } else if (res.indexOf('/') >= 0) {
+            base = '/blaze/' + res.replace(/^\/+/, '');
+        } else {
+            base = '/blaze/' + res;
+        }
+        var parts = [];
+        for (var k in params) {
+            if (Object.prototype.hasOwnProperty.call(params, k)) {
+                parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(String(params[k])));
             }
+        }
+        return parts.length ? base + '?' + parts.join('&') : base;
+    };
+    CncProbe.runBlazeUrl = function (urlPath) {
+        CncProbe.runShell({ _response: CncProbe.shellResult, url: urlPath });
+    };
+    /** Primary Blaze shell path — builds url: '/blaze/…' (matches shell.js / src.js). */
+    CncProbe.runBlaze = function (resource, params) {
+        CncProbe.runBlazeUrl(CncProbe.blazeUrlFromResource(resource, params));
+    };
+    /** Experimental: _module:'blaze' + short _resource — does not dispatch on cnc.server.exe today. */
+    CncProbe.runBlazeModule = function (resource, params) {
+        params = params || {};
+        var req = {
+            _module: 'blaze',
+            _resource: resource,
+            _response: CncProbe.shellResult
+        };
+        for (var k in params) {
+            if (Object.prototype.hasOwnProperty.call(params, k)) {
+                req[k] = params[k];
+            }
+        }
+        CncProbe.runShell(req);
+    };
+    CncProbe.blazeShellInput = function (id, fallback) {
+        var el = document.getElementById(id);
+        var v = el ? String(el.value || '').trim() : '';
+        return v !== '' ? v : (fallback !== undefined ? String(fallback) : '');
+    };
+    CncProbe.blazeShellAuthenticate = function () {
+        CncProbe.runBlaze('authenticate', {
+            email: CncProbe.blazeShellInput('cnc-probe-blaze-email', 'user@example.com'),
+            password: CncProbe.blazeShellInput('cnc-probe-blaze-pass', 'test')
         });
-        setTimeout(function () {
-            if (completed) {
-                return;
-            }
-            CncProbe.log('No callback yet. Retrying logout via _resource style...');
-            CncProbe.runShell({
-                _resource: '/blaze/logout',
-                _response: function (res) {
-                    completed = true;
-                    CncProbe.shellResult(res);
+    };
+    CncProbe.blazeShellTokenAuthenticate = function () {
+        CncProbe.runBlaze('tokenauthenticate');
+    };
+    CncProbe.blazeShellGames = function () {
+        CncProbe.runBlaze('games');
+    };
+    CncProbe._inBlazeGame = false;
+    CncProbe._pendingBlazeCreate = false;
+
+    CncProbe.markBlazeCreatePending = function () {
+        CncProbe._pendingBlazeCreate = true;
+    };
+
+    CncProbe.blazeShellCreateGame = function () {
+        CncProbe.markBlazeCreatePending();
+        CncProbe.runBlaze('creategame', {
+            gameName: CncProbe.blazeShellInput('cnc-probe-blaze-gname', 'XEVRAC'),
+            players: CncProbe.blazeShellInput('cnc-probe-blaze-players', '2')
+        });
+    };
+    CncProbe.blazeShellJoinGame = function () {
+        if (CncProbe._inBlazeGame) {
+            CncProbe.log(
+                'joinGame skipped — createGame / resetDedicatedServer already put you in the game.\n' +
+                '(Shell error GAMEMANAGER_ERR_ALREADY_GAME_MEMBER is expected if you join again.)'
+            );
+            return;
+        }
+        CncProbe.runBlaze('joinGame', {
+            gameID: CncProbe.blazeShellInput('cnc-probe-blaze-gameid', '1')
+        });
+    };
+
+    // ---- Blaze shell URL route (explicit /blaze/… — same wire as runBlaze above) ----
+    CncProbe.blazeUrlAuthenticate = function () {
+        CncProbe.runBlazeUrl(CncProbe.blazeUrlFromResource('authenticate', {
+            email: CncProbe.blazeShellInput('cnc-probe-blaze-email', 'user@example.com'),
+            password: CncProbe.blazeShellInput('cnc-probe-blaze-pass', 'test')
+        }));
+    };
+    CncProbe.blazeUrlTokenAuthenticate = function () {
+        CncProbe.runBlazeUrl('/blaze/tokenauthenticate');
+    };
+    CncProbe.blazeUrlGames = function () {
+        CncProbe.runBlazeUrl('/blaze/games');
+    };
+    CncProbe.blazeUrlCreateGame = function () {
+        CncProbe.markBlazeCreatePending();
+        CncProbe.runBlazeUrl(CncProbe.blazeUrlFromResource('creategame', {
+            gameName: CncProbe.blazeShellInput('cnc-probe-blaze-gname', 'XEVRAC'),
+            players: CncProbe.blazeShellInput('cnc-probe-blaze-players', '2')
+        }));
+    };
+    CncProbe.blazeUrlJoinGame = function () {
+        CncProbe.blazeShellJoinGame();
+    };
+    CncProbe.blazeModuleCreateGame = function () {
+        CncProbe.runBlazeModule('creategame', {
+            gameName: CncProbe.blazeShellInput('cnc-probe-blaze-gname', 'XEVRAC'),
+            players: CncProbe.blazeShellInput('cnc-probe-blaze-players', '2')
+        });
+    };
+
+    CncProbe.logAddAiHelp = function () {
+        CncProbe.log(
+            'Add AI paths:\n' +
+            '  • Probe: Add AI button → POST /cnc/probe-add-ai (Refracted GMGR 0x26 + join notifies)\n' +
+            '  • Retail: in-game lobby Add AI → GameManager.addQueuedPlayerToGame\n' +
+            '  • No blaze shell route or RtsClient console command in cnc.server.exe.\n' +
+            '  • After add, use AI slot + attribute buttons or CncProbe.setLobbyAiPid(ai_pid).\n\n' +
+            'Create game first via createGame / resetDedicatedServer — do not joinGame after (already a member).'
+        );
+    };
+    CncProbe.probeAddAi = function (gid) {
+        gid = gid != null ? String(gid) : CncProbe.blazeShellInput('cnc-probe-blaze-gameid', '1');
+        var url = '/cnc/probe-add-ai?gid=' + encodeURIComponent(gid);
+        CncProbe.log('probe-add-ai gid=' + gid + ' …');
+        if (!window.fetch) {
+            CncProbe.log('fetch unavailable — open ' + url + ' from a shell that can reach Refracted.');
+            return;
+        }
+        fetch(url, { method: 'POST' })
+            .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+            .then(function (res) {
+                if (!res.body || !res.body.ok) {
+                    var err = (res.body && res.body.error) ? res.body.error : ('HTTP ' + res.status);
+                    CncProbe.log('probe-add-ai failed: ' + err);
+                    return;
                 }
+                var d = res.body;
+                CncProbe.log(
+                    'probe-add-ai ok: gid=' + d.gid + ' ai_pid=' + d.ai_pid + ' name=' + d.name +
+                    ' (notifies → ' + d.blaze_sessions + ' Blaze session(s))'
+                );
+                if (d.ai_pid != null) {
+                    CncProbe.setLobbyAiPid(d.ai_pid);
+                }
+                CncProbe.syncAiFromGetPlayers();
+            })
+            .catch(function (e) {
+                CncProbe.log('probe-add-ai error: ' + (e && e.message ? e.message : e));
             });
-            setTimeout(function () {
-                if (!completed) {
-                    CncProbe.log(
-                        'Logout probe did not return a callback in this shell context.\n' +
-                        'Likely causes: route not implemented or callback suppressed by EAWebKit bridge.'
-                    );
+    };
+    CncProbe.promptInGameAddAi = function () {
+        CncProbe.probeAddAi();
+    };
+    CncProbe.syncAiFromGetPlayers = function () {
+        CncProbe.log('blazeGetPlayers via gameclient — check Frostbite log / console for AI persona ids.');
+        CncProbe.rtBlazeGetPlayersFromInput();
+    };
+    /** Dev escape hatch after in-game Add AI: paste ai_pid from Refracted console log. */
+    CncProbe.setLobbyAiPid = function (pid) {
+        if (pid == null || String(pid).trim() === '') {
+            return;
+        }
+        CncProbe._lobbyAiPid = String(pid).trim();
+        try {
+            sessionStorage.setItem('cnc_lobby_ai_pid', CncProbe._lobbyAiPid);
+        } catch (e) { /* empty */ }
+        CncProbe.lobbyTargetAi();
+        CncProbe.lobbyRefreshPidDisplay();
+        CncProbe.log('AI slot pid set to ' + CncProbe._lobbyAiPid);
+    };
+
+    CncProbe.openLobbyTest = function () {
+        window.location.href = 'lobby.html';
+    };
+
+    /** Blaze setPlayerAttributes without debug-probe form fields (lobby test page). */
+    CncProbe.sendLobbyAttr = function (key, value, opts) {
+        opts = opts || {};
+        var gid = opts.gameId != null ? String(opts.gameId) : '1';
+        var pid = opts.playerId != null ? String(opts.playerId) : CncProbe.resolveHostPid();
+        if (!pid) {
+            CncProbe.log('sendLobbyAttr: no playerID — set Refracted profile or authenticate first.');
+            return false;
+        }
+        CncProbe.runBlaze('attribute', {
+            gameID: gid,
+            playerID: pid,
+            key: String(key),
+            value: String(value)
+        });
+        return true;
+    };
+    /** cmd 7 — setPlayerAttributes (gameID + playerID + key + value) */
+    CncProbe.lobbyTargetMode = 'host';
+    CncProbe._lobbyAiPid = null;
+
+    CncProbe.resolveHostPid = function () {
+        if (window.CncBlazeState) {
+            CncBlazeState.applyExternalHints();
+            if (CncBlazeState.personaId != null && String(CncBlazeState.personaId) !== '') {
+                return String(CncBlazeState.personaId);
+            }
+        }
+        var prof = window.__CNC_PROFILE;
+        if (prof && prof.personaId != null) {
+            return String(prof.personaId);
+        }
+        try {
+            var ss = sessionStorage.getItem('cnc_blaze_session');
+            if (ss) {
+                var o = JSON.parse(ss);
+                if (o && o.personaId != null) {
+                    return String(o.personaId);
                 }
-            }, 1400);
-        }, 1400);
+            }
+            var pidOnly = sessionStorage.getItem('cnc_blaze_persona_id');
+            if (pidOnly) {
+                return String(pidOnly);
+            }
+        } catch (e) { /* empty */ }
+        return '';
     };
-    CncProbe.blazeCreate = function (name, players) {
-        name = name || 'XEVRAC';
-        players = players || 4;
-        CncProbe.runShell({ _response: CncProbe.shellResult, url: '/blaze/createGame?gameName=' + encodeURIComponent(name) + '&players=' + players });
+
+    CncProbe.resolveHostName = function () {
+        if (window.CncBlazeState) {
+            CncBlazeState.applyExternalHints();
+            var n = CncBlazeState.getPlayerName();
+            if (n && n !== CncBlazeState.UNKNOWN_PLAYER) {
+                return n;
+            }
+        }
+        var prof = window.__CNC_PROFILE;
+        if (prof && prof.displayName) {
+            return String(prof.displayName);
+        }
+        return '';
     };
-    CncProbe.blazeJoin = function (gid) {
-        gid = gid || 1;
-        CncProbe.runShell({ _response: CncProbe.shellResult, url: '/blaze/joinGame?gameID=' + encodeURIComponent(gid) });
+
+    CncProbe.lobbyRefreshPidDisplay = function () {
+        var el = document.getElementById('cnc-probe-lobby-pid-display');
+        if (el) {
+            var host = CncProbe.resolveHostPid();
+            var name = CncProbe.resolveHostName();
+            var ai = CncProbe._lobbyAiPid;
+            var parts = [];
+            if (host) {
+                parts.push('host: ' + (name ? name + ' · ' : '') + host);
+            } else {
+                parts.push('host: (set profile in Refracted Accounts)');
+            }
+            parts.push(ai ? ('AI: ' + ai) : 'AI: — (in-game Add AI)');
+            el.textContent = parts.join('  |  ');
+        }
+        CncProbe.lobbyUpdateTargetLabel();
     };
+
+    CncProbe.initLobbyPids = function () {
+        if (window.CncBlazeState) {
+            CncBlazeState.applyExternalHints();
+            CncBlazeState.subscribe(function () {
+                CncProbe.lobbyRefreshPidDisplay();
+            });
+        }
+        CncProbe.lobbyRefreshPidDisplay();
+    };
+
+    CncProbe.lobbyUpdateTargetLabel = function () {
+        var el = document.getElementById('cnc-probe-lobby-target-label');
+        if (!el) {
+            return;
+        }
+        var pid = CncProbe.lobbyActivePlayerId();
+        el.textContent = CncProbe.lobbyTargetMode + (pid ? ' · pid ' + pid : '');
+    };
+    CncProbe.lobbyActivePlayerId = function () {
+        if (CncProbe.lobbyTargetMode === 'ai') {
+            return CncProbe._lobbyAiPid ? String(CncProbe._lobbyAiPid) : '';
+        }
+        return CncProbe.resolveHostPid();
+    };
+    CncProbe.lobbyTargetHost = function () {
+        CncProbe.lobbyTargetMode = 'host';
+        CncProbe.lobbyUpdateTargetLabel();
+    };
+    CncProbe.lobbyTargetAi = function () {
+        CncProbe.lobbyTargetMode = 'ai';
+        CncProbe.lobbyUpdateTargetLabel();
+        if (!CncProbe.lobbyActivePlayerId()) {
+            CncProbe.log('No AI yet — use in-game lobby Add AI (GMGR 0x26), then AI slot.');
+        }
+    };
+    CncProbe.blazeShellSetPlayerAttribute = function () {
+        var pid = CncProbe.lobbyActivePlayerId();
+        if (!pid) {
+            CncProbe.log('playerID required — select host slot (profile) or AI slot (Add AI first).');
+            return;
+        }
+        CncProbe.runBlaze('attribute', {
+            gameID: CncProbe.blazeShellInput('cnc-probe-blaze-attr-gid', '1'),
+            playerID: pid,
+            key: CncProbe.blazeShellInput('cnc-probe-blaze-attr-key', 'testKey'),
+            value: CncProbe.blazeShellInput('cnc-probe-blaze-attr-val', 'testVal')
+        });
+    };
+    /** cmd 10 — setGameAttributes (gameID + key + value; omit playerID) */
+    CncProbe.blazeShellSetGameAttribute = function () {
+        CncProbe.runBlaze('attribute', {
+            gameID: CncProbe.blazeShellInput('cnc-probe-blaze-attr-gid', '1'),
+            key: CncProbe.blazeShellInput('cnc-probe-blaze-attr-key', 'testKey'),
+            value: CncProbe.blazeShellInput('cnc-probe-blaze-attr-val', 'testVal')
+        });
+    };
+
+    // ---- Lobby: faction · house color · spawn (player-slot attrs + engine notes) ----
+    CncProbe._lobbyAttrDebounceMs = 400;
+    CncProbe._lobbyAttrTimer = null;
+    CncProbe._lobbyAttrPending = null;
+    CncProbe._flushLobbyAttr = function () {
+        CncProbe._lobbyAttrTimer = null;
+        var p = CncProbe._lobbyAttrPending;
+        CncProbe._lobbyAttrPending = null;
+        if (!p) {
+            return;
+        }
+        var pid = CncProbe.lobbyActivePlayerId();
+        if (!pid) {
+            CncProbe.log('No playerID — host slot uses profile; AI slot needs Add AI first.');
+            return;
+        }
+        CncProbe.runBlaze('attribute', {
+            gameID: CncProbe.blazeShellInput('cnc-probe-blaze-attr-gid', '1'),
+            playerID: pid,
+            key: p.key,
+            value: p.value
+        });
+    };
+    CncProbe.blazeShellSetLobbyAttr = function (key, value) {
+        CncProbe._lobbyAttrPending = { key: key, value: String(value) };
+        if (CncProbe._lobbyAttrTimer) {
+            clearTimeout(CncProbe._lobbyAttrTimer);
+        }
+        CncProbe._lobbyAttrTimer = setTimeout(CncProbe._flushLobbyAttr, CncProbe._lobbyAttrDebounceMs);
+    };
+    CncProbe.lobbyInput = function (id, fallback) {
+        var el = document.getElementById(id);
+        var v = el ? String(el.value || '').trim() : '';
+        return v !== '' ? v : (fallback !== undefined ? String(fallback) : '');
+    };
+    CncProbe.lobbySetFaction = function (faction) {
+        CncProbe.blazeShellSetLobbyAttr('_faction', faction);
+    };
+    CncProbe.lobbySetStartpoint = function (n) {
+        CncProbe.blazeShellSetLobbyAttr('_startpoint', n);
+    };
+    CncProbe.lobbySetIsAi = function (on) {
+        CncProbe.blazeShellSetLobbyAttr('_isai', on ? '1' : '0');
+    };
+    CncProbe.lobbySetTeam = function (team) {
+        CncProbe.blazeShellSetLobbyAttr('_team', team);
+    };
+    CncProbe.lobbyApplyFromForm = function () {
+        CncProbe.lobbySetFaction(CncProbe.lobbyInput('cnc-probe-lobby-faction', 'USA'));
+        setTimeout(function () {
+            CncProbe.lobbySetStartpoint(CncProbe.lobbyInput('cnc-probe-lobby-start', '1'));
+        }, 200);
+        setTimeout(function () {
+            CncProbe.lobbySetTeam(CncProbe.lobbyInput('cnc-probe-lobby-team', '1'));
+        }, 400);
+        setTimeout(function () {
+            CncProbe.lobbySetIsAi(CncProbe.lobbyInput('cnc-probe-lobby-isai', '0') === '1');
+        }, 600);
+    };
+    CncProbe.lobbyPresetHumanUsa = function () {
+        CncProbe.log('Lobby preset: human USA, team 1, startpoint 1 (host slot)');
+        CncProbe.lobbyTargetHost();
+        CncProbe.lobbySetFaction('USA');
+        setTimeout(function () { CncProbe.lobbySetStartpoint('1'); }, 200);
+        setTimeout(function () { CncProbe.lobbySetTeam('1'); }, 400);
+        setTimeout(function () { CncProbe.lobbySetIsAi(false); }, 600);
+    };
+    CncProbe.lobbyPresetAiEsc = function () {
+        CncProbe.log('Lobby preset: AI ESC, team 2, startpoint 2 (AI slot — Add AI first)');
+        CncProbe.lobbyTargetAi();
+        if (!CncProbe.lobbyActivePlayerId()) {
+            return;
+        }
+        CncProbe.lobbySetFaction('ESC');
+        setTimeout(function () { CncProbe.lobbySetStartpoint('2'); }, 200);
+        setTimeout(function () { CncProbe.lobbySetTeam('2'); }, 400);
+        setTimeout(function () { CncProbe.lobbySetIsAi(true); }, 600);
+    };
+    /** gameclient: blazeSetPlayerAttribute <gameId> <playerId> <key> <value> */
+    CncProbe.rtBlazeSetPlayerAttrFull = function (key, value) {
+        if (CncProbe._lobbyAttrTimer) {
+            clearTimeout(CncProbe._lobbyAttrTimer);
+            CncProbe._lobbyAttrTimer = null;
+            CncProbe._lobbyAttrPending = null;
+        }
+        var gid = CncProbe.blazeShellInput('cnc-probe-blaze-attr-gid', '1');
+        var pid = CncProbe.lobbyActivePlayerId();
+        if (!pid) {
+            CncProbe.log('playerID required — host slot uses profile; AI slot needs Add AI first.');
+            return;
+        }
+        CncProbe.runGame(
+            'RtsClient.blazeSetPlayerAttribute ' + gid + ' ' + pid + ' ' + key + ' ' + value
+        );
+    };
+    CncProbe.lobbySetFactionConsole = function (faction) {
+        CncProbe.rtBlazeSetPlayerAttrFull('_faction', faction);
+    };
+    CncProbe.lobbyTryStartpointCli = function () {
+        var n = CncProbe.lobbyInput('cnc-probe-lobby-start', '1');
+        CncProbe.log('Experimental CLI startpoint (cfg/Level option, not Blaze): startpoint ' + n);
+        CncProbe.runGame('startpoint ' + n);
+    };
+    CncProbe.lobbyLogSpawnEngineMessages = function () {
+        CncProbe.log(
+            'In-match spawn selection (engine messages — no Blaze shell route):\n' +
+            '  ServerPlayer.ManuallySelectedSpawnPoint — player picked a start on the map\n' +
+            '  Network.SelectSpawnGroup — UI/network spawn group selection\n' +
+            '  Network.SpawnOnSelected — confirm spawn at selected group\n\n' +
+            'Pre-game lobby slot index: use _startpoint via Blaze attribute above (1-based).\n' +
+            'HouseColorSelectorWinProc fires RtsBlaze.AddHouseColor internally; shell has no addHouseColor route.'
+        );
+    };
+
+    /** event/game — internal Blaze game event hook (cmd 12 when payload present) */
+    CncProbe.blazeShellEventGame = function () {
+        CncProbe.runBlaze('event/game');
+    };
+    /** event/player — internal Blaze player event hook (cmd 13 when payload present) */
+    CncProbe.blazeShellEventPlayer = function () {
+        CncProbe.runBlaze('event/player');
+    };
+
+    // ---- shellaccesslayer (non-Blaze routes) ----
     CncProbe.getConfig = function () { CncProbe.runShell({ _response: CncProbe.shellResult, url: '/config/' }); };
     CncProbe.getOptions = function () { CncProbe.runShell({ _response: CncProbe.shellResult, url: '/options/graphics/get' }); };
     CncProbe.frontEndFullscreen = function (on) {
@@ -377,16 +800,66 @@
     CncProbe.discardSettings = function () { CncProbe.runShell({ _resource: '/usersettings/discard' }); };
     CncProbe.sessionQuit = function () { CncProbe.runShell({ _resource: '/session/quit' }); };
     CncProbe.sessionSurrender = function () { CncProbe.runShell({ _resource: '/session/surrender' }); };
-    CncProbe.salamanderGameReady = function (host) {
-        host = host || 'localhost';
+
+    // ---- Salamander (_module: salamander / _resource: attribute) ----
+    CncProbe.salamanderInput = function (id, fallback) {
+        var el = document.getElementById(id);
+        var v = el ? String(el.value || '').trim() : '';
+        return v !== '' ? v : (fallback !== undefined ? String(fallback) : '');
+    };
+    CncProbe.runSalamanderAttribute = function (playerID, key, value) {
         CncProbe.runShell({
+            _module: 'salamander',
+            _resource: 'attribute',
             _response: CncProbe.shellResult,
-            _resource: '/salamander/attribute',
-            playerID: '999',
-            key: 'GameReady',
-            value: host
+            playerID: playerID,
+            key: key,
+            value: value
         });
     };
+    CncProbe.salamanderAttribute = function () {
+        CncProbe.runSalamanderAttribute(
+            CncProbe.salamanderInput('cnc-probe-salamander-pid', '999'),
+            CncProbe.salamanderInput('cnc-probe-salamander-key', 'GameReady'),
+            CncProbe.salamanderInput('cnc-probe-salamander-val', 'localhost')
+        );
+    };
+    CncProbe.salamanderGameReady = function () {
+        var host = CncProbe.salamanderInput('cnc-probe-salamander-val', 'localhost');
+        CncProbe.runSalamanderAttribute(
+            CncProbe.salamanderInput('cnc-probe-salamander-pid', '999'),
+            'GameReady',
+            host
+        );
+    };
+    CncProbe.salamanderGameReadyAndCreate = function () {
+        var host = CncProbe.salamanderInput('cnc-probe-salamander-val', 'localhost');
+        CncProbe.log(
+            'GameReady + createGame (no join)\n' +
+            'joinGame is omitted — it requires a listening game server, not just Blaze/shell.'
+        );
+        CncProbe.runSalamanderAttribute(
+            CncProbe.salamanderInput('cnc-probe-salamander-pid', '999'),
+            'GameReady',
+            host
+        );
+        setTimeout(function () { CncProbe.rtCreateLocal(); }, 350);
+    };
+    CncProbe.salamanderGameReadyCreateAndJoin = function () {
+        var host = CncProbe.salamanderInput('cnc-probe-salamander-val', 'localhost');
+        CncProbe.log(
+            'GameReady → createGame → joinGame ' + host + '\n' +
+            'If nothing listens for that join, the client will fatal ("Unable to connect to the server").'
+        );
+        CncProbe.runSalamanderAttribute(
+            CncProbe.salamanderInput('cnc-probe-salamander-pid', '999'),
+            'GameReady',
+            host
+        );
+        setTimeout(function () { CncProbe.rtCreateLocal(); }, 350);
+        setTimeout(function () { CncProbe.rtJoinLocal(host); }, 800);
+    };
+
     CncProbe.startWs = function (port) {
         port = port || 9000;
         if (!CncProbe.hasShell() || !shellaccesslayer.startWebsocketListener) {
@@ -432,7 +905,7 @@
             return;
         }
         CncProbe.runShell({
-            _resource: '/blaze',
+            url: '/blaze/games',
             _response: function (res) {
                 var typeName = Object.prototype.toString.call(res);
                 var keys = [];
@@ -476,6 +949,7 @@
         CncProbe.runGame('RtsClient.joinGame ' + gid + ' ' + host);
     };
     CncProbe.rtBlazeCreate = function (gname, n, level) {
+        CncProbe.markBlazeCreatePending();
         var elG = document.getElementById('cnc-probe-blaze-gname');
         var elN = document.getElementById('cnc-probe-blaze-players');
         var elL = document.getElementById('cnc-probe-create-level');
@@ -503,25 +977,6 @@
             level = 'levels/SP/Alpha_Tutorial/Alpha_Tutorial';
         }
         CncProbe.runGame('RtsClient.blazeCreateGame ' + gname + ' ' + n + ' ' + level);
-    };
-    CncProbe.rtBlazeCreateUrl = function (gname, n) {
-        var elG = document.getElementById('cnc-probe-blaze-gname');
-        var elN = document.getElementById('cnc-probe-blaze-players');
-        if (gname === undefined || gname === null) {
-            gname = elG ? String(elG.value || '').trim() : '';
-        }
-        if (!gname) {
-            gname = 'XEVRAC';
-        }
-        if (n === undefined || n === null) {
-            n = elN ? String(elN.value || '').trim() : '';
-        }
-        if (n === '' || n === undefined) {
-            n = '4';
-        }
-        var url = '/blaze/createGame?gameName=' + encodeURIComponent(gname) + '&players=' + encodeURIComponent(n);
-        CncProbe.log('blazeCreateGame (URL) -> ' + url);
-        CncProbe.runShell({ url: url });
     };
     CncProbe.rtBlazeJoin = function (gid) {
         if (gid === undefined || gid === null) {
@@ -552,7 +1007,12 @@
         CncProbe.runGame('RtsClient.blazeSetPlayerAttribute ' + k + ' ' + v);
     };
     CncProbe.rtGetHouseColors = function () { CncProbe.runGame('RtsClient.getSelectableHouseColors'); };
-    CncProbe.rtEndGame = function () { CncProbe.runGame('RtsClient.endGame'); };
+    CncProbe.rtEndGame = function () {
+        if (window.CncPreLanding && CncPreLanding.scheduleReturnFromMatch) {
+            CncPreLanding.scheduleReturnFromMatch();
+        }
+        CncProbe.runGame('RtsClient.endGame');
+    };
     CncProbe.rtSurrender = function () { CncProbe.runGame('RtsClient.surrenderGame'); };
     /** Matches Frostbite console: RtsClient.createGame <fullConfigPath> <levelName> [playerId] */
     CncProbe.rtCreateGameLine = function () {
@@ -579,49 +1039,14 @@
         CncProbe.runGame(line);
         CncProbe.log(
             'createGame sent. Black screen + WaitingForLevel is normal until something completes the session.\n' +
-            'Experimental: use GameReady + createGame (no TCP join). Do not use joinGame unless a real game server is listening.'
+            'Use Salamander → GameReady + createGame if the level does not start.'
         );
     };
     CncProbe.rtJoinLocal = function (host) {
-        host = host || 'localhost';
+        host = host || CncProbe.salamanderInput('cnc-probe-salamander-val', 'localhost');
         CncProbe.runGame('RtsClient.joinGame 1 ' + host);
     };
-    /**
-     * Salamander GameReady + createGame only. Safe with Refracted: does not call RtsClient.joinGame
-     * (joinGame opens a TCP game session; the emulator is not that host — it fatals with "Unable to connect to the server").
-     */
-    CncProbe.localSalamanderGameReadyAndCreate = function (host) {
-        host = host || 'localhost';
-        CncProbe.log(
-            'GameReady + createGame (no join)\n' +
-            'joinGame is omitted — it requires a listening game server, not just Blaze/shell.'
-        );
-        CncProbe.runShell({
-            _response: CncProbe.shellResult,
-            _resource: '/salamander/attribute',
-            playerID: '999',
-            key: 'GameReady',
-            value: host
-        });
-        setTimeout(function () { CncProbe.rtCreateLocal(); }, 350);
-    };
-    /** Same as above then RtsClient.joinGame — only if a real game host is running or you accept a fatal disconnect dialog. */
-    CncProbe.localHostAndJoinWithGameServer = function (host) {
-        host = host || 'localhost';
-        CncProbe.log(
-            'FULL: GameReady → createGame → joinGame ' + host + '\n' +
-            'If nothing listens for that join, the client will fatal ("Unable to connect to the server").'
-        );
-        CncProbe.runShell({
-            _response: CncProbe.shellResult,
-            _resource: '/salamander/attribute',
-            playerID: '999',
-            key: 'GameReady',
-            value: host
-        });
-        setTimeout(function () { CncProbe.rtCreateLocal(); }, 350);
-        setTimeout(function () { CncProbe.rtJoinLocal(host); }, 800);
-    };
+
     CncProbe.joinMultiplayer = function () { CncProbe.runGame('client.joinMultiplayer'); };
     CncProbe.clientDisconnect = function () { CncProbe.runGame('client.disconnect'); };
     CncProbe.testClientJoinMultiplayer = function () {
@@ -662,9 +1087,13 @@
     CncProbe.rtsUseBlaze = function () { CncProbe.runGame('RtsClientSettings.UseBlaze'); };
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { CncProbe.initOutputModal(); });
+        document.addEventListener('DOMContentLoaded', function () {
+            CncProbe.initOutputModal();
+            CncProbe.initLobbyPids();
+        });
     } else {
         CncProbe.initOutputModal();
+        CncProbe.initLobbyPids();
     }
 
     window.CncProbe = CncProbe;

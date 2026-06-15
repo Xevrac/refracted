@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html class="cnc-lobby-page" ng-app="CCApp">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Command &amp; Conquer — Skirmish Lobby</title>
+    <link rel="stylesheet" href="lib/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/lobby-test.css">
+    <script src="lib/jquery/jquery-1.9.1-min.js"></script>
+    <script src="lib/angular/angular.min.js"></script>
+    <script src="lib/shell.js"></script>
+    <script src="js/cnc-blaze-state.js"></script>
+    <script src="js/debug-probe.js"></script>
+    <script>
+        try {
+            angular.module('CCApp');
+        } catch (e) {
+            angular.module('CCApp', []);
+        }
+    </script>
+    <script src="js/lobby-test.js"></script>
+</head>
+<body class="cc-theme cnc-lobby-standalone" ng-controller="LobbyController">
+    <div class="cnc-lobby-chrome">
+        <a class="cnc-lobby-chrome__link" href="index.html">← Shell</a>
+        <a class="cnc-lobby-chrome__link" href="debug.html">Debug</a>
+    </div>
+    <div class="cnc-lobby-mount" ng-include="'view/lobby-test.html'"></div>
+</body>
+</html>
