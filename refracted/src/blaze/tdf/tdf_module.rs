@@ -250,6 +250,18 @@ impl TdfEncoder {
         result.freeze()
     }
 
+    /// Blaze TIME: type **`0x0A`** + **8** big-endian epoch milliseconds.
+    pub fn encode_time(tag: &str, value: i64) -> Bytes {
+        let mut result = BytesMut::new();
+        let tag_encoded = Self::make_tag(tag);
+        result.put_u8(tag_encoded[0]);
+        result.put_u8(tag_encoded[1]);
+        result.put_u8(tag_encoded[2]);
+        result.put_u8(0x0A);
+        result.put_slice(&value.to_be_bytes());
+        result.freeze()
+    }
+
     /// TDF type `0x06`: tag plus a single raw payload byte (used for `ADDR` discriminators, not varint).
     pub fn encode_int_single_byte(tag: &str, value: u8) -> Bytes {
         let mut result = BytesMut::new();
@@ -901,7 +913,7 @@ impl TdfEncoder {
                     if let Ok((value, _)) = Self::decode_varint(&data[i + 4..]) {
                         return Some(value as i64);
                     }
-                } else if tb == 0x07 && i + 12 <= data.len() {
+                } else if (tb == 0x07 || tb == 0x0A) && i + 12 <= data.len() {
                     if let Ok(eight) = <[u8; 8]>::try_from(&data[i + 4..i + 12]) {
                         return Some(i64::from_be_bytes(eight));
                     }

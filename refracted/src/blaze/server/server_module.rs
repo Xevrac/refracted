@@ -1432,6 +1432,26 @@ impl BlazeProtocolServer {
                                 crate::client::cnc::cnc_extract_reset_game_id(&packet.payload)
                             };
                             let flow_label = if is_join { "joinGame" } else { "resetDedicatedServer" };
+                            if !is_join {
+                                if let Some(sid) = state.blaze_session_id {
+                                    match crate::client::cnc::dedicated_pool::orchestrate_client_reset(
+                                        sid,
+                                        gid,
+                                        &packet.payload,
+                                    ) {
+                                        Some(dedicated_sid) => crate::debug_println!(
+                                            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m cmd 220 queued for dedicated session #{} (gid={})",
+                                            dedicated_sid,
+                                            gid
+                                        ),
+                                        None => crate::debug_println!(
+                                            "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m no idle pooled dedicated for {} (gid={})",
+                                            flow_label,
+                                            gid
+                                        ),
+                                    }
+                                }
+                            }
                             crate::debug_println!(
                                 "\x1b[38;2;255;215;0m[CNC]\x1b[0m pushing NotifyGameStateChange + NotifyGameSetup + NotifyPlatformHostInitialized after {} (gid={})",
                                 flow_label, gid
@@ -2279,7 +2299,11 @@ impl BlazeProtocolServer {
                     let pushes = if command == 0x0009 {
                         crate::client::cnc::fireframe::pushes_after_join_game(&payload)?
                     } else {
-                        crate::client::cnc::fireframe::pushes_after_reset_dedicated_server(&payload)?
+                        let client_sid = state.blaze_session_id.unwrap_or(0);
+                        crate::client::cnc::fireframe::pushes_after_reset_dedicated_server(
+                            client_sid,
+                            &payload,
+                        )?
                     };
                     for (push_idx, push) in pushes.into_iter().enumerate() {
                         let ts = SystemTime::now()

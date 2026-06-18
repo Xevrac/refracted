@@ -617,19 +617,22 @@ impl HttpHandler {
         _body: &[u8],
     ) -> BlazeResult<HttpResponse> {
         if path.contains("getServerInstance") {
-            let response_body = r#"<?xml version="1.0" encoding="UTF-8"?>
+            let blaze_main = crate::common::game::current_service_ports().blaze_main;
+            let response_body = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
 <serverinstanceinfo>
     <address member="0">
         <valu>
             <hostname>127.0.0.1</hostname>
             <ip>2130706433</ip>
-            <port>10040</port>
+            <port>{blaze_main}</port>
         </valu>
     </address>
-    <secure>1</secure>
+    <secure>0</secure>
     <trialservicename></trialservicename>
     <defaultdnsaddress>0</defaultdnsaddress>
-</serverinstanceinfo>"#;
+</serverinstanceinfo>"#
+            );
 
             let mut headers = HashMap::new();
             headers.insert("X-BLAZE-COMPONENT".to_string(), "redirector".to_string());

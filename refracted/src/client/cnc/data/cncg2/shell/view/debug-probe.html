@@ -96,7 +96,7 @@
         </div>
         <div class="probe-row">
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetPlayersFromInput()">blazeGetPlayers</button>
-            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.probeAddAi()">Add AI</button>
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.promptInGameAddAi()">Add AI</button>
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetGames()">blazeGetGames</button>
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeSetAttr()">blazeSetPlayerAttribute</button>
         </div>
@@ -153,10 +153,10 @@
             <button class="probe-btn" type="button" onclick="CncProbe.rtBlazeGetPlayers('1')">blazeGetPlayers (gid 1)</button>
         </div>
 
-        <h5 class="cnc-probe-subhead">Add AI player (GMGR 0x0026)</h5>
-        <p class="probe-hint"><strong>Add AI</strong> hits Refracted <code>/cnc/probe-add-ai</code> (same roster + join notifies as retail GMGR 0x26). No <code>/blaze/addAi</code> shell route in the exe. Create game first, then Add AI → <strong>blazeGetPlayers (roster)</strong> or AI slot.</p>
+        <h5 class="cnc-probe-subhead">Add AI player (retail)</h5>
+        <p class="probe-hint"><strong>Add AI</strong> runs <code>RtsClient.AddRemotePlayer</code> (team 2, startpoint 2). GMGR <code>addQueuedPlayerToGame</code> (RPC 38) fires only after level spawn sets <code>[RtsGameClient+0xE5]</code>. Create game first, then Add AI → <strong>blazeGetPlayers (roster)</strong>.</p>
         <div class="probe-row">
-            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.probeAddAi()">Add AI</button>
+            <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.promptInGameAddAi()">Add AI</button>
             <button class="probe-btn" type="button" onclick="CncProbe.syncAiFromGetPlayers()">blazeGetPlayers (roster)</button>
             <button class="probe-btn" type="button" onclick="CncProbe.logAddAiHelp()">?</button>
         </div>

@@ -215,7 +215,24 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 38) => Some(format!("{}.addQueuedPlayerToGame", component_name)),
         (4, 39) => Some(format!("{}.lockGameForJoining", component_name)),
         (4, 40) => Some(format!("{}.unlockGameForJoining", component_name)),
-        (4, 41) => Some(format!("{}.setGameModRegister", component_name)), // 0x29
+        (4, 41) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "meshEndpointsConnected"
+            } else {
+                "setGameModRegister"
+            }
+        )), // RPC id 65 / 0x41
+        (4, 90) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyPlayerAttribChange"
+            } else {
+                "notifyPlayerAttribChange"
+            }
+        )),
         (4, 42) => Some(format!("{}.getGameListSubscription", component_name)),
         (4, 100) => Some(format!("{}.getGameListSnapshot", component_name)), // 0x64
         (4, 201) => Some(format!(
@@ -254,6 +271,15 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 113) => Some(format!("{}.getGameDataByUser", component_name)),
         (4, 150) => Some(format!("{}.registerDynamicDedicatedServerCreator", component_name)), // 0x96
         (4, 151) => Some(format!("{}.unregisterDynamicDedicatedServerCreator", component_name)), // 0x97
+        (4, 220) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyCreateDynamicDedicatedServerGame"
+            } else {
+                "notifyCreateDynamicDedicatedServerGame"
+            }
+        )),
         // Note: (4, 19) is selectHost - replayGame also exists as command 16 (0x10) and 19 (0x13) in some implementations
         
         // StatsComponent (7)

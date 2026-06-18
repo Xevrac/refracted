@@ -448,46 +448,40 @@
 
     CncProbe.logAddAiHelp = function () {
         CncProbe.log(
-            'Add AI paths:\n' +
-            '  • Probe: Add AI button → POST /cnc/probe-add-ai (Refracted GMGR 0x26 + join notifies)\n' +
-            '  • Retail: in-game lobby Add AI → GameManager.addQueuedPlayerToGame\n' +
-            '  • No blaze shell route or RtsClient console command in cnc.server.exe.\n' +
-            '  • After add, use AI slot + attribute buttons or CncProbe.setLobbyAiPid(ai_pid).\n\n' +
+            'Add AI (retail only):\n' +
+            '  • RtsClient.AddRemotePlayer <team> <startpoint> queues the slot locally.\n' +
+            '  • Client flushes to GMGR addQueuedPlayerToGame (RPC 38) once [RtsGameClient+0xE5] is set.\n' +
+            '  • That flag is set by vtable slot 3 after ClientLevel_spawnEntities (post level bind).\n' +
+            '  • After add, use blazeGetPlayers or CncProbe.setLobbyAiPid(ai_pid).\n\n' +
             'Create game first via createGame / resetDedicatedServer — do not joinGame after (already a member).'
         );
     };
-    CncProbe.probeAddAi = function (gid) {
-        gid = gid != null ? String(gid) : CncProbe.blazeShellInput('cnc-probe-blaze-gameid', '1');
-        var url = '/cnc/probe-add-ai?gid=' + encodeURIComponent(gid);
-        CncProbe.log('probe-add-ai gid=' + gid + ' …');
-        if (!window.fetch) {
-            CncProbe.log('fetch unavailable — open ' + url + ' from a shell that can reach Refracted.');
-            return;
+    /** Retail skirmish path: queue remote/AI slot by Blaze team + startpoint (message +44/+48). */
+    CncProbe.runAddRemotePlayer = function (team, startpoint, opts) {
+        opts = opts || {};
+        if (!CncProbe.hasGame()) {
+            CncProbe.log('runAddRemotePlayer: gameclient not available.');
+            return false;
         }
-        fetch(url, { method: 'POST' })
-            .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
-            .then(function (res) {
-                if (!res.body || !res.body.ok) {
-                    var err = (res.body && res.body.error) ? res.body.error : ('HTTP ' + res.status);
-                    CncProbe.log('probe-add-ai failed: ' + err);
-                    return;
-                }
-                var d = res.body;
-                CncProbe.log(
-                    'probe-add-ai ok: gid=' + d.gid + ' ai_pid=' + d.ai_pid + ' name=' + d.name +
-                    ' (notifies → ' + d.blaze_sessions + ' Blaze session(s))'
-                );
-                if (d.ai_pid != null) {
-                    CncProbe.setLobbyAiPid(d.ai_pid);
-                }
-                CncProbe.syncAiFromGetPlayers();
-            })
-            .catch(function (e) {
-                CncProbe.log('probe-add-ai error: ' + (e && e.message ? e.message : e));
-            });
+        team = team != null ? String(team) : '2';
+        startpoint = startpoint != null ? String(startpoint) : '2';
+        CncProbe.runGame('RtsClient.AddRemotePlayer ' + team + ' ' + startpoint);
+        if (opts.blazeGetPlayers !== false) {
+            var gid = opts.gameId != null ? String(opts.gameId) : '1';
+            var delay = opts.pollDelayMs != null ? opts.pollDelayMs : 800;
+            setTimeout(function () {
+                CncProbe.runGame('RtsClient.blazeGetPlayers ' + gid);
+            }, delay);
+            if (opts.pollAgainMs) {
+                setTimeout(function () {
+                    CncProbe.runGame('RtsClient.blazeGetPlayers ' + gid);
+                }, opts.pollAgainMs);
+            }
+        }
+        return true;
     };
     CncProbe.promptInGameAddAi = function () {
-        CncProbe.probeAddAi();
+        CncProbe.runAddRemotePlayer('2', '2', { blazeGetPlayers: true });
     };
     CncProbe.syncAiFromGetPlayers = function () {
         CncProbe.log('blazeGetPlayers via gameclient — check Frostbite log / console for AI persona ids.');

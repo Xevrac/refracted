@@ -19,6 +19,15 @@
         return map[code] || 'GENERAL';
     }
 
+    function difficultyIndex(diff) {
+        var map = { EASY: 0, MEDIUM: 1, HARD: 2 };
+        var key = String(diff || 'MEDIUM').toUpperCase();
+        return map[key] != null ? map[key] : 1;
+    }
+
+    function difficultyAttrValue(diff) {
+        return String(difficultyIndex(diff));
+    }
     var appModule;
     try {
         appModule = angular.module('CCApp');
@@ -33,7 +42,7 @@
         $scope.mapPath = BENCHMARK_MAP.path;
         $scope.matchLabel = '1v1 Skirmish';
         $scope.gameId = '1';
-        $scope.onlineCount = 133580;
+        $scope.onlineCount = 0;
         $scope.statusLine = '';
         $scope.hostReady = false;
         $scope.aiDifficulties = ['EASY', 'MEDIUM', 'HARD'];
@@ -87,6 +96,46 @@
             $scope.subTab = name;
         };
 
+        $scope.startpointLabel = function (n) {
+            if (n == null || n === '') {
+                return '—';
+            }
+            return 'Slot ' + n;
+        };
+
+        function refreshOnlineCount() {
+            if (!window.fetch) {
+                return;
+            }
+            fetch('/cnc/online-count', { method: 'GET', credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (body) {
+                    if (!body || !body.ok) {
+                        return;
+                    }
+                    var n = body.count != null ? body.count : body.active;
+                    if (n != null && !$scope.$$phase) {
+                        $scope.$apply(function () {
+                            $scope.onlineCount = n;
+                        });
+                    } else if (n != null) {
+                        $scope.onlineCount = n;
+                    }
+                })
+                .catch(function () { /* Refracted offline */ });
+        }
+
+        function sendDifficulty(slot, diff) {
+            if (!slot || !slot.isAi) {
+                return;
+            }
+            var idx = difficultyIndex(diff);
+            if (window.CncProbe && CncProbe.runGame) {
+                CncProbe.runGame('Network.DifficultyChanged ' + idx);
+            }
+            sendAttr('_difficulty', difficultyAttrValue(diff), slot);
+        }
+
         function syncHostFromSession() {
             if (window.CncBlazeState && CncBlazeState.applyExternalHints) {
                 CncBlazeState.applyExternalHints();
@@ -127,6 +176,11 @@
                 $scope.selectedSlot = host;
                 $scope.selectedTeam = 1;
             }
+            if (pid && host.faction) {
+                $timeout(function () {
+                    sendAttr('_faction', host.faction, host);
+                }, 400);
+            }
         }
 
         function firstEmptySlot(team) {
@@ -138,18 +192,73 @@
             return null;
         }
 
-        function fillAiSlot(slot, aiPid) {
+        function startpointForSlot(teamNum, slotIndex) {
+            if (teamNum === 1) {
+                return slotIndex + 1;
+            }
+            return slotIndex + 2;
+        }
+
+        function fillAiSlot(slot, aiPid, teamNum, startpoint) {
             slot.occupied = true;
             slot.isAi = true;
             slot.isLocal = false;
-            slot.pid = aiPid;
+            slot.pid = aiPid ? String(aiPid) : '';
             slot.displayName = 'AI_1';
             slot.codename = codenameForFaction('APA');
             slot.faction = 'APA';
-            slot.startpoint = 2;
-            slot.teamNum = 2;
+            slot.startpoint = startpoint != null ? startpoint : 2;
+            slot.teamNum = teamNum != null ? teamNum : 2;
             slot.difficulty = 'MEDIUM';
             slot.ready = true;
+        }
+
+        function persistAiPid(pid) {
+            if (!pid) {
+                return;
+            }
+            var s = String(pid).trim();
+            if (!s) {
+                return;
+            }
+            if (window.CncProbe) {
+                CncProbe._lobbyAiPid = s;
+            }
+            try {
+                sessionStorage.setItem('cnc_lobby_ai_pid', s);
+            } catch (e) { /* empty */ }
+        }
+
+        function applyAiAttrs(slot) {
+            if (!slot || !slot.occupied || !slot.isAi) {
+                return;
+            }
+            var pid = slot.pid || (window.CncProbe && CncProbe._lobbyAiPid) || '';
+            if (!pid) {
+                $scope.statusLine = 'AI slot open — waiting for persona ID from blazeGetPlayers / server log.';
+                if (window.CncProbe && CncProbe.runGame) {
+                    CncProbe.runGame('RtsClient.blazeGetPlayers ' + $scope.gameId);
+                }
+                return;
+            }
+            slot.pid = pid;
+            persistAiPid(pid);
+            $scope.selectedSlot = slot;
+            $scope.selectedTeam = slot.teamNum || 2;
+            sendAttr('_isai', '1', slot);
+            $timeout(function () {
+                sendAttr('_faction', slot.faction, slot);
+            }, 250);
+            $timeout(function () {
+                sendAttr('_startpoint', String(slot.startpoint), slot);
+            }, 500);
+            $timeout(function () {
+                sendAttr('_team', String(slot.teamNum), slot);
+            }, 750);
+            $timeout(function () {
+                sendDifficulty(slot, slot.difficulty || 'MEDIUM');
+            }, 1000);
+            $scope.statusLine = 'AI ready · PID ' + pid;
         }
 
         function loadAiFromStorage() {
@@ -174,10 +283,8 @@
                 if (!slot) {
                     return;
                 }
-                fillAiSlot(slot, aiPid);
-                if (window.CncProbe) {
-                    CncProbe._lobbyAiPid = aiPid;
-                }
+                fillAiSlot(slot, aiPid, 2, 2);
+                persistAiPid(aiPid);
             } catch (e) { /* empty */ }
         }
 
@@ -214,12 +321,16 @@
         };
 
         $scope.setFaction = function (code) {
-            if (!$scope.selectedSlot || !$scope.selectedSlot.occupied) {
+            var host = $scope.team1[0];
+            if (!host || !host.occupied || !host.isLocal) {
                 return;
             }
-            $scope.selectedSlot.faction = code;
-            $scope.selectedSlot.codename = codenameForFaction(code);
-            $scope.statusLine = 'Faction ' + code + ' (UI only — use Test getFullGameData to hit Blaze)';
+            host.faction = code;
+            host.codename = codenameForFaction(code);
+            $scope.selectedSlot = host;
+            $scope.selectedTeam = 1;
+            sendAttr('_faction', code, host);
+            $scope.statusLine = 'Faction ' + code + ' · PID ' + (host.pid || '?');
         };
 
         $scope.selectSlot = function (slot, teamNum, $event) {
@@ -237,7 +348,14 @@
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
+            if (!slot || !slot.isAi) {
+                return;
+            }
             slot.difficulty = diff;
+            $scope.selectedSlot = slot;
+            $scope.selectedTeam = slot.teamNum || 2;
+            sendDifficulty(slot, diff);
+            $scope.statusLine = 'AI difficulty ' + diff + ' · PID ' + (slot.pid || 'pending');
         };
 
         $scope.removeAiSlot = function (slot, $event) {
@@ -276,12 +394,43 @@
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
-            if (window.CncProbe && CncProbe.probeAddAi) {
-                CncProbe.probeAddAi($scope.gameId);
-                $scope.statusLine = 'Add AI via Refracted probe…';
+            if (!window.CncProbe || !CncProbe.runGame) {
+                $scope.statusLine = 'gameclient unavailable — open lobby from in-game shell.';
                 return;
             }
-            $scope.statusLine = 'CncProbe unavailable — use debug probe Add AI.';
+            var slot = firstEmptySlot($scope.team2);
+            if (!slot) {
+                $scope.statusLine = 'Team 2 has no open slot.';
+                return;
+            }
+            var teamNum = 2;
+            var slotIndex = 0;
+            for (var i = 0; i < $scope.team2.length; i++) {
+                if ($scope.team2[i] === slot) {
+                    slotIndex = i;
+                    break;
+                }
+            }
+            var startpoint = startpointForSlot(teamNum, slotIndex);
+            $scope.statusLine = 'AddRemotePlayer team ' + teamNum + ' start ' + startpoint + '…';
+            if (CncProbe.runAddRemotePlayer) {
+                CncProbe.runAddRemotePlayer(teamNum, startpoint, {
+                    gameId: $scope.gameId,
+                    pollDelayMs: 1200
+                });
+            } else {
+                CncProbe.runGame('RtsClient.AddRemotePlayer ' + teamNum + ' ' + startpoint);
+                $timeout(function () {
+                    CncProbe.runGame('RtsClient.blazeGetPlayers ' + $scope.gameId);
+                }, 1200);
+            }
+            fillAiSlot(slot, '', teamNum, startpoint);
+            $scope.selectedSlot = slot;
+            $scope.selectedTeam = teamNum;
+            $timeout(function () {
+                loadAiFromStorage();
+                applyAiAttrs(slot);
+            }, 3000);
         };
 
         $scope.startBattle = function () {
@@ -304,6 +453,12 @@
 
         syncHostFromSession();
         loadAiFromStorage();
+        refreshOnlineCount();
+
+        var onlinePoll = setInterval(refreshOnlineCount, 30000);
+        $scope.$on('$destroy', function () {
+            clearInterval(onlinePoll);
+        });
 
         if (window.CncBlazeState) {
             CncBlazeState.subscribe(function () {

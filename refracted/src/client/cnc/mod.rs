@@ -161,7 +161,7 @@ fn content_type_for(path: &Path) -> &'static str {
     }
 }
 
-/// CNC probe HTTP routes (`/cnc/probe-dump`, `/cnc/probe-add-ai`).
+/// CNC probe HTTP routes (`/cnc/probe-dump`, `/cnc/online-count`).
 pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<HttpResponse> {
     let is_post = method.eq_ignore_ascii_case("POST");
     let is_get = method.eq_ignore_ascii_case("GET");
@@ -173,9 +173,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
         .map(|(b, q)| (b, Some(q)))
         .unwrap_or((path, None));
     let base = base.trim_start_matches('/');
-    if base == "cnc/probe-add-ai" && (is_post || is_get) {
+    if base == "cnc/online-count" && is_get {
         let _ = body;
-        return Some(handle_probe_add_ai(query));
+        return Some(handle_cnc_online_count());
     }
     if !is_post {
         return None;
@@ -233,91 +233,15 @@ fn percent_decode_plus(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn query_param_i64(query: Option<&str>, key: &str, default: i64) -> i64 {
-    query
-        .and_then(|q| {
-            q.split('&').find_map(|pair| {
-                let (k, v) = pair.split_once('=')?;
-                if k == key {
-                    percent_decode_plus(v).parse().ok()
-                } else {
-                    None
-                }
-            })
-        })
-        .unwrap_or(default)
-}
-
-/// Dev probe: add AI to game state and queue Blaze join notifies on the active client session.
-fn handle_probe_add_ai(query: Option<&str>) -> HttpResponse {
-    use crate::common::error::BlazeError;
-
-    let gid = query_param_i64(query, "gid", 1);
-    let result = probe_add_queued_player_to_game(gid);
-    match result {
-        Ok((gid, ai_pid, name, sessions)) => {
-            let body = serde_json::json!({
-                "ok": true,
-                "gid": gid,
-                "ai_pid": ai_pid,
-                "name": name,
-                "blaze_sessions": sessions,
-            });
-            HttpResponse::new(
-                200,
-                "application/json",
-                body.to_string().into_bytes(),
-            )
-        }
-        Err(e) => {
-            let (status, msg) = match &e {
-                BlazeError::InvalidPacket(m) => (400, m.clone()),
-                _ => (500, e.to_string()),
-            };
-            let body = serde_json::json!({ "ok": false, "error": msg });
-            HttpResponse::new(status, "application/json", body.to_string().into_bytes())
-        }
-    }
-}
-
-/// Same roster + notify path as GMGR `addQueuedPlayerToGame`, triggered from debug probe HTTP.
-pub fn probe_add_queued_player_to_game(gid: i64) -> BlazeResult<(i64, i64, String, usize)> {
-    let mut payload = Vec::new();
-    payload.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
-    let (gid, player) = game_state::add_queued_player(&payload)?;
-    crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m probe-add-ai gid={} slot={} ai_pid={} name={}",
-        gid,
-        player.slot,
-        player.persona_id,
-        player.display_name
-    );
-    let pushes = fireframe::pushes_after_add_queued_player(gid, &player)?;
-    let session_ids: Vec<u64> = crate::session::blaze_sessions::list_sessions()
-        .into_iter()
-        .filter(|s| s.authenticated)
-        .filter(|s| {
-            s.clnt
-                .as_deref()
-                .map(|c| c.contains("RtsBlaze"))
-                .unwrap_or(true)
-        })
-        .map(|s| s.id)
-        .collect();
-    if session_ids.is_empty() {
-        return Err(crate::common::error::BlazeError::InvalidPacket(
-            "no authenticated Blaze client session — log in first".into(),
-        ));
-    }
-    for sid in &session_ids {
-        fireframe::enqueue_pending_pushes(*sid, pushes.clone());
-    }
-    Ok((
-        gid,
-        player.persona_id,
-        player.display_name,
-        session_ids.len(),
-    ))
+/// Lobby HUD: authenticated Blaze client count (`GET /cnc/online-count`).
+fn handle_cnc_online_count() -> HttpResponse {
+    use crate::session::blaze_sessions;
+    let body = serde_json::json!({
+        "ok": true,
+        "count": blaze_sessions::authenticated_count(),
+        "active": blaze_sessions::active_count(),
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
 fn sanitize_probe_dump_filename(raw: &str) -> String {
@@ -338,6 +262,25 @@ fn sanitize_probe_dump_filename(raw: &str) -> String {
     }
 }
 
+fn cnc_local_request_relative_path(clean: &str) -> Option<String> {
+    if let Some(rest) = clean.strip_prefix("/cnc/data/") {
+        return Some(rest.to_string());
+    }
+    if let Some(rest) = clean.strip_prefix("/cncg2/") {
+        return Some(format!("cncg2/{rest}"));
+    }
+    if let Some(rest) = clean.strip_prefix("/config.cncg2/") {
+        return Some(format!("config.cncg2/{rest}"));
+    }
+    if clean == "/config.cncg2" || clean == "/config.cncg2/" {
+        return Some("config.cncg2/cncprod150805.cfg".to_string());
+    }
+    if clean == "/netconfig" || clean.starts_with("/netconfig/") {
+        return Some("config.cncg2/netconfig".to_string());
+    }
+    None
+}
+
 pub fn try_handle_http_request(method: &str, path: &str) -> Option<HttpResponse> {
     let is_head = method == "HEAD";
     if method != "GET" && !is_head {
@@ -345,15 +288,38 @@ pub fn try_handle_http_request(method: &str, path: &str) -> Option<HttpResponse>
     }
 
     let clean = path.split('?').next().unwrap_or(path);
-    let request_rel = if let Some(rest) = clean.strip_prefix("/cnc/data/") {
-        rest
-    } else {
-        clean.trim_start_matches('/')
-    };
+    let request_rel = cnc_local_request_relative_path(clean)?;
 
-    let rel = sanitize_relative_request_path(request_rel)?;
-    let root = cnc_data_runtime_dir();
-    let full = root.join(&rel);
+    let rel = sanitize_relative_request_path(&request_rel)?;
+    for root in cnc_http_data_roots() {
+        if let Some(response) = try_read_http_file(&root, &rel, is_head) {
+            return Some(response);
+        }
+    }
+
+    Some(HttpResponse::new(404, "text/plain", b"Not Found".to_vec()))
+}
+
+fn cnc_http_data_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    roots.push(cnc_data_runtime_dir());
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            roots.push(dir.join("data").join("client").join("cnc"));
+        }
+    }
+    roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src").join("client").join("cnc").join("data"));
+    roots
+}
+
+fn try_read_http_file(root: &Path, rel: &Path, is_head: bool) -> Option<HttpResponse> {
+    let full = if rel.starts_with("config.cncg2") {
+        root.join(rel)
+    } else if rel == Path::new("netconfig") {
+        root.join("config.cncg2").join("netconfig")
+    } else {
+        root.join(rel)
+    };
 
     let mut try_paths = if full.is_dir() {
         vec![full.join("index.html"), full.join("devWrapper.html")]
@@ -377,8 +343,7 @@ pub fn try_handle_http_request(method: &str, path: &str) -> Option<HttpResponse>
             return Some(HttpResponse::new(200, ct, body));
         }
     }
-
-    Some(HttpResponse::new(404, "text/plain", b"Not Found".to_vec()))
+    None
 }
 
 /// Templates the active Refracted user profile into served HTML so the JS shell
@@ -494,6 +459,7 @@ pub fn handle_packet_fields(
         // CNC Blaze 3.19.4: dedicated reset uses 0x0019; official table lists reset at 0x16 — both return JoinGameResponse.
         (0x0004, 0x16) => Some(handle_game_manager_reset_dedicated_server(payload)),
         (0x0004, 0x19) => Some(handle_game_manager_reset_dedicated_server(payload)),
+        (0x0004, 0x41) => Some(handle_game_manager_mesh_endpoints_connected(payload)),
         (0x0004, 0x71) => Some(handle_game_manager_command_113(payload)),
         // RedirectorComponent::getServerInstance
         (0x0005, 0x0001) => Some(handle_redirector_get_server_instance(payload)),
@@ -977,6 +943,19 @@ pub fn handle_game_manager_finalize_game_creation(_payload: &[u8]) -> BlazeResul
     Ok(Bytes::from(Vec::new()))
 }
 
+/// `GameManager.meshEndpointsConnected` (**`0x0004::0x0041`**, RPC id 65) — client reports mesh link up after `createdGameNetwork`.
+pub fn handle_game_manager_mesh_endpoints_connected(payload: &[u8]) -> BlazeResult<Bytes> {
+    let gid = TdfEncoder::find_long_field(payload, "GID ")
+        .or_else(|| TdfEncoder::find_long_field(payload, "GID"))
+        .or_else(|| TdfEncoder::find_int_field(payload, "GID ").map(|v| v as i64))
+        .unwrap_or(0);
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m meshEndpointsConnected gid={}",
+        gid
+    );
+    Ok(Bytes::from(Vec::new()))
+}
+
 /// CNC `GameManager.removePlayer` (**`0x0004::0x000B`** — same numeric id as EA `startMatchmaking`).
 pub fn handle_game_manager_remove_player(_payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(Vec::new()))
@@ -1376,6 +1355,28 @@ fn append_replicated_platform_host(out: &mut Vec<u8>, host_persona: i64) {
     out.extend_from_slice(&TdfEncoder::encode_struct("PHST", &phst));
 }
 
+/// Notify pooled `cnc.server.exe` to run `resetDedicatedServer` (cmd 220 / `NotifyCreateDynamicDedicatedServerGame`).
+/// IDA: root `GID` + nested `CreateGameRequest` (`sub_12986A0` / `sub_1293290`).
+pub fn build_notify_create_dynamic_dedicated_server_game(
+    gid: i64,
+    create_request: &[u8],
+) -> BlazeResult<Bytes> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
+    out.extend_from_slice(create_request);
+    Ok(Bytes::from(out))
+}
+
+/// `THST` / `DHST` — topology + dedicated host ids so GMGR can run `preInitGameNetwork`.
+/// Uses pooled dedicated persona when assigned; otherwise the creating client's persona as a dev stub.
+fn append_replicated_topology_hosts(out: &mut Vec<u8>, topology_host_persona: i64) {
+    let mut host = Vec::new();
+    host.extend_from_slice(&TdfEncoder::encode_long("HPID", topology_host_persona));
+    host.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
+    out.extend_from_slice(&TdfEncoder::encode_struct("THST", &host));
+    out.extend_from_slice(&TdfEncoder::encode_struct("DHST", &host));
+}
+
 /// Blaze persona id used as host in CNC GameManager notifies (`ADMN`, `PROS`, **`PHID`**, etc.).
 fn cnc_notify_host_persona_i32() -> i32 {
     let session = crate::session::get_user_session();
@@ -1399,6 +1400,8 @@ pub fn build_game_manager_notify_game_setup(
     let session = crate::session::get_user_session();
     let uid_i32 = cnc_notify_host_persona_i32();
     let uid = uid_i32 as i64;
+    let dedicated = dedicated_pool::host_for_gid(gid);
+    let topology_persona = dedicated.map(|d| d.persona_id).unwrap_or(uid);
     let _display_name = if session.display_name.is_empty() {
         "Player"
     } else {
@@ -1414,20 +1417,31 @@ pub fn build_game_manager_notify_game_setup(
     let ntop_game = NTOP_CLIENT_SERVER_DEDICATED;
     let game_uuid = cnc_resolve_notify_game_uuid(request_payload);
 
-    // HNET endpoints: INIP from `CreateGameRequest`; EXIP from `updateNetworkInfo`, else our QoS
-    // listener's observed peer address (`record_qos_observed_client_endpoint`), else the request's
-    // first IP pair, else 0. EXIP port: session / request, else mirror INIP (game) port.
+    // HNET endpoints: pooled dedicated INIP when assigned; else `CreateGameRequest` / QoS / session EXIP.
     let ips = TdfEncoder::scan_all_int_fields(request_payload, "IP  ");
     let ports = TdfEncoder::scan_all_int_fields(request_payload, "PORT");
-    let host_inip_ip = ips.get(1).copied().unwrap_or(0);
-    let host_inip_port_from_request = ports.get(1).copied().unwrap_or(0);
+    let host_inip_ip = dedicated
+        .map(|d| d.inip_ip)
+        .filter(|&ip| ip != 0)
+        .or_else(|| ips.get(1).copied())
+        .unwrap_or(0);
+    let host_inip_port_from_request = dedicated
+        .map(|d| d.inip_port)
+        .filter(|&p| p != 0)
+        .or_else(|| ports.get(1).copied())
+        .unwrap_or(0);
     let req_exip_ip = ips.first().copied().unwrap_or(0);
     let req_exip_port = ports.first().copied().unwrap_or(0);
 
-    let host_exip_ip = session
-        .network_exip_ip
-        .map(|u| u as i32)
+    let host_exip_ip = dedicated
+        .map(|d| d.exip_ip)
         .filter(|&ip| ip != 0)
+        .or_else(|| {
+            session
+                .network_exip_ip
+                .map(|u| u as i32)
+                .filter(|&ip| ip != 0)
+        })
         .or_else(|| {
             crate::session::peek_qos_observed_exip_ip()
                 .map(|u| u as i32)
@@ -1436,19 +1450,16 @@ pub fn build_game_manager_notify_game_setup(
         .or_else(|| req_exip_ip.ne(&0).then_some(req_exip_ip))
         .unwrap_or(0);
 
-    // Mirror the request's INIP/EXIP ports verbatim; only fall back to the dev port when the request
-    // actually sent 0 (or wasn't an IpPairAddress union). Hardcoding CNC_TEST_DEDICATED_PORT (25200)
-    // for both meant the client never saw the real listener (3659) it advertised in CreateGameRequest.
     let host_inip_port = if host_inip_port_from_request != 0 {
         host_inip_port_from_request
     } else {
         CNC_TEST_DEDICATED_PORT
     };
-    let host_exip_port = if req_exip_port != 0 {
-        req_exip_port
-    } else {
-        host_inip_port
-    };
+    let host_exip_port = dedicated
+        .map(|d| d.exip_port)
+        .filter(|&p| p != 0)
+        .or_else(|| req_exip_port.ne(&0).then_some(req_exip_port))
+        .unwrap_or(host_inip_port);
 
     let gid_i32 = gid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     let _ = gid_i32;
@@ -1490,7 +1501,8 @@ pub fn build_game_manager_notify_game_setup(
     game.extend_from_slice(&encode_union_list("HNET", HNET_UNION_MEMBER_VALU, &[hnet_row]));
 
     game.extend_from_slice(&TdfEncoder::encode_int("NTOP", ntop_game));
-    append_replicated_platform_host(&mut game, uid);
+    append_replicated_topology_hosts(&mut game, topology_persona);
+    append_replicated_platform_host(&mut game, topology_persona);
     game.extend_from_slice(&TdfEncoder::encode_string("UUID", &game_uuid));
     game.extend_from_slice(&TdfEncoder::encode_int("VOIP", voip));
 
@@ -1499,7 +1511,7 @@ pub fn build_game_manager_notify_game_setup(
     let pros = game_state::pros_entries_for_gid(gid);
     game_state::set_pros_wire_fields(gid, pros.clone());
 
-    let reas = encode_reas_dataless();
+    let reas = encode_reas_reset_dedicated();
 
     let mut response = Vec::new();
     response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
@@ -1568,18 +1580,20 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     ));
     game.extend_from_slice(&encode_union_list("HNET", HNET_UNION_MEMBER_VALU, &[hnet_row]));
     game.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_CLIENT_SERVER_DEDICATED));
+    append_replicated_topology_hosts(&mut game, uid);
     append_replicated_platform_host(&mut game, uid);
     game.extend_from_slice(&TdfEncoder::encode_string("UUID", &game_uuid));
     game.extend_from_slice(&TdfEncoder::encode_int("VOIP", 0));
     game
 }
 
-/// One `ListGameData` row: flat `ReplicatedGameData` fields + `PROS` roster.
-/// The CNC client binds list-item fields directly onto `ListGameData` (not a nested `GAME` struct).
+/// One `ListGameData` row: nested `GAME` (`ReplicatedGameData`) + `PROS` roster.
+/// Matches Blaze `GetFullGameDataResponse::mGames` / client SDK `ListGameData` layout.
 fn build_list_game_data_entry(gid: i64) -> BlazeResult<Vec<u8>> {
     let game = build_replicated_game_data_fields(gid);
-    let pros = game_state::pros_entries_for_gid(gid);
-    let mut out = game;
+    let pros = game_state::gfgd_roster_entries_for_gid(gid);
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
     out.extend_from_slice(&encode_struct_list("PROS", &pros));
     Ok(out)
 }
@@ -1600,7 +1614,7 @@ pub fn build_game_manager_game_payload(gid: i64) -> BlazeResult<Bytes> {
 /// We intentionally avoid copying arbitrary fields from `JoinGameRequest`/`JoinGameResponse`.
 pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes> {
     let mut response = build_game_manager_game_payload(gid)?.to_vec();
-    response.extend_from_slice(&encode_reas_dataless());
+    response.extend_from_slice(&encode_reas_dataless_join());
     Ok(Bytes::from(response))
 }
 
@@ -1628,18 +1642,30 @@ pub fn build_game_manager_notify_player_join_completed(gid: i64) -> BlazeResult<
     Ok(Bytes::from(game_state::build_replicated_player(&player, gid)))
 }
 
-/// Emit `REAS = UNION{ DATALESS_CONTEXT(0): DCTX }` for the reset/create success path.
-/// Wire: `REAS(3) + 0x06(UNION) + 0x00(member 0) + DCTX(3) + 0x00(INTEGER) + varint(0)`.
-fn encode_reas_dataless() -> Bytes {
+/// Emit `REAS = UNION{ DATALESS_CONTEXT(0): DCTX=JOIN }` for join-game notify path.
+fn encode_reas_dataless_join() -> Bytes {
+    encode_reas_dataless(1)
+}
+
+/// Emit `REAS = UNION{ DATALESS_CONTEXT(0): DCTX }`
+fn encode_reas_dataless(dctx: i32) -> Bytes {
     let reas_tag = TdfEncoder::make_tag("REAS");
     let mut out = Vec::new();
     out.push(reas_tag[0]);
     out.push(reas_tag[1]);
     out.push(reas_tag[2]);
     out.push(0x06);
-    out.push(0x00);
-    out.extend_from_slice(&TdfEncoder::encode_int("DCTX", 0));
+    out.extend_from_slice(&TdfEncoder::encode_varint(0));
+    out.extend_from_slice(&TdfEncoder::encode_int("DCTX", dctx));
     Bytes::from(out)
+}
+
+/// Emit `REAS = UNION{ RESET_DEDICATED_SERVER_CONTEXT(1): ERR=0 }` for `resetDedicatedServer` notify path.
+/// Prevents `createdGameNetwork` from calling `finalizeGameCreation` on a dedicated reset
+fn encode_reas_reset_dedicated() -> Bytes {
+    encode_union_struct("REAS", 1, "RDSC", |body| {
+        body.extend_from_slice(&TdfEncoder::encode_int("ERR ", 0));
+    })
 }
 
 fn encode_union_struct(
@@ -1703,6 +1729,10 @@ mod notify_game_setup_tests {
     use crate::blaze::tdf::{TdfEncoder, TdfTreeParser};
     use indexmap::IndexMap;
 
+    fn reset_test_games() {
+        game_state::clear_all_games_for_test();
+    }
+
     fn encode_union_list(tag: &str, items: &[Vec<u8>]) -> Vec<u8> {
         let tag_encoded = TdfEncoder::make_tag(tag);
         let mut out = Vec::new();
@@ -1731,6 +1761,43 @@ mod notify_game_setup_tests {
     }
 
     #[test]
+    fn mesh_endpoints_connected_returns_empty_ok() {
+        let mut req = Vec::new();
+        req.extend_from_slice(&TdfEncoder::encode_int("GID ", 1));
+        let rsp = handle_game_manager_mesh_endpoints_connected(&req).expect("handler");
+        assert!(rsp.is_empty());
+    }
+
+    #[test]
+    fn notify_setup_reas_parses_reset_dedicated_union() {
+        let payload = build_game_manager_notify_game_setup(&[], 1).expect("encode");
+        let tree = TdfTreeParser::parse_packet(&payload).expect("parse");
+        let reas = find_tag(&tree, "REAS").expect("REAS");
+        assert!(
+            reas.value_display.contains("1"),
+            "REAS should decode active member 1, got {:?}",
+            reas.value_display
+        );
+        assert!(
+            find_tag(&reas.children, "ERR").is_some() || find_tag(&reas.children, "RDSC").is_some(),
+            "REAS reset body should contain ERR or RDSC struct"
+        );
+    }
+
+    #[test]
+    fn set_player_attributes_parses_captured_request_shape() {
+        let wire: [u8; 36] = [
+            0x87, 0x4d, 0x32, 0x05, 0x01, 0x01, 0x01, 0x09, 0x5f, 0x66, 0x61, 0x63, 0x74, 0x69,
+            0x6f, 0x6e, 0x00, 0x04, 0x55, 0x53, 0x41, 0x00, 0x9e, 0x99, 0x00, 0x00, 0x01, 0xc2,
+            0x99, 0x00, 0x00, 0x9a, 0xfd, 0xf9, 0xf9, 0x08,
+        ];
+        let applied = game_state::apply_set_player_attributes(&wire).expect("parse");
+        assert_eq!(applied.0, 1);
+        assert_eq!(applied.1, 1_201_618_778);
+        assert_eq!(applied.2.get("_faction").map(String::as_str), Some("USA"));
+    }
+
+    #[test]
     fn notify_game_state_change_parses() {
         let payload = build_game_manager_notify_game_state_change(42, GSTA_RESETABLE).expect("encode");
         assert_eq!(TdfEncoder::find_int_field(&payload, "GID\0"), Some(42));
@@ -1745,11 +1812,10 @@ mod notify_game_setup_tests {
         assert!(u.len() >= 8 && u != ".", "{}", u);
     }
 
-    // Regression: REAS=127 is `INVALID_MEMBER` → client cancels the freshly built game
-    // ("canceled or timed out locally"). Reset path must use DATALESS_CONTEXT (member 0)
-    // carrying DCTX so `onNotifyGameSetup` binds the game and accepts followup notifies.
+    // Regression: REAS=127 is `INVALID_MEMBER` → client cancels the freshly built game.
+    // Dedicated reset must use `rdsc` (member 1) so the client does not run create/finalize paths.
     #[test]
-    fn notify_setup_reas_is_dataless_not_cancel_sentinel() {
+    fn notify_setup_reas_is_reset_dedicated_not_cancel_sentinel() {
         let payload = build_game_manager_notify_game_setup(&[], 1).expect("encode");
         let reas_tag = TdfEncoder::make_tag("REAS");
         let cancel_needle: [u8; 6] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0xbf, 0x01];
@@ -1757,10 +1823,15 @@ mod notify_game_setup_tests {
             !payload.windows(cancel_needle.len()).any(|w| w == cancel_needle),
             "REAS must not carry union member 127 (INVALID_MEMBER) — that is the cancel sentinel"
         );
+        let rdsc_needle: [u8; 5] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x01];
+        assert!(
+            payload.windows(rdsc_needle.len()).any(|w| w == rdsc_needle),
+            "reset REAS must encode UNION member 1 (ResetDedicatedServerSetupContext)"
+        );
         let dctx_needle: [u8; 5] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x00];
         assert!(
-            payload.windows(dctx_needle.len()).any(|w| w == dctx_needle),
-            "REAS must encode UNION member 0 (DATALESS_CONTEXT)"
+            !payload.windows(dctx_needle.len()).any(|w| w == dctx_needle),
+            "reset REAS must not use dataless DCTX=CREATE member 0"
         );
     }
 
@@ -1773,6 +1844,22 @@ mod notify_game_setup_tests {
             !payload.windows(cancel_needle.len()).any(|w| w == cancel_needle),
             "join REAS must not carry union member 127"
         );
+        let join_needle: [u8; 5] = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x00];
+        assert!(
+            payload.windows(join_needle.len()).any(|w| w == join_needle),
+            "join REAS must encode UNION member 0 (DATALESS_CONTEXT)"
+        );
+    }
+
+    #[test]
+    fn notify_create_dynamic_dedicated_server_game_encodes_gid_and_request() {
+        let mut req = Vec::new();
+        req.extend_from_slice(&TdfEncoder::encode_string("GNAM", "Skirmish"));
+        req.extend_from_slice(&TdfEncoder::encode_int("GSET", 271));
+        let payload =
+            build_notify_create_dynamic_dedicated_server_game(42, &req).expect("encode");
+        assert_eq!(TdfEncoder::find_long_field(&payload, "GID "), Some(42));
+        assert!(TdfEncoder::find_string_field(&payload, "GNAM").as_deref() == Some("Skirmish"));
     }
 
     #[test]
@@ -1891,7 +1978,8 @@ mod notify_game_setup_tests {
     }
 
     #[test]
-    fn get_full_game_data_flat_row_after_notify_setup() {
+    fn get_full_game_data_nested_game_row_after_notify_setup() {
+        reset_test_games();
         let mut req = Vec::new();
         req.extend_from_slice(&TdfEncoder::encode_string("GNAM", "XEVRAC"));
         req.extend_from_slice(&TdfEncoder::encode_int("GSET", 271));
@@ -1907,30 +1995,102 @@ mod notify_game_setup_tests {
         assert_eq!(lgam.children.len(), 1, "LGAM must have one row");
 
         let row = &lgam.children[0];
+        let game = find_tag(&row.children, "GAME").expect("GAME struct in ListGameData row");
         assert!(
-            find_tag(&row.children, "GNAM").is_some(),
-            "GNAM missing in flat LGAM row"
+            find_tag(&game.children, "GNAM").is_some(),
+            "GNAM missing in GAME"
         );
         assert!(
-            find_tag(&row.children, "GID ")
-                .or_else(|| find_tag(&row.children, "GID"))
+            find_tag(&game.children, "GID ")
+                .or_else(|| find_tag(&game.children, "GID"))
                 .is_some(),
-            "GID missing in flat LGAM row"
+            "GID missing in GAME"
         );
-        assert!(
-            find_tag(&tree, "GAME").is_none(),
-            "ListGameData row must not wrap ReplicatedGameData in GAME"
-        );
+        let ntop = TdfEncoder::find_int_field(&resp, "NTOP").unwrap_or(-1);
+        assert_eq!(ntop, NTOP_CLIENT_SERVER_DEDICATED, "NTOP must be dedicated");
 
         let gnam = TdfEncoder::find_string_field(&resp, "GNAM").unwrap_or_default();
         assert_eq!(gnam, "XEVRAC");
 
         let pros_tag = TdfEncoder::make_tag("PROS");
         assert!(resp.windows(3).any(|w| w == pros_tag));
+
+        let gid = TdfEncoder::find_long_field(&resp, "GID ")
+            .or_else(|| TdfEncoder::find_long_field(&resp, "GID"))
+            .or_else(|| TdfEncoder::find_int_field(&resp, "GID ").map(|v| v as i64))
+            .or_else(|| TdfEncoder::find_int_field(&resp, "GID").map(|v| v as i64));
+        assert_eq!(gid, Some(1));
     }
 
     #[test]
-    fn pros_entry_uses_space_padded_loc_pid_uid_tags() {
+    fn pros_entry_retail_field_order_preserves_pid_time_stat() {
+        reset_test_games();
+        let player = game_state::CncPlayer {
+            persona_id: 1201618778,
+            display_name: "Xevrac".to_string(),
+            slot: 0,
+            team: 1,
+            is_ai: false,
+            attribs: indexmap::IndexMap::new(),
+            stat: 2,
+        };
+        let notify_row = game_state::build_notify_pros_entry(&player, 1);
+        let gfgd_row = game_state::build_gfgd_pros_entry(&player, 1);
+        for (label, row) in [("notify", notify_row.as_slice()), ("gfgd", gfgd_row.as_slice())] {
+            assert_eq!(
+                TdfEncoder::find_long_field(row, "EXID"),
+                Some(1201618778),
+                "{label} PROS EXID"
+            );
+            assert_eq!(
+                TdfEncoder::find_long_field(row, "PID "),
+                Some(1201618778),
+                "{label} PROS PID union member 0"
+            );
+            assert_eq!(
+                TdfEncoder::find_long_field(row, "GID "),
+                Some(1),
+                "{label} PROS GID"
+            );
+            assert_eq!(
+                TdfEncoder::find_long_field(row, "TIME"),
+                Some(1201618778),
+                "{label} PROS TIME (persona @ +208)"
+            );
+            assert!(
+                row.windows(3).any(|w| w == TdfEncoder::make_tag("SID ")),
+                "{label} PROS SID tag"
+            );
+            assert_eq!(TdfEncoder::find_long_field(row, "STAT"), Some(2), "{label} PROS STAT");
+            assert!(
+                !row.windows(3).any(|w| w == TdfEncoder::make_tag("UID ")),
+                "{label} PROS must not emit UID — not in retail ReplicatedGamePlayer schema"
+            );
+        }
+        assert!(
+            !notify_row.windows(3).any(|w| w == TdfEncoder::make_tag("BLOB")),
+            "notify PROS must not include BLOB — client mis-parses and crashes"
+        );
+        for (label, row) in [("notify", notify_row.as_slice()), ("gfgd", gfgd_row.as_slice())] {
+            let pnet_pos = row
+                .windows(3)
+                .position(|w| w == TdfEncoder::make_tag("PNET"))
+                .expect("{label} PNET");
+            let pid_pos = row
+                .windows(3)
+                .position(|w| w == TdfEncoder::make_tag("PID "))
+                .expect("{label} PID");
+            assert!(pid_pos < pnet_pos, "{label} PID must precede PNET on wire");
+            assert_eq!(
+                row.get(pnet_pos + 3).copied(),
+                Some(0x06),
+                "{label} PNET must be NetworkAddress UNION (0x06), not OBJECT_ID or member 127"
+            );
+        }
+    }
+
+    #[test]
+    fn pros_entry_uses_space_padded_loc_pid_time_tags() {
         let player = game_state::CncPlayer {
             persona_id: 1201618778,
             display_name: "Xevrac".to_string(),
@@ -1943,6 +2103,6 @@ mod notify_game_setup_tests {
         let row = game_state::build_pros_entry(&player, 1);
         assert!(row.windows(3).any(|w| w == TdfEncoder::make_tag("LOC ")));
         assert!(row.windows(3).any(|w| w == TdfEncoder::make_tag("PID ")));
-        assert!(row.windows(3).any(|w| w == TdfEncoder::make_tag("UID ")));
+        assert!(row.windows(3).any(|w| w == TdfEncoder::make_tag("TIME")));
     }
 }

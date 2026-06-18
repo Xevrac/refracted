@@ -12,7 +12,6 @@ use crate::common::error::{BlazeError, BlazeResult};
 use crate::session::get_user_session;
 
 const PROS_STAT_ACTIVE_CONNECTING: i32 = 2;
-const PROS_STAT_ACTIVE: i32 = 0;
 const STAS_IN_GAME: i32 = 2;
 
 static GAMES: OnceLock<Mutex<HashMap<i64, CncGame>>> = OnceLock::new();
@@ -24,7 +23,6 @@ static LAST_GAME_LIST_SNAPSHOT: OnceLock<Mutex<Option<(i64, Vec<i64>)>>> = OnceL
 
 const GSTA_RESETABLE: i32 = 0x07;
 const NTOP_DEDICATED: i32 = 1;
-const PLAYER_STATE_ACTIVE_CONNECTING: i32 = 2;
 const FIT_SCORE_DEFAULT: i32 = 100;
 
 const AI_PERSONA_MIN: i64 = 9_000_000_000;
@@ -46,6 +44,11 @@ fn next_ai_persona_id() -> i64 {
 
 fn games() -> &'static Mutex<HashMap<i64, CncGame>> {
     GAMES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(test)]
+pub fn clear_all_games_for_test() {
+    games().lock().clear();
 }
 
 #[derive(Clone, Debug)]
@@ -300,6 +303,7 @@ pub fn add_queued_player(payload: &[u8]) -> BlazeResult<(i64, CncPlayer)> {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     game.players.push(player.clone());
+    refresh_pros_wire_for_gid(gid);
     *LAST_ADD_QUEUED
         .get_or_init(|| Mutex::new(None))
         .lock() = Some((gid, player.clone()));
@@ -348,29 +352,36 @@ pub fn parse_set_player_attributes(payload: &[u8]) -> Option<(i64, i64, String, 
     Some((applied.0, applied.1, k.clone(), v.clone()))
 }
 
+fn parse_gm_gid_pid(payload: &[u8]) -> Option<(i64, i64)> {
+    let gid = ["GID ", "GID"]
+        .iter()
+        .find_map(|tag| TdfEncoder::find_long_field(payload, tag))
+        .or_else(|| TdfEncoder::find_int_field(payload, "GID ").map(|v| v as i64))
+        .or_else(|| TdfEncoder::find_int_field(payload, "GID").map(|v| v as i64))?;
+    let pid = ["PID ", "PID"]
+        .iter()
+        .find_map(|tag| TdfEncoder::find_long_field(payload, tag))
+        .or_else(|| TdfEncoder::find_int_field(payload, "PID ").map(|v| v as i64))
+        .or_else(|| TdfEncoder::find_int_field(payload, "PID").map(|v| v as i64))?;
+    Some((gid, pid))
+}
+
 pub fn apply_set_player_attributes(
     payload: &[u8],
 ) -> Option<(i64, i64, IndexMap<String, String>)> {
-    let gid = TdfEncoder::find_int_field(payload, "GID").map(|v| v as i64)?;
-    let pid = TdfEncoder::find_int_field(payload, "PID").map(|v| v as i64)?;
+    let (gid, pid) = parse_gm_gid_pid(payload)?;
     let attrs = TdfEncoder::find_string_string_map_field(payload, "ATTR")?;
     if attrs.is_empty() {
         return None;
     }
     seed_from_join(gid);
-    let mut changed = IndexMap::new();
     for (key, value) in &attrs {
-        if set_player_attribute(gid, pid, key, value) {
-            changed.insert(key.clone(), value.clone());
-        }
+        set_player_attribute(gid, pid, key, value);
     }
+    // Always echo requested attrs — client retries until `NotifyPlayerAttribChange` arrives.
     *LAST_ATTR_CHANGE
         .get_or_init(|| Mutex::new(None))
-        .lock() = if changed.is_empty() {
-        None
-    } else {
-        Some((gid, pid, changed))
-    };
+        .lock() = Some((gid, pid, attrs.clone()));
     Some((gid, pid, attrs))
 }
 
@@ -396,65 +407,86 @@ pub fn build_notify_player_attrib_change(
     out
 }
 
-pub fn build_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
-    let gid_i32 = gid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let pid_i32 = player.persona_id.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_int("EXID", pid_i32));
-    out.extend_from_slice(&TdfEncoder::encode_int("GID ", gid_i32));
-    out.extend_from_slice(&TdfEncoder::encode_int("LOC ", 0));
-    out.extend_from_slice(&TdfEncoder::encode_string("NAME", &player.display_name));
-    out.extend_from_slice(&TdfEncoder::encode_int("PID ", pid_i32));
-    out.extend_from_slice(&TdfEncoder::encode_int("SLOT", player.slot));
-    out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
-    out.extend_from_slice(&TdfEncoder::encode_int("TIDX", 0xFFFF));
-    out.extend_from_slice(&TdfEncoder::encode_int("UID ", pid_i32));
-    if !player.attribs.is_empty() {
-        out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered(
-            "ATTR",
-            &player.attribs,
-        ));
-    }
-    out
-}
-
-fn encode_empty_pnet_union() -> Vec<u8> {
+fn encode_empty_pnet_network_address() -> Vec<u8> {
     let mut out = Vec::new();
     let tag = TdfEncoder::make_tag("PNET");
     out.push(tag[0]);
     out.push(tag[1]);
     out.push(tag[2]);
     out.push(0x06);
-    out.extend_from_slice(&TdfEncoder::encode_varint(127));
+    // `NetworkAddress` union member 2 = `IpPairAddress` (see Blaze `networkaddress.tdf`).
+    out.extend_from_slice(&TdfEncoder::encode_varint(2));
+    let endpoint = |ip: i32, port: i32| {
+        let mut ep = Vec::new();
+        ep.extend_from_slice(&TdfEncoder::encode_int("IP  ", ip));
+        ep.extend_from_slice(&TdfEncoder::encode_int("PORT", port));
+        ep
+    };
+    let mut valu = Vec::new();
+    valu.extend_from_slice(&TdfEncoder::encode_struct("INIP", &endpoint(0, 0)));
+    valu.extend_from_slice(&TdfEncoder::encode_struct("EXIP", &endpoint(0, 0)));
+    out.extend_from_slice(&TdfEncoder::encode_struct("VALU", &valu));
     out
 }
 
-/// Full `ReplicatedGamePlayer` row for `ListGameData::mGameRoster` (`getFullGameData` path).
-pub fn build_gfgd_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
-    let gid_i32 = gid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let pid = player.persona_id;
-    let pid_i32 = pid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_int("EXID", pid_i32));
-    out.extend_from_slice(&TdfEncoder::encode_int("GID ", gid_i32));
+fn append_pros_core_fields(out: &mut Vec<u8>, player: &CncPlayer, gid: i64, gfgd: bool) {
+    out.extend_from_slice(&TdfEncoder::encode_long("EXID", player.persona_id));
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     out.extend_from_slice(&TdfEncoder::encode_int("LOC ", 0));
     out.extend_from_slice(&TdfEncoder::encode_string("NAME", &player.display_name));
-    out.extend_from_slice(&encode_empty_pnet_union());
-    out.extend_from_slice(&TdfEncoder::encode_long("PID ", pid));
-    out.extend_from_slice(&TdfEncoder::encode_int("SID ", 255));
-    out.extend_from_slice(&TdfEncoder::encode_int("SLOT", player.slot));
-    out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
-    out.extend_from_slice(&TdfEncoder::encode_int("TIDX", 0xFFFF));
-    out.extend_from_slice(&TdfEncoder::encode_int("TIME", 0));
-    out.extend_from_slice(&TdfEncoder::encode_object_id("UGID", 0, 0, 0));
-    out.extend_from_slice(&TdfEncoder::encode_long("UID ", pid));
     if !player.attribs.is_empty() {
         out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered(
             "PATT",
             &player.attribs,
         ));
     }
+    out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));
+    out.extend_from_slice(&encode_empty_pnet_network_address());
+    out.extend_from_slice(&TdfEncoder::encode_int("SID ", 255));
+    out.extend_from_slice(&TdfEncoder::encode_int("SLOT", player.slot));
+    out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
+    out.extend_from_slice(&TdfEncoder::encode_int("TIDX", 0xFFFF));
+    out.extend_from_slice(&TdfEncoder::encode_time("TIME", player.persona_id));
+    if gfgd {
+        out.extend_from_slice(&TdfEncoder::encode_object_id("UGID", 0, 0, 0));
+    }
+}
+
+/// `NotifyGameSetup::PROS` — minimal row (no `BLOB` / empty `PATT`; persona on `TIME` @ +208).
+pub fn build_notify_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
+    let mut out = Vec::new();
+    append_pros_core_fields(&mut out, player, gid, false);
     out
+}
+
+/// `getFullGameData::PROS` — extended retail row (`PNET` NetworkAddress union after `PID`).
+pub fn build_gfgd_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
+    let mut out = Vec::new();
+    append_pros_core_fields(&mut out, player, gid, true);
+    out
+}
+
+/// Back-compat alias used by tests.
+pub fn build_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
+    build_notify_pros_entry(player, gid)
+}
+
+fn pros_entries_from_game(game: &CncGame) -> Vec<Vec<u8>> {
+    game.players
+        .iter()
+        .map(|p| build_notify_pros_entry(p, game.gid))
+        .collect()
+}
+
+pub fn refresh_pros_wire_for_gid(gid: i64) {
+    let pros = games()
+        .lock()
+        .get(&gid)
+        .map(pros_entries_from_game)
+        .unwrap_or_default();
+    if !pros.is_empty() {
+        set_pros_wire_fields(gid, pros);
+    }
 }
 
 pub fn build_plst_entry(player: &CncPlayer) -> Vec<u8> {
@@ -499,7 +531,7 @@ pub fn pros_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
     games()
         .lock()
         .get(&gid)
-        .map(|g| g.players.iter().map(|p| build_pros_entry(p, gid)).collect())
+        .map(|g| g.players.iter().map(|p| build_notify_pros_entry(p, gid)).collect())
         .unwrap_or_else(|| {
             let host = host_persona();
             let p = CncPlayer {
@@ -511,11 +543,11 @@ pub fn pros_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
                 attribs: IndexMap::new(),
                 stat: PROS_STAT_ACTIVE_CONNECTING,
             };
-            vec![build_pros_entry(&p, gid)]
+            vec![build_notify_pros_entry(&p, gid)]
         })
 }
 
-/// `ListGameData::mGameRoster` for `getFullGameData` — full retail player rows (not notify `PROS`).
+/// `ListGameData::mGameRoster` for `getFullGameData` — extended rows (not cached notify wire).
 pub fn gfgd_roster_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
     games()
         .lock()
@@ -564,11 +596,11 @@ pub fn mark_host_join_completed(gid: i64) {
     };
     for player in &mut game.players {
         if player.persona_id == host || player.persona_id == game.host_persona {
-            player.stat = PROS_STAT_ACTIVE;
+            player.stat = PROS_STAT_ACTIVE_CONNECTING;
             player.slot = 0;
         }
     }
-    game.pros_wire = None;
+    game.pros_wire = Some(pros_entries_from_game(game));
 }
 
 pub fn host_player_for_gid(gid: i64) -> CncPlayer {
@@ -589,7 +621,7 @@ pub fn host_player_for_gid(gid: i64) -> CncPlayer {
             team: 1,
             is_ai: false,
             attribs: IndexMap::new(),
-            stat: PROS_STAT_ACTIVE,
+            stat: PROS_STAT_ACTIVE_CONNECTING,
         })
 }
 
@@ -655,14 +687,16 @@ fn slot_capacities_vector(tag: &str, public_participants: u16) -> Vec<u8> {
 }
 
 pub fn build_game_browser_player_data(player: &CncPlayer) -> Vec<u8> {
+    let pid_i32 = player.persona_id.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_long("pid", player.persona_id));
-    out.extend_from_slice(&TdfEncoder::encode_string("name", &player.display_name));
-    out.extend_from_slice(&TdfEncoder::encode_int("tidx", player.team.max(0)));
-    out.extend_from_slice(&TdfEncoder::encode_int("stat", PLAYER_STATE_ACTIVE_CONNECTING));
+    out.extend_from_slice(&TdfEncoder::encode_int("EXID", pid_i32));
+    out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));
+    out.extend_from_slice(&TdfEncoder::encode_string("NAME", &player.display_name));
+    out.extend_from_slice(&TdfEncoder::encode_int("TIDX", player.team.max(0)));
+    out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
     if !player.attribs.is_empty() {
         out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered(
-            "patt",
+            "PATT",
             &player.attribs,
         ));
     }
@@ -682,22 +716,22 @@ pub fn build_game_browser_game_data(gid: i64) -> Option<Vec<u8>> {
         .collect();
 
     let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_long("gid", gid));
-    out.extend_from_slice(&TdfEncoder::encode_string("gnam", &game.name));
-    out.extend_from_slice(&slot_capacities_vector("cap", pcap));
-    out.extend_from_slice(&slot_capacities_vector("pcnt", pcnt));
-    out.extend_from_slice(&TdfEncoder::encode_int("gsta", GSTA_RESETABLE));
-    out.extend_from_slice(&TdfEncoder::encode_long("host", host));
-    out.extend_from_slice(&TdfEncoder::encode_int("ntop", NTOP_DEDICATED));
-    out.extend_from_slice(&encode_struct_list("rost", &roster));
-    out.extend_from_slice(&TdfEncoder::encode_long_list("admn", &[host]));
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
+    out.extend_from_slice(&TdfEncoder::encode_string("GNAM", &game.name));
+    out.extend_from_slice(&slot_capacities_vector("CAP ", pcap));
+    out.extend_from_slice(&slot_capacities_vector("PCNT", pcnt));
+    out.extend_from_slice(&TdfEncoder::encode_int("GSTA", GSTA_RESETABLE));
+    out.extend_from_slice(&TdfEncoder::encode_long("HOST", host));
+    out.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_DEDICATED));
+    out.extend_from_slice(&encode_struct_list("ROST", &roster));
+    out.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[host]));
     Some(out)
 }
 
 fn build_game_browser_match_data(game_data: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_struct("gam", game_data));
-    out.extend_from_slice(&TdfEncoder::encode_int("fit", FIT_SCORE_DEFAULT));
+    out.extend_from_slice(&TdfEncoder::encode_struct("GAM ", game_data));
+    out.extend_from_slice(&TdfEncoder::encode_int("FIT ", 0));
     out
 }
 

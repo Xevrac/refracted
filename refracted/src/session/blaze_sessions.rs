@@ -174,6 +174,9 @@ pub fn unregister(id: u64) {
     let mut m = registry().lock();
     m.remove(&id);
     drop(m);
+    if crate::common::game::get_current_game_id().as_str() == "cnc" {
+        crate::client::cnc::dedicated_pool::on_session_gone(id);
+    }
     persist_sessions_to_disk();
 }
 

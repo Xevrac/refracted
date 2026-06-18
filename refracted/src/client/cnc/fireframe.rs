@@ -53,8 +53,22 @@ pub fn enqueue_pending_pushes(blaze_session_id: u64, pushes: Vec<OutgoingPush>) 
         .extend(pushes);
 }
 
-pub fn pushes_after_reset_dedicated_server(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> {
+pub fn pushes_after_reset_dedicated_server(
+    client_session_id: u64,
+    request: &[u8],
+) -> BlazeResult<Vec<OutgoingPush>> {
     let gid = super::cnc_extract_reset_game_id(request);
+    match super::dedicated_pool::orchestrate_client_reset(client_session_id, gid, request) {
+        Some(dedicated_sid) => crate::debug_println!(
+            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m queued cmd 220 NotifyCreate for dedicated session #{} (gid={})",
+            dedicated_sid,
+            gid
+        ),
+        None => crate::debug_println!(
+            "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m no idle pooled dedicated for resetDedicatedServer (gid={}) — registerDynamicDedicatedServerCreator (0x96) required",
+            gid
+        ),
+    }
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized after resetDedicatedServer (gid={})",
         gid
