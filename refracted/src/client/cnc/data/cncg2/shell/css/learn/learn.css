@@ -70,8 +70,8 @@
     background: #0a0a0a;
     border: 1px solid #000;
     border-top: 1px solid #222;
-    color: #aaa;
-    font-family: Arial, sans-serif; font-size: 12px;
+    color: #fff;
+    font-family: 'Eurostile-Bol', Arial, sans-serif; font-size: 12px; font-weight: normal;
     text-align: left; padding: 0 15px;
     margin-bottom: 2px;
     cursor: pointer;
@@ -102,21 +102,44 @@
 }
 
 /* Base styles for HTML injected from the controller */
+.guides-scroll-area {
+    position: absolute;
+    top: 30px; left: 30px; right: 30px; bottom: 30px;
+    overflow-y: auto;
+    padding-right: 15px; 
+    color: #fff;
+    font-family: 'Eurostile-Reg', Arial, sans-serif;
+}
+
 .guides-scroll-area h2.guide-page-header {
     color: #fff;
-    font-family: 'Eurostile-Hea', Arial, sans-serif;
-    font-size: 24px; font-weight: bold;
+    font-family: 'Eurostile-Bol', Arial, sans-serif;
+    font-size: 24px; font-weight: normal;
     margin: 0 0 25px 0;
     line-height: 1.2;
     text-shadow: 1px 1px 2px #000;
 }
 
-.guides-scroll-area p, .guides-scroll-area li {
-    color: #aaa;
-    font-family: Arial, sans-serif;
-    font-size: 12px;
+.guides-scroll-area h3 {
+    color: #fff;
+    font-family: 'Eurostile-Bol', Arial, sans-serif;
+    font-size: 18px; font-weight: normal;
+    margin: 20px 0 10px 0;
+}
+
+.guides-scroll-area p, .guides-scroll-area li, .guides-scroll-area th, .guides-scroll-area td {
+    color: #fff;
+    font-family: 'Eurostile-Reg', Arial, sans-serif;
+    font-size: 13px;
     line-height: 1.6;
+}
+
+.guides-scroll-area p {
     margin-bottom: 15px;
+}
+
+.guides-scroll-area li {
+    margin-bottom: 5px;
 }
 
 .guides-scroll-area ul {
@@ -128,4 +151,37 @@
 .guides-scroll-area .guide-image-wrap {
     margin-top: 20px;
     text-align: center;
+}
+
+.guides-scroll-area .guide-image-panel {
+    display: table;
+    width: 100%;
+    margin: 15px 0;
+    background-color: rgba(30, 30, 30, 0.5);
+    border: 1px solid #0a0a0a;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+.guides-scroll-area .guide-image-panel .panel-label {
+    display: table-cell;
+    vertical-align: top;
+    width: 30%;
+    color: #ccc;
+    font-size: 13px;
+    padding: 15px;
+    border-right: 1px solid #0a0a0a;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+.guides-scroll-area .guide-image-panel .panel-image {
+    display: table-cell;
+    vertical-align: middle;
+    text-align: left;
+    width: 70%;
+    padding: 15px;
+    -webkit-box-sizing: border-box; box-sizing: border-box;
+}
+.guides-scroll-area .guide-image-panel .panel-image img {
+    max-width: 100%;
+    height: auto;
+    max-height: 120px;
+    display: inline-block;
 }

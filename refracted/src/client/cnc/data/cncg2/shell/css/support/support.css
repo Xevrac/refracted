@@ -26,7 +26,7 @@
 /* Individual Content Blocks */
 .support-block {
     background: rgba(0, 0, 0, 0.6); /* Slightly translucent */
-    border: 1px solid #333;
+    border: 5px solid #333;
     padding: 20px 25px;
     margin-bottom: 15px;
     -webkit-box-sizing: border-box; box-sizing: border-box;
@@ -35,19 +35,19 @@
 /* UPGRADED TYPOGRAPHY FOR QUESTIONS */
 .support-block h3 {
     color: #fff;
-    font-family: 'Eurostile-Hea', Arial, sans-serif; /* Mapped to bold font */
-    font-size: 24px; /* Increased size */
-    font-weight: bold;
+    font-family: 'Eurostile-Bol', Arial, sans-serif;
+    font-size: 24px;
+    font-weight: normal;
     margin: 0 0 15px 0;
     line-height: 1.2;
-    text-shadow: 1px 1px 2px #000; /* Subtle drop shadow for depth */
+    text-shadow: 1px 1px 2px #000;
 }
 
 .support-block p, 
 .support-block li {
-    color: #aaa;
-    font-family: Arial, sans-serif;
-    font-size: 12px;
+    color: #fff;
+    font-family: 'Eurostile-Reg', Arial, sans-serif;
+    font-size: 13px;
     line-height: 1.6;
     margin-bottom: 10px;
 }
