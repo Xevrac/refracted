@@ -50,9 +50,10 @@ body.cc-theme {
 }
 
 /* CHROME 15 TEXT RENDERING BUG FIX */
-h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
-.cc-theme, .cc-theme button, .cc-theme input, .cc-theme select, .cc-theme textarea {
-    text-rendering: optimizeLegibility;
+/* optimizeLegibility combined with @font-face causes text to disappear in WebKit 535 */
+.cc-theme, .cc-theme button, .cc-theme input, .cc-theme select, .cc-theme textarea,
+h1, h2, h3, h4, h5, h6, .cc-username {
+    text-rendering: auto !important;
 }
 .clearfix:before, .clearfix:after { content: " "; display: table; }
 .clearfix:after { clear: both; }
@@ -169,6 +170,10 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
     background-color: #0a0a0c;
     background-image:
         url('../view/image/btn_bg_05.png'),
+        -webkit-repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(255, 255, 255, 0.04) 3px, rgba(255, 255, 255, 0.04) 4px),
+        -webkit-repeating-linear-gradient(-45deg, transparent 0, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 4px);
+    background-image:
+        url('../view/image/btn_bg_05.png'),
         repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(255, 255, 255, 0.04) 3px, rgba(255, 255, 255, 0.04) 4px),
         repeating-linear-gradient(-45deg, transparent 0, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 4px);
     background-size: 100% 100%, auto, auto;
@@ -246,6 +251,7 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
     right: 0;
     bottom: 0;
     border-radius: inherit;
+    background: -webkit-repeating-linear-gradient(left, transparent, transparent 4px, rgba(0,0,0,0.04) 4px, rgba(0,0,0,0.04) 5px);
     background: repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.04) 4px, rgba(0,0,0,0.04) 5px);
     pointer-events: none;
     opacity: 0.45;
