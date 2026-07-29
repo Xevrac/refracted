@@ -1,11 +1,11 @@
-//! Refracted library: protocol servers, HTTP/gRPC handling, and per-title client behavior.
+﻿//! Refracted library: protocol servers, HTTP/gRPC handling, and per-title client behavior.
 //!
 //! **Layout (intentional):**
-//! - [`core`] — Server lifecycle, console/logging, the **toolkit** (inspectors, research proxies).
-//! - [`blaze`], [`http`], [`web`], [`lsx`], [`qos`], [`rtm`] — Service layers (listeners and handlers).
-//! - [`grpc`], [`jwt`], [`session`], [`crypto`] — Shared building blocks for auth and wire formats.
-//! - [`nucleus`] — Game-agnostic identity/account layer (Settings → Accounts); feeds Blaze handler inputs.
-//! - [`client`] — Title-specific logic (`labs`, `cnc`, …), selected by [`common::game`] from `games.json`.
+//! - [`core`] -- Server lifecycle, console/logging, the **toolkit** (inspectors, research proxies).
+//! - [`blaze`], [`http`], [`web`], [`lsx`], [`qos`], [`rtm`] -- Service layers (listeners and handlers).
+//! - [`grpc`], [`jwt`], [`session`], [`crypto`] -- Shared building blocks for auth and wire formats.
+//! - [`nucleus`] -- Game-agnostic identity/account layer (Settings → Accounts); feeds Blaze handler inputs.
+//! - [`client`] -- Title-specific logic (`labs`, `cnc`, …), selected by [`common::game`] from `games.json`.
 //!
 //! The binary in `main.rs` hosts the desktop UI; the library is structured so servers and handlers stay testable and separated from egui.
 

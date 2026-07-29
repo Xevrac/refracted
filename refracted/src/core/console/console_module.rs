@@ -129,8 +129,10 @@ fn make_log_line(text: &str) -> LogLine {
         .unwrap_or_default()
         .as_secs_f64();
 
+    let text = cleaned.trim().to_string();
+
     LogLine {
-        text: cleaned,
+        text,
         colors,
         segments,
         timestamp,

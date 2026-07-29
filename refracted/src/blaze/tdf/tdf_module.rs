@@ -1,4 +1,4 @@
-use crate::common::error::{BlazeError, BlazeResult};
+﻿use crate::common::error::{BlazeError, BlazeResult};
 use bytes::{BufMut, Bytes, BytesMut};
 
 /// TDF (Tagged Data Format) encoder/decoder
@@ -425,7 +425,7 @@ impl TdfEncoder {
         result.freeze()
     }
 
-    /// Blaze TDF type `5` — **double list** (parallel pairs), not a key/value map. Matches `WriteTdfDoubleList`:
+    /// Blaze TDF type `5` -- **double list** (parallel pairs), not a key/value map. Matches `WriteTdfDoubleList`:
     /// tag, type `5`, `subtype1`, `subtype2`, count, then for each index: `list1[i]` then `list2[i]`.
     /// Subtypes: `0` = varint integer, `1` = length-prefixed UTF-8 string + `0x00`.
     pub fn encode_double_list_int_int(tag: &str, list1: &[i64], list2: &[i64]) -> Bytes {
@@ -653,6 +653,31 @@ impl TdfEncoder {
 
     /// Encode a map of string to string (IndexMap version to preserve order)
     /// Format: tag+type as 32-bit BE integer (tag in upper 24 bits, type in lower 8 bits) + key_type (0x1 for STRING) + val_type (0x1 for STRING) + map length + key-value pairs
+    /// String→blob map (`key_type=0x1`, `val_type=0x2`).
+    pub fn encode_string_blob_map_ordered(
+        tag: &str,
+        map: &indexmap::IndexMap<String, Vec<u8>>,
+    ) -> Bytes {
+        let mut result = BytesMut::new();
+        let tag_encoded = Self::make_tag(tag);
+        result.put_u8(tag_encoded[0]);
+        result.put_u8(tag_encoded[1]);
+        result.put_u8(tag_encoded[2]);
+        result.put_u8(0x5);
+        result.put_u8(0x1);
+        result.put_u8(0x2);
+        result.extend_from_slice(&Self::encode_varint(map.len() as u64));
+        for (key, value) in map {
+            let key_bytes = key.as_bytes();
+            result.extend_from_slice(&Self::encode_varint((key_bytes.len() + 1) as u64));
+            result.extend_from_slice(key_bytes);
+            result.put_u8(0);
+            result.extend_from_slice(&Self::encode_varint(value.len() as u64));
+            result.extend_from_slice(value);
+        }
+        result.freeze()
+    }
+
     pub fn encode_string_string_map_ordered(
         tag: &str,
         map: &indexmap::IndexMap<String, String>,
@@ -822,7 +847,7 @@ impl TdfEncoder {
         if data.len() < pos + 3 {
             return false;
         }
-        // Do not `trim()` — the 4th character (e.g. trailing space in `GID `) is part of the packed label.
+        // Do not `trim()` -- the 4th character (e.g. trailing space in `GID `) is part of the packed label.
         let expected = Self::make_tag(tag);
         data[pos..pos + 3] == expected
     }
@@ -903,7 +928,7 @@ impl TdfEncoder {
         None
     }
 
-    /// First INTEGER (`0x00` varint) or BIGINT (**`0x07`**, BE `i64`) for `tag` — **linear scan** (works inside null-terminated structs; does not rely on [`Self::decode_struct_data`]).
+    /// First INTEGER (`0x00` varint) or BIGINT (**`0x07`**, BE `i64`) for `tag` -- **linear scan** (works inside null-terminated structs; does not rely on [`Self::decode_struct_data`]).
     pub fn find_long_field(data: &[u8], tag: &str) -> Option<i64> {
         let mut i = 0usize;
         while i + 4 <= data.len() {
@@ -1032,7 +1057,7 @@ impl TdfEncoder {
         }
     }
 
-    /// Byte-linear scan for `tag` + INTEGER (`0x00`) + varint — no nested struct decode.
+    /// Byte-linear scan for `tag` + INTEGER (`0x00`) + varint -- no nested struct decode.
     /// Use when on-wire structs are not length-prefixed the way [`Self::decode_struct_data`] expects.
     /// Also accepts type `0x07` (INT64) + 8 big-endian bytes (some clients use this for addresses).
     pub fn scan_all_u32_fields(data: &[u8], tag: &str) -> Vec<u32> {
@@ -1141,6 +1166,65 @@ impl TdfEncoder {
         Ok(out)
     }
 
+    /// Decode a string→blob TDF map body (type byte already consumed): `key_type val_type count (key val)*`
+    pub fn decode_string_blob_map_untagged(
+        data: &[u8],
+    ) -> BlazeResult<indexmap::IndexMap<String, Vec<u8>>> {
+        use indexmap::IndexMap;
+        if data.len() < 3 {
+            return Err(BlazeError::TdfEncoding(
+                "string-blob map too short".into(),
+            ));
+        }
+        if data[0] != 0x1 || data[1] != 0x2 {
+            return Err(BlazeError::TdfEncoding(format!(
+                "expected string-blob map, got key_type=0x{:02x} val_type=0x{:02x}",
+                data[0], data[1]
+            )));
+        }
+        let (map_len, varint_len) = Self::decode_varint(&data[2..])?;
+        let mut offset = 2 + varint_len;
+        let mut out = IndexMap::new();
+        for _ in 0..map_len {
+            let (key_len, key_varint_len) = Self::decode_varint(&data[offset..])?;
+            offset += key_varint_len;
+            let key_end = offset + key_len as usize;
+            if key_end > data.len() {
+                return Err(BlazeError::TdfEncoding("map key truncated".into()));
+            }
+            let key = Self::decode_null_terminated_string(&data[offset..key_end])?;
+            offset = key_end;
+            let (val_len, val_varint_len) = Self::decode_varint(&data[offset..])?;
+            offset += val_varint_len;
+            let val_end = offset + val_len as usize;
+            if val_end > data.len() {
+                return Err(BlazeError::TdfEncoding("map value truncated".into()));
+            }
+            out.insert(key, data[offset..val_end].to_vec());
+            offset = val_end;
+        }
+        Ok(out)
+    }
+
+    /// Top-level `CDAT` (or other tag) string→blob map in a TDF struct payload.
+    pub fn find_string_blob_map_field(
+        data: &[u8],
+        tag: &str,
+    ) -> Option<indexmap::IndexMap<String, Vec<u8>>> {
+        let mut pos = 0;
+        while pos + 4 <= data.len() {
+            if Self::wire_tag_matches_at(data, pos, tag) && data[pos + 3] == 0x5 {
+                return Self::decode_string_blob_map_untagged(&data[pos + 4..]).ok();
+            }
+            let type_byte = data[pos + 3];
+            match Self::skip_field(&data[pos + 3..], type_byte) {
+                Ok(skipped) => pos += 3 + skipped,
+                Err(_) => break,
+            }
+        }
+        None
+    }
+
     /// Top-level `ATTR` (or other tag) string→string map in a TDF struct payload.
     pub fn find_string_string_map_field(
         data: &[u8],
@@ -1158,6 +1242,21 @@ impl TdfEncoder {
             }
         }
         None
+    }
+
+    /// Top-level BLOB field (type `0x2`) by tag.
+    pub fn find_blob_field(data: &[u8], tag: &str) -> Option<Vec<u8>> {
+        let field = Self::extract_top_level_field_bytes(data, tag)?;
+        if field.len() < 5 || field[3] != 0x2 {
+            return None;
+        }
+        let (length, varint_len) = Self::decode_varint(&field[4..]).ok()?;
+        let start = 4 + varint_len;
+        let end = start + length as usize;
+        if end > field.len() {
+            return None;
+        }
+        Some(field[start..end].to_vec())
     }
 
     fn decode_null_terminated_string(data: &[u8]) -> BlazeResult<String> {

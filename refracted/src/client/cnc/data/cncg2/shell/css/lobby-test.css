@@ -1,4 +1,4 @@
-/* Skirmish lobby — full-viewport C&C pre-game (game WebView + standalone) */
+/* Skirmish lobby — shell / chat / pause theme (EAWebKit-safe) */
 
 html.cnc-lobby-page,
 html.cnc-lobby-page body.cnc-lobby-standalone,
@@ -8,988 +8,545 @@ body.cnc-lobby-standalone.cc-theme {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background-color: #000;
+    background-color: #050608;
     background-image: url('../images/cnc_background.png');
     background-repeat: no-repeat;
     background-size: cover;
     background-position: center center;
-    background-attachment: fixed;
     font-size: 15px;
 }
 
 .cnc-lobby-mount {
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     overflow: hidden;
-}
-
-.cnc-lobby-standalone {
-    --lobby-chrome-h: 32px;
 }
 
 .cnc-lobby-chrome {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 0; left: 0; right: 0;
     z-index: 40;
-    height: var(--lobby-chrome-h);
-    padding: 0 18px;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    background: rgba(8, 12, 18, 0.97);
-    border-bottom: 1px solid rgba(72, 88, 110, 0.5);
+    height: 32px;
+    padding: 0 14px;
+    line-height: 32px;
+    background: rgba(12, 12, 14, 0.94);
+    border-bottom: 1px solid #9a9a9a;
 }
-
 .cnc-lobby-chrome__link {
     margin-right: 18px;
-    color: #8ec8f0;
+    color: #c8d0d8;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
     font-size: 12px;
     text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 2px #000;
 }
+.cnc-lobby-chrome__link:hover { color: #fff; }
 
-.cnc-lobby-standalone .cnc-lobby-root {
-    top: var(--lobby-chrome-h);
-}
+.cnc-lobby-standalone .cnc-lobby-root { top: 32px; }
 
 .cnc-lobby-root {
-    --lobby-panel: rgba(12, 16, 24, 0.92);
-    --lobby-panel-inner: rgba(6, 9, 14, 0.72);
-    --lobby-border: rgba(88, 104, 128, 0.48);
-    --lobby-border-strong: rgba(110, 140, 180, 0.62);
-    --lobby-blue: #1a7fd4;
-    --lobby-blue-dim: #0d4a7a;
-    --lobby-blue-glow: rgba(26, 127, 212, 0.35);
-    --lobby-text: #e8ecf0;
-    --lobby-muted: #9aa3ae;
-    --lobby-rail-w: clamp(300px, 26vw, 410px);
-    --lobby-hud-h: 52px;
-    --lobby-bar-h: 80px;
-    --lobby-btn-radius: 4px;
-
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     overflow: hidden;
     z-index: 10;
-    color: var(--lobby-text);
-    font-size: 15px;
-    line-height: 1.4;
+    color: #e8e8e8;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
 }
 
 .cnc-lobby-backdrop {
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    background-color: #000;
-    background-image: url('../images/cnc_background.png');
-    background-repeat: no-repeat;
-    background-size: cover;
-    background-position: center center;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: #050608 url('../images/cnc_background.png') center center / cover no-repeat;
 }
-
 .cnc-lobby-scrim {
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    background:
-        linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0.72) 100%);
+    top: 0; right: 0; bottom: 0; left: 0;
+    background-color: rgba(0, 0, 0, 0.5);
     pointer-events: none;
 }
 
-/* HUD strip */
-.cnc-lobby-hud {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: var(--lobby-rail-w);
-    z-index: 5;
-    height: var(--lobby-hud-h);
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    padding: 0 32px;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.35) 72%, transparent 100%);
-    pointer-events: none;
-}
-
-.cnc-lobby-hud > * {
-    pointer-events: auto;
-}
-
-.cnc-lobby-hud__left {
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    gap: 18px;
-}
-
-.cnc-lobby-badge {
-    font-family: 'Eurostile-Hea', sans-serif;
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    padding: 9px 22px;
-    border-radius: var(--lobby-btn-radius);
-    background: linear-gradient(180deg, rgba(26, 90, 150, 0.55), rgba(10, 50, 90, 0.88));
-    border: 1px solid var(--lobby-border-strong);
-    color: #b8dcf8;
-}
-
-.cnc-lobby-hud__sep {
-    width: 1px;
-    height: 24px;
-    background: var(--lobby-border);
-}
-
-.cnc-lobby-hud__mode {
-    font-size: 15px;
-    color: var(--lobby-muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-/* Main stage */
 .cnc-lobby-stage {
     position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    top: 0; right: 0; bottom: 72px; left: 0;
     display: -webkit-box;
+    display: -moz-box;
+    display: box;
     display: flex;
-    min-height: 0;
 }
 
-.cnc-lobby-battle {
+.cnc-lobby-main {
     -webkit-box-flex: 1;
+    -moz-box-flex: 1;
+    box-flex: 1;
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
     display: -webkit-box;
+    display: -moz-box;
+    display: box;
     display: flex;
     -webkit-box-orient: vertical;
+    -moz-box-orient: vertical;
+    box-orient: vertical;
     flex-direction: column;
-    padding: calc(var(--lobby-hud-h) + 12px) 32px 1em;
+    padding: 18px 22px 12px;
     -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
     box-sizing: border-box;
 }
 
 .cnc-lobby-rail {
     -webkit-box-flex: 0;
-    flex: 0 0 var(--lobby-rail-w);
-    width: var(--lobby-rail-w);
+    -moz-box-flex: 0;
+    box-flex: 0;
+    flex: 0 0 340px;
+    width: 340px;
     min-height: 0;
     position: relative;
-    border-left: 1px solid rgba(56, 64, 76, 0.95);
-    background: rgba(0, 0, 0, 0.72);
-    box-shadow: -12px 0 36px rgba(0, 0, 0, 0.5);
+    border-left: 1px solid #9a9a9a;
+    background: rgba(12, 12, 14, 0.92);
 }
-
 .cnc-lobby-rail .cc-sidebar,
 .cnc-lobby-sidebar {
     position: absolute !important;
-    top: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: 0 !important;
+    top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important;
     width: auto !important;
     border-left: none;
     border-radius: 0;
 }
 
-/* Theater */
-.cnc-lobby-theater {
+.cnc-lobby-top {
     -webkit-box-flex: 0;
-    flex: 0 0 26vh;
-    min-height: 200px;
-    max-height: 280px;
-    position: relative;
-    display: block;
-    margin-bottom: 20px;
-    border: 2px solid var(--lobby-border);
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.5);
-    overflow: hidden;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.cnc-lobby-theater__visual {
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 38%;
-    min-width: 240px;
-    max-width: 420px;
-    background: url('../images/cnc_background.png') center center / cover no-repeat;
-    border-right: 1px solid var(--lobby-border);
-    z-index: 0;
-}
-
-.cnc-lobby-theater__visual::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    background: linear-gradient(90deg, transparent 35%, rgba(10, 14, 20, 0.96) 100%);
-}
-
-.cnc-lobby-theater__body {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    min-height: inherit;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-orient: vertical;
-    flex-direction: column;
-    -webkit-box-pack: center;
-    justify-content: center;
-    -webkit-box-align: center;
-    align-items: center;
-    text-align: center;
-    padding: 22px 36px 20px;
+    flex: 0 0 auto;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: rgba(12, 12, 14, 0.9);
+    border: 1px solid #9a9a9a;
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.75);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    background: linear-gradient(90deg, transparent 0%, transparent 32%, rgba(0, 0, 0, 0.42) 48%, rgba(0, 0, 0, 0.5) 100%);
 }
-
-.cnc-lobby-theater__copy {
-    width: 100%;
-    max-width: 720px;
-    margin: 0 auto;
+.cnc-lobby-top__title {
+    margin-bottom: 12px;
 }
-
-.cnc-lobby-theater__eyebrow {
-    margin: 0 0 10px;
-    font-size: 11px;
-    letter-spacing: 0.2em;
+.cnc-lobby-top__badge {
+    display: inline-block;
+    margin-right: 10px;
+    padding: 5px 12px;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--lobby-muted);
+    color: #fff;
+    background: #1d5f99;
+    border: 1px solid #06325f;
+    text-shadow: 0 1px 2px #000;
 }
-
-.cnc-lobby-theater__title {
-    margin: 0;
-    font-family: 'Eurostile-Hea', sans-serif;
-    font-size: 48px;
-    font-weight: normal;
-    letter-spacing: 0.06em;
+.cnc-lobby-top__mode {
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    line-height: 1.05;
-    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.85);
+    color: #c8d0d8;
+    text-shadow: 0 1px 2px #000;
 }
 
-.cnc-lobby-theater__path {
-    margin: 12px 0 0;
-    font-size: 12px;
-    font-family: monospace;
-    color: #6f7a86;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.cnc-lobby-map {
+    display: block;
+    max-width: 380px;
 }
-
-.cnc-lobby-pills {
-    display: -webkit-box;
-    display: flex;
-    gap: 12px;
-    -webkit-box-wrap: wrap;
-    flex-wrap: wrap;
-    -webkit-box-pack: center;
-    justify-content: center;
-    margin-top: 20px;
-    width: 100%;
-    max-width: 520px;
-}
-
-.cnc-lobby-pills button {
-    font-family: 'EurostileLTStdBold', 'Eurostile-Med', sans-serif;
+.cnc-lobby-map__label {
+    display: block;
+    margin-bottom: 5px;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
     font-size: 11px;
-    font-weight: bold;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    min-width: 118px;
-    padding: 10px 22px;
-    border-radius: 4px;
-    border: 1px solid rgba(88, 104, 128, 0.65);
-    background: linear-gradient(180deg, rgba(28, 34, 44, 0.95) 0%, rgba(8, 10, 14, 0.98) 100%);
-    color: #8a939e;
-    cursor: pointer;
-    text-align: center;
-    line-height: 1.2;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.06),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.45),
-        0 2px 6px rgba(0, 0, 0, 0.35);
-    -webkit-transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-    transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    color: #9a9a9a;
 }
 
-.cnc-lobby-pills button:hover {
-    border-color: rgba(110, 140, 180, 0.75);
-    color: #c8d4e0;
-}
-
-.cnc-lobby-pills button.active {
-    background: linear-gradient(180deg, rgba(36, 110, 175, 0.55) 0%, rgba(14, 58, 98, 0.95) 100%);
-    border-color: var(--lobby-blue);
-    color: #fff;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        0 0 16px var(--lobby-blue-glow),
-        0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-/* Arena */
 .cnc-lobby-arena {
     -webkit-box-flex: 1;
     flex: 1 1 auto;
+    min-height: 0;
     display: -webkit-box;
+    display: -moz-box;
+    display: box;
     display: flex;
     -webkit-box-align: stretch;
     align-items: stretch;
-    gap: 20px;
-    min-height: 260px;
     margin-bottom: 12px;
 }
 
-.cnc-lobby-team-panel {
+.cnc-lobby-team {
     -webkit-box-flex: 1;
     flex: 1 1 0;
     width: 0;
     min-width: 0;
-    min-height: 0;
     display: -webkit-box;
+    display: -moz-box;
+    display: box;
     display: flex;
     -webkit-box-orient: vertical;
     flex-direction: column;
-    gap: 14px;
-    padding: 20px 22px 18px;
-    border: 2px solid var(--lobby-border);
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.55);
-    background-image:
-        repeating-linear-gradient(45deg, transparent 0, transparent 4px, rgba(255, 255, 255, 0.012) 4px, rgba(255, 255, 255, 0.012) 5px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 28px rgba(0, 0, 0, 0.35);
+    padding: 12px;
+    background: rgba(12, 12, 14, 0.9);
+    border: 1px solid #9a9a9a;
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
 }
-
-.cnc-lobby-team-panel__head {
-    -webkit-box-flex: 0;
-    flex: 0 0 auto;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-pack: justify;
-    justify-content: space-between;
-    -webkit-box-align: center;
-    align-items: center;
-    padding-bottom: 4px;
-    border-bottom: 1px solid rgba(72, 88, 110, 0.28);
-}
-
-.cnc-lobby-team-label {
-    font-family: 'Eurostile-Hea', sans-serif;
-    font-size: 17px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--lobby-muted);
-}
-
-.cnc-lobby-team-count {
+.cnc-lobby-team__head {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #3a3a3a;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
     font-size: 14px;
-    color: #7f8996;
-    letter-spacing: 0.08em;
-    padding: 4px 10px;
-    border-radius: var(--lobby-btn-radius);
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(72, 88, 110, 0.35);
-}
-
-.cnc-lobby-divider {
-    -webkit-box-flex: 0;
-    flex: 0 0 56px;
-    width: 56px;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-orient: vertical;
-    flex-direction: column;
-    -webkit-box-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    justify-content: center;
-    gap: 10px;
-    align-self: stretch;
-    padding: 0;
-}
-
-.cnc-lobby-divider__line {
-    width: 1px;
-    -webkit-box-flex: 1;
-    flex: 1 1 auto;
-    min-height: 40px;
-    background: linear-gradient(180deg, transparent, var(--lobby-border-strong), transparent);
-}
-
-.cnc-lobby-divider__text {
-    font-family: 'Eurostile-Bla', sans-serif;
-    font-size: 26px;
-    color: #5f6b7a;
-    letter-spacing: 0.24em;
-    padding: 6px 0;
-}
-
-.cnc-lobby-slot-card {
-    -webkit-box-flex: 1;
-    flex: 1 1 auto;
-    min-height: 220px;
-    border-radius: 4px;
-    border: 2px dashed rgba(96, 108, 124, 0.5);
-    background: rgba(0, 0, 0, 0.42);
-    position: relative;
-    box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.35);
-}
-
-.cnc-lobby-slot-card.occupied {
-    border-style: solid;
-    border-color: var(--lobby-border);
-    background: rgba(0, 0, 0, 0.58);
-}
-
-.cnc-lobby-slot-card.selected {
-    border-color: var(--lobby-blue);
-    box-shadow: 0 0 0 1px var(--lobby-blue-glow), inset 0 0 32px rgba(26, 127, 212, 0.1);
-}
-
-.cnc-lobby-slot-card.faction-usa { border-left-width: 5px; border-left-color: #3a7bd5; }
-.cnc-lobby-slot-card.faction-apa { border-left-width: 5px; border-left-color: #c0392b; }
-.cnc-lobby-slot-card.faction-eu { border-left-width: 5px; border-left-color: #2980b9; }
-.cnc-lobby-slot-card.faction-gla { border-left-width: 5px; border-left-color: #d4a017; }
-
-.cnc-lobby-slot-card__empty {
-    height: 100%;
-    min-height: 196px;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-orient: vertical;
-    flex-direction: column;
-    -webkit-box-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    justify-content: center;
-    gap: 14px;
-    padding: 32px 28px;
-    color: #727d8a;
-    font-size: 15px;
-    text-align: center;
-}
-
-.cnc-lobby-slot-card__empty-icon {
-    width: 52px;
-    height: 52px;
-    line-height: 50px;
-    text-align: center;
-    border-radius: 4px;
-    border: 2px solid var(--lobby-border);
-    background: rgba(0, 0, 0, 0.4);
-    font-size: 26px;
-    color: #8a96a4;
-}
-
-.cnc-lobby-slot-card__empty-label {
-    font-size: 15px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #7a8492;
+    color: #fff;
+    text-shadow: 0 1px 2px #000;
+}
+.cnc-lobby-team__count {
+    float: right;
+    color: #9a9a9a;
+    font-size: 13px;
+    letter-spacing: 0.06em;
 }
 
-.cnc-lobby-slot-card__actions {
-    display: -webkit-box;
-    display: flex;
-    gap: 12px;
-    -webkit-box-pack: center;
-    justify-content: center;
-    margin-top: 10px;
-}
-
-.cnc-lobby-slot-action {
-    min-width: 118px !important;
-}
-
-.cnc-lobby-slot-card__filled {
-    height: 100%;
-    min-height: 216px;
-    display: -webkit-box;
-    display: flex;
-    padding: 28px 32px 24px;
-    gap: 40px;
-    -webkit-box-align: start;
-    align-items: flex-start;
-}
-
-.cnc-lobby-slot-card__avatar {
+.cnc-lobby-vs {
     -webkit-box-flex: 0;
-    flex: 0 0 auto;
-    width: 96px;
-    height: 96px;
-    margin-right: 4px;
-    border-radius: 4px;
-    background: #121820 url('../view/image/guest_avatar.svg') center / cover no-repeat;
-    border: 2px solid #3a4550;
-    box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6);
+    flex: 0 0 52px;
+    width: 52px;
+    text-align: center;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 16px;
+    letter-spacing: 0.16em;
+    color: #9a9a9a;
+    padding-top: 90px;
+    text-shadow: 0 1px 2px #000;
 }
 
-.cnc-lobby-slot-card__avatar.faction-usa { border-color: #3a7bd5; }
-.cnc-lobby-slot-card__avatar.faction-apa { border-color: #c0392b; }
-.cnc-lobby-slot-card__avatar.faction-eu { border-color: #2980b9; }
-.cnc-lobby-slot-card__avatar.faction-gla { border-color: #d4a017; }
+.cnc-lobby-slot {
+    -webkit-box-flex: 1;
+    flex: 1 1 auto;
+    min-height: 180px;
+    position: relative;
+    border: 1px solid #3a3a3a;
+    background: rgba(0, 0, 0, 0.45);
+}
+.cnc-lobby-slot.occupied { border-color: #555; }
+.cnc-lobby-slot.selected { border-color: #1d5f99; }
+.cnc-lobby-slot.faction-usa { border-left: 3px solid #3a7bd5; }
+.cnc-lobby-slot.faction-apa { border-left: 3px solid #c0392b; }
+.cnc-lobby-slot.faction-eu { border-left: 3px solid #2980b9; }
+.cnc-lobby-slot.faction-gla { border-left: 3px solid #d4a017; }
 
-.cnc-lobby-slot-card__info {
+.cnc-lobby-slot__empty {
+    padding: 40px 16px;
+    text-align: center;
+    color: #888;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.cnc-lobby-slot__actions {
+    margin-top: 18px;
+    text-align: center;
+}
+.cnc-lobby-slot__actions .cnc-lobby-btn {
+    margin: 0 4px;
+}
+
+.cnc-lobby-slot__body {
+    padding: 16px;
+    display: -webkit-box;
+    display: -moz-box;
+    display: box;
+    display: flex;
+}
+.cnc-lobby-slot__avatar {
+    -webkit-box-flex: 0;
+    flex: 0 0 72px;
+    width: 72px;
+    height: 72px;
+    margin-right: 14px;
+    border: 1px solid #555;
+    background: #0a0a0a url('../view/image/default_profile_img.png') center center no-repeat;
+    background-size: cover;
+}
+.cnc-lobby-slot__avatar.faction-usa { border-color: #3a7bd5; }
+.cnc-lobby-slot__avatar.faction-apa { border-color: #c0392b; }
+.cnc-lobby-slot__avatar.faction-eu { border-color: #2980b9; }
+.cnc-lobby-slot__avatar.faction-gla { border-color: #d4a017; }
+
+.cnc-lobby-slot__meta {
     -webkit-box-flex: 1;
     flex: 1 1 auto;
     min-width: 0;
-    padding-top: 4px;
-    padding-left: 6px;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-orient: vertical;
-    flex-direction: column;
-    gap: 0;
 }
-
-.cnc-lobby-slot-card__role {
+.cnc-lobby-slot__name-row {
+    margin-bottom: 4px;
+}
+.cnc-lobby-slot__codename {
     display: inline-block;
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--lobby-blue);
-    margin: 0 0 14px;
-    padding: 3px 8px;
-    border-radius: var(--lobby-btn-radius);
-    background: rgba(26, 127, 212, 0.12);
-    border: 1px solid rgba(26, 127, 212, 0.28);
-    -webkit-align-self: flex-start;
-    align-self: flex-start;
-}
-
-.cnc-lobby-startpoint {
-    margin: 14px 0 0;
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #5a6572;
-}
-
-.cnc-lobby-startpoint__val {
-    color: #6f7886;
-    font-weight: normal;
-}
-
-.cnc-lobby-field {
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-orient: vertical;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 18px;
-    max-width: 220px;
-}
-
-.cnc-lobby-field__label {
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #6f7886;
-}
-
-.cnc-lobby-select {
-    width: 100%;
-    max-width: 220px;
-    height: 32px;
-    padding: 0 28px 0 12px;
-    border-radius: 4px;
-    border: 1px solid var(--lobby-border);
-    background: rgba(0, 0, 0, 0.55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%238a939e' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 10px center;
-    color: #d0d8e0;
-    font-family: 'Eurostile-Med', Arial, sans-serif;
-    font-size: 13px;
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-.cnc-lobby-select:focus {
-    outline: none;
-    border-color: var(--lobby-blue);
-    box-shadow: 0 0 0 1px var(--lobby-blue-glow);
-}
-
-.cnc-lobby-select.swatch-usa { border-color: #3a7bd5; color: #b8d4f8; }
-.cnc-lobby-select.swatch-apa { border-color: #c0392b; color: #f0b0b0; }
-.cnc-lobby-select.swatch-eu { border-color: #2980b9; color: #a8d0f0; }
-.cnc-lobby-select.swatch-gla { border-color: #d4a017; color: #e8d078; }
-
-.cnc-lobby-select--diff {
-    max-width: 180px;
-}
-
-.cnc-lobby-slot-card__codename {
-    display: block;
-    font-family: 'Eurostile-Hea', sans-serif;
-    font-size: 30px;
-    letter-spacing: 0.05em;
-    line-height: 1.15;
+    margin-right: 8px;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.04em;
     color: #fff;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
-    margin: 0 0 8px;
+    text-shadow: 0 1px 2px #000;
+    vertical-align: middle;
 }
-
-.cnc-lobby-slot-card__name {
-    display: block;
-    margin: 0 0 4px;
-    font-size: 15px;
-    line-height: 1.35;
-    color: var(--lobby-muted);
-}
-
-.cnc-lobby-slot-card__kick {
-    position: absolute;
-    top: 14px;
-    right: 16px;
-    width: 34px;
-    height: 34px;
-    border: 1px solid var(--lobby-border);
-    border-radius: var(--lobby-btn-radius);
-    background: rgba(255, 255, 255, 0.06);
-    color: #8a939e;
-    font-size: 18px;
-    line-height: 1;
-    cursor: pointer;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    justify-content: center;
-    padding: 0;
-}
-
-.cnc-lobby-ready {
-    margin-top: 18px;
-    max-width: 300px;
-}
-
-.cnc-lobby-ready__track {
-    height: 8px;
-    border-radius: 2px;
-    background: rgba(0, 0, 0, 0.55);
-    overflow: hidden;
-    border: 1px solid rgba(72, 88, 110, 0.35);
-}
-
-.cnc-lobby-ready__track span {
-    display: block;
-    height: 100%;
-    background: linear-gradient(90deg, var(--lobby-blue-dim), var(--lobby-blue));
-}
-
-.cnc-lobby-ready__label {
-    display: block;
-    margin-top: 10px;
+.cnc-lobby-slot__tag {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 3px 8px;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
     font-size: 11px;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #6f7a86;
+    color: #fff;
+    border: 1px solid #06325f;
+    background: #1d5f99;
+    vertical-align: middle;
 }
-
-.cnc-lobby-factions {
-    display: -webkit-box;
-    display: flex;
-    gap: 10px;
-    margin-top: 22px;
-    -webkit-box-wrap: wrap;
-    flex-wrap: wrap;
+.cnc-lobby-slot__tag--ready {
+    color: #fff;
+    border-color: #1f6b1a;
+    background: #37a414;
 }
-
-.cnc-lobby-faction-chip {
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    padding: 8px 16px;
-    border-radius: var(--lobby-btn-radius);
-    border: 1px solid #3a424c;
-    background: rgba(0, 0, 0, 0.5);
-    color: #8a939e;
+.cnc-lobby-slot__player {
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #c8c8c8;
+}
+.cnc-lobby-slot__kick {
+    float: right;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #555;
+    background: #1a1a1a;
+    color: #ccc;
+    font-size: 14px;
+    line-height: 26px;
     cursor: pointer;
-    text-align: center;
-    line-height: 1.2;
-    min-width: 52px;
 }
+.cnc-lobby-slot__kick:hover { color: #fff; border-color: #888; background: #4a4a4a; }
 
-.cnc-lobby-faction-chip.active { color: #fff; border-color: #aaa; }
-.cnc-lobby-faction-chip.swatch-usa { border-color: #3a7bd5; color: #8ab4f0; }
-.cnc-lobby-faction-chip.swatch-apa { border-color: #c0392b; color: #f0a0a0; }
-.cnc-lobby-faction-chip.swatch-eu { border-color: #2980b9; color: #8ac0e8; }
-.cnc-lobby-faction-chip.swatch-gla { border-color: #d4a017; color: #e8c868; }
-
-.cnc-lobby-diff {
-    margin-top: 18px;
-    display: -webkit-box;
-    display: flex;
-    gap: 8px;
-    -webkit-box-wrap: wrap;
-    flex-wrap: wrap;
+.cnc-lobby-slot__fields {
+    margin-top: 4px;
 }
-
-.cnc-lobby-diff button {
+.cnc-lobby-field {
+    display: block;
+    margin-bottom: 10px;
+    max-width: 220px;
+}
+.cnc-lobby-field__label {
+    display: block;
+    margin-bottom: 4px;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
     font-size: 11px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 8px 14px;
-    border-radius: 4px;
-    border: 1px solid var(--lobby-border);
-    background: rgba(0, 0, 0, 0.45);
-    color: #7a8492;
+    color: #9a9a9a;
+}
+
+.cnc-lobby-combo {
+    position: relative;
+    width: 100%;
+    max-width: 220px;
+    z-index: 2;
+}
+.cnc-lobby-combo.active { z-index: 30; }
+.cnc-lobby-combo--map { max-width: 380px; }
+.cnc-lobby-combo__face {
+    display: block;
+    width: 100%;
+    height: 34px;
+    padding: 0 24px 0 10px;
+    margin: 0;
+    border: 1px solid #2a2a2a;
+    background: #0a0a0a;
+    color: #e8e8e8;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.03em;
+    text-align: left;
     cursor: pointer;
-    text-align: center;
-    line-height: 1.2;
 }
-
-.cnc-lobby-diff button.active {
-    border-color: var(--lobby-blue);
+.cnc-lobby-combo--map .cnc-lobby-combo__face {
+    height: 40px;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 16px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.cnc-lobby-combo.swatch-usa .cnc-lobby-combo__face { border-color: #3a7bd5; color: #b8d4f8; }
+.cnc-lobby-combo.swatch-apa .cnc-lobby-combo__face { border-color: #c0392b; color: #f0b0b0; }
+.cnc-lobby-combo.swatch-eu .cnc-lobby-combo__face { border-color: #2980b9; color: #a8d0f0; }
+.cnc-lobby-combo.swatch-gla .cnc-lobby-combo__face { border-color: #d4a017; color: #e8d078; }
+.cnc-lobby-combo__face:hover,
+.cnc-lobby-combo__face:focus {
+    outline: none;
+    border-color: #1d5f99;
+}
+.cnc-lobby-combo__menu {
+    position: absolute;
+    left: 0; right: 0;
+    top: 36px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: rgba(12, 12, 14, 0.98);
+    border: 1px solid #9a9a9a;
+    max-height: 220px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    z-index: 40;
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.85);
+}
+.cnc-lobby-combo--map .cnc-lobby-combo__menu { top: 42px; max-height: 280px; }
+.cnc-lobby-combo__menu li {
+    padding: 9px 12px;
+    color: #e8e8e8;
+    font-size: 14px;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+}
+.cnc-lobby-combo__menu li:last-child { border-bottom: none; }
+.cnc-lobby-combo__menu li:hover,
+.cnc-lobby-combo__menu li.active {
+    background: #1d5f99;
     color: #fff;
-    background: rgba(26, 127, 212, 0.18);
 }
 
-/* Match main shell btn-options / btn-massive-green (style.css) */
-.cnc-lobby-root .btn {
+.cnc-lobby-actions {
+    -webkit-box-flex: 0;
+    flex: 0 0 56px;
+    height: 56px;
+    line-height: 56px;
+    border: 1px solid #9a9a9a;
+    background: rgba(12, 12, 14, 0.94);
+    padding: 0 10px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    text-indent: 0;
-    background-position: 0 0 !important;
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
 }
-
-.cnc-lobby-root .btn.btn-options {
-    display: inline-block !important;
-    min-width: 114px;
-    height: 28px !important;
-    padding: 0 22px !important;
-    margin: 0 !important;
-    border-radius: 4px !important;
-    -webkit-border-radius: 4px !important;
-    font-family: 'EurostileLTStdBold', 'EurostileLTStd-Demi', 'Eurostile-Med', Arial, sans-serif !important;
-    font-weight: bold !important;
-    font-size: 15px !important;
-    letter-spacing: 0.03em;
-    line-height: 26px !important;
-    text-align: center !important;
-    vertical-align: middle;
-    border: 1px solid #0a4577 !important;
-    text-shadow: 0 1px 1px #000, 0 0 6px rgba(0, 40, 90, 0.45), 0 0 2px rgba(255, 255, 255, 0.2);
-    background-color: #176BC0 !important;
-    background-image: url('../view/image/btn_bg_02.png') !important;
-    background-size: 100% 100% !important;
-    background-repeat: no-repeat !important;
-    -webkit-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.45) !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.45) !important;
-}
-
-.cnc-lobby-root .btn.btn-options:hover,
-.cnc-lobby-root .btn.btn-options:focus {
-    background-image: url('../view/image/btn_bg_02_over.png') !important;
-    border-color: #0a4a7a !important;
-    color: #fff !important;
-}
-
-.cnc-lobby-root .btn.btn-massive-green.cnc-lobby-start {
-    display: inline-block !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 200px !important;
-    height: 40px !important;
-    padding: 0 32px !important;
-    margin: 0 !important;
-    border-radius: 4px !important;
-    -webkit-border-radius: 4px !important;
-    font-family: 'Eurostile-Hea', 'Eurostile-Med', Arial, sans-serif !important;
-    font-size: 18px !important;
-    font-weight: bold !important;
-    line-height: 38px !important;
+.cnc-lobby-actions__online {
+    float: right;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 13px;
+    color: #9a9a9a;
     letter-spacing: 0.04em;
-    text-align: center !important;
-    text-shadow: 0 1px 2px #000;
-    border: 1px solid #111 !important;
-    background-color: #55aa00 !important;
-    background-image: url('../view/image/btn_bg_03.png') !important;
-    background-size: 100% 100% !important;
-    background-repeat: no-repeat !important;
 }
 
-.cnc-lobby-root .btn.btn-massive-green.cnc-lobby-start:hover,
-.cnc-lobby-root .btn.btn-massive-green.cnc-lobby-start:focus {
-    background-image: url('../view/image/btn_bg_03_over.png') !important;
-    border-color: #fff !important;
-    color: #fff !important;
+/* Keep shell btn_bg textures — do not restyle like pause/chat dark_gray */
+.cnc-lobby-btn {
+    display: inline-block;
+    min-width: 88px;
+    height: 28px;
+    margin-right: 8px;
+    padding: 0 14px;
+    border: 1px solid #1d5f99;
+    background: #17548f url('../view/image/btn_bg_01.png') center center no-repeat;
+    background-size: 100% 100%;
+    color: #fff;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 1px #000;
+    line-height: 26px;
+    text-align: center;
+    cursor: pointer;
+    vertical-align: middle;
 }
-
-.cnc-lobby-start:disabled {
-    opacity: 0.42;
+.cnc-lobby-btn:hover,
+.cnc-lobby-btn:focus {
+    outline: none;
+    background-image: url('../view/image/btn_bg_01_over.png');
+    border-color: #2a7ab8;
+}
+.cnc-lobby-btn--go {
+    min-width: 140px;
+    height: 34px;
+    line-height: 32px;
+    border-color: #1f6b1a;
+    background-color: #37a414;
+    background-image: url('../view/image/btn_bg_03.png');
+    font-size: 13px;
+}
+.cnc-lobby-btn--go:hover,
+.cnc-lobby-btn--go:focus {
+    background-image: url('../view/image/btn_bg_03.png');
+    border-color: #4a9a30;
+}
+.cnc-lobby-btn--go[disabled],
+.cnc-lobby-btn:disabled {
+    opacity: 0.4;
     cursor: default;
 }
 
-.cnc-lobby-exit {
-    position: relative;
-    z-index: 1;
-}
-
-.cnc-lobby-toast {
-    -webkit-box-flex: 0;
-    flex: 0 0 auto;
-    margin: 0 0 8px;
-    padding: 10px 14px;
-    font-size: 12px;
-    font-family: monospace;
-    color: #9ab4cc;
-    text-align: center;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(72, 88, 110, 0.35);
-    border-radius: 4px;
-}
-
-.cnc-lobby-bar {
-    -webkit-box-flex: 0;
-    flex: 0 0 var(--lobby-bar-h);
-    height: var(--lobby-bar-h);
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    position: relative;
-    margin: auto -32px 0;
-    padding: 0 32px;
-    border-top: 2px solid var(--lobby-border);
-    background: rgba(0, 0, 0, 0.82);
-    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
-}
-
-.cnc-lobby-bar__center {
+.cnc-lobby-debug {
     position: absolute;
-    left: 50%;
-    top: 50%;
-    -webkit-transform: translate(-50%, -50%);
-    transform: translate(-50%, -50%);
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-pack: center;
-    justify-content: center;
-    pointer-events: none;
+    left: 0; right: 0; bottom: 0;
+    height: 72px;
+    z-index: 20;
+    border-top: 1px solid #9a9a9a;
+    background: rgba(12, 12, 14, 0.96);
 }
-
-.cnc-lobby-bar__center .cnc-lobby-start {
-    pointer-events: auto;
+.cnc-lobby-debug__bar {
+    height: 100%;
+    padding: 6px 12px;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
 }
-
-.cnc-lobby-bar__online {
-    margin-left: auto;
-    position: relative;
-    z-index: 1;
-    font-size: 13px;
-    color: #6f7886;
+.cnc-lobby-debug__label {
+    float: left;
+    margin-right: 10px;
+    margin-top: 2px;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #9a9a9a;
+}
+.cnc-lobby-debug__clear {
+    float: right;
+    margin-top: 0;
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid #555;
+    background: #1a1a1a;
+    color: #ccc;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+.cnc-lobby-debug__clear:hover { color: #fff; border-color: #888; background: #4a4a4a; }
+.cnc-lobby-debug__log {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: 56px;
+    margin-left: 60px;
+    margin-right: 64px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #8aa0b4;
+}
+.cnc-lobby-debug__line {
     white-space: nowrap;
-    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-
-@media (max-width: 1100px) {
-    .cnc-lobby-theater__title {
-        font-size: 38px;
-    }
-
-    .cnc-lobby-theater__visual {
-        width: 32%;
-        min-width: 160px;
-    }
-
-    .cnc-lobby-slot-card__codename {
-        font-size: 28px;
-    }
-}
-
-@media (max-width: 900px) {
-    .cnc-lobby-battle {
-        padding-left: 20px;
-        padding-right: 20px;
-    }
-
-    .cnc-lobby-bar {
-        margin-left: -20px;
-        margin-right: -20px;
-        padding-left: 20px;
-        padding-right: 20px;
-    }
-
-    .cnc-lobby-stage {
-        -webkit-box-orient: vertical;
-        flex-direction: column;
-    }
-
-    .cnc-lobby-hud {
-        right: 0;
-        padding: 0 20px;
-    }
-
-    .cnc-lobby-rail {
-        -webkit-box-flex: 0;
-        flex: 0 0 200px;
-        width: 100%;
-        border-left: none;
-        border-top: 1px solid rgba(56, 64, 76, 0.9);
-    }
-
-    .cnc-lobby-arena {
-        -webkit-box-orient: vertical;
-        flex-direction: column;
-        gap: 16px;
-    }
-
-    .cnc-lobby-divider {
-        -webkit-box-orient: horizontal;
-        flex-direction: row;
-        -webkit-box-flex: 0;
-        flex: 0 0 44px;
-        width: 100%;
-    }
-
-    .cnc-lobby-divider__line {
-        width: auto;
-        height: 1px;
-        min-height: 0;
-        -webkit-box-flex: 1;
-        flex: 1 1 auto;
-        background: linear-gradient(90deg, transparent, var(--lobby-border-strong), transparent);
-    }
-
-    .cnc-lobby-slot-card__actions {
-        -webkit-box-orient: vertical;
-        flex-direction: column;
-        width: 100%;
-        max-width: 220px;
-    }
-
-    .cnc-lobby-slot-card__actions .btn {
-        width: 100%;
-    }
-}
+.cnc-lobby-debug__line--empty { color: #555; }

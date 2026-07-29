@@ -1,4 +1,4 @@
-use crate::core::inspector::grpc_inspector::{
+﻿use crate::core::inspector::grpc_inspector::{
     protobuf_wire_format_dump_with_opts, ProtobufWireDumpOpts,
 };
 use crate::core::inspector::inspector_module::format_hex_dump;
@@ -19,7 +19,7 @@ pub struct GrpcMakeWorkbenchState {
     pub manual_first_grpc_payload_len: String,
     /// True when gRPC-prefix peel found nothing at offset 0 (Recovery can search / fix truncated length).
     pub needs_calculate_length: bool,
-    /// Background length-recovery (`brute_recover_grpc_dissect`) — UI overlay while running.
+    /// Background length-recovery (`brute_recover_grpc_dissect`) -- UI overlay while running.
     pub length_recovery_busy: bool,
     length_recovery_rx: Option<mpsc::Receiver<Result<(String, Vec<String>), String>>>,
     pub status_hint: Option<String>,
@@ -461,7 +461,7 @@ fn resolve_dissect_payload(
         }
         needs_recovery = raw.len() >= 5;
         notes.push(
-            "No complete gRPC length-prefix at buffer start — trying naked protobuf/gzip.".into(),
+            "No complete gRPC length-prefix at buffer start -- trying naked protobuf/gzip.".into(),
         );
     }
 

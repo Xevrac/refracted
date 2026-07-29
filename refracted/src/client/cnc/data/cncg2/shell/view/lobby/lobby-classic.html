@@ -1,0 +1,158 @@
+<div class="cc-lobby" ng-controller="ShellLobbyController" ng-click="closeMenus()">
+    <div class="cc-lobby__body" ng-show="lobbyView == 'setup'">
+        <div class="cc-lobby__stage">
+            <div class="cc-lobby__map" ng-click="$event.stopPropagation()">
+                <div class="cc-lobby__map-art" aria-hidden="true"></div>
+                <div class="cc-lobby__map-veil" aria-hidden="true"></div>
+                <div class="cc-lobby__map-ui">
+                    <div class="cc-lobby__tabs">
+                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'MAPS'}" ng-click="setLobbySubTab('MAPS')">SELECT MAP</button>
+                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'GENERALS'}" ng-click="setLobbySubTab('GENERALS')">GENERALS</button>
+                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'MODIFY'}" ng-click="setLobbySubTab('MODIFY')">MODIFY GENERALS</button>
+                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'HISTORY'}" ng-click="setLobbySubTab('HISTORY')">HISTORY</button>
+                    </div>
+                    <div class="cc-lobby__map-chooser">
+                        <button type="button" class="cc-lobby__map-pill" ng-hide="lobbySubTab == 'MAPS'" ng-click="setLobbySubTab('MAPS')">
+                            {{ selectedMap.label }}
+                            <span class="cc-lobby__chevron"></span>
+                        </button>
+                        <ul class="cc-lobby__map-list" ng-show="lobbySubTab == 'MAPS'">
+                            <li ng-repeat="m in maps" ng-class="{active: m.id == selectedMap.id}">
+                                <a href="" ng-click="selectMap(m)">{{ m.label }}</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cc-lobby__teams">
+                <div class="cc-lobby__team cc-lobby__team--1">
+                    <div class="cc-lobby__team-head">TEAM 1</div>
+                    <div class="cc-lobby__card"
+                         ng-repeat="slot in team1"
+                         ng-show="slot.occupied"
+                         ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
+                         ng-click="$event.stopPropagation()">
+                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal"
+                                ng-click="clearSlot(1, $index, $event)" title="Remove">&times;</button>
+                        <div class="cc-lobby__card-left">
+                            <div class="cc-lobby__portrait"><img ng-src="{{ generalAvatar(slot) }}" alt=""></div>
+                            <div class="cc-lobby__color-ribbon" ng-if="!slot.invitePending"
+                                 ng-style="{'background-color': slot.color}"></div>
+                            <div class="cc-lobby__tools" ng-if="!slot.invitePending">
+                                <button type="button" class="cc-lobby__arrow"
+                                        ng-click="toggleSlotMenu(1, $index, $event)"
+                                        ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
+                                        title="Faction / general / colour"></button>
+                            </div>
+                            <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
+                                <li class="cc-lobby__menu-label">Faction</li>
+                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction()}">
+                                    <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
+                                </li>
+                                <li class="cc-lobby__menu-label">General</li>
+                                <li ng-repeat="g in availableGenerals(slot)"
+                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral()}">
+                                    <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
+                                </li>
+                                <li class="cc-lobby__menu-label">Color</li>
+                                <li class="cc-lobby__menu-colors">
+                                    <button type="button" class="cc-lobby__swatch" ng-repeat="c in colors"
+                                            ng-style="{'background-color': c}" ng-class="{on: slot.color == c}"
+                                            ng-click="setColor(slot, c, $event)"></button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="cc-lobby__card-right">
+                            <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
+                            <div class="cc-lobby__names">
+                                <div class="cc-lobby__codename">{{ slot.codename }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__ai" ng-if="slot.isAi">
+                                    <span>AI:</span>
+                                    <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(1)">
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-click="inviteFriend(1)">INVITE FRIEND</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-click="addAi(1)">ADD AI</button>
+                    </div>
+                </div>
+
+                <div class="cc-lobby__vs"><span>VS</span></div>
+
+                <div class="cc-lobby__team cc-lobby__team--2">
+                    <div class="cc-lobby__team-head">TEAM 2</div>
+                    <div class="cc-lobby__card"
+                         ng-repeat="slot in team2"
+                         ng-show="slot.occupied"
+                         ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(2, $index)}"
+                         ng-click="$event.stopPropagation()">
+                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal"
+                                ng-click="clearSlot(2, $index, $event)" title="Remove">&times;</button>
+                        <div class="cc-lobby__card-left">
+                            <div class="cc-lobby__portrait"><img ng-src="{{ generalAvatar(slot) }}" alt=""></div>
+                            <div class="cc-lobby__color-ribbon" ng-if="!slot.invitePending"
+                                 ng-style="{'background-color': slot.color}"></div>
+                            <div class="cc-lobby__tools" ng-if="!slot.invitePending">
+                                <button type="button" class="cc-lobby__arrow"
+                                        ng-click="toggleSlotMenu(2, $index, $event)"
+                                        ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
+                                        title="Faction / general / colour"></button>
+                            </div>
+                            <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
+                                <li class="cc-lobby__menu-label">Faction</li>
+                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction()}">
+                                    <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
+                                </li>
+                                <li class="cc-lobby__menu-label">General</li>
+                                <li ng-repeat="g in availableGenerals(slot)"
+                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral()}">
+                                    <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
+                                </li>
+                                <li class="cc-lobby__menu-label">Color</li>
+                                <li class="cc-lobby__menu-colors">
+                                    <button type="button" class="cc-lobby__swatch" ng-repeat="c in colors"
+                                            ng-style="{'background-color': c}" ng-class="{on: slot.color == c}"
+                                            ng-click="setColor(slot, c, $event)"></button>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="cc-lobby__card-right">
+                            <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
+                            <div class="cc-lobby__names">
+                                <div class="cc-lobby__codename">{{ slot.codename }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__ai" ng-if="slot.isAi">
+                                    <span>AI:</span>
+                                    <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(2)">
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-click="inviteFriend(2)">INVITE FRIEND</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-click="addAi(2)">ADD AI</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cc-lobby__actions">
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="exitLobby()">EXIT</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startBattle()">START BATTLE</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="openServerBrowser()">SERVER BROWSER</button>
+            </div>
+        </div>
+
+        <aside class="cc-lobby__rail">
+            <div class="cc-sidebar cc-lobby__sidebar" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
+        </aside>
+    </div>
+
+    <div class="cc-lobby__browser" ng-show="lobbyView == 'browser'" ng-include="'view/lobby/server-browser-classic.html'"></div>
+    <div class="cc-lobby__modal" ng-show="_starting">
+        <div class="cc-lobby__modal-box">Starting game..</div>
+    </div>
+</div>

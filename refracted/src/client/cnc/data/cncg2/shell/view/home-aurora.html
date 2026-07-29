@@ -1,0 +1,139 @@
+<div class="au-dash" ng-controller="DashboardController">
+    <div class="au-rail">
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'LIVE'}" ng-click="setTab('LIVE')">Live</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'PROFILE'}" ng-click="setTab('PROFILE')">Profile</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'CUSTOMIZE'}" ng-click="setTab('CUSTOMIZE')">Customize</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'WATCH'}" ng-click="setTab('WATCH')">Watch</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'LEARN'}" ng-click="setTab('LEARN')">Learn</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'SUPPORT'}" ng-click="setTab('SUPPORT')">Support</button>
+        <button type="button" class="au-rail__item au-rail__item--play" ng-click="openLobby()">Play</button>
+        <div class="au-rail__grow"></div>
+        <div class="au-build au-build--rail" aria-label="Build information">
+            <div>rfr/{{ buildRfr }}</div>
+            <div>prism/{{ buildPrism }}</div>
+            <div>cnc_rl/{{ buildCnc }}</div>
+        </div>
+    </div>
+
+    <div class="au-stage" ng-class="{'au-stage--subnav': hasSubnavRow()}">
+        <div class="au-live" ng-show="activeTab == 'LIVE'">
+        <div class="au-hero au-hud-frame" ng-show="!activeNewsArticle">
+            <div class="au-hero__copy">
+                <p class="au-eyebrow">Theater ready</p>
+                <h1 class="au-hero__title">{{ playerName }}</h1>
+                <p class="au-hero__lead">Wins {{ wins }} · Losses {{ losses }}</p>
+                <div class="au-hero__actions">
+                    <button type="button" class="au-btn au-btn--primary" ng-click="openLobby()">PLAY {{ selectedMode }}</button>
+                    <div class="au-mode">
+                        <button type="button" class="au-btn au-btn--ghost" data-toggle="dropdown">Mode</button>
+                        <ul class="dropdown-menu">
+                            <li><a href="" ng-click="setMode('PVP')">PVP</a></li>
+                            <li><a href="" ng-click="setMode('PVE')">PVE</a></li>
+                            <li><a href="" ng-click="setMode('1v1')">1v1</a></li>
+                            <li><a href="" ng-click="setMode('Team Battle')">Team Battle</a></li>
+                            <li><a href="" ng-click="setMode('Onslaught')">Onslaught</a></li>
+                            <li><a href="" ng-click="setMode('Custom Skirmish')">Custom Skirmish</a></li>
+                            <li><a href="" ng-click="setMode('Practice PvE')">Practice PvE</a></li>
+                        </ul>
+                    </div>
+                    <button type="button" class="au-btn au-btn--ghost">Create party</button>
+                </div>
+            </div>
+            <div class="au-hero__art">
+                <img ng-src="{{ currentLiveImage }}" alt="" class="au-hero__img">
+            </div>
+        </div>
+
+        <div class="au-panel-row" ng-class="{'au-panel-row--article': activeNewsArticle}">
+            <div class="au-panel au-panel--stats" ng-hide="activeNewsArticle">
+                <div class="au-stats__head">Network</div>
+                <div class="au-stats__row">
+                    <div class="au-stats__cell au-stats__cell--players">
+                        <span class="au-stats__icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <circle cx="12" cy="8" r="3.2" stroke="#3aa0ff" stroke-width="1.8"/>
+                                <path d="M5.5 19.5c1.2-3.2 3.4-4.8 6.5-4.8s5.3 1.6 6.5 4.8" stroke="#3aa0ff" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="au-stats__meta">
+                            <span class="au-stats__label">Players online</span>
+                            <strong class="au-stats__value">{{ onlinePlayers }}</strong>
+                        </span>
+                    </div>
+                    <div class="au-stats__cell au-stats__cell--servers">
+                        <span class="au-stats__icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+                                <rect x="3.5" y="4" width="17" height="5.5" rx="1.2" stroke="#5fd868" stroke-width="1.8"/>
+                                <rect x="3.5" y="14.5" width="17" height="5.5" rx="1.2" stroke="#5fd868" stroke-width="1.8"/>
+                                <circle cx="7" cy="6.75" r="1" fill="#5fd868"/>
+                                <circle cx="7" cy="17.25" r="1" fill="#5fd868"/>
+                                <path d="M10.5 6.75h7M10.5 17.25h7" stroke="#5fd868" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </span>
+                        <span class="au-stats__meta">
+                            <span class="au-stats__label">Servers online</span>
+                            <strong class="au-stats__value">{{ onlineServers }}</strong>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="au-panel au-panel--news" ng-class="{'au-panel--news-open': activeNewsArticle}">
+                <div ng-include="'view/newsbar.html'"></div>
+            </div>
+        </div>
+        </div>
+
+        <div class="au-subnav" ng-show="hasSubnavRow()">
+            <a href="" ng-show="activeTab == 'PROFILE'" ng-class="{'au-subnav__on': activeSubTab == 'OVERVIEW'}" ng-click="setSubTab('OVERVIEW')">Overview</a>
+            <a href="" ng-show="activeTab == 'PROFILE'" ng-class="{'au-subnav__on': activeSubTab == 'STATISTICS'}" ng-click="setSubTab('STATISTICS')">Statistics</a>
+            <a href="" ng-show="activeTab == 'PROFILE'" ng-class="{'au-subnav__on': activeSubTab == 'MATCH HISTORY'}" ng-click="setSubTab('MATCH HISTORY')">Match History</a>
+            <a href="" ng-show="activeTab == 'PROFILE'" ng-class="{'au-subnav__on': activeSubTab == 'ACHIEVEMENTS'}" ng-click="setSubTab('ACHIEVEMENTS')">Achievements</a>
+            <a href="" ng-show="activeTab == 'PROFILE'" ng-class="{'au-subnav__on': activeSubTab == 'LEADERBOARDS'}" ng-click="setSubTab('LEADERBOARDS')">Leaderboards</a>
+            <a href="" ng-show="activeTab == 'CUSTOMIZE'" ng-class="{'au-subnav__on': activeSubTab == 'GENERALS'}" ng-click="setSubTab('GENERALS')">Generals</a>
+            <a href="" ng-show="activeTab == 'CUSTOMIZE'" ng-class="{'au-subnav__on': activeSubTab == 'MODIFY GENERALS'}" ng-click="setSubTab('MODIFY GENERALS')">Modify Generals</a>
+            <a href="" ng-show="activeTab == 'CUSTOMIZE'" ng-class="{'au-subnav__on': activeSubTab == 'HISTORY'}" ng-click="setSubTab('HISTORY')">History</a>
+            <a href="" ng-show="activeTab == 'LEARN'" ng-class="{'au-subnav__on': activeSubTab == 'PLAY TUTORIAL'}" ng-click="setSubTab('PLAY TUTORIAL')">Play Tutorial</a>
+            <a href="" ng-show="activeTab == 'LEARN'" ng-class="{'au-subnav__on': activeSubTab == 'GUIDES'}" ng-click="setSubTab('GUIDES')">Guides</a>
+            <a href="" ng-show="activeTab == 'SUPPORT'" ng-class="{'au-subnav__on': activeSubTab == 'FAQ'}" ng-click="setSubTab('FAQ')">FAQ</a>
+            <a href="" ng-show="activeTab == 'SUPPORT'" ng-class="{'au-subnav__on': activeSubTab == 'TROUBLESHOOT'}" ng-click="setSubTab('TROUBLESHOOT')">Troubleshoot</a>
+        </div>
+
+        <div class="au-panel au-panel--body" ng-show="activeTab == 'PROFILE'" ng-controller="ProfileController">
+            <div class="au-profile-host" ng-include="'view/profile/profile-overview.html'" ng-show="activeSubTab == 'OVERVIEW'"></div>
+            <div class="au-profile-host" ng-include="'view/profile/profile-statistics.html'" ng-show="activeSubTab == 'STATISTICS'"></div>
+            <div class="au-profile-host" ng-include="'view/profile/profile-match-history.html'" ng-show="activeSubTab == 'MATCH HISTORY'"></div>
+            <div class="au-profile-host" ng-include="'view/profile/profile-achievements.html'" ng-show="activeSubTab == 'ACHIEVEMENTS'"></div>
+            <div class="au-profile-host" ng-include="'view/profile/profile-leaderboards.html'" ng-show="activeSubTab == 'LEADERBOARDS'"></div>
+        </div>
+
+        <div class="au-panel au-panel--body" ng-show="activeTab == 'LEARN'">
+            <div class="au-profile-host" ng-include="'view/learn/learn-main.html'"></div>
+        </div>
+
+        <div class="au-panel au-panel--body" ng-show="activeTab == 'SUPPORT'">
+            <div class="au-profile-host" ng-include="'view/support/support-main.html'"></div>
+        </div>
+
+        <div class="au-panel au-panel--body au-panel--body-tip" ng-show="activeTab == 'CUSTOMIZE' || activeTab == 'WATCH'">
+            <div class="cc-info-tip cc-info-tip--page">
+                <strong>Coming soon</strong>
+                <span ng-show="activeTab == 'CUSTOMIZE'">Customize generals and loadouts is not ready yet. This section will light up in a later build.</span>
+                <span ng-show="activeTab == 'WATCH'">Watch is not ready yet. This section will light up in a later build.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="au-side">
+        <div class="au-side__head">Social</div>
+        <div class="au-side__body" ng-include="'view/sidebar.html'"></div>
+    </div>
+
+    <div class="au-foot">
+        <button class="btn-cnc-credits" ng-click="openCredits()"></button>
+        <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-click="openDebug()"></button>
+        <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-click="toggleAlertPopup()"></button>
+        <div class="alert-popup-box" ng-show="alertPopupOpen">
+            <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator. All functions, features, visuals and gameplay elements are subject to change.</p>
+        </div>
+    </div>
+</div>

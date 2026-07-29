@@ -1,0 +1,3 @@
+# Generated from retail game assemblies via tools/msgsys-dump — do not commit.
+*.bin
+dlls/

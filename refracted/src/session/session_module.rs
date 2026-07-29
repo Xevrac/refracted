@@ -1,4 +1,4 @@
-use parking_lot::Mutex;
+﻿use parking_lot::Mutex;
 use std::net::SocketAddr;
 
 pub use crate::common::build_profile::BuildProfile;
@@ -61,7 +61,7 @@ impl Default for UserSession {
 
 /// Global session state shared between LSX and HTTP handlers
 static GLOBAL_SESSION: Mutex<Option<UserSession>> = Mutex::new(None);
-/// IPv4 (Blaze / network byte order) last seen as the QoS TCP peer — fills `EXIP` when the client
+/// IPv4 (Blaze / network byte order) last seen as the QoS TCP peer -- fills `EXIP` when the client
 /// still sends 0.0.0.0 in `updateNetworkInfo`.
 static LAST_QOS_OBSERVED_EXIP_IP: Mutex<Option<u32>> = Mutex::new(None);
 static BUILD_DETECTION: Mutex<BuildDetectionState> = Mutex::new(BuildDetectionState {
@@ -105,7 +105,7 @@ pub fn set_user_session(session: UserSession) {
     crate::session::blaze_sessions::sync_all_from_global_session();
 }
 
-/// Real LSX/HTTP session only — never the [`UserSession::default`] placeholder.
+/// Real LSX/HTTP session only -- never the [`UserSession::default`] placeholder.
 pub fn clone_user_session_if_set() -> Option<UserSession> {
     GLOBAL_SESSION.lock().clone()
 }
@@ -114,6 +114,22 @@ pub fn clone_user_session_if_set() -> Option<UserSession> {
 pub fn get_user_session() -> UserSession {
     let global = GLOBAL_SESSION.lock();
     global.clone().unwrap_or_default()
+}
+
+thread_local! {
+    static CURRENT_BLAZE_SESSION_ID: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Record which Blaze session's request is being handled *synchronously* on this thread, so
+/// per-session responses (e.g. a pooled dedicated server's own auth identity) can avoid falling back
+/// to the shared client profile. Set immediately before a synchronous handler/builder call -- there
+/// must be no `.await` between the set and the read.
+pub fn set_current_blaze_session_id(id: Option<u64>) {
+    CURRENT_BLAZE_SESSION_ID.with(|c| c.set(id));
+}
+
+pub fn current_blaze_session_id() -> Option<u64> {
+    CURRENT_BLAZE_SESSION_ID.with(|c| c.get())
 }
 
 /// Increment updateNetworkInfo call count and return the count

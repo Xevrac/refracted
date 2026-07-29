@@ -1,0 +1,309 @@
+@font-face {
+    font-family: 'Eurostile-Med';
+    src: url('../fonts/Eurostile-Reg.otf') format('opentype');
+}
+@font-face {
+    font-family: 'Eurostile-Hea';
+    src: url('../fonts/Eurostile-Bol.otf') format('opentype');
+}
+@font-face {
+    font-family: 'EurostileLTStdBold';
+    src: url('../fonts/EurostileLTStdBold.otf') format('opentype');
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', 'Eurostile-Med', Arial, sans-serif;
+    color: #fff;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+[ng\:cloak], [ng-cloak], .ng-cloak { display: none !important; }
+
+/* Pause menu — centered stack in Aurora visual language */
+.pause-menu {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 320px;
+    margin: -114px 0 0 -160px;
+    padding: 12px;
+    background: rgba(10, 14, 16, 0.96);
+    border: 1px solid #1c2a32;
+    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.78);
+    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.78);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    z-index: 100;
+}
+
+.pause-menu-btn {
+    display: block;
+    width: 100%;
+    height: 44px;
+    margin: 0 0 8px 0;
+    padding: 0;
+    border: 1px solid #4a5560;
+    background-color: #1a1e22;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    color: #d8d8d8;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 2px #000;
+    cursor: pointer;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+}
+.pause-menu-btn:last-child { margin-bottom: 0; }
+.pause-menu-btn:hover,
+.pause-menu-btn:focus {
+    outline: none;
+    color: #fff;
+    border-color: #6a7a88;
+    background-color: #242a30;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+    text-shadow: 0 0 8px rgba(58, 160, 255, 0.18);
+}
+
+/* Confirm Quit / Confirm Surrender — over pause menu */
+.confirm-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: transparent;
+    z-index: 500;
+}
+
+.confirm-modal-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 340px;
+    height: 150px;
+    margin: -75px 0 0 -170px;
+    background: rgba(10, 14, 16, 0.97);
+    border: 1px solid #1c2a32;
+    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
+    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+body.ingame-aurora .options-modal-box {
+    background: #0c0f0d;
+    border: 1px solid #1c2a32;
+    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.2), 0 20px 50px rgba(0, 0, 0, 0.85);
+    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.2), 0 20px 50px rgba(0, 0, 0, 0.85);
+}
+
+body.ingame-aurora .options-header h2 {
+    color: #e6edf5;
+    text-shadow: 0 0 16px rgba(0, 136, 255, 0.35);
+}
+
+body.ingame-aurora .options-sidebar {
+    background: #0f1418;
+    border-color: #1c2a32;
+}
+
+body.ingame-aurora .options-content {
+    background: #0c0f0d;
+    border-color: #1c2a32;
+}
+
+body.ingame-aurora .options-tabs > li > a {
+    color: #9eb4c8;
+}
+
+body.ingame-aurora .options-tabs > li.active > a {
+    color: #fff;
+}
+
+body.ingame-aurora .opt-label-main,
+body.ingame-aurora .opt-radio,
+body.ingame-aurora .opt-checkbox {
+    color: #e6edf5;
+}
+
+body.ingame-aurora .btn-opt-action,
+body.ingame-aurora .btn-opt-restore {
+    color: #d8d8d8;
+    text-align: center;
+    text-shadow: 0 1px 0 #000;
+    border: 1px solid #4a5560;
+    border-radius: 4px;
+    padding: 0;
+    background-color: #1a1e22;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    background-size: auto, 100% 100%;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+}
+
+body.ingame-aurora .btn-opt-green,
+body.ingame-aurora .btn-opt-yellow,
+body.ingame-aurora .btn-opt-restore {
+    background-color: #1a1e22;
+}
+
+body.ingame-aurora .btn-opt-action:hover,
+body.ingame-aurora .btn-opt-restore:hover {
+    color: #fff;
+    border-color: #6a7a88;
+    background-color: #242a30;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+}
+
+body.ingame-aurora .btn-options-close {
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    background: #121618;
+    border: 1px solid #1c2a32;
+    border-radius: 0;
+}
+
+body.ingame-aurora .btn-options-close:hover {
+    border-color: #3aa0ff;
+    -webkit-filter: none;
+}
+
+body.ingame-aurora .btn-options-close::before,
+body.ingame-aurora .btn-options-close::after {
+    left: 10px;
+    top: 4px;
+    width: 1px;
+    height: 12px;
+    background: #8b9aab;
+    display: block;
+}
+
+body.ingame-aurora .btn-options-close:hover::before,
+body.ingame-aurora .btn-options-close:hover::after {
+    background: #fff;
+}
+
+.confirm-modal-title {
+    margin: 0;
+    padding: 12px 14px 0 14px;
+    color: #fff;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 0.02em;
+}
+
+.confirm-modal-msg {
+    margin: 0;
+    padding: 28px 16px 0 16px;
+    text-align: center;
+    color: #e8e8e8;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.confirm-modal-actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    text-align: center;
+}
+
+.confirm-btn {
+    display: inline-block;
+    width: 88px;
+    height: 30px;
+    margin: 0 8px;
+    padding: 0;
+    border: 1px solid #4a5560;
+    background-color: #1a1e22;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    color: #d8d8d8;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+}
+.confirm-btn:hover,
+.confirm-btn:focus {
+    outline: none;
+    color: #fff;
+    border-color: #6a7a88;
+    background-color: #242a30;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+}
+
+/* Options sits above pause + confirms.
+   Pause body uses Eurostile-Hea with no base font-size; frontend options inherit
+   body.cc-theme (Med @ 12px). Scope overrides so in-game options match shell. */
+.options-modal-overlay {
+    z-index: 9999;
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 12px;
+    color: #fff;
+}
+.options-modal-overlay .options-header h2 {
+    font-family: 'Eurostile-Med', 'EurostileLTStd', Arial, sans-serif;
+    font-size: 18px;
+    font-weight: normal;
+}
+.options-modal-overlay .options-tabs > li > a {
+    font-family: 'Eurostile-Med', 'EurostileLTStd', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: normal;
+}
+.options-modal-overlay .options-row-label,
+.options-modal-overlay .options-hint,
+.options-modal-overlay .options-select,
+.options-modal-overlay .options-footer-btn,
+.options-modal-overlay label,
+.options-modal-overlay select,
+.options-modal-overlay input,
+.options-modal-overlay button {
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+}

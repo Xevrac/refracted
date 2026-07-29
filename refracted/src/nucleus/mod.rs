@@ -1,4 +1,4 @@
-//! **Nucleus** — game-agnostic identity/account facade inside Refracted.
+﻿//! **Nucleus** -- game-agnostic identity/account facade inside Refracted.
 //!
 //! ## Relationship to Blaze
 //! - [`crate::blaze::components`] stays the registry for **Blaze wire** names (including component **1002**
@@ -9,7 +9,7 @@
 //!
 //! ## Wire reality (correcting a common simplification)
 //! Titles that call **NucleusIdentity** over Blaze send **1002** packets on the **same Blaze connection**
-//! as everything else — the game client *can* see that traffic. What stays “internal” in *this* app is
+//! as everything else -- the game client *can* see that traffic. What stays “internal” in *this* app is
 //! *our* choice of when we **synthesize** or **map** those responses from the Nucleus layer vs. pass-through.
 //!
 //! ## UI

@@ -1,0 +1,25 @@
+<div class="cc-shell-root cc-shell-root--aurora">
+    <div class="au-top">
+        <div class="au-top__brand">
+            <img class="au-top__logo" src="images/aurora-logo-sml.png" alt="" width="36" height="36">
+            <div class="au-top__titles">
+                <span class="au-top__mark">AURORA</span>
+                <span class="au-top__sub">Powered By Refracted</span>
+            </div>
+        </div>
+        <div class="au-top__right">
+            <button type="button"
+                    class="au-btn au-btn--ghost au-top__browse"
+                    ng-show="lobbyOpen && lobbyView == 'setup'"
+                    ng-click="openServerBrowser()">Server Browser</button>
+            <button type="button"
+                    class="au-btn au-btn--ghost au-top__browse"
+                    ng-show="lobbyOpen && lobbyView == 'browser'"
+                    ng-click="closeServerBrowser()">Back to Lobby</button>
+            <button type="button" class="au-btn au-btn--ghost" ng-click="openOptions()">OPTIONS</button>
+        </div>
+    </div>
+
+    <div ng-include="homeTemplateUrl" class="cc-main-view au-main" ng-if="!lobbyOpen"></div>
+    <div ng-include="lobbyTemplateUrl" class="cc-main-view au-main au-main--lobby" ng-if="lobbyOpen"></div>
+</div>

@@ -1,10 +1,10 @@
-use crate::blaze::tdf::TdfEncoder;
+﻿use crate::blaze::tdf::TdfEncoder;
 use crate::client::labs::LABS_SESSION_OBJECT_ID;
 use crate::common::error::BlazeResult;
 use crate::session::session_module::UserSession;
 use bytes::Bytes;
 
-/// `USER` struct for UserAdded / lookupUser — field order matches Blaze `UserAdded` (`AID`, `AIDS`, `ALOC`, …).
+/// `USER` struct for UserAdded / lookupUser -- field order matches Blaze `UserAdded` (`AID`, `AIDS`, `ALOC`, …).
 fn encode_user_identification_inner(session: &UserSession) -> Vec<u8> {
     let mut user_struct = Vec::new();
     user_struct.extend_from_slice(&TdfEncoder::encode_long("AID ", session.user_id as i64));
@@ -155,7 +155,7 @@ pub fn handle_user_sessions_update_hardware_flags(payload: &[u8]) -> BlazeResult
     Ok(Bytes::from(Vec::new()))
 }
 
-/// UserSessions.lookupUser (Command 12) — client expects `USER` identification; empty replies were ~16B and dropped the session.
+/// UserSessions.lookupUser (Command 12) -- client expects `USER` identification; empty replies were ~16B and dropped the session.
 pub fn handle_user_sessions_lookup_user(_payload: &[u8]) -> BlazeResult<Bytes> {
     use crate::session::get_user_session;
     let session = get_user_session();
@@ -178,7 +178,7 @@ pub fn handle_user_sessions_command_60(_payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(Vec::new()))
 }
 
-/// UserSessions command 8 — `UserAuthenticated` notification payload (stable field order).
+/// UserSessions command 8 -- `UserAuthenticated` notification payload (stable field order).
 pub fn handle_user_sessions_authenticated(_payload: &[u8]) -> BlazeResult<Bytes> {
     use crate::blaze::handlers::auth_handlers::blaze_session_key;
     use crate::session::get_user_session;

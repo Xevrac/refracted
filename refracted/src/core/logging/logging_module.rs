@@ -9,7 +9,7 @@ macro_rules! console_println {
             let text = format!($($arg)*);
             
             // Use tracing::info! with the formatted text
-            // CustomFormatter will detect ANSI codes ([Client→], [Blaze→], \x1b) and skip [Console] prefix
+            // CustomFormatter will detect ANSI codes ([Client→], [Blaze→], [RTS], \x1b) and skip [Console] prefix
             // LogWriter will then parse ANSI codes and display with proper colors
             tracing::info!("{}", text);
         }

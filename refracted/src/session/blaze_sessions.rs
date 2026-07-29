@@ -154,6 +154,14 @@ pub fn sync_all_from_global_session() {
     let mut m = registry().lock();
     if let Some(s) = snapshot {
         for e in m.values_mut() {
+            if e
+                .clnt
+                .as_deref()
+                .map(crate::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
+                .unwrap_or(false)
+            {
+                continue;
+            }
             if !s.display_name.is_empty() {
                 e.display_name = Some(s.display_name.clone());
             }
@@ -244,18 +252,43 @@ fn note_clnt_from_payload(id: u64, payload: &[u8]) {
     }
 }
 
+/// Stamp a pooled dedicated server's own identity (`CNCO<N>` + distinct persona) onto its Blaze row
+/// so it never carries the shared client persona. Also ensures the row is recognized as a pooled
+/// server (`clnt`), so `sync_all_from_global_session` skips it and never overwrites this identity.
+pub fn set_dedicated_identity(id: u64, name: &str, persona_id: u64) {
+    {
+        let mut m = registry().lock();
+        let Some(e) = m.get_mut(&id) else {
+            return;
+        };
+        e.display_name = Some(name.to_string());
+        e.persona_id = Some(persona_id);
+        e.user_id = Some(persona_id);
+        let is_server = e
+            .clnt
+            .as_deref()
+            .map(crate::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
+            .unwrap_or(false);
+        if !is_server {
+            e.clnt = Some("RtsBlazeServer".to_string());
+        }
+    }
+    persist_sessions_to_disk();
+}
+
 pub fn mark_authenticated(id: u64) {
     sync_all_from_global_session();
-    let mut m = registry().lock();
-    if let Some(e) = m.get_mut(&id) {
-        e.authenticated = true;
-    } else {
-        tracing::warn!(
-            "mark_authenticated: no registry entry for blaze session id {}",
-            id
-        );
+    {
+        let mut m = registry().lock();
+        if let Some(e) = m.get_mut(&id) {
+            e.authenticated = true;
+        } else {
+            tracing::warn!(
+                "mark_authenticated: no registry entry for blaze session id {}",
+                id
+            );
+        }
     }
-    drop(m);
     persist_sessions_to_disk();
 }
 
@@ -280,6 +313,31 @@ pub fn active_count() -> usize {
 
 pub fn authenticated_count() -> usize {
     registry().lock().values().filter(|e| e.authenticated).count()
+}
+
+fn entry_is_server(e: &BlazeSessionEntry) -> bool {
+    e.clnt
+        .as_deref()
+        .map(crate::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
+        .unwrap_or(false)
+}
+
+/// Authenticated Blaze sessions whose `CLNT` is a game client (not dedicated server).
+pub fn authenticated_player_count() -> usize {
+    registry()
+        .lock()
+        .values()
+        .filter(|e| e.authenticated && !entry_is_server(e))
+        .count()
+}
+
+/// Authenticated Blaze sessions whose `CLNT` identifies a dedicated server.
+pub fn authenticated_server_count() -> usize {
+    registry()
+        .lock()
+        .values()
+        .filter(|e| e.authenticated && entry_is_server(e))
+        .count()
 }
 
 pub fn get_session(id: u64) -> Option<BlazeSessionInfo> {

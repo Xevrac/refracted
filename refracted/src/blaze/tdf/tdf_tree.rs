@@ -1188,6 +1188,7 @@ impl TdfTreeParser {
             let val_result = match val_type {
                 0x0 => Self::parse_integer_varint(data, "Value", pos),
                 0x1 => Self::parse_string_raw(data, "Value", pos), // Strings in maps don't have tag+type
+                0x2 => Self::parse_blob_raw(data, "Value", pos), // BLOBs in maps don't have tag+type
                 0x3 => Self::parse_struct(data, "Value", pos), // Structs in maps (no length prefix, ends with 0x00)
                 0xC => Self::parse_generic_type_value(data, "Value", pos), // SCNA GenericType payload
                 _ => {

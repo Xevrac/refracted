@@ -1,4 +1,4 @@
-// Blaze Inspector - UI for viewing captured Blaze packets with TDF parsing
+﻿// Blaze Inspector - UI for viewing captured Blaze packets with TDF parsing
 
 use crate::blaze::tdf::{TdfEncoder, TdfTreeNode};
 use crate::common::discovery;
@@ -22,6 +22,7 @@ pub enum BlazeListDirectionFilter {
     All,
     ClientToBlaze,
     BlazeToClient,
+    BlazeToDedicated,
 }
 
 impl BlazeListDirectionFilter {
@@ -30,6 +31,7 @@ impl BlazeListDirectionFilter {
             BlazeListDirectionFilter::All => true,
             BlazeListDirectionFilter::ClientToBlaze => d == PacketDirection::ClientToBlaze,
             BlazeListDirectionFilter::BlazeToClient => d == PacketDirection::BlazeToClient,
+            BlazeListDirectionFilter::BlazeToDedicated => d == PacketDirection::BlazeToDedicated,
         }
     }
 
@@ -38,7 +40,8 @@ impl BlazeListDirectionFilter {
         match self {
             BlazeListDirectionFilter::All => "All directions",
             BlazeListDirectionFilter::ClientToBlaze => "Client -> Blaze",
-            BlazeListDirectionFilter::BlazeToClient => "Blaze <- Client",
+            BlazeListDirectionFilter::BlazeToClient => "Blaze -> Client",
+            BlazeListDirectionFilter::BlazeToDedicated => "Blaze -> Dedicated",
         }
     }
 }
@@ -481,7 +484,7 @@ pub fn render_blaze_inspector(
                                 }
                             } else {
                                 ui.label(
-                                    egui::RichText::new("(no seq — ring buffer full?)").weak().small(),
+                                    egui::RichText::new("(no seq -- ring buffer full?)").weak().small(),
                                 );
                             }
                         });
@@ -524,6 +527,11 @@ pub fn render_blaze_inspector(
                         &mut state.direction_filter,
                         BlazeListDirectionFilter::BlazeToClient,
                         BlazeListDirectionFilter::BlazeToClient.label(),
+                    );
+                    ui.selectable_value(
+                        &mut state.direction_filter,
+                        BlazeListDirectionFilter::BlazeToDedicated,
+                        BlazeListDirectionFilter::BlazeToDedicated.label(),
                     );
                 });
         });
@@ -608,6 +616,9 @@ fn render_packet_list(
                             PacketDirection::BlazeToClient => {
                                 egui::Color32::from_rgb(255, 150, 100)
                             }
+                            PacketDirection::BlazeToDedicated => {
+                                egui::Color32::from_rgb(150, 220, 120)
+                            }
                         };
 
                         let cmd_display = if let Some(ref cmd_name) = packet.command_name {
@@ -636,7 +647,7 @@ fn render_packet_list(
                             } else {
                                 "Pin row (keeps near top)"
                             };
-                            // Same pattern as grpc_inspector — small frameless Buttons often lose
+                            // Same pattern as grpc_inspector -- small frameless Buttons often lose
                             // clicks inside ScrollArea on some platforms.
                             if ui
                                 .add_sized(
@@ -776,7 +787,7 @@ fn render_tdf_tree_panel(
             .is_some_and(|s| !s.is_empty())
         {
             ui.label(
-                egui::RichText::new("Root-level tag scan (no full tree — see parse error below if any).")
+                egui::RichText::new("Root-level tag scan (no full tree -- see parse error below if any).")
                     .weak()
                     .small(),
             );
@@ -1067,6 +1078,7 @@ fn render_packet_details(
         let direction_color = match direction {
             PacketDirection::ClientToBlaze => egui::Color32::from_rgb(100, 150, 255),
             PacketDirection::BlazeToClient => egui::Color32::from_rgb(255, 150, 100),
+            PacketDirection::BlazeToDedicated => egui::Color32::from_rgb(150, 220, 120),
         };
         let direction_str = direction.to_string();
         ui.label(egui::RichText::new(direction_str).color(direction_color));

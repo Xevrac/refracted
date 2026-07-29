@@ -31,7 +31,10 @@
     }
 
     function getTagline() {
-        var n = (navigator.language || 'en').toLowerCase();
+        return 'Powered by Refracted';
+    }
+
+    function getInitialStatus() {
         return 'LOGGING YOU IN, PLEASE WAIT';
     }
 
@@ -211,7 +214,7 @@
 
     window.CncPreLanding = {
         getTagline: getTagline,
-        getInitialStatus: getTagline,
+        getInitialStatus: getInitialStatus,
         hasShell: hasShell,
         shouldSkip: shouldSkip,
         getCredentials: getCredentials,
@@ -240,7 +243,7 @@
                 return;
             }
             if (!hasShell()) {
-                statusAnimator.setLine(getTagline());
+                statusAnimator.setLine(getInitialStatus());
                 done();
                 return;
             }
@@ -249,7 +252,7 @@
                 email: o.email != null ? o.email : cred.email,
                 password: o.password != null ? o.password : cred.password
             };
-            statusAnimator.setLine(getTagline());
+            statusAnimator.setLine(getInitialStatus());
             setTimeout(function () {
                 chainShellSteps(
                     ctx,

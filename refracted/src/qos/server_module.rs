@@ -1,12 +1,4 @@
-//! Local QoS coordinator — replaces EA’s `qoscoordinator` + regional probes for offline emulation.
-//! Binds 3659 / 4001 / 10010 (TLS + HTTP) so the client can use advertised QOSS endpoints locally.
-//!
-//! Blaze advertises these endpoints via preAuth **QOSS** (e.g. QCNF QCA/QCP) and **LTPS** (PSA/PSP);
-//! this module is the TCP side (TLS or cleartext HTTP/binary probes).
-//!
-//! HTTP/2 on coordinator ports uses the **`h2` crate** (same as the main HTTP/2 stack). The previous
-//! manual frame parser mis-handled HEADERS frames (0x01) as DATA and never sent HTTP/2 responses,
-//! which left client streams incomplete and caused Blaze disconnect/reconnect churn.
+﻿//! Local QoS coordinator -- BlazeSDK `QosManager` / DirtySDK `QosClient` probe endpoints (BWPS/LTPS).
 
 use crate::common::error::{io_is_expected_peer_close, BlazeResult};
 use crate::core::inspector::inspector_module::{capture_grpc, CapturedGrpc, GrpcDirection};
@@ -19,27 +11,20 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt, ReadBuf};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error, info, warn};
 
-fn bytes_preview(data: &[u8], max: usize) -> String {
-    let n = data.len().min(max);
-    if n == 0 {
-        return "(empty)".to_string();
-    }
-    let hex = data[..n]
-        .iter()
-        .map(|b| format!("{:02x}", b))
-        .collect::<Vec<_>>()
-        .join(" ");
-    if data.len() > max {
-        format!("{} … (+{} bytes)", hex, data.len() - max)
-    } else {
-        hex
-    }
+const QOS_TAG: &str = "\x1b[38;2;80;200;120m[QoS]\x1b[0m";
+
+/// Port roles matching Blaze preAuth QOSS (`BWPS` / `LTPS` PSA+PSP).
+#[derive(Clone, Copy)]
+struct QosBind {
+    port: u16,
+    /// Short role for logs: `bwps` (coordinator), `ltps` (latency/data), `alt`.
+    role: &'static str,
 }
 
 fn looks_like_http_request(first_line: &str) -> bool {
@@ -51,6 +36,20 @@ fn looks_like_http_request(first_line: &str) -> bool {
         parts[0],
         "GET" | "POST" | "HEAD" | "OPTIONS" | "PUT" | "DELETE" | "PATCH"
     ) && parts[1].starts_with('/')
+}
+
+fn classify_http_probe(path_lc: &str) -> &'static str {
+    if path_lc == "/qos/firewall" {
+        "firewall"
+    } else if path_lc == "/qos/qos" {
+        "bandwidth"
+    } else if path_lc.contains("clientcall") {
+        "coordinator"
+    } else if path_lc.contains("health") || path_lc.contains("check") {
+        "health"
+    } else {
+        "http"
+    }
 }
 
 fn proto_write_varint(out: &mut Vec<u8>, mut v: u64) {
@@ -83,7 +82,7 @@ fn proto_write_sint32(out: &mut Vec<u8>, field_number: u32, value: i32) {
 
 fn wrap_grpc_message_frame(protobuf_payload: &[u8]) -> Vec<u8> {
     let mut framed = Vec::with_capacity(5 + protobuf_payload.len());
-    framed.push(0); // compression flag: uncompressed
+    framed.push(0);
     framed.extend_from_slice(&(protobuf_payload.len() as u32).to_be_bytes());
     framed.extend_from_slice(protobuf_payload);
     framed
@@ -95,7 +94,6 @@ fn build_qos_clientcall_response_payload(is_followup_call: bool) -> Vec<u8> {
     proto_write_string(&mut out, 3, "v4[159.196.128.63]");
 
     if !is_followup_call {
-        // First response shape from live capture.
         let field7_hex = [
             "0a076177732d736a63120d35342e3135312e33312e3134311894a401221056a74f9896d52b1e113786c20e84be80288004",
             "0a076177732d696164120e31332e3232332e3234352e3137311898a4012210df07e8b866e3a1f4bb6e9ad2cb491063288004",
@@ -130,7 +128,6 @@ fn build_qos_clientcall_response_payload(is_followup_call: bool) -> Vec<u8> {
         proto_write_sint32(&mut field9, 12, 1000);
         proto_write_len_delimited(&mut out, 9, &field9);
     } else {
-        // Follow-up response shape from live capture.
         proto_write_sint32(&mut out, 4, -2);
         proto_write_string(&mut out, 6, "v4[123.456.789.10]:56204");
         let regions: [(&str, i32); 14] = [
@@ -192,7 +189,6 @@ fn capture_qos_grpc_record(
     });
 }
 
-/// Prepends bytes already read from the socket (used to peek TLS vs plain HTTP).
 struct PrependStream<S> {
     head: Vec<u8>,
     head_off: usize,
@@ -244,15 +240,82 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for PrependStream<S> {
     }
 }
 
-/// QoS Protocol Server - Handles Quality of Service coordination
-/// The QoS coordinator is used by the client to measure network quality and latency
+/// Session counter / probe kinds -- INFO only at begin + end (BlazeSDK span: connected → qos completed).
+struct QosSessionLog {
+    peer: SocketAddr,
+    bind: QosBind,
+    transport: &'static str,
+    started: Instant,
+    probes: u32,
+    kinds: Vec<&'static str>,
+    outcome: &'static str,
+}
+
+impl QosSessionLog {
+    fn begin(peer: SocketAddr, bind: QosBind, transport: &'static str) -> Self {
+        // DirtySDK QosClient dials preAuth PSA (BWPS/LTPS) -- peer is the Blaze client NetConn IP.
+        info!(
+            "{QOS_TAG} begin {peer} → {}:{} ({}) via {}",
+            bind.role, bind.port, target_hint(bind.role), transport
+        );
+        Self {
+            peer,
+            bind,
+            transport,
+            started: Instant::now(),
+            probes: 0,
+            kinds: Vec::new(),
+            outcome: "ok",
+        }
+    }
+
+    fn note_probe(&mut self, kind: &'static str) {
+        self.probes = self.probes.saturating_add(1);
+        if !self.kinds.iter().any(|k| *k == kind) {
+            self.kinds.push(kind);
+        }
+    }
+
+    fn fail(&mut self, outcome: &'static str) {
+        self.outcome = outcome;
+    }
+
+    fn end(self) {
+        let ms = self.started.elapsed().as_millis();
+        let kinds = if self.kinds.is_empty() {
+            "-".to_string()
+        } else {
+            self.kinds.join("+")
+        };
+        info!(
+            "{QOS_TAG} end {} → {}:{} {} {} probe(s) [{}] via {} {}ms",
+            self.peer,
+            self.bind.role,
+            self.bind.port,
+            self.outcome,
+            self.probes,
+            kinds,
+            self.transport,
+            ms
+        );
+    }
+}
+
+fn target_hint(role: &str) -> &'static str {
+    match role {
+        "bwps" => "coordinator/BWPS",
+        "ltps" => "ping-site/LTPS",
+        "alt" => "coordinator-alt",
+        _ => "qos",
+    }
+}
+
 pub struct QosProtocolServer {
     host: String,
     ssl_context: Option<Arc<ServerConfig>>,
 }
 
 impl QosProtocolServer {
-    /// Create new QoS protocol server (TLS optional — same cert as Web/Blaze for coordinator HTTPS).
     pub fn new(host: String, ssl_context: Option<Arc<ServerConfig>>) -> Self {
         Self { host, ssl_context }
     }
@@ -265,62 +328,62 @@ impl QosProtocolServer {
         ]
     }
 
-    /// Start QoS protocol server
     pub async fn start_qos_server(
         &self,
         ports: &crate::common::game::ServicePorts,
     ) -> BlazeResult<()> {
-        let c = ports.qos_coordinator;
-        let host = self.host.clone();
-        let tls = self.ssl_context.clone();
-        tokio::spawn(async move {
-            if let Err(e) = Self::run_qos_server(host.clone(), c, tls.clone()).await {
-                error!("QoS server error: {}", e);
-            }
-        });
-
-        let d = ports.qos_data;
-        let host = self.host.clone();
-        let tls = self.ssl_context.clone();
-        tokio::spawn(async move {
-            if let Err(e) = Self::run_qos_server(host.clone(), d, tls.clone()).await {
-                error!("QoS data port server error: {}", e);
-            }
-        });
-
-        let a = ports.qos_alt;
-        let host = self.host.clone();
-        let tls = self.ssl_context.clone();
-        tokio::spawn(async move {
-            if let Err(e) = Self::run_qos_server(host, a, tls).await {
-                error!("QoS coordinator alt port server error: {}", e);
-            }
-        });
-
+        let binds = [
+            QosBind {
+                port: ports.qos_coordinator,
+                role: "bwps",
+            },
+            QosBind {
+                port: ports.qos_data,
+                role: "ltps",
+            },
+            QosBind {
+                port: ports.qos_alt,
+                role: "alt",
+            },
+        ];
+        for bind in binds {
+            let host = self.host.clone();
+            let tls = self.ssl_context.clone();
+            tokio::spawn(async move {
+                if let Err(e) = Self::run_qos_server(host, bind, tls).await {
+                    error!("QoS {} :{} error: {}", bind.role, bind.port, e);
+                }
+            });
+        }
         Ok(())
     }
 
-    /// Run QoS server
     async fn run_qos_server(
         host: String,
-        port: u16,
+        bind: QosBind,
         ssl_context: Option<Arc<ServerConfig>>,
     ) -> BlazeResult<()> {
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{}:{}", host, bind.port);
         let socket = tokio::net::TcpSocket::new_v4()
             .map_err(|e| crate::common::error::BlazeError::Io(e))?;
         #[cfg(windows)]
-        socket.set_reuseaddr(true)
+        socket
+            .set_reuseaddr(true)
             .map_err(|e| crate::common::error::BlazeError::Io(e))?;
-        socket.bind(addr.parse()
-            .map_err(|e| crate::common::error::BlazeError::InvalidPacket(format!("Invalid address: {}", e)))?)
+        socket
+            .bind(addr.parse().map_err(|e| {
+                crate::common::error::BlazeError::InvalidPacket(format!("Invalid address: {}", e))
+            })?)
             .map_err(|e| crate::common::error::BlazeError::Io(e))?;
-        let listener = socket.listen(128)
+        let listener = socket
+            .listen(128)
             .map_err(|e| crate::common::error::BlazeError::Io(e))?;
         if !crate::common::startup_progress::is_startup_in_progress() {
-            info!("[QoS] listening on {}", addr);
-            debug!(
-                "[QoS] advertised in Blaze preAuth QOSS (QCNF QCA/QCP) + LTPS (PSA/PSP)"
+            info!(
+                "{QOS_TAG} listening {} ({}) on {}",
+                bind.role,
+                target_hint(bind.role),
+                addr
             );
         }
 
@@ -328,30 +391,27 @@ impl QosProtocolServer {
             let (stream, peer) = listener.accept().await?;
             let tls = ssl_context.clone();
             tokio::spawn(async move {
-                if let Err(e) = Self::handle_qos_connection(stream, peer, port, tls).await {
-                    warn!("[QoS] peer={} port={} | handler error: {}", peer, port, e);
+                if let Err(e) = Self::handle_qos_connection(stream, peer, bind, tls).await {
+                    warn!(
+                        "{QOS_TAG} {} → {}:{} handler error: {}",
+                        peer, bind.role, bind.port, e
+                    );
                 }
             });
         }
     }
 
-    /// Handle QoS connection (optional TLS — second request is often TLS ClientHello on port 10010).
     async fn handle_qos_connection(
         mut stream: TcpStream,
         peer: SocketAddr,
-        port: u16,
+        bind: QosBind,
         ssl_context: Option<Arc<ServerConfig>>,
     ) -> BlazeResult<()> {
         crate::session::record_qos_observed_client_endpoint(peer);
-        info!("[QoS] peer={} port={} | connected", peer, port);
-        debug!(
-            "[QoS] peer={} port={} | first byte 0x16 ⇒ TLS; else cleartext HTTP or binary echo",
-            peer, port
-        );
 
         let mut first = [0u8; 1];
         if let Err(e) = stream.read_exact(&mut first).await {
-            warn!("[QoS] peer={} port={} | no first byte: {}", peer, port, e);
+            debug!("{QOS_TAG} {peer} → {}:{} no data: {e}", bind.role, bind.port);
             return Ok(());
         }
 
@@ -359,74 +419,79 @@ impl QosProtocolServer {
 
         if first[0] == 0x16 {
             if let Some(cfg) = ssl_context {
-                debug!(
-                    "[QoS] peer={} port={} | TLS ClientHello (0x16), handshaking",
-                    peer, port
-                );
+                debug!("{QOS_TAG} {peer} → {}:{} TLS handshake", bind.role, bind.port);
                 let acceptor = TlsAcceptor::from(cfg);
                 match acceptor.accept(prep).await {
                     Ok(tls_stream) => {
-                        info!("[QoS] peer={} port={} | TLS session ready", peer, port);
-                        return Self::handle_qos_h2_connection(tls_stream, peer, port).await;
+                        return Self::handle_qos_h2_connection(tls_stream, peer, bind, "tls-h2")
+                            .await;
                     }
                     Err(e) => {
-                        warn!("[QoS] peer={} port={} | TLS handshake failed: {}", peer, port, e);
+                        debug!(
+                            "{QOS_TAG} {peer} → {}:{} TLS failed: {e}",
+                            bind.role, bind.port
+                        );
                         return Ok(());
                     }
                 }
             } else {
-                warn!(
-                    "[QoS] peer={} port={} | TLS ClientHello but no server TLS config — drop",
-                    peer, port
+                debug!(
+                    "{QOS_TAG} {peer} → {}:{} TLS without cert -- drop",
+                    bind.role, bind.port
                 );
                 return Ok(());
             }
         }
 
         if first[0] == 0x50 {
-            debug!(
-                "[QoS] peer={} port={} | HTTP/2 cleartext (PRI), h2 handshake",
-                peer, port
-            );
-            return Self::handle_qos_h2_connection(prep, peer, port).await;
+            return Self::handle_qos_h2_connection(prep, peer, bind, "h2").await;
         }
 
-        info!("[QoS] peer={} port={} | cleartext session", peer, port);
         debug!(
-            "[QoS] peer={} port={} | first_byte=0x{:02x}",
-            peer, port, first[0]
+            "{QOS_TAG} {peer} → {}:{} cleartext first=0x{:02x}",
+            bind.role, bind.port, first[0]
         );
-        Self::handle_qos_io_loop(prep, peer, port).await
+        Self::handle_qos_io_loop(prep, peer, bind).await
     }
 
-    /// HTTP/2 coordinator (TLS or `PRI * HTTP/2.0` cleartext) — proper HEADERS/DATA responses per stream.
     async fn handle_qos_h2_connection<S>(
         stream: S,
         peer: SocketAddr,
-        port: u16,
+        bind: QosBind,
+        transport: &'static str,
     ) -> BlazeResult<()>
     where
         S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     {
+        let mut session = QosSessionLog::begin(peer, bind, transport);
         let mut conn = server::handshake(stream).await?;
         while let Some(next) = conn.accept().await {
             match next {
                 Ok((request, respond)) => {
-                    tokio::spawn(async move {
-                        if let Err(e) =
-                            Self::process_qos_h2_request(request, respond, peer, port).await
-                        {
-                            warn!("[QoS] peer={} port={} | h2 stream error: {}", peer, port, e);
+                    match Self::process_qos_h2_request(request, respond, peer, bind).await {
+                        Ok(kind) => session.note_probe(kind),
+                        Err(e) => {
+                            debug!(
+                                "{QOS_TAG} {peer} → {}:{} h2 stream error: {e}",
+                                bind.role, bind.port
+                            );
+                            session.fail("h2-error");
                         }
-                    });
+                    }
                 }
                 Err(e) => {
-                    warn!("[QoS] peer={} port={} | h2 accept error: {}", peer, port, e);
+                    debug!(
+                        "{QOS_TAG} {peer} → {}:{} h2 accept error: {e}",
+                        bind.role, bind.port
+                    );
+                    if session.probes == 0 {
+                        session.fail("h2-accept");
+                    }
                     break;
                 }
             }
         }
-        debug!("[QoS] peer={} port={} | h2 connection finished", peer, port);
+        session.end();
         Ok(())
     }
 
@@ -434,8 +499,8 @@ impl QosProtocolServer {
         mut request: Request<h2::RecvStream>,
         mut respond: SendResponse<Bytes>,
         peer: SocketAddr,
-        port: u16,
-    ) -> BlazeResult<()> {
+        bind: QosBind,
+    ) -> BlazeResult<&'static str> {
         let method = request.method().as_str().to_string();
         let path = request.uri().path().to_string();
         let path_lc = path.to_lowercase();
@@ -493,8 +558,6 @@ impl QosProtocolServer {
                 .body(())
                 .map_err(|e| crate::common::error::BlazeError::Http2(e.to_string()))?;
             let mut send = respond.send_response(response, false)?;
-
-            // gRPC wire frame: compressed-flag(0) + message-length(0), no protobuf payload.
             send.send_data(Bytes::copy_from_slice(&response_body), false)?;
 
             let mut trailers = http::HeaderMap::new();
@@ -514,11 +577,15 @@ impl QosProtocolServer {
                 Some("0".to_string()),
             );
 
-            info!(
-                "[QoS] peer={} port={} | h2 200 gRPC {} {} ({}B)",
-                peer, port, method, path, response_body.len()
+            let kind = classify_http_probe(&path_lc);
+            debug!(
+                "{QOS_TAG} {peer} → {}:{} gRPC {method} {path} ({}B) followup={}",
+                bind.role,
+                bind.port,
+                response_body.len(),
+                is_followup_call
             );
-            return Ok(());
+            return Ok(kind);
         }
 
         let (body, tag): (&str, &'static str) = if path_lc == "/qos/qos" {
@@ -528,6 +595,7 @@ impl QosProtocolServer {
         } else {
             ("OK", "200 default")
         };
+        let kind = classify_http_probe(&path_lc);
 
         let body_bytes = Bytes::copy_from_slice(body.as_bytes());
         let response = Response::builder()
@@ -540,11 +608,11 @@ impl QosProtocolServer {
         let mut send = respond.send_response(response, false)?;
         send.send_data(body_bytes, true)?;
 
-        info!(
-            "[QoS] peer={} port={} | h2 {} {} {} → {}B",
-            peer, port, tag, method, path, body.len()
+        debug!(
+            "{QOS_TAG} {peer} → {}:{} h2 {tag} {method} {path}",
+            bind.role, bind.port
         );
-        Ok(())
+        Ok(kind)
     }
 
     fn capture_qos_grpc(
@@ -561,9 +629,9 @@ impl QosProtocolServer {
     async fn handle_qos_io_loop<S: AsyncRead + AsyncWrite + Unpin>(
         mut stream: S,
         peer: SocketAddr,
-        port: u16,
+        bind: QosBind,
     ) -> BlazeResult<()> {
-        let mut request_count = 0u32;
+        let mut session = QosSessionLog::begin(peer, bind, "cleartext");
         loop {
             let mut read_buf = vec![0u8; 4096];
             match tokio::time::timeout(
@@ -572,106 +640,91 @@ impl QosProtocolServer {
             )
             .await
             {
-                Ok(Ok(0)) => {
-                    info!(
-                        "[QoS] peer={} port={} | closed ({} request(s))",
-                        peer, port, request_count
-                    );
-                    break;
-                }
+                Ok(Ok(0)) => break,
                 Ok(Ok(n)) => {
-                    request_count += 1;
                     let chunk = &read_buf[..n];
 
-                    let (response, kind, detail) =
-                        if let Ok(s) = std::str::from_utf8(chunk) {
-                            let first_line = s.lines().next().unwrap_or("").trim_end();
-                            if looks_like_http_request(first_line) {
-                                let (bytes, tag) = Self::handle_http_qos_request(s);
-                                (
-                                    bytes,
-                                    "http",
-                                    format!("{} → {}", first_line, tag),
-                                )
+                    let (response, kind, detail) = if let Ok(s) = std::str::from_utf8(chunk) {
+                        let first_line = s.lines().next().unwrap_or("").trim_end();
+                        if looks_like_http_request(first_line) {
+                            let (bytes, path_tag) = Self::handle_http_qos_request(s);
+                            let kind = if path_tag.contains("firewall") {
+                                "firewall"
+                            } else if path_tag.contains("/qos/qos") {
+                                "bandwidth"
                             } else {
-                                let echo = Self::generate_binary_qos_response(chunk);
-                                let prev = bytes_preview(chunk, 24);
-                                (
-                                    echo,
-                                    "binary",
-                                    format!("utf8 non-HTTP first_line={:?} preview {}", first_line, prev),
-                                )
-                            }
+                                "http"
+                            };
+                            (bytes, kind, format!("{first_line} → {path_tag}"))
                         } else {
-                            if chunk.first() == Some(&0x16) {
-                                warn!(
-                                    "[QoS] peer={} port={} | req #{} | TLS 0x16 on cleartext (unexpected)",
-                                    peer, port, request_count
-                                );
-                            }
-                            let echo = Self::generate_binary_qos_response(chunk);
-                            let prev = bytes_preview(chunk, 24);
                             (
-                                echo,
-                                "binary",
-                                format!("non-utf8 preview {}", prev),
+                                Self::generate_binary_qos_response(chunk),
+                                "latency",
+                                format!("non-http {first_line:?}"),
                             )
-                        };
+                        }
+                    } else {
+                        if chunk.first() == Some(&0x16) {
+                            debug!(
+                                "{QOS_TAG} {peer} → {}:{} TLS on cleartext socket",
+                                bind.role, bind.port
+                            );
+                        }
+                        (
+                            Self::generate_binary_qos_response(chunk),
+                            "latency",
+                            "binary probe".to_string(),
+                        )
+                    };
 
-                    info!(
-                        "[QoS] peer={} port={} | req {} | {} | {}B → {}B",
-                        peer, port, request_count, kind, n, response.len()
+                    session.note_probe(kind);
+                    debug!(
+                        "{QOS_TAG} {peer} → {}:{} #{} {kind} {n}B→{}B | {detail}",
+                        bind.role,
+                        bind.port,
+                        session.probes,
+                        response.len()
                     );
-                    debug!("[QoS] peer={} port={} | req {} detail: {}", peer, port, request_count, detail);
 
                     if !response.is_empty() {
                         if let Err(e) = stream.write_all(&response).await {
                             if io_is_expected_peer_close(&e) {
-                                debug!(
-                                    "[QoS] peer={} port={} | write stopped (peer closed): {}",
-                                    peer, port, e
-                                );
-                                info!(
-                                    "[QoS] peer={} port={} | closed ({} request(s))",
-                                    peer, port, request_count
-                                );
-                            } else {
-                                error!("[QoS] peer={} port={} | write failed: {}", peer, port, e);
+                                break;
                             }
+                            error!(
+                                "{QOS_TAG} {peer} → {}:{} write failed: {e}",
+                                bind.role, bind.port
+                            );
+                            session.fail("write-error");
                             break;
                         }
                         let _ = stream.flush().await;
                     }
                 }
                 Ok(Err(e)) => {
-                    if io_is_expected_peer_close(&e) {
-                        debug!(
-                            "[QoS] peer={} port={} | read ended after {} req(s) (peer closed): {}",
-                            peer, port, request_count, e
+                    if !io_is_expected_peer_close(&e) {
+                        error!(
+                            "{QOS_TAG} {peer} → {}:{} read error: {e}",
+                            bind.role, bind.port
                         );
-                        info!(
-                            "[QoS] peer={} port={} | closed ({} request(s))",
-                            peer, port, request_count
-                        );
-                    } else {
-                        error!("[QoS] peer={} port={} | read error: {}", peer, port, e);
+                        session.fail("read-error");
                     }
                     break;
                 }
                 Err(_) => {
                     debug!(
-                        "[QoS] peer={} port={} | read timeout 30s (keepalive), still waiting",
-                        peer, port
+                        "{QOS_TAG} {peer} → {}:{} keepalive wait",
+                        bind.role, bind.port
                     );
                     continue;
                 }
             }
         }
 
+        session.end();
         Ok(())
     }
 
-    /// Handle HTTP QoS requests. Second element is a short outcome tag for logs.
     fn handle_http_qos_request(request: &str) -> (Vec<u8>, &'static str) {
         let lines: Vec<&str> = request.lines().collect();
         if lines.is_empty() {
@@ -681,24 +734,26 @@ impl QosProtocolServer {
         let request_line = lines[0];
         let parts: Vec<&str> = request_line.split_whitespace().collect();
         if parts.len() < 2 {
-            return (Self::http_error_response(400, "Bad Request"), "400 bad_request_line");
+            return (
+                Self::http_error_response(400, "Bad Request"),
+                "400 bad_request_line",
+            );
         }
 
         let path_query = parts[1];
-
-        let (path, _query) = if let Some(pos) = path_query.find('?') {
-            (&path_query[..pos], &path_query[pos + 1..])
+        let path = if let Some(pos) = path_query.find('?') {
+            &path_query[..pos]
         } else {
-            (path_query, "")
+            path_query
         };
         let path_lc = path.to_lowercase();
 
         let (body, tag): (&str, &'static str) = if path_lc == "/qos/qos" {
             ("OK", "200 /qos/qos")
         } else if path_lc == "/qos/firewall" {
-            ("1", "200 /qos/firewall NAT=open")
+            ("1", "200 /qos/firewall")
         } else {
-            ("OK", "200 default OK (unknown path)")
+            ("OK", "200 default")
         };
 
         let bytes = format!(
@@ -716,7 +771,6 @@ impl QosProtocolServer {
         (bytes, tag)
     }
 
-    /// Generate HTTP error response
     fn http_error_response(status_code: u16, reason: &str) -> Vec<u8> {
         format!(
             "HTTP/1.1 {} {}\r\n\
@@ -733,14 +787,12 @@ impl QosProtocolServer {
         .into_bytes()
     }
 
-    /// Generate binary QoS response (for non-HTTP protocols)
     fn generate_binary_qos_response(_request: &[u8]) -> Vec<u8> {
-        // Format: [status_byte][latency_ms: u32][packet_loss: u8][bandwidth: u32]
         let mut response = Vec::new();
-        response.push(0x00); // Status: OK
-        response.extend_from_slice(&(10u32.to_le_bytes())); // Latency: 10ms
-        response.push(0x00); // Packet loss: 0%
-        response.extend_from_slice(&(1000000u32.to_le_bytes())); // Bandwidth: 1Mbps
+        response.push(0x00);
+        response.extend_from_slice(&(10u32.to_le_bytes()));
+        response.push(0x00);
+        response.extend_from_slice(&(1000000u32.to_le_bytes()));
         response
     }
 }

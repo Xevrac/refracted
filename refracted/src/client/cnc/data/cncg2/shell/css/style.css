@@ -1,14 +1,33 @@
 /* =========================================================================
    OFFICIAL C&C FONTS (Mapped to Local Directory)
+   Chrome 15: do NOT use text-rendering: optimizeLegibility — it blanks glyphs.
    ========================================================================= */
 @font-face {
     font-family: 'Eurostile-Med';
     src: url('../fonts/Eurostile-Reg.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
 }
 
 @font-face {
     font-family: 'Eurostile-Hea';
+    src: url('../fonts/Eurostile-Hea.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Eurostile-Hea';
+    src: url('../fonts/Eurostile-HeaIta.otf') format('opentype');
+    font-weight: bold;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'Eurostile-Bol';
     src: url('../fonts/Eurostile-Bol.otf') format('opentype');
+    font-weight: bold;
+    font-style: normal;
 }
 
 @font-face {
@@ -17,16 +36,29 @@
 }
 
 @font-face {
-    font-family: 'EurostileLTStd-BoldEx2'; 
+    font-family: 'EurostileLTStd-BoldEx2';
     src: url('../fonts/EurostileLTStd-BoldEx2.ttf') format('truetype');
-} 
+}
 
 @font-face {
-    font-family: 'EurostileLTStd-Demi'; 
+    font-family: 'EurostileLTStdBold';
+    src: url('../fonts/EurostileLTStdBold.otf') format('opentype');
+}
+
+@font-face {
+    font-family: 'EurostileLTStd';
+    src: url('../fonts/EurostileLTStd.otf') format('opentype');
+}
+
+@font-face {
+    font-family: 'EurostileLTStd-Demi';
     src: url('../fonts/EurostileLTStdBold.otf') format('opentype');
 }
 
 /* GLOBAL RESET & THEME */
+html {
+    height: 100%;
+}
 body.cc-theme {
     background-color: #000;
     color: #b8b8b8;
@@ -40,19 +72,28 @@ body.cc-theme {
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
-    min-height: 100vh;
+    height: 100%;
+    min-height: 100%;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     overflow: hidden; 
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    -webkit-font-smoothing: antialiased;
+    /* subpixel AA — grayscale "antialiased" makes Eurostile look thin/grainy on dark UI */
+    -webkit-font-smoothing: subpixel-antialiased;
 }
 
-/* CHROME 15 TEXT RENDERING BUG FIX */
-h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
-.cc-theme, .cc-theme button, .cc-theme input, .cc-theme select, .cc-theme textarea {
-    text-rendering: optimizeLegibility;
+/* Chrome 15 / WebKit 535: optimizeLegibility + @font-face blanks text.
+   Keep auto on the whole tree (links/labels included). */
+.cc-theme,
+.cc-theme *,
+.cc-theme button,
+.cc-theme input,
+.cc-theme select,
+.cc-theme textarea,
+.cc-theme a {
+    text-rendering: auto !important;
+    -webkit-font-smoothing: subpixel-antialiased;
 }
 .clearfix:before, .clearfix:after { content: " "; display: table; }
 .clearfix:after { clear: both; }
@@ -169,6 +210,10 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
     background-color: #0a0a0c;
     background-image:
         url('../view/image/btn_bg_05.png'),
+        -webkit-repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(255, 255, 255, 0.04) 3px, rgba(255, 255, 255, 0.04) 4px),
+        -webkit-repeating-linear-gradient(-45deg, transparent 0, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 4px);
+    background-image:
+        url('../view/image/btn_bg_05.png'),
         repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(255, 255, 255, 0.04) 3px, rgba(255, 255, 255, 0.04) 4px),
         repeating-linear-gradient(-45deg, transparent 0, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 4px);
     background-size: 100% 100%, auto, auto;
@@ -246,6 +291,7 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
     right: 0;
     bottom: 0;
     border-radius: inherit;
+    background: -webkit-repeating-linear-gradient(left, transparent, transparent 4px, rgba(0,0,0,0.04) 4px, rgba(0,0,0,0.04) 5px);
     background: repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.04) 4px, rgba(0,0,0,0.04) 5px);
     pointer-events: none;
     opacity: 0.45;
@@ -305,108 +351,125 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
     flex-shrink: 0;
 }
 
-/* Persona (Blaze / shellauth JSON) */
+/* Persona (Blaze / shellauth JSON) — used in options meta stack / aurora */
 .cc-persona-block {
     position: absolute;
     right: 212px;
     top: 4px;
     text-align: right;
-    max-width: 200px;
+    max-width: 220px;
     line-height: 1.3;
-    font-size: 11px;
-    font-family: 'Eurostile-Med', sans-serif;
+    font-size: 12px;
+    font-family: Arial, Helvetica, sans-serif;
 }
 .cc-top-bar .cc-persona-block {
     display: none;
 }
-.cc-persona-name { font-weight: bold; color: #e4e4e4; }
-.cc-persona-email { font-size: 10px; color: #8a8a8a; }
+.cc-persona-name {
+    font-weight: bold;
+    color: #e8e8e8;
+    font-size: 12px;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 14px;
+}
+.cc-persona-email {
+    font-size: 10px;
+    color: #9a9a9a;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 12px;
+    margin-top: 1px;
+}
 
-/* OPTIONS BLOCK — build strings: small mono stack (retail title-bar style) */
+/* OPTIONS BLOCK — build stack + button (matches alpha layout) */
 .cc-options-block {
     position: absolute;
     right: 0;
-    top: 5px;
+    top: 4px;
     display: -webkit-box;
     display: -ms-flexbox;
     display: flex;
-    -webkit-box-align: end;
-    -ms-flex-align: end;
-    align-items: flex-end;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
     -webkit-box-pack: end;
     justify-content: flex-end;
     max-width: 100%;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    padding-bottom: 1px;
 }
 .build-info-block {
     display: block;
-    -webkit-flex-shrink: 0;
-    -ms-flex-negative: 0;
-    flex-shrink: 0;
     text-align: right;
-    margin: 0 9px 1px 0;
-    padding: 0 1px 0 0;
+    margin: 0 10px 0 0;
+    padding: 0;
     font-weight: bold;
     font-style: normal;
     font-size: 13px;
-    line-height: 1.07;
-    letter-spacing: 0.018em;
-    color: #ae3024;
-    font-family: 'EurostileLTStdBold', 'EurostileLTStd-Demi', 'Eurostile-Med', Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    text-rendering: geometricPrecision;
-    text-shadow: 0 0 1px rgba(0, 0, 0, 0.75), 0 1px 0 rgba(0, 0, 0, 0.45), 0 0 6px rgba(80, 0, 0, 0.28);
+    line-height: 15px;
+    letter-spacing: 0.03em;
+    color: #d45545;
+    font-family: 'Eurostile-Bla', 'Eurostile-Hea', 'EurostileLTStd-BoldEx2', 'EurostileLTStdBold', Arial, Helvetica, sans-serif;
+    -webkit-font-smoothing: subpixel-antialiased;
+    text-rendering: auto;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.85);
     opacity: 1;
 }
 .build-info-line {
     display: block;
+    height: 15px;
+    line-height: 15px;
     white-space: nowrap;
     margin: 0;
     padding: 0;
+    overflow: hidden;
 }
 .build-info-line + .build-info-line {
-    margin-top: 0;
+    margin-top: 1px;
 }
 .cc-options-block .btn.btn-options {
     -webkit-flex-shrink: 0;
     -ms-flex-negative: 0;
     flex-shrink: 0;
     margin-top: 0;
-    margin-bottom: 6px;
+    margin-bottom: 0;
 }
 
 .btn.btn-options {
-    display: -webkit-inline-box;
-    display: -ms-inline-flexbox;
-    display: inline-flex;
-    -webkit-box-align: center;
-    -ms-flex-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    -ms-flex-pack: center;
-    justify-content: center;
+    display: inline-block;
     font-weight: bold;
-    min-width: 114px;
+    font-style: normal;
+    min-width: 108px;
     height: 28px;
-    padding: 0 19px;
-    border-radius: 10px;
+    padding: 0 18px;
+    border-radius: 8px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    font-size: 15px;
-    letter-spacing: 0.03em;
-    font-family: 'EurostileLTStdBold', 'EurostileLTStd-Demi', 'Eurostile-Med', Arial, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    font-family: 'Eurostile-Hea', 'Eurostile-Med', sans-serif;
     border: 1px solid #0a4577;
-    text-shadow: 0 1px 1px #000, 0 0 6px rgba(0, 40, 90, 0.45), 0 0 2px rgba(255,255,255,0.2);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.75);
     background-color: #176BC0;
     background-image: url('../view/image/btn_bg_02.png');
     background-size: 100% 100%;
     background-repeat: no-repeat;
-    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 0 rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.45);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 0 rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.45);
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.25);
     vertical-align: middle;
-    line-height: 1;
+    line-height: 26px;
+    text-align: center;
+    text-transform: uppercase;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.btn.btn-options .btn-label {
+    font-family: 'Eurostile-Hea', 'Eurostile-Med', sans-serif;
+    font-weight: bold;
+    font-style: normal;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 26px;
 }
 .btn.btn-options:hover,
 .btn.btn-options:focus {
@@ -579,7 +642,7 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
 .cc-main-nav > li:last-child::after { display: none; }
 .cc-main-nav > li > a { 
     display: block; width: 100%; height: 50px; line-height: 50px; padding: 0; margin: 0; 
-    font-family: 'Eurostile-Hea', 'Eurostile-Med', Arial, sans-serif; font-weight: bold; font-size: 30px; text-transform: uppercase; text-align: center; color: #777; text-shadow: none; border-radius: 0 !important; background-color: transparent;
+    font-family: 'Eurostile-Hea', 'Eurostile-Med', Arial, sans-serif; font-weight: bold; font-size: 30px; text-transform: uppercase; text-align: center; color: #b0b0b0; text-shadow: none; border-radius: 0 !important; background-color: transparent;
     -webkit-transition: background-color 0.5s ease, color 0.5s ease, text-shadow 0.5s ease; transition: background-color 0.5s ease, color 0.5s ease, text-shadow 0.5s ease;
 }
 .cc-main-nav > li > a:hover { background-color: #053F76 !important; color: #fff; text-shadow: 0 0 10px #fff; text-decoration: none; }
@@ -657,7 +720,7 @@ h1, h2, h3, h4, h5, h6, .cc-username { text-rendering: auto !important; }
 }
 .cc-subnav > li:last-child::after { display: none; }
 .cc-subnav > li > a { 
-    display: block; height: 40px; line-height: 40px; padding: 0 15px; font-family: 'Eurostile-Med', Arial, sans-serif; font-size: 13px; font-weight: normal; text-transform: uppercase; letter-spacing: 0.06em; color: #9a9a9a; text-shadow: 0 1px 0 rgba(0,0,0,0.7); background-color: transparent; background-image: none; border: none;
+    display: block; height: 40px; line-height: 40px; padding: 0 15px; font-family: 'Eurostile-Med', Arial, sans-serif; font-size: 13px; font-weight: normal; text-transform: uppercase; letter-spacing: 0.06em; color: #c0c0c0; text-shadow: 0 1px 0 rgba(0,0,0,0.7); background-color: transparent; background-image: none; border: none;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     -webkit-transition: background-color 0.35s ease, color 0.35s ease; transition: background-color 0.35s ease, color 0.35s ease;
@@ -752,25 +815,25 @@ button.btn-alert-marker:focus { outline: none; }
 
 /* element + 2 classes so `color` beats `button.btn-alert-marker` and shows when not hovering */
 button.btn-alert-marker.btn-alert-marker--wop {
-    right: 420px;
-    border-color: #e6b322;
-    color: #ffd56a;
-    background: rgba(26, 20, 8, 0.9);
-    -webkit-box-shadow: 0 0 5px rgba(230, 179, 34, 0.8);
-    box-shadow: 0 0 5px rgba(230, 179, 34, 0.8);
+    right: 444px;
+    border-color: #3fbf4a;
+    color: #8dff96;
+    background: rgba(8, 26, 12, 0.92);
+    -webkit-box-shadow: 0 0 5px rgba(63, 191, 74, 0.8);
+    box-shadow: 0 0 5px rgba(63, 191, 74, 0.8);
     -webkit-animation: alertBlink 2.4s infinite ease-in-out;
     animation: alertBlink 2.4s infinite ease-in-out;
 }
 button.btn-alert-marker.btn-alert-marker--wop:hover {
-    color: #ffe18d;
-    border-color: #f1c95c;
-    background: rgba(34, 24, 8, 0.95);
-    -webkit-box-shadow: 0 0 7px rgba(241, 201, 92, 0.9);
-    box-shadow: 0 0 7px rgba(241, 201, 92, 0.9);
+    color: #b4ffba;
+    border-color: #5fd868;
+    background: rgba(12, 34, 16, 0.95);
+    -webkit-box-shadow: 0 0 7px rgba(95, 216, 104, 0.9);
+    box-shadow: 0 0 7px rgba(95, 216, 104, 0.9);
 }
 
 button.btn-alert-marker.btn-alert-marker--debug {
-    right: 444px;
+    right: 420px;
     border-color: #3f95ff;
     color: #8ec5ff;
     background: rgba(8, 20, 38, 0.92);
@@ -785,7 +848,8 @@ button.btn-alert-marker.btn-alert-marker--debug:hover {
     box-shadow: 0 0 8px rgba(107, 176, 255, 0.95);
 }
 
-#cnc-footer-wop::before {
+#cnc-footer-wop::before,
+button.btn-alert-marker.btn-alert-marker--wop::before {
     content: "!";
     position: absolute;
     left: 50%;
@@ -795,14 +859,15 @@ button.btn-alert-marker.btn-alert-marker--debug:hover {
     display: block;
     font-size: 13px;
     line-height: 1;
-    color: #ffd56a;
+    color: #8dff96;
     pointer-events: none;
 }
 button.btn-alert-marker.btn-alert-marker--wop:hover::before {
-    color: #ffe18d;
+    color: #b4ffba;
 }
 
-#cnc-footer-debug::before {
+#cnc-footer-debug::before,
+button.btn-alert-marker.btn-alert-marker--debug::before {
     content: "";
     position: absolute;
     left: 50%;
@@ -825,21 +890,21 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
 }
 
 @-webkit-keyframes alertBlink {
-    0% { opacity: 1; -webkit-box-shadow: 0 0 5px rgba(230, 179, 34, 0.8); }
-    50% { opacity: 0.42; -webkit-box-shadow: 0 0 1px rgba(230, 179, 34, 0.2); }
-    100% { opacity: 1; -webkit-box-shadow: 0 0 5px rgba(230, 179, 34, 0.8); }
+    0% { opacity: 1; -webkit-box-shadow: 0 0 5px rgba(63, 191, 74, 0.8); }
+    50% { opacity: 0.42; -webkit-box-shadow: 0 0 1px rgba(63, 191, 74, 0.2); }
+    100% { opacity: 1; -webkit-box-shadow: 0 0 5px rgba(63, 191, 74, 0.8); }
 }
 @keyframes alertBlink {
-    0% { opacity: 1; box-shadow: 0 0 5px rgba(230, 179, 34, 0.8); }
-    50% { opacity: 0.42; box-shadow: 0 0 1px rgba(230, 179, 34, 0.2); }
-    100% { opacity: 1; box-shadow: 0 0 5px rgba(230, 179, 34, 0.8); }
+    0% { opacity: 1; box-shadow: 0 0 5px rgba(63, 191, 74, 0.8); }
+    50% { opacity: 0.42; box-shadow: 0 0 1px rgba(63, 191, 74, 0.2); }
+    100% { opacity: 1; box-shadow: 0 0 5px rgba(63, 191, 74, 0.8); }
 }
 
 /* Popup above the work-in-progress marker */
 .alert-popup-box {
     position: absolute;
     bottom: 40px;
-    right: 420px;
+    right: 444px;
     width: 250px;
     min-height: 80px;
     padding: 14px 16px;
@@ -858,4 +923,40 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
     line-height: 1.45;
     color: #e8e8e8;
     text-align: center;
+}
+
+/* Yellow coming-soon / info tip */
+.cc-info-tip {
+    margin: 12px 0 0 0;
+    padding: 12px 14px;
+    max-width: 480px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    background: rgba(230, 179, 34, 0.12);
+    border: 1px solid rgba(230, 179, 34, 0.55);
+    border-left: 3px solid #e6b322;
+    color: #f0d98a;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.cc-info-tip strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #ffd24d;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.cc-info-tip--page {
+    margin: 24px;
+    max-width: 560px;
+}
+.cc-placeholder-tab {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
 }

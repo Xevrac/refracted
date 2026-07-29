@@ -13,6 +13,7 @@
                     <li ng-class="{'active': optionsTab == 'SOUND'}"><a href="" ng-click="setOptionsTab('SOUND')">SOUND</a></li>
                     <li ng-class="{'active': optionsTab == 'CONTROLS'}"><a href="" ng-click="setOptionsTab('CONTROLS')">CONTROLS</a></li>
                     <li ng-class="{'active': optionsTab == 'GAMEPLAY'}"><a href="" ng-click="setOptionsTab('GAMEPLAY')">GAMEPLAY</a></li>
+                    <li ng-show="allowShellThemeSelect" ng-class="{'active': optionsTab == 'INTERFACE'}"><a href="" ng-click="setOptionsTab('INTERFACE')">INTERFACE</a></li>
                 </ul>
                 <div class="options-restore-wrap">
                     <button class="btn-opt-restore" ng-click="restoreDefaults()">RESTORE DEFAULTS</button>
@@ -75,6 +76,29 @@
                     </div>
                     <div class="opt-group">
                         <label class="opt-checkbox"><input type="checkbox" ng-model="settings.allowdeselect" ng-change="applyGameplay()"> Allow Deselect</label>
+                    </div>
+                </div>
+
+                <div class="opt-pane" ng-show="optionsTab == 'INTERFACE' && allowShellThemeSelect">
+                    <div class="opt-group">
+                        <label class="opt-label-main">Shell UI Theme</label>
+                        <select class="opt-select"
+                                ng-model="settings.shellUiTheme"
+                                ng-options="theme.id as theme.label for theme in shellThemeOptions"
+                                ng-change="applyShellTheme()"></select>
+                        <p class="opt-hint">{{ shellThemeHint }}</p>
+                    </div>
+                    <div class="opt-group opt-group--disabled">
+                        <label class="opt-label-main">Default Theme</label>
+                        <select class="opt-select"
+                                ng-model="settings.shellUiThemeDefault"
+                                ng-options="theme.id as theme.label for theme in shellThemeOptions"
+                                ng-disabled="true"
+                                disabled="disabled"></select>
+                        <div class="cc-info-tip">
+                            <strong>Coming soon</strong>
+                            Account defaults are not yet implemented, check back later.
+                        </div>
                     </div>
                 </div>
             </div>

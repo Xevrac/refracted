@@ -1,0 +1,573 @@
+/* Aurora shell lobby — modern HUD (WebKit 535 / Chrome 15 safe) */
+
+/* Stay under .au-top (64px), same as normal .au-main */
+.au-main--lobby {
+    position: absolute !important;
+    top: 64px !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+}
+
+.au-top__browse {
+    margin-right: 8px;
+}
+
+.au-lobby {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: #0a0d0b;
+    color: #e6edf5;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.au-lobby__body {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.au-lobby__main {
+    position: absolute;
+    top: 16px;
+    left: 18px;
+    right: 336px;
+    bottom: 16px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    padding-bottom: 56px;
+    overflow: visible;
+}
+
+.au-lobby__side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    border-left: 1px solid #1c2a32;
+    background: rgba(12, 15, 13, 0.92);
+}
+
+.au-lobby__side-body {
+    position: absolute;
+    top: 36px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+}
+
+.au-lobby__side .cc-sidebar {
+    position: static;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+}
+
+.au-lobby__map {
+    position: relative;
+    z-index: 40;
+    height: 200px;
+    margin: 0 0 14px 0;
+    overflow: visible;
+    background: #0a0d0b;
+    border: 1px solid #1c2a32;
+}
+
+.au-lobby__map-img {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.4;
+}
+
+.au-lobby__map-dim {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(8, 12, 14, 0.35);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.au-lobby__map-overlay {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 50;
+}
+
+.au-lobby__map-face img {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.au-lobby__map-menu {
+    list-style: none;
+    margin: 6px 0 0 0;
+    padding: 0;
+    min-width: 220px;
+    border: 1px solid #1c2a32;
+    background: rgba(10, 14, 16, 0.98);
+    position: relative;
+    z-index: 60;
+    -webkit-box-shadow: 0 8px 20px rgba(0, 0, 0, 0.65);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.65);
+}
+
+.au-lobby__map-menu li a {
+    display: block;
+    padding: 9px 12px;
+    color: #c8d0da;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.au-lobby__map-menu li a:hover,
+.au-lobby__map-menu li.active a {
+    background: rgba(0, 136, 255, 0.2);
+    color: #fff;
+}
+
+.au-lobby__tabs {
+    position: absolute;
+    left: 16px;
+    bottom: 12px;
+    z-index: 3;
+}
+
+.au-lobby__tabs button {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 7px 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #8b9aab;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.au-lobby__tabs button.au-lobby__tab--on {
+    color: #fff;
+    border-color: rgba(0, 136, 255, 0.45);
+    background: rgba(0, 136, 255, 0.12);
+}
+
+/* Three-column team row — no overlap with VS */
+.au-lobby__team {
+    display: table-cell;
+    vertical-align: top;
+    width: 42%;
+    overflow: visible;
+    position: relative;
+    z-index: 1;
+}
+
+.au-lobby__teams {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    position: relative;
+    z-index: 2;
+    margin: 0 0 12px 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: visible;
+}
+
+.au-lobby__team--1 {
+    padding-right: 12px;
+}
+
+.au-lobby__team--2 {
+    padding-left: 12px;
+}
+
+.au-lobby__team-head {
+    margin: 0 0 8px 0;
+    color: #8b9aab;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.au-lobby__vs {
+    display: table-cell;
+    vertical-align: middle;
+    width: 16%;
+    text-align: center;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 22px;
+    color: #3aa0ff;
+    pointer-events: none;
+}
+
+.au-lobby__vs span {
+    display: inline-block;
+}
+
+.au-lobby__slot {
+    position: relative;
+    min-height: 72px;
+    margin: 0 0 8px 0;
+    padding: 10px;
+    border: 1px solid #1c2a32;
+    background: rgba(16, 20, 18, 0.88);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    overflow: visible;
+    z-index: 1;
+}
+
+.au-lobby__slot-body {
+    overflow: visible;
+    position: relative;
+    min-height: 59px;
+    padding-right: 56px;
+}
+
+.au-lobby__slot-body:after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.au-lobby__avatar-wrap {
+    float: left;
+    width: 48px;
+    margin: 0 10px 0 0;
+}
+
+.au-lobby__avatar {
+    width: 48px;
+    height: 48px;
+    margin: 0;
+    border: 1px solid rgba(0, 136, 255, 0.35);
+    background: #0c0f0d;
+    overflow: hidden;
+}
+
+.au-lobby__avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.au-lobby__color-ribbon {
+    height: 6px;
+    margin-top: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.45);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby__meta {
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    padding-right: 4px;
+}
+
+.au-lobby__menu-btn {
+    position: absolute;
+    top: 50%;
+    right: 28px;
+    width: 22px;
+    height: 22px;
+    margin-top: -11px;
+    padding: 0;
+    border: 1px solid #3a4a58;
+    background: rgba(18, 24, 28, 0.95);
+    cursor: pointer;
+    z-index: 12;
+}
+
+.au-lobby__menu-btn.open {
+    border-color: #3aa0ff;
+    background: rgba(0, 136, 255, 0.18);
+}
+
+.au-lobby__chevron {
+    display: block;
+    width: 0;
+    height: 0;
+    margin: 8px auto 0 auto;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #c8d0da;
+}
+
+.au-lobby__menu-btn.open .au-lobby__chevron {
+    border-top-color: #fff;
+}
+
+.au-lobby__slot-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 6px;
+    width: 180px;
+    padding: 4px 0;
+    list-style: none;
+    border: 1px solid #1c2a32;
+    background: rgba(10, 14, 16, 0.98);
+    z-index: 90;
+    -webkit-box-shadow: 0 8px 20px rgba(0, 0, 0, 0.75);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.75);
+}
+
+.au-lobby__slot-menu li.disabled a {
+    color: #555;
+    cursor: default;
+    pointer-events: none;
+}
+
+.au-lobby__slot-menu-label {
+    padding: 4px 10px 2px 10px;
+    color: #8b9aab;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.au-lobby__slot-menu li a {
+    display: block;
+    padding: 6px 10px;
+    color: #c8d0da;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.au-lobby__slot-menu li a:hover,
+.au-lobby__slot-menu li.active a {
+    background: rgba(0, 136, 255, 0.2);
+    color: #fff;
+}
+
+.au-lobby__slot-menu li.disabled a:hover {
+    background: transparent;
+    color: #555;
+}
+
+.au-lobby__slot.menu-open {
+    z-index: 40;
+}
+
+.au-lobby__slot-colors {
+    padding: 4px 10px 8px 10px;
+}
+
+.au-lobby__swatch {
+    display: inline-block;
+    width: 14px;
+    height: 12px;
+    margin: 0 3px 3px 0;
+    border: 1px solid #0c0f0d;
+    padding: 0;
+    cursor: pointer;
+}
+
+.au-lobby__swatch.on {
+    border-color: #fff;
+    -webkit-box-shadow: 0 0 0 1px #fff;
+    box-shadow: 0 0 0 1px #fff;
+}
+
+.au-lobby__team-actions {
+    margin-top: 8px;
+    white-space: nowrap;
+}
+
+.au-lobby__team-actions .au-btn {
+    margin: 0 6px 0 0;
+}
+
+.au-lobby__slot--local {
+    -webkit-box-shadow: inset 0 -2px 0 rgba(0, 136, 255, 0.55);
+    box-shadow: inset 0 -2px 0 rgba(0, 136, 255, 0.55);
+}
+
+.au-lobby__meta strong {
+    display: block;
+    color: #e6edf5;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.au-lobby__meta span {
+    display: block;
+    color: #8b9aab;
+    font-size: 11px;
+    margin: 2px 0 4px 0;
+}
+
+.au-lobby__ai button {
+    margin-right: 4px;
+    padding: 2px 6px;
+    border: 1px solid #1c2a32;
+    background: transparent;
+    color: #8b9aab;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.au-lobby__ai button.on {
+    color: #fff;
+    border-color: rgba(0, 136, 255, 0.55);
+    background: rgba(0, 136, 255, 0.16);
+}
+
+.au-lobby__kick {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 22px;
+    height: 22px;
+    margin-top: -11px;
+    border: 1px solid #1c2a32;
+    background: #121618;
+    color: #8b9aab;
+    font-size: 14px;
+    line-height: 18px;
+    padding: 0;
+    cursor: pointer;
+    z-index: 12;
+}
+
+.au-lobby__kick:hover {
+    color: #fff;
+    border-color: #3aa0ff;
+}
+
+.au-lobby__actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 48px;
+    text-align: center;
+}
+
+.au-lobby__actions .au-btn {
+    margin: 0 6px;
+}
+
+.au-lobby__start {
+    min-width: 200px;
+}
+
+.au-lobby__browser,
+.au-lobby-browser {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 18px 20px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    background: #0a0d0b;
+    z-index: 5;
+}
+
+.au-lobby-browser__panel {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    right: 20px;
+    bottom: 18px;
+    padding: 18px;
+    overflow: auto;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby-browser__title {
+    margin: 0 0 14px 0;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #e6edf5;
+}
+
+.au-lobby-browser__table {
+    margin-top: 14px;
+    border: 1px solid #1c2a32;
+}
+
+.au-lobby-browser__row {
+    overflow: hidden;
+    padding: 10px 12px;
+    border-bottom: 1px solid #1c2a32;
+    font-size: 12px;
+}
+
+.au-lobby-browser__row--head {
+    background: rgba(0, 0, 0, 0.35);
+    color: #8b9aab;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.au-lobby-browser__row span {
+    float: left;
+    width: 25%;
+}
+
+.au-lobby-browser__empty {
+    padding: 28px 12px;
+    color: #8b9aab;
+    text-align: center;
+    font-size: 13px;
+}
+
+.au-lobby__modal {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.au-lobby__modal-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 280px;
+    margin: -38px 0 0 -140px;
+    padding: 22px 16px;
+    border: 1px solid #1c2a32;
+    background: rgba(10, 14, 16, 0.97);
+    color: #e6edf5;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    text-align: center;
+    -webkit-box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+}

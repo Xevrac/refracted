@@ -1,0 +1,707 @@
+/* Classic shell lobby — Generals 2 alpha layout (EAWebKit-safe) */
+
+.cc-main-view--lobby {
+    position: absolute;
+    top: 70px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.cc-lobby {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: #050505 url('../view/image/dark_gray_tex.jpg') repeat;
+    color: #ececec;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.cc-lobby__body {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+/* Left content column + right social rail */
+.cc-lobby__stage {
+    position: absolute;
+    top: 16px;
+    left: 36px;
+    right: 436px;
+    bottom: 16px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__rail {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 320px;
+    border-left: 1px solid #2a2a2a;
+    background: rgba(8, 8, 8, 0.94);
+    z-index: 2;
+}
+
+.cc-lobby__sidebar {
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto !important;
+}
+
+/* ---- Map plate: upper half of stage ---- */
+.cc-lobby__map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 46%;
+    z-index: 20;
+    border: 1px solid #2c2c2c;
+    -webkit-box-shadow: 0 0 0 5px #0a0a0a, 0 0 0 6px #3a3a3a;
+    box-shadow: 0 0 0 5px #0a0a0a, 0 0 0 6px #3a3a3a;
+    overflow: visible;
+    background: #121212;
+}
+
+.cc-lobby__map-art {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #1a1a1a;
+    background-image: url('../images/cnc_background.png');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    z-index: 0;
+}
+
+.cc-lobby__map-veil {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.28);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.cc-lobby__map-ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+}
+
+.cc-lobby__tabs {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 42%;
+    margin-top: -18px;
+    text-align: center;
+    z-index: 6;
+}
+
+.cc-lobby__tab {
+    display: inline-block;
+    margin: 0 2px;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(8, 16, 28, 0.82);
+    color: #c8d0da;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+}
+
+.cc-lobby__tab.active {
+    color: #fff;
+    border-color: rgba(70, 160, 230, 0.95);
+    background: rgba(28, 90, 150, 0.9);
+}
+
+.cc-lobby__map-chooser {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    width: 300px;
+    margin-left: -150px;
+    z-index: 40;
+}
+
+.cc-lobby__map-pill {
+    display: block;
+    width: 100%;
+    height: 36px;
+    line-height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(80, 150, 210, 0.75);
+    background: rgba(18, 55, 95, 0.92);
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: left;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__chevron {
+    float: right;
+    width: 0;
+    height: 0;
+    margin-top: 14px;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #fff;
+}
+
+.cc-lobby__map-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(80, 150, 210, 0.55);
+    background: rgba(8, 28, 48, 0.97);
+    max-height: 220px;
+    overflow: auto;
+    -webkit-box-shadow: 0 10px 24px rgba(0, 0, 0, 0.85);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.85);
+}
+
+.cc-lobby__map-list li a {
+    display: block;
+    padding: 10px 12px;
+    color: #d0e4f8;
+    text-decoration: none;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cc-lobby__map-list li a:hover,
+.cc-lobby__map-list li.active a {
+    background: rgba(50, 130, 210, 0.65);
+    color: #fff;
+}
+
+/* ---- Teams: fill remaining space above bottom actions ---- */
+.cc-lobby__teams {
+    position: absolute;
+    top: 56%;
+    left: 0;
+    right: 0;
+    bottom: 58px;
+    display: -webkit-box;
+    -webkit-box-orient: horizontal;
+    -webkit-box-align: stretch;
+    -webkit-box-pack: justify;
+    z-index: 10;
+    margin: 0;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__team {
+    -webkit-box-flex: 1;
+    width: 0;
+    padding: 14px 14px 58px 14px;
+    border: 1px solid #3a3a3a;
+    background: rgba(10, 10, 10, 0.82);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.cc-lobby__team--1 {
+    margin-right: 8px;
+}
+
+.cc-lobby__team--2 {
+    margin-left: 8px;
+}
+
+.cc-lobby__team-head {
+    margin: 0 0 12px 0;
+    color: #c8c8c8;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.14em;
+}
+
+.cc-lobby__vs {
+    width: 72px;
+    -webkit-box-flex: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-box-pack: center;
+    -webkit-box-align: center;
+    text-align: center;
+    pointer-events: none;
+    background: transparent;
+    border: none;
+}
+
+.cc-lobby__vs span {
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 34px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 2px 0 #000;
+}
+
+/* Player card */
+.cc-lobby__card {
+    position: relative;
+    min-height: 104px;
+    margin: 0 0 12px 0;
+    padding: 10px;
+    border: 1px solid #555;
+    background: rgba(18, 18, 18, 0.94);
+    overflow: visible;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    z-index: 1;
+}
+
+.cc-lobby__card.menu-open {
+    z-index: 50;
+}
+
+.cc-lobby__card.local {
+    border-color: #6a8aaa;
+    -webkit-box-shadow: inset 0 -3px 0 #2f7fc4;
+    box-shadow: inset 0 -3px 0 #2f7fc4;
+}
+
+.cc-lobby__card.pending { opacity: 0.72; }
+
+.cc-lobby__kick {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #555;
+    background: #222;
+    color: #ccc;
+    font-size: 13px;
+    line-height: 16px;
+    padding: 0;
+    cursor: pointer;
+    z-index: 12;
+}
+
+.cc-lobby__card-left {
+    float: left;
+    width: 60px;
+    position: relative;
+    z-index: 5;
+}
+
+.cc-lobby__portrait {
+    width: 54px;
+    height: 54px;
+    border: 1px solid #777;
+    background: #111;
+    overflow: hidden;
+}
+
+.cc-lobby__portrait img {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.cc-lobby__color-ribbon {
+    height: 6px;
+    margin-top: 5px;
+    border: 1px solid #222;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__tools {
+    margin-top: 5px;
+    height: 16px;
+    overflow: visible;
+    position: relative;
+    z-index: 6;
+}
+
+.cc-lobby__arrow {
+    display: block;
+    width: 54px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #4a90c8;
+    background: rgba(18, 28, 40, 0.95);
+    cursor: pointer;
+    position: relative;
+}
+
+.cc-lobby__arrow:after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 5px;
+    margin-left: -4px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #fff;
+}
+
+.cc-lobby__arrow.open {
+    background: rgba(40, 110, 180, 0.95);
+    border-color: #7ab8e8;
+}
+
+.cc-lobby__menu {
+    position: absolute;
+    left: 0;
+    top: 92px;
+    width: 180px;
+    margin: 0;
+    padding: 4px 0;
+    list-style: none;
+    border: 1px solid #4a90c8;
+    background: #0a1420;
+    z-index: 80;
+    -webkit-box-shadow: 0 8px 20px rgba(0, 0, 0, 0.85);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.85);
+}
+
+.cc-lobby__menu-label {
+    padding: 4px 10px 2px 10px;
+    color: #7a9ab8;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__menu li a {
+    display: block;
+    padding: 6px 10px;
+    color: #d8e8f8;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.cc-lobby__menu li a:hover,
+.cc-lobby__menu li.active a {
+    background: rgba(40, 120, 200, 0.45);
+    color: #fff;
+}
+
+.cc-lobby__menu li.disabled a {
+    color: #555;
+    cursor: default;
+    pointer-events: none;
+    background: transparent;
+}
+
+.cc-lobby__menu-colors { padding: 4px 10px 8px 10px; }
+
+.cc-lobby__swatch {
+    display: inline-block;
+    width: 14px;
+    height: 12px;
+    margin: 0 3px 3px 0;
+    border: 1px solid #222;
+    padding: 0;
+    cursor: pointer;
+}
+
+.cc-lobby__swatch.on {
+    border-color: #fff;
+}
+
+.cc-lobby__card-right {
+    margin-left: 70px;
+    padding-top: 2px;
+    overflow: hidden;
+}
+
+.cc-lobby__faction {
+    float: left;
+    width: 28px;
+    height: 28px;
+    margin: 4px 10px 0 0;
+}
+
+.cc-lobby__names { overflow: hidden; }
+
+.cc-lobby__codename {
+    color: #fff;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.cc-lobby__player {
+    color: #b0b0b0;
+    font-size: 12px;
+    margin-top: 3px;
+}
+
+.cc-lobby__ai {
+    margin-top: 6px;
+    color: #aaa;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.cc-lobby__ai span {
+    margin-right: 4px;
+}
+
+.cc-lobby__ai button {
+    margin-left: 2px;
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: #777;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.cc-lobby__ai button.on {
+    color: #fff;
+    border-color: rgba(80, 150, 210, 0.55);
+    background: rgba(40, 90, 140, 0.35);
+    text-decoration: none;
+}
+
+.cc-lobby__team-actions {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 12px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.cc-lobby__act {
+    display: inline-block;
+    width: 47%;
+    height: 42px;
+    margin: 0 1%;
+    padding: 0;
+    border: 1px solid #111;
+    border-radius: 4px;
+    color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+    vertical-align: top;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: 100% 100%;
+}
+
+.cc-lobby__act--invite {
+    background-color: #37a414;
+    background-image: url('../view/image/btn_bg_03.png');
+}
+
+.cc-lobby__act--ai {
+    background-color: #17548f;
+    background-image: url('../view/image/btn_bg_01.png');
+}
+
+.cc-lobby__act--ai:hover {
+    background-image: url('../view/image/btn_bg_01_over.png');
+}
+
+.cc-lobby__act:hover {
+    -webkit-filter: brightness(1.08);
+    filter: brightness(1.08);
+}
+
+/* Bottom actions pinned to stage floor */
+.cc-lobby__actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 48px;
+    z-index: 15;
+}
+
+.cc-lobby__btn {
+    display: inline-block;
+    min-width: 120px;
+    height: 42px;
+    padding: 0 16px;
+    border: 1px solid #111;
+    border-radius: 4px;
+    color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+    vertical-align: middle;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: 100% 100%;
+}
+
+.cc-lobby__btn--exit {
+    float: left;
+    background-color: #a0882a;
+    background-image: url('../view/image/btn_bg_05.png');
+}
+
+.cc-lobby__btn--start {
+    position: absolute;
+    left: 50%;
+    width: 280px;
+    margin-left: -140px;
+    background-color: #37a414;
+    background-image: url('../view/image/btn_bg_03.png');
+}
+
+.cc-lobby__btn--browse {
+    float: right;
+    min-width: 160px;
+    background-color: #17548f;
+    background-image: url('../view/image/btn_bg_01.png');
+}
+
+.cc-lobby__btn--browse:hover {
+    background-image: url('../view/image/btn_bg_01_over.png');
+}
+
+.cc-lobby__btn:hover {
+    -webkit-filter: brightness(1.08);
+    filter: brightness(1.08);
+}
+
+/* Server browser */
+.cc-lobby__browser,
+.cc-lobby-browser {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 20px 28px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    background: #080808;
+    z-index: 10;
+}
+
+.cc-lobby-browser__head {
+    margin: 0 0 18px 0;
+    overflow: hidden;
+}
+
+.cc-lobby-browser__head .cc-lobby__btn {
+    float: left;
+    margin: 0 16px 0 0;
+}
+
+.cc-lobby-browser__title {
+    margin: 6px 0 0 0;
+    display: inline-block;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fff;
+}
+
+.cc-lobby-browser__panel {
+    border: 1px solid #2a2a2a;
+    background: rgba(16, 16, 16, 0.95);
+    padding: 16px;
+}
+
+.cc-lobby-browser__table {
+    margin-top: 16px;
+    border: 1px solid #2a2a2a;
+}
+
+.cc-lobby-browser__row {
+    display: block;
+    overflow: hidden;
+    padding: 10px 12px;
+    border-bottom: 1px solid #222;
+    font-size: 12px;
+}
+
+.cc-lobby-browser__row--head {
+    background: #111;
+    color: #9a9a9a;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cc-lobby-browser__row span {
+    float: left;
+    width: 25%;
+}
+
+.cc-lobby-browser__empty {
+    padding: 28px 12px;
+    color: #666;
+    font-size: 13px;
+    text-align: center;
+}
+
+.cc-lobby__modal {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.58);
+}
+
+.cc-lobby__modal-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 280px;
+    margin: -38px 0 0 -140px;
+    padding: 22px 16px;
+    border: 1px solid #4a90c8;
+    background: rgba(10, 20, 32, 0.96);
+    color: #fff;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+    text-align: center;
+    -webkit-box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+}

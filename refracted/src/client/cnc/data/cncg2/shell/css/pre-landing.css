@@ -1,4 +1,6 @@
-/* Pre-landing: black screen, spinner, title, status box (retail C&C) */
+/* Pre-landing: solid black full-screen, spinner/title/status centered.
+   Chrome 15 / WebKit 535: do not use flex on the overlay — -webkit-box can
+   collapse to content height and let the theme body background show through. */
 
 .cc-app-root[ng-cloak] {
     display: none;
@@ -10,26 +12,20 @@
     right: 0;
     bottom: 0;
     left: 0;
+    width: 100%;
+    height: 100%;
     z-index: 200000;
     background: #000;
+    background-color: #000;
+    background-image: none;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    justify-content: center;
-    padding: 20px 0;
-    overflow: auto;
-    -webkit-box-orient: vertical;
-    -webkit-box-direction: normal;
-    -webkit-flex-direction: column;
-    -ms-flex-direction: column;
-    flex-direction: column;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
 }
 
-/* Optional art: cover viewport, content stays flex-centered */
+/* Optional art: cover viewport, content stays centered */
 .cc-pre-landing--art {
     background: #0a0a0a url('../images/loading_pre_landing2.png') no-repeat center center;
     -webkit-background-size: cover;
@@ -47,62 +43,40 @@
     z-index: 0;
 }
 .cc-pre-landing--art .cc-pre-landing__inner {
-    position: relative;
-    z-index: 1;
     background: rgba(0, 0, 0, 0.4);
     padding: 20px 12px 24px 12px;
     border-radius: 6px;
-    max-width: 100%;
-    width: 100%;
-    margin: 0 auto;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
 }
 
 .cc-pre-landing__inner {
-    text-align: center;
-    max-width: 100%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
     width: 100%;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     padding: 0 8px;
+    text-align: center;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    position: relative;
     z-index: 1;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
 }
 
 .cc-pre-landing__brand {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    display: flex;
-    -webkit-box-align: center;
-    -ms-flex-align: center;
-    align-items: center;
-    -webkit-box-pack: center;
-    -ms-flex-pack: center;
-    justify-content: center;
-    gap: 0 20px;
-    -webkit-box-orient: horizontal;
-    -webkit-box-direction: normal;
-    -ms-flex-direction: row;
-    flex-direction: row;
-    margin: 0 auto 10px auto;
-    width: 100%;
-    -webkit-box-pack: center;
-    justify-content: center;
-}
-.cc-pre-landing__spinner {
-    margin-right: 20px;
-}
-.cc-pre-landing__title + .cc-pre-landing__tagline,
-.cc-pre-landing__brand + .cc-pre-landing__tagline {
-    margin-top: 4px;
+    display: inline-block;
+    margin: 0 auto 16px auto;
+    padding: 0;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 .cc-pre-landing__tagline {
     margin: 0 auto 16px auto;
-    max-width: min(96vw, 640px);
+    max-width: 640px;
+    width: 96%;
     font-family: 'Eurostile-Med', Arial, sans-serif;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: normal;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -111,11 +85,11 @@
 }
 
 .cc-pre-landing__spinner {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 20px;
     width: 40px;
     height: 40px;
-    -webkit-flex-shrink: 0;
-    -ms-flex-negative: 0;
-    flex-shrink: 0;
     border-radius: 50%;
     border: 3px solid rgba(255, 255, 255, 0.1);
     border-top-color: #fff;
@@ -132,22 +106,24 @@
 }
 
 .cc-pre-landing__title {
+    display: inline-block;
+    vertical-align: middle;
     margin: 0;
     font-family: 'Eurostile-Hea', 'Eurostile-Med', Arial, sans-serif;
-    font-size: clamp(20px, 3.2vw, 34px);
+    font-size: 28px;
     font-weight: bold;
     letter-spacing: 0.14em;
     color: #fff;
     line-height: 1.1;
-    text-rendering: optimizeLegibility;
+    text-rendering: auto;
     text-shadow: 0 1px 0 #000, 0 0 20px rgba(255, 255, 255, 0.12);
     white-space: nowrap;
 }
 
 .cc-pre-landing__statusBox {
     display: block;
-    width: min(88vw, 560px);
-    max-width: 560px;
+    width: 560px;
+    max-width: 88%;
     min-width: 0;
     margin: 0 auto;
     border: 1px solid rgba(255, 255, 255, 0.55);
@@ -172,13 +148,24 @@
 
 .cc-pre-landing__hint {
     margin: 20px 0 0 0;
-    font-family: Arial, sans-serif;
-    font-size: 10px;
-    color: #555;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #b0b0b0;
     letter-spacing: 0.02em;
+    max-width: 640px;
+    width: 96%;
+    margin-left: auto;
+    margin-right: auto;
 }
-.cc-pre-landing--shell .cc-pre-landing__hint { display: none; }
+/* Keep hint visible in Chrome 15 / webdev; only dim slightly when native shell is bound */
+.cc-pre-landing--shell .cc-pre-landing__hint {
+    display: block;
+    color: #8a8a8a;
+}
 
 .cc-app-root {
-    min-height: 100vh;
+    height: 100%;
+    min-height: 100%;
+    position: relative;
 }

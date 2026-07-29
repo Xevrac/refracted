@@ -51,6 +51,7 @@ pub struct CapturedPacket {
 pub enum PacketDirection {
     ClientToBlaze,
     BlazeToClient,
+    BlazeToDedicated,
 }
 
 impl PacketDirection {
@@ -58,6 +59,7 @@ impl PacketDirection {
         match self {
             PacketDirection::ClientToBlaze => "Client->Blaze",
             PacketDirection::BlazeToClient => "Blaze->Client",
+            PacketDirection::BlazeToDedicated => "Blaze->Dedicated",
         }
     }
 }
@@ -77,6 +79,7 @@ impl InspectorType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ToolkitWorkbenchMode {
+    FrostEx,
     #[default]
     Listen,
     Make,

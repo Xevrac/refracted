@@ -1,4 +1,4 @@
-use aes::{
+﻿use aes::{
     cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit},
     Aes128,
 };
@@ -544,7 +544,7 @@ impl LsxServer {
         None
     }
 
-    /// First `id="..."` after `<Request ` — stable when attribute order differs from the quote-split heuristic.
+    /// First `id="..."` after `<Request ` -- stable when attribute order differs from the quote-split heuristic.
     fn extract_lsx_request_id<'a>(request: &'a str, fallback: &'a str) -> &'a str {
         if let Some(start) = request.find("<Request ") {
             let slice = &request[start..];
