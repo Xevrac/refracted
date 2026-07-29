@@ -77,7 +77,11 @@
     padding-top: 10px;
     padding-right: 15px; /* Scrollbar padding */
     z-index: 10;
+<<<<<<< HEAD
     -webkit-font-smoothing: subpixel-antialiased;
+=======
+    -webkit-font-smoothing: antialiased; /* Forces smoother, thinner font rendering */
+>>>>>>> origin/main
 }
 
 /* Big Category Font */
