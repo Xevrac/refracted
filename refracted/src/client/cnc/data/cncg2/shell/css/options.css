@@ -16,46 +16,69 @@
     height: 500px;
     margin: -250px 0 0 -350px;
     background: #000;
-    border: 1px solid #1d1f22;
+    border: 1px solid #2a2a2a;
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.95);
     -webkit-box-sizing: border-box; box-sizing: border-box;
 }
 
-/* The Red PNG X Button */
+/* Default close button: Aurora-style square X.
+   Classic shell overrides this with the credits-style red circle. */
 .btn-options-close {
     position: absolute;
-    top: 9px;
+    top: 10px;
     right: 10px;
-    width: 16px;
-    height: 16px;
-    background-color: transparent;
-    background-image: none;
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    border: none;
+    width: 22px;
+    height: 22px;
+    background: #121618;
+    border: 1px solid #1c2a32;
     cursor: pointer;
     box-shadow: none;
     border-radius: 0;
     z-index: 10;
     padding: 0;
     -webkit-transition: none; transition: none;
-    opacity: 0.72;
+    opacity: 1;
 }
 .btn-options-close:hover {
-    opacity: 1;
+    border-color: #3aa0ff;
 }
 .btn-options-close::before,
 .btn-options-close::after {
     content: "";
     position: absolute;
-    left: 7px;
-    top: 0;
+    left: 10px;
+    top: 4px;
     width: 1px;
-    height: 16px;
-    background: #3f3f3f;
+    height: 12px;
+    background: #8b9aab;
 }
 .btn-options-close::before { transform: rotate(45deg); }
 .btn-options-close::after { transform: rotate(-45deg); }
+.btn-options-close:hover::before,
+.btn-options-close:hover::after {
+    background: #fff;
+}
+
+.cc-shell-root--classic .btn-options-close {
+    top: -12px;
+    right: -12px;
+    width: 32px;
+    height: 32px;
+    background-color: transparent;
+    background-image: url('../view/image/Red_x_button.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    border-radius: 16px;
+}
+.cc-shell-root--classic .btn-options-close:hover {
+    -webkit-filter: brightness(1.2);
+}
+.cc-shell-root--classic .btn-options-close::before,
+.cc-shell-root--classic .btn-options-close::after {
+    display: none;
+}
 
 /* =========================================================================
    HEADER & BODY STRUCTURE
@@ -71,11 +94,11 @@
 .options-header h2 { 
     margin: 0;
     color: #fff;
-    font-size: 20px;
-    letter-spacing: 0.02em;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Med', Arial, sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    font-family: Arial, Helvetica, sans-serif;
     font-weight: bold;
-    text-shadow: 1px 1px 2px #000;
+    text-shadow: 0 1px 1px #000;
 }
 
 .options-body-wrapper {
@@ -84,6 +107,8 @@
     bottom: 58px;
     left: 16px;
     right: 16px;
+    font-family: Arial, Helvetica, sans-serif;
+    -webkit-font-smoothing: subpixel-antialiased;
 }
 
 /* Sidebar styling mimicking the profile/sidebar panels */
@@ -125,20 +150,20 @@
     background: #070707;
     border: 1px solid #050505;
     border-bottom: 0;
-    color: #5b5b5b;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Hea', Arial, sans-serif;
+    color: #c8c8c8;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 13px;
     font-weight: bold;
     text-transform: uppercase;
     text-align: center;
     text-decoration: none;
     -webkit-transition: none; transition: none;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.04em;
 }
 .options-tabs > li:last-child > a { border-bottom: 1px solid #050505; }
 .options-tabs > li > a:hover {
     background-color: #123152;
-    color: #c4d9f5;
+    color: #e8e8e8;
 }
 
 /* Active state maps directly to the sub-row blue */
@@ -147,7 +172,7 @@
     background-image: none !important;
     color: #fff;
     border-color: #06325f;
-    text-shadow: 0 0 6px rgba(255, 255, 255, 0.45);
+    text-shadow: none;
 }
 
 /* =========================================================================
@@ -163,17 +188,16 @@
 .btn-opt-restore {
     width: 100%;
     height: 24px;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    line-height: 24px;
+    display: inline-block;
+    text-align: center;
     border-radius: 8px;
     border: 1px solid #111;
     background-color: #17548f;
     background-image: url('../view/image/btn_bg_01.png');
     background-size: 100% 100%;
     color: #fff;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Hea', Arial, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
     font-weight: bold;
     font-size: 11px;
     text-transform: uppercase;
@@ -196,17 +220,37 @@
 
 .opt-label-main {
     display: block;
-    color: #fff;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Med', Arial, sans-serif;
+    color: #f0f0f0;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
     font-weight: bold;
     margin-bottom: 8px;
 }
+.opt-hint {
+    margin: 10px 0 0 0;
+    color: #b0b0b0;
+    font-size: 12px;
+    line-height: 1.5;
+    max-width: 420px;
+    font-family: Arial, Helvetica, sans-serif;
+}
+.opt-group--disabled {
+    opacity: 0.55;
+}
+.opt-group--disabled .opt-label-main {
+    color: #888;
+}
+.opt-group--disabled .opt-select {
+    color: #777;
+    border-color: #333;
+    cursor: not-allowed;
+    background-color: #0a0a0a;
+}
 .opt-radio {
     display: inline-block;
-    color: #d2d2d2;
-    font-family: 'EurostileLTStd', Arial, sans-serif;
-    font-size: 12px;
+    color: #e0e0e0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
     margin-right: 20px;
     cursor: pointer;
     line-height: 24px;
@@ -215,8 +259,8 @@
 
 .opt-checkbox {
     display: inline-block;
-    color: #fff;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Med', Arial, sans-serif;
+    color: #f0f0f0;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
     font-weight: bold;
     cursor: pointer;
@@ -235,7 +279,7 @@
     border: 1px solid #222;
     color: #d4d4d4;
     padding: 0 10px;
-    font-family: 'EurostileLTStd', Arial, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 14px;
     appearance: none;
     -webkit-appearance: none;
@@ -297,12 +341,12 @@
     height: 31px;
     line-height: 30px;
     color: #fff;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Hea', Arial, sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
     font-weight: bold;
     font-size: 12px;
     border-radius: 4px;
     border: 1px solid #111;
-    text-shadow: 0 1px 1px #000;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
     cursor: pointer;
     margin-left: 8px;
     -webkit-transition: none; transition: none;

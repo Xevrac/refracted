@@ -1,0 +1,347 @@
+/* =========================================================================
+   Theme: Aurora
+   Dark tactical HUD inspired by refracted_cnc/frontend (blue accent, grid,
+   vignette). Keeps bumped/bevel shading; ES5-era CSS only (WebKit 535).
+   Activated via body.cc-theme--aurora
+   ========================================================================= */
+
+body.cc-theme.cc-theme--aurora {
+    color: #e6edf5;
+    background-color: #070907;
+    background-image:
+        -webkit-radial-gradient(50% 15%, ellipse, rgba(0, 136, 255, 0.14), transparent 55%),
+        -webkit-radial-gradient(80% 80%, ellipse, rgba(0, 80, 140, 0.10), transparent 50%),
+        -webkit-radial-gradient(10% 70%, ellipse, rgba(0, 100, 80, 0.07), transparent 45%),
+        -webkit-linear-gradient(rgba(58, 160, 255, 0.035) 1px, transparent 1px),
+        -webkit-linear-gradient(0deg, rgba(58, 160, 255, 0.035) 1px, transparent 1px),
+        url('../images/cnc_background.png');
+    background-size:
+        auto,
+        auto,
+        auto,
+        56px 56px,
+        56px 56px,
+        cover;
+    background-position: center, center, center, 0 0, 0 0, center;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
+    background-attachment: fixed;
+}
+
+body.cc-theme.cc-theme--aurora .cc-app-root {
+    position: relative;
+}
+
+/* Soft grain / scanlines (no mix-blend — WebKit 535) */
+body.cc-theme.cc-theme--aurora:before {
+    content: "";
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.12;
+    background-image: -webkit-repeating-linear-gradient(
+        top,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.28) 2px,
+        rgba(0, 0, 0, 0.28) 3px
+    );
+}
+
+body.cc-theme.cc-theme--aurora .cc-app-root {
+    position: relative;
+    z-index: 1;
+}
+
+/* Pre-landing: opaque black veil over aurora body grid/glows */
+body.cc-theme.cc-theme--aurora .cc-pre-landing {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 200000;
+    background: #000;
+    background-color: #000;
+    background-image: none;
+}
+
+/* Top bar — darker panel, cyan hairline */
+body.cc-theme.cc-theme--aurora .cc-top-bar {
+    background: rgba(12, 15, 13, 0.92);
+    border-bottom: 1px solid #1c2a32;
+    -webkit-box-shadow: 0 1px 0 rgba(0, 136, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 1px 0 rgba(0, 136, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+body.cc-theme.cc-theme--aurora .cc-persona-name,
+body.cc-theme.cc-theme--aurora .cc-username {
+    color: #e6edf5;
+    text-shadow: 0 1px 0 #000, 0 0 12px rgba(0, 136, 255, 0.25);
+}
+
+body.cc-theme.cc-theme--aurora .cc-persona-email,
+body.cc-theme.cc-theme--aurora .cc-build-meta {
+    color: #8b9aab;
+}
+
+/* Currency pills — cool metal + accent edge */
+body.cc-theme.cc-theme--aurora .cc-currency-value-box {
+    background: #101412;
+    border: 1px solid #1c2a32;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 #000;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 #000;
+}
+
+body.cc-theme.cc-theme--aurora .cc-currency-pill--vp,
+body.cc-theme.cc-theme--aurora .cc-currency-pill--cp,
+body.cc-theme.cc-theme--aurora .cc-currency-pill--gf {
+    background: #0c0f0d;
+    border: 1px solid #0088ff;
+    color: #3aa0ff;
+    text-shadow: 0 1px 0 #000;
+}
+
+body.cc-theme.cc-theme--aurora .btn.btn-massive-play,
+body.cc-theme.cc-theme--aurora .btn.btn-play-dropdown,
+body.cc-theme.cc-theme--aurora .btn.btn-primary,
+body.cc-theme.cc-theme--aurora .btn.btn-options,
+body.cc-theme.cc-theme--aurora .btn.btn-mini.btn-add-premium {
+    color: #fff;
+    border: 1px solid rgba(0, 136, 255, 0.45);
+    background-color: #0088ff;
+    background-image: -webkit-linear-gradient(top, #3aa0ff 0%, #0088ff 48%, #0066cc 100%);
+    background-image: linear-gradient(to bottom, #3aa0ff 0%, #0088ff 48%, #0066cc 100%);
+    -webkit-box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+        0 8px 22px rgba(0, 136, 255, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+        0 8px 22px rgba(0, 136, 255, 0.22);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.65);
+}
+
+body.cc-theme.cc-theme--aurora .btn.btn-massive-play:hover,
+body.cc-theme.cc-theme--aurora .btn.btn-play-dropdown:hover,
+body.cc-theme.cc-theme--aurora .btn.btn-primary:hover,
+body.cc-theme.cc-theme--aurora .btn.btn-options:hover,
+body.cc-theme.cc-theme--aurora .btn.btn-massive-play:focus,
+body.cc-theme.cc-theme--aurora .btn.btn-play-dropdown:focus,
+body.cc-theme.cc-theme--aurora .btn.btn-primary:focus,
+body.cc-theme.cc-theme--aurora .btn.btn-options:focus {
+    border-color: #3aa0ff;
+    background-color: #3aa0ff;
+    background-image: -webkit-linear-gradient(top, #5cb4ff 0%, #3aa0ff 45%, #0088ff 100%);
+    background-image: linear-gradient(to bottom, #5cb4ff 0%, #3aa0ff 45%, #0088ff 100%);
+}
+
+body.cc-theme.cc-theme--aurora .btn.btn-massive-play:active,
+body.cc-theme.cc-theme--aurora .btn.btn-primary:active {
+    -webkit-box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* Ghost / secondary */
+body.cc-theme.cc-theme--aurora .btn-default,
+body.cc-theme.cc-theme--aurora .btn-add-currency {
+    background-color: #101412;
+    background-image: -webkit-linear-gradient(top, #1a221e 0%, #101412 100%);
+    background-image: linear-gradient(to bottom, #1a221e 0%, #101412 100%);
+    border: 1px solid #1c2a32;
+    color: #e6edf5;
+}
+
+body.cc-theme.cc-theme--aurora .btn-default:hover,
+body.cc-theme.cc-theme--aurora .btn-add-currency:hover {
+    border-color: rgba(0, 136, 255, 0.55);
+    background-color: rgba(0, 136, 255, 0.12);
+}
+
+/* Nav tabs */
+body.cc-theme.cc-theme--aurora .cc-nav-tabs > li > a,
+body.cc-theme.cc-theme--aurora .nav-tabs > li > a {
+    color: #8b9aab;
+    border-color: transparent;
+    text-shadow: 0 1px 0 #000;
+}
+
+body.cc-theme.cc-theme--aurora .cc-nav-tabs > li.active > a,
+body.cc-theme.cc-theme--aurora .nav-tabs > li.active > a {
+    color: #e6edf5;
+    border-bottom: 2px solid #0088ff;
+    background: transparent;
+}
+
+/* Panels / feeds / friends — dark surface + blue edge */
+body.cc-theme.cc-theme--aurora .cc-panel,
+body.cc-theme.cc-theme--aurora .cc-feed-panel,
+body.cc-theme.cc-theme--aurora .cc-friends-panel,
+body.cc-theme.cc-theme--aurora .cc-party-box,
+body.cc-theme.cc-theme--aurora .well {
+    background: rgba(16, 20, 18, 0.92);
+    border: 1px solid #1c2a32;
+    -webkit-box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 0 0 1px rgba(0, 136, 255, 0.08),
+        0 12px 32px rgba(0, 0, 0, 0.45);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 0 0 1px rgba(0, 136, 255, 0.08),
+        0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+body.cc-theme.cc-theme--aurora .cc-panel h3,
+body.cc-theme.cc-theme--aurora .cc-feed-panel h3,
+body.cc-theme.cc-theme--aurora .cc-friends-panel h3 {
+    color: #e6edf5;
+    border-bottom: 1px solid #1c2a32;
+    text-shadow: 0 1px 0 #000;
+}
+
+/* Corner HUD ticks on main play cluster */
+body.cc-theme.cc-theme--aurora .cc-center-cluster {
+    position: relative;
+}
+
+body.cc-theme.cc-theme--aurora .cc-center-cluster:before,
+body.cc-theme.cc-theme--aurora .cc-center-cluster:after {
+    content: "";
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-color: rgba(0, 136, 255, 0.45);
+    pointer-events: none;
+    z-index: 2;
+}
+
+body.cc-theme.cc-theme--aurora .cc-center-cluster:before {
+    top: -6px;
+    left: -6px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+}
+
+body.cc-theme.cc-theme--aurora .cc-center-cluster:after {
+    right: -6px;
+    bottom: -6px;
+    border-right: 1px solid;
+    border-bottom: 1px solid;
+}
+
+/* Options modal under aurora */
+body.cc-theme.cc-theme--aurora .options-modal-box {
+    background: #0c0f0d;
+    border: 1px solid #1c2a32;
+    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.2), 0 20px 50px rgba(0, 0, 0, 0.85);
+    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.2), 0 20px 50px rgba(0, 0, 0, 0.85);
+}
+
+body.cc-theme.cc-theme--aurora .options-header h2 {
+    color: #e6edf5;
+    text-shadow: 0 0 16px rgba(0, 136, 255, 0.35);
+}
+
+body.cc-theme.cc-theme--aurora .options-tabs li a {
+    color: #9eb4c8;
+}
+body.cc-theme.cc-theme--aurora .options-tabs li.active a {
+    color: #fff;
+}
+body.cc-theme.cc-theme--aurora .options-tabs li a:hover {
+    color: #e6edf5;
+}
+body.cc-theme.cc-theme--aurora .opt-label-main,
+body.cc-theme.cc-theme--aurora .opt-radio,
+body.cc-theme.cc-theme--aurora .opt-checkbox {
+    color: #e6edf5;
+}
+
+/* Shell options dialogue buttons — grey hatch + outline (not solid / not classic textures) */
+body.cc-theme.cc-theme--aurora .btn-opt-action,
+body.cc-theme.cc-theme--aurora .btn-opt-restore {
+    color: #d8d8d8;
+    text-align: center;
+    text-shadow: 0 1px 0 #000;
+    border: 1px solid #4a5560;
+    border-radius: 4px;
+    padding: 0;
+    background-color: #1a1e22;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+    background-size: auto, 100% 100%;
+    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
+    -webkit-filter: none;
+    filter: none;
+}
+
+body.cc-theme.cc-theme--aurora .btn-opt-action {
+    height: 31px;
+    line-height: 29px;
+}
+
+body.cc-theme.cc-theme--aurora .btn-opt-restore {
+    height: 24px;
+    line-height: 22px;
+}
+
+body.cc-theme.cc-theme--aurora .btn-opt-green,
+body.cc-theme.cc-theme--aurora .btn-opt-yellow,
+body.cc-theme.cc-theme--aurora .btn-opt-restore {
+    background-color: #1a1e22;
+}
+
+body.cc-theme.cc-theme--aurora .btn-opt-action:hover,
+body.cc-theme.cc-theme--aurora .btn-opt-restore:hover {
+    color: #fff;
+    border-color: #6a7a88;
+    background-color: #242a30;
+    background-image:
+        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+    background-image:
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
+        linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
+    -webkit-filter: none;
+    filter: none;
+}
+
+body.cc-theme.cc-theme--aurora .btn-opt-green:hover,
+body.cc-theme.cc-theme--aurora .btn-opt-yellow:hover,
+body.cc-theme.cc-theme--aurora .btn-opt-restore:hover {
+    border-color: #6a7a88;
+}
+
+body.cc-theme.cc-theme--aurora .opt-select,
+body.cc-theme.cc-theme--aurora .opt-slider {
+    background: #101412;
+    border: 1px solid #1c2a32;
+    color: #e6edf5;
+}
+
+/* Pre-landing */
+body.cc-theme.cc-theme--aurora .cc-pre-landing__title {
+    color: #e6edf5;
+    text-shadow: 0 0 24px rgba(0, 136, 255, 0.35);
+}
+
+body.cc-theme.cc-theme--aurora .cc-pre-landing__tagline,
+body.cc-theme.cc-theme--aurora .cc-pre-landing__status {
+    color: #8b9aab;
+}
+
+body.cc-theme.cc-theme--aurora .cc-pre-landing__spinner {
+    border-color: rgba(0, 136, 255, 0.25);
+    border-top-color: #0088ff;
+}

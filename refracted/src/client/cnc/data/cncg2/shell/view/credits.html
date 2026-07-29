@@ -12,14 +12,15 @@
         <div class="credits-scroll-area">
             
             <div class="credits-category-block" ng-repeat="categoryBlock in creditsData">
-                <h2 class="credit-category">{{ categoryBlock.category }}</h2>
+                <h2 class="credit-category" ng-show="categoryBlock.category">{{ categoryBlock.category }}</h2>
                 
                 <div class="credits-section-block" ng-repeat="section in categoryBlock.sections">
-                    <h3 class="credit-subcategory">{{ section.subtitle }}</h3>
+                    <h3 class="credit-subcategory" ng-show="section.subtitle">{{ section.subtitle }}</h3>
+                    <div class="credit-missing-data" ng-show="section.isMissingData">* MISSING DATA *</div>
                     
-                    <div class="credits-role-block" ng-repeat="entry in section.entries">
-                        <div class="credit-role">{{ entry.role }}</div>
-                        <div class="credit-name">{{ entry.name }}</div>
+                    <div class="credits-role-block" ng-repeat="entry in section.entries" ng-class="{'credits-legal-text': categoryBlock.category === 'LEGAL NOTICES'}">
+                        <div class="credit-role" ng-show="entry.role">{{ entry.role }}</div>
+                        <div class="credit-name" ng-repeat="name in entry.names">{{ name }}</div>
                     </div>
                 </div>
             </div>

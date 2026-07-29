@@ -1,36 +1,47 @@
 <!DOCTYPE html>
-<html>
-
+<html ng-app="CCApp">
 <head>
-    <title>Command & Conquer™</title>
-    <link rel="stylesheet" href="./css/shell.css">
-    <script src="./js/src.js"></script>
+    <meta charset="utf-8">
+    <title>Command &amp; Conquer — Pause Menu</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="lib/angular/angular.min.js"></script>
+    <link rel="stylesheet" href="css/options.css">
+    <link rel="stylesheet" href="css/ingame-menu.css">
+    <script src="js/ingame-menu.js"></script>
+    <script src="options.js"></script>
 </head>
+<body class="ingame-aurora" ng-controller="IngameMenuController" ng-cloak>
 
-<body>
-    <img class="logo" src="./images/maintenance/logo.png" alt="Logo">
-    <hr>
-    <h1>Settings</h1>
-    <button onclick="getOptions()">getOptions</button>
-    <button onclick="FrontEndFullscreenTrue()">FrontEndFullscreenTrue</button>
-    <button onclick="FrontEndFullscreenFalse()">FrontEndFullscreenFalse</button>
-    <button onclick="SetFullscreenDimensions()">SetFullscreenDimensions</button>
-    <button onclick="SetWindowedDimensions()">SetWindowedDimensions</button>
-    <h2>Sound</h2>
-    <div class="slider-container">
-        <div class="slider-background"></div>
-        <label for="volumeSlider">Master Volume:</label>
-        <input type="range" id="volumeSlider" min="0" max="100" step="1" value="0" oninput="updateVolume(this.value)">
-        <span id="volumeValue">0%</span>
+    <div class="pause-menu" ng-hide="optionsOpen">
+        <button type="button" class="pause-menu-btn" ng-click="openOptions()">OPTIONS</button>
+        <button type="button" class="pause-menu-btn" ng-click="openConfirmSurrender()">SURRENDER</button>
+        <button type="button" class="pause-menu-btn" ng-click="openConfirmQuit()">QUIT GAME</button>
+        <button type="button" class="pause-menu-btn" ng-click="returnToGame()">RETURN TO GAME</button>
     </div>
-    <br>
-    <br>
-    <div>
-        <a class="button-link" onclick="applyAudio()" href="#">applyAudio</a>
-        <a class="button-link" onclick="save()" href="#">Save</a>
-        <a class="button-link" onclick="discard()" href="#">Discard</a>
-        <a class="button-link" href="./devWrapper.html">Back</a>
+
+    <div class="confirm-modal-overlay" ng-show="confirmSurrenderOpen && !optionsOpen">
+        <div class="confirm-modal-box">
+            <h2 class="confirm-modal-title">Confirm Surrender?</h2>
+            <p class="confirm-modal-msg">Are you sure you want to surrender?</p>
+            <div class="confirm-modal-actions">
+                <button type="button" class="confirm-btn" ng-click="confirmSurrenderYes()">YES</button>
+                <button type="button" class="confirm-btn" ng-click="cancelConfirm()">NO</button>
+            </div>
+        </div>
     </div>
-    <div id="version">Shell v1.2.2 | Xevrac</div>
+
+    <div class="confirm-modal-overlay" ng-show="confirmQuitOpen && !optionsOpen">
+        <div class="confirm-modal-box">
+            <h2 class="confirm-modal-title">Confirm Quit?</h2>
+            <p class="confirm-modal-msg">Are you sure you want to exit the game?</p>
+            <div class="confirm-modal-actions">
+                <button type="button" class="confirm-btn" ng-click="confirmQuitYes()">YES</button>
+                <button type="button" class="confirm-btn" ng-click="cancelConfirm()">NO</button>
+            </div>
+        </div>
+    </div>
+
+    <div ng-include="'view/options.html'"></div>
+
 </body>
 </html>

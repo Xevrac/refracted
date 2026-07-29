@@ -1,4 +1,4 @@
-use crate::common::error::BlazeResult;
+﻿use crate::common::error::BlazeResult;
 use crate::core::inspector::inspector_module::*;
 use crate::grpc::grpc_handler::*;
 use crate::grpc::grpc_body_decode_capture;
@@ -660,7 +660,7 @@ impl HttpHandler {
 
     /// Handle GCS (Global Configuration Service) requests
     fn handle_gcs(&self, _path: &str, _method: &str, _body: &[u8]) -> BlazeResult<HttpResponse> {
-        // Working clients GET .../application_id/.../device_id/<id> — must not 404 here or boot stalls waiting on GCS.
+        // Working clients GET .../application_id/.../device_id/<id> -- must not 404 here or boot stalls waiting on GCS.
         let config = self.build_gcs_response();
         Ok(HttpResponse::new(200, "application/json", config))
     }
@@ -976,7 +976,7 @@ impl HttpHandler {
             return self.handle_santiago_auth_via_auth_code(body);
         }
         else if path.contains("GrantTokenByRefreshToken") {
-            crate::console_println!("\x1b[38;2;0;200;255m[gRPC]\x1b[0m GrantTokenByRefreshToken — issuing tokens (same envelope as auth code)");
+            crate::console_println!("\x1b[38;2;0;200;255m[gRPC]\x1b[0m GrantTokenByRefreshToken -- issuing tokens (same envelope as auth code)");
             let token_response = self.build_ea_token_grant_response();
             let mut request_headers = HashMap::new();
             request_headers.insert("grpc-accept-encoding".to_string(), "gzip".to_string());
@@ -993,7 +993,7 @@ impl HttpHandler {
                 response_headers,
             ))
         } else if path.contains("DeleteToken") {
-            crate::console_println!("\x1b[38;2;0;200;255m[gRPC]\x1b[0m DeleteToken — acknowledged");
+            crate::console_println!("\x1b[38;2;0;200;255m[gRPC]\x1b[0m DeleteToken -- acknowledged");
             let mut headers = HashMap::new();
             headers.insert("grpc-status".to_string(), "0".to_string());
             Ok(HttpResponse::new_with_headers(

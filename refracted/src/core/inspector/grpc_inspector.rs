@@ -1,4 +1,4 @@
-// gRPC Inspector - UI for viewing captured gRPC requests/responses
+﻿// gRPC Inspector - UI for viewing captured gRPC requests/responses
 
 use crate::core::inspector::inspector_module::*;
 use crate::grpc::{grpc_body_decode_capture, peel_grpc_data_frames_detailed};
@@ -419,7 +419,7 @@ fn utf8_ratio_non_control(s: &str) -> f32 {
 }
 
 /// Protobuf framing uses many C0 controls (they are valid UTF-8 bytes). Skip “human UTF-8” shortcuts when
-/// this fraction is too high — prefer nested protobuf instead of `\u{{0012}}` escapes.
+/// this fraction is too high -- prefer nested protobuf instead of `\u{{0012}}` escapes.
 fn utf8_c0_control_frac_except_ws(s: &str) -> f32 {
     let n = s.chars().count().max(1);
     let bad = s
@@ -520,7 +520,7 @@ fn length_delimited_use_mixed_hex_line(payload: &[u8]) -> bool {
     has_ascii_controls_except_tab_lf_cr(payload)
 }
 
-/// Product titles and similar: valid UTF-8 with letters — do not treat as nested protobuf just because
+/// Product titles and similar: valid UTF-8 with letters -- do not treat as nested protobuf just because
 /// the first byte forms a varint (e.g. `t` → fake "end group").
 fn length_delimited_prefers_utf8_display(payload: &[u8], prefer_raw_strings: bool) -> bool {
     length_delimited_utf8_human_quotable(payload, prefer_raw_strings)
@@ -729,7 +729,7 @@ fn decode_protobuf_raw_with_pos(
                     slice
                 } else {
                     output.push_str(&format!(
-                        "{}{}: <length-delimited truncated: declared len {} > remaining {} bytes — tail as hex>\n",
+                        "{}{}: <length-delimited truncated: declared len {} > remaining {} bytes -- tail as hex>\n",
                         indent_str, field_num, length, rem_avail
                     ));
                     if rem_avail > 0 {
@@ -812,7 +812,7 @@ fn decode_protobuf_raw_with_pos(
                 if std::str::from_utf8(display_data).is_ok() {
                     if length_delimited_use_mixed_hex_line(display_data) {
                         output.push_str(&format!(
-                            "{}// {} bytes (mixed binary — \\x escapes, printable ASCII unchanged)\n",
+                            "{}// {} bytes (mixed binary -- \\x escapes, printable ASCII unchanged)\n",
                             indent_str,
                             display_data.len()
                         ));
@@ -827,7 +827,7 @@ fn decode_protobuf_raw_with_pos(
                         let mut escaped = String::new();
                         grpc_wire_push_utf8_quoted_escapes(&mut escaped, string_value);
                         output.push_str(&format!(
-                            "{}// {} bytes UTF-8 (unusual BMP controls — escaped)\n",
+                            "{}// {} bytes UTF-8 (unusual BMP controls -- escaped)\n",
                             indent_str,
                             display_data.len()
                         ));
@@ -932,7 +932,7 @@ fn decode_protobuf_raw_with_pos(
                     pos = at;
                 } else {
                     output.push_str(&format!(
-                        "{}<reserved wire type {} at offset {}; no resync — skip 1 byte>\n",
+                        "{}<reserved wire type {} at offset {}; no resync -- skip 1 byte>\n",
                         indent_str, wire_type, scan_start
                     ));
                     pos = scan_start + 1;
@@ -1051,7 +1051,7 @@ fn render_grpc_details(ui: &mut egui::Ui, grpc: &CapturedGrpc, show_plaintext: b
                     ui.add_space(4.0);
                     for (i, protobuf) in chunks.iter().enumerate() {
                         egui::CollapsingHeader::new(format!(
-                            "Message {} — {} bytes",
+                            "Message {} -- {} bytes",
                             i + 1,
                             protobuf.len()
                         ))
@@ -1071,7 +1071,7 @@ fn render_grpc_details(ui: &mut egui::Ui, grpc: &CapturedGrpc, show_plaintext: b
                         });
                     }
                     if !slack.is_empty() {
-                        egui::CollapsingHeader::new(format!("Slack tail — {} bytes", slack.len()))
+                        egui::CollapsingHeader::new(format!("Slack tail -- {} bytes", slack.len()))
                             .default_open(false)
                             .show(ui, |ui| {
                                 ui.weak(
@@ -1110,7 +1110,7 @@ fn render_grpc_details(ui: &mut egui::Ui, grpc: &CapturedGrpc, show_plaintext: b
                             );
                         });
                 } else {
-                    ui.label(egui::RichText::new("Body (no gRPC frames peeled — heuristic):").heading());
+                    ui.label(egui::RichText::new("Body (no gRPC frames peeled -- heuristic):").heading());
                     ui.add_space(5.0);
                     egui::ScrollArea::vertical()
                         .id_source("body_scroll_plain")

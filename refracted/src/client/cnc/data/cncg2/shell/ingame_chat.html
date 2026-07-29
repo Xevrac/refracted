@@ -1,11 +1,40 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html ng-app="CCApp">
 <head>
-    <title>Command & Conquer™</title>
+    <meta charset="utf-8">
+    <title>Command &amp; Conquer — Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="lib/angular/angular.min.js"></script>
+    <link rel="stylesheet" href="css/ingame-chat.css">
+    <script src="js/ingame-chat.js"></script>
 </head>
-<body>
-    <h1>Ingame_chat</h1>
-    <hr>
-    <p>Placeholder</p>
+<body class="ingame-aurora" ng-controller="IngameChatController" ng-cloak>
+
+    <div class="chat-panel">
+        <div class="chat-header">
+            <span class="chat-header-title">Chat</span>
+            <span class="chat-channel-btns">
+                <button type="button" class="chat-channel-btn" ng-class="{active: channel=='all'}" ng-click="setChannel('all')">All</button>
+                <button type="button" class="chat-channel-btn" ng-class="{active: channel=='team'}" ng-click="setChannel('team')">Team</button>
+            </span>
+            <button type="button" class="chat-close-btn" ng-click="closeChat()" title="Close">X</button>
+        </div>
+
+        <div id="chat-history" class="chat-history">
+            <div class="chat-empty" ng-show="!messages.length">Type a message…</div>
+            <div class="chat-line" ng-repeat="m in messages" ng-class="m.kind">
+                <span class="chat-from" ng-class="{self: m.kind=='self', team: channel=='team'}" ng-show="m.from">{{ m.from }}:</span>
+                <span class="chat-text">{{ m.text }}</span>
+            </div>
+        </div>
+
+        <form class="chat-input-row" ng-submit="send()">
+            <input id="chat-input" type="text" class="chat-input" ng-model="draft"
+                   maxlength="180" autocomplete="off" spellcheck="false"
+                   placeholder="Enter message">
+            <button type="submit" class="chat-send-btn">Send</button>
+        </form>
+    </div>
+
 </body>
 </html>

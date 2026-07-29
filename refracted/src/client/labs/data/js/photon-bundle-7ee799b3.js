@@ -1,4 +1,4 @@
-/* Twinkle Signature v1 uyVgMc4qnDZhSMRXnAqPCf1XhiXlb8MkU2sjwlbIDJUr+aA3eU7e39hOV0jYu5W78OtrePwaM79DlAD+ZWLNAA== *//*!
+﻿/* Twinkle Signature v1 uyVgMc4qnDZhSMRXnAqPCf1XhiXlb8MkU2sjwlbIDJUr+aA3eU7e39hOV0jYu5W78OtrePwaM79DlAD+ZWLNAA== *//*!
 *   Version: release-139708-hotfix_141023
 *   Build #: 141023
 *    Branch: release-139708-hotfix
@@ -64523,7 +64523,7 @@ description: e.description,
 items: e.items.map(({status: e, text: t, icon: n, details: i, isDisabled: o}) => ({
 id: e,
 focusId: bOe(e),
-label: t + (i ? ` — ${i}` : ""),
+label: t + (i ? ` -- ${i}` : ""),
 isDisabled: o,
 value: e,
 skipButtonIcon: !0,

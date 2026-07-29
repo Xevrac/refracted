@@ -1,4 +1,4 @@
-#![cfg_attr(windows, windows_subsystem = "windows")]
+﻿#![cfg_attr(windows, windows_subsystem = "windows")]
 
 use anyhow::Result;
 use refracted::core::console::{
@@ -29,6 +29,83 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/.
 const BANNER_BASE64: &str = include_str!("core/ui/banner_base64.txt");
 
 const EMULATOR_LISTEN_HOST: &str = "0.0.0.0";
+
+fn render_channel_arrow_log(
+    ui: &mut egui::Ui,
+    text: &str,
+    marker: &str,
+    left_label: &str,
+    right_label: &str,
+    channel_color: egui::Color32,
+    body_color: egui::Color32,
+) {
+    if let Some(pos) = text.find(marker) {
+        if pos > 0 {
+            ui.label(
+                egui::RichText::new(&text[..pos])
+                    .family(egui::FontFamily::Monospace)
+                    .size(11.0)
+                    .color(body_color),
+            );
+        }
+        ui.label(
+            egui::RichText::new(format!("[{left_label} "))
+                .family(egui::FontFamily::Monospace)
+                .size(11.0)
+                .color(channel_color),
+        );
+        ui.label(
+            egui::RichText::new("→")
+                .family(egui::FontFamily::Monospace)
+                .size(11.0)
+                .color(body_color),
+        );
+        ui.label(
+            egui::RichText::new(format!(" {right_label}]"))
+                .family(egui::FontFamily::Monospace)
+                .size(11.0)
+                .color(channel_color),
+        );
+        let rest_start = pos + marker.len();
+        if rest_start < text.len() {
+            let rest = &text[rest_start..];
+            let gray_base = egui::Color32::from_rgb(140, 140, 140);
+            let gray_alpha = egui::Color32::from_rgba_unmultiplied(
+                gray_base.r(), gray_base.g(), gray_base.b(), body_color.a(),
+            );
+            if let Some((base, suffix_digits)) = rest.rsplit_once(" x") {
+                if !suffix_digits.is_empty() && suffix_digits.chars().all(|c| c.is_ascii_digit()) {
+                    ui.label(
+                        egui::RichText::new(base)
+                            .family(egui::FontFamily::Monospace)
+                            .size(11.0)
+                            .color(body_color),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!(" x{}", suffix_digits))
+                            .family(egui::FontFamily::Monospace)
+                            .size(11.0)
+                            .color(gray_alpha),
+                    );
+                } else {
+                    ui.label(
+                        egui::RichText::new(rest)
+                            .family(egui::FontFamily::Monospace)
+                            .size(11.0)
+                            .color(body_color),
+                    );
+                }
+            } else {
+                ui.label(
+                    egui::RichText::new(rest)
+                        .family(egui::FontFamily::Monospace)
+                        .size(11.0)
+                        .color(body_color),
+                );
+            }
+        }
+    }
+}
 
 struct LogWriter {
     stdout: io::Stdout,
@@ -166,6 +243,42 @@ fn draw_x(ui: &mut egui::Ui, color: egui::Color32, size: f32) {
     
     painter.line_segment([top_left, bottom_right], stroke);
     painter.line_segment([top_right, bottom_left], stroke);
+}
+
+const COLOR_CLIENT_ACCENT: (u8, u8, u8) = (100, 200, 255);
+const COLOR_SERVER_ACCENT: (u8, u8, u8) = (40, 100, 200);
+
+fn accent_color(rgb: (u8, u8, u8)) -> egui::Color32 {
+    egui::Color32::from_rgb(rgb.0, rgb.1, rgb.2)
+}
+
+fn accent_fill(rgb: (u8, u8, u8)) -> egui::Color32 {
+    egui::Color32::from_rgba_unmultiplied(rgb.0, rgb.1, rgb.2, 128)
+}
+
+fn draw_accent_badge(ui: &mut egui::Ui, text: &str, rgb: (u8, u8, u8)) {
+    egui::Frame::none()
+        .fill(accent_fill(rgb))
+        .stroke(egui::Stroke::new(1.0, accent_color(rgb)))
+        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+        .rounding(4.0)
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(text)
+                    .small()
+                    .color(egui::Color32::WHITE),
+            );
+        });
+}
+
+fn dedicated_pool_state_badge(state: refracted::client::cnc::dedicated_pool::DedicatedPoolState) -> (&'static str, (u8, u8, u8)) {
+    use refracted::client::cnc::dedicated_pool::DedicatedPoolState;
+    match state {
+        DedicatedPoolState::Connected => ("Tracked", (140, 140, 140)),
+        DedicatedPoolState::CreatorRegistered => ("Registered", (120, 180, 255)),
+        DedicatedPoolState::Idle => ("Idle", COLOR_CLIENT_ACCENT),
+        DedicatedPoolState::InUse => ("In use", (255, 190, 90)),
+    }
 }
 
 fn draw_disclaimer_arrow_icon(
@@ -433,9 +546,20 @@ impl RefractedApp {
                     let has_ansi_escape = message_string.contains('\x1b');
                     let has_literal_escape = message_string.contains("\\x1b");
                     let has_client_arrow = message_string.contains("[Client→");
+                    let has_server_arrow = message_string.contains("[Server→");
                     let has_blaze_arrow = message_string.contains("[Blaze→");
+                    let has_rts = message_string.contains("[RTS]")
+                        || message_string.contains("[RTS→")
+                        || message_string.contains("→RTS]");
+                    let has_sim = message_string.contains("[SIM]")
+                        || message_string.contains("[Orchestration]")
+                        || message_string.contains("[CNC orchestration]");
                     let has_qos = message_string.contains("[QoS]");
-                    let has_ansi = has_ansi_escape || has_literal_escape || has_client_arrow || has_blaze_arrow;
+                    let has_ansi = has_ansi_escape
+                        || has_literal_escape
+                        || has_client_arrow
+                        || has_server_arrow
+                        || has_blaze_arrow;
                     // INFO: ANSI first (so embedded [QoS] in colored debug lines is not prefixed again), then plain [QoS]
                     const QOS_TAG_GREEN: &str = "\x1b[38;2;80;200;120m[QoS]\x1b[0m";
                     const ERROR_TAG_RED: &str = "\x1b[38;2;255;150;150m[ERROR]\x1b[0m";
@@ -449,12 +573,11 @@ impl RefractedApp {
                     }
 
                     if level == tracing::Level::INFO {
-                        if has_client_arrow || has_blaze_arrow {
-                            // Blaze packet log - write plain text without [Console] prefix
-                            // Keep it simple - just write the message as-is
+                        if has_client_arrow || has_server_arrow || has_blaze_arrow || has_rts || has_sim {
+                            // Blaze / RTS / SIM channel logs -- no [Console] prefix
                             write!(writer, "{}", message_string)?;
                         } else if has_ansi {
-                            // ANSI first: debug_println embeds [QoS] after escape codes — do not add a second green [QoS]
+                            // ANSI first: debug_println embeds [QoS] after escape codes -- do not add a second green [QoS]
                             write!(writer, "{}", message_string)?;
                         } else if has_qos {
                             let rest = strip_plain_qos(message_string.as_str());
@@ -465,7 +588,7 @@ impl RefractedApp {
                         }
                         writeln!(writer)
                     } else if level == tracing::Level::ERROR {
-                        if has_ansi {
+                        if has_ansi || has_rts || has_sim {
                             write!(writer, "{}", message_string)?;
                         } else if has_qos {
                             let rest = strip_plain_qos(message_string.as_str());
@@ -475,7 +598,7 @@ impl RefractedApp {
                         }
                         writeln!(writer)
                     } else if level == tracing::Level::WARN {
-                        if has_ansi {
+                        if has_ansi || has_rts || has_sim {
                             write!(writer, "{}", message_string)?;
                         } else if has_qos {
                             let rest = strip_plain_qos(message_string.as_str());
@@ -705,11 +828,31 @@ impl RefractedApp {
                                 .as_deref()
                                 .map(str::trim)
                                 .filter(|n| !n.is_empty())
-                                .unwrap_or("—");
-                            let label = format!("#{} {} {}", s.id, name, s.peer);
-                            if ui.selectable_label(sel, label).clicked() {
-                                self.selected_blaze_session = Some(s.id);
-                            }
+                                .unwrap_or("--");
+                            let is_server = s
+                                .clnt
+                                .as_deref()
+                                .map(refracted::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
+                                .unwrap_or(false);
+                            let clnt_tag = s
+                                .clnt
+                                .as_deref()
+                                .map(|c| format!(" [{}]", c))
+                                .unwrap_or_default();
+                            let label = format!("#{} {}{} {}", s.id, name, clnt_tag, s.peer);
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.0;
+                                let response = ui.selectable_label(sel, &label);
+                                if response.clicked() {
+                                    self.selected_blaze_session = Some(s.id);
+                                }
+                                let (badge_label, badge_rgb) = if is_server {
+                                    ("Server", COLOR_SERVER_ACCENT)
+                                } else {
+                                    ("Client", COLOR_CLIENT_ACCENT)
+                                };
+                                draw_accent_badge(ui, badge_label, badge_rgb);
+                            });
                         }
                     });
             });
@@ -739,7 +882,10 @@ impl RefractedApp {
                     if let Some(ref n) = s.display_name {
                         ui.label(format!("Username: {}", n));
                     } else {
-                        ui.label("Username: —");
+                        ui.label("Username: --");
+                    }
+                    if let Some(ref clnt) = s.clnt {
+                        ui.label(format!("CLNT: {}", clnt));
                     }
                     if let Some(uid) = s.user_id {
                         ui.label(format!("UID: {}", uid));
@@ -759,7 +905,7 @@ impl RefractedApp {
                     ui.label(format!(
                         "CFID: {}",
                         if conf.cfid.is_empty() {
-                            "—".to_string()
+                            "--".to_string()
                         } else {
                             conf.cfid
                         }
@@ -767,13 +913,13 @@ impl RefractedApp {
                     ui.label(format!(
                         "Tenancy: {}",
                         if conf.client_grpc_tenancy.is_empty() {
-                            "—".to_string()
+                            "--".to_string()
                         } else {
                             conf.client_grpc_tenancy
                         }
                     ));
                     let url_disp = if conf.client_grpc_url.is_empty() {
-                        "—".to_string()
+                        "--".to_string()
                     } else {
                         let u = conf.client_grpc_url.as_str();
                         const MAX: usize = 72;
@@ -856,24 +1002,28 @@ impl RefractedApp {
                                 .as_deref()
                                 .map(str::trim)
                                 .filter(|n| !n.is_empty())
-                                .unwrap_or("—");
-                            let clnt = e
+                                .unwrap_or("--");
+                            let clnt_tag = e
                                 .clnt
                                 .as_deref()
-                                .map(str::trim)
-                                .filter(|n| !n.is_empty())
-                                .unwrap_or("—");
+                                .map(|c| format!(" [{}]", c))
+                                .unwrap_or_default();
                             let label = format!(
-                                "#{} {} {} [{}] {}",
+                                "#{} {}{} {}",
                                 e.blaze_session_id,
                                 name,
+                                clnt_tag,
                                 e.peer,
-                                e.state.label(),
-                                clnt
                             );
-                            if ui.selectable_label(sel, label).clicked() {
-                                self.selected_dedicated_pool = Some(e.blaze_session_id);
-                            }
+                            let (status_label, status_rgb) = dedicated_pool_state_badge(e.state);
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 6.0;
+                                let response = ui.selectable_label(sel, &label);
+                                if response.clicked() {
+                                    self.selected_dedicated_pool = Some(e.blaze_session_id);
+                                }
+                                draw_accent_badge(ui, status_label, status_rgb);
+                            });
                         }
                     });
             });
@@ -896,23 +1046,74 @@ impl RefractedApp {
                     if let Some(ref clnt) = e.clnt {
                         ui.label(format!("CLNT: {}", clnt));
                     }
-                    ui.label(format!("State: {}", e.state.label()));
+                    ui.horizontal(|ui| {
+                        ui.label("State:");
+                        let (status_label, status_rgb) = dedicated_pool_state_badge(e.state);
+                        draw_accent_badge(ui, status_label, status_rgb);
+                    });
                     ui.label(format!("Last event: {}", when));
                     ui.label(format!(
                         "Creator registered: {}",
                         if e.creator_registered { "yes" } else { "no" }
                     ));
-                    if let Some(gid) = e.current_gid {
-                        ui.label(format!("Game ID: {}", gid));
-                    }
-                    if let Some(ref gn) = e.game_name {
-                        ui.label(format!("Game name: {}", gn));
-                    }
+                    ui.separator();
                     if let Some(ref n) = e.display_name {
                         ui.label(format!("Persona: {}", n));
                     }
                     if let Some(pid) = e.persona_id {
                         ui.label(format!("Persona ID: {}", pid));
+                    }
+                    if let Some(gid) = e.current_gid {
+                        ui.separator();
+                        ui.label(format!("Game ID: {}", gid));
+                        if let Some(ref gn) = e.game_name {
+                            ui.label(format!("Name: {}", gn));
+                        }
+                        let map_path = refracted::client::cnc::game_state::get_map_path(gid);
+                        if !map_path.is_empty() {
+                            ui.label(format!("Map: {}", map_path));
+                        }
+                        let phase = refracted::client::cnc::game_state::get_phase(gid);
+                        let phase_color = match phase {
+                            refracted::client::cnc::game_state::GamePhase::InGame => (80, 200, 80),
+                            refracted::client::cnc::game_state::GamePhase::PreGame => (200, 200, 80),
+                            _ => (150, 150, 150),
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label("Phase:");
+                            draw_accent_badge(ui, phase.label(), phase_color);
+                        });
+                        let players = refracted::client::cnc::game_state::players_for_gid(gid);
+                        let ai_count = players.iter().filter(|p| p.is_ai).count();
+                        let human_count = players.len().saturating_sub(ai_count);
+                        ui.label(format!("Players: {}", players.len()));
+                        if human_count > 0 {
+                            ui.label(format!("Humans: {}", human_count));
+                        }
+                        if ai_count > 0 {
+                            ui.label(format!("AI opponents: {}", ai_count));
+                        }
+                        if !players.is_empty() {
+                            ui.separator();
+                            for p in &players {
+                                if p.is_ai {
+                                    ui.label(format!("[AI] slot {} -- {}", p.slot + 1, p.display_name));
+                                } else {
+                                    ui.label(format!("slot {} -- {} (PID {})", p.slot + 1, p.display_name, p.persona_id));
+                                }
+                                if !p.attribs.is_empty() {
+                                    let attrs: Vec<String> = p
+                                        .attribs
+                                        .iter()
+                                        .filter(|(k, _)| !k.starts_with('_'))
+                                        .map(|(k, v)| format!("{}={}", k, v))
+                                        .collect();
+                                    if !attrs.is_empty() {
+                                        ui.label(format!("  {}", attrs.join(", ")));
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else {
                     ui.label("Select a server to view pool status.");
@@ -941,7 +1142,13 @@ impl eframe::App for RefractedApp {
             self.startup_maximize_pending = false;
         }
 
-        while let Ok(line) = self.log_rx.try_recv() {
+        const MAX_LOG_DRAIN_PER_FRAME: usize = 256;
+        let mut drained = 0usize;
+        while drained < MAX_LOG_DRAIN_PER_FRAME {
+            let Ok(line) = self.log_rx.try_recv() else {
+                break;
+            };
+            drained += 1;
             let mut buf = self.log_buffer.lock();
             if let Some(ref k) = line.upsert_key {
                 if let Some(i) = buf.iter().rposition(|l| l.upsert_key.as_ref() == Some(k)) {
@@ -956,6 +1163,9 @@ impl eframe::App for RefractedApp {
             if len > 10000 {
                 buf.drain(0..len - 10000);
             }
+        }
+        if drained >= MAX_LOG_DRAIN_PER_FRAME {
+            ctx.request_repaint();
         }
 
         // Continuous repaint for smooth updates - request repaint every frame
@@ -1164,12 +1374,12 @@ impl eframe::App for RefractedApp {
 
                 ui.separator();
 
-                // Tab bar
+                // Tab bar: Shell Sessions | Toolkit
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.selected_tab, "Shell".to_string(), "Shell");
-                    ui.selectable_value(&mut self.selected_tab, "Toolkit".to_string(), "Toolkit");
-                    ui.label(egui::RichText::new("|").weak());
                     ui.selectable_value(&mut self.selected_tab, "Sessions".to_string(), "Sessions");
+                    ui.label(egui::RichText::new("|").weak());
+                    ui.selectable_value(&mut self.selected_tab, "Toolkit".to_string(), "Toolkit");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.selected_tab == "Shell" {
                             if ui.button("Save As").clicked() {
@@ -1288,6 +1498,9 @@ impl eframe::App for RefractedApp {
                         };
                         
                         for line in &shell_lines {
+                            if line.text.trim().is_empty() {
+                                continue;
+                            }
                             // Filter [Blaze] debug logs if debug logging is disabled
                             if !debug_logging_enabled && line.text.contains("[Blaze]") {
                                 continue;
@@ -1297,176 +1510,246 @@ impl eframe::App for RefractedApp {
                             let age = current_time - line.timestamp;
                             let alpha = (age / 0.3).min(1.0);
                             
-                            // Check if this is a Blaze log line (has [Client→Blaze] or [Blaze→Client])
-                            let is_blaze_log = line.text.contains("[Client→Blaze]") || line.text.contains("[Blaze→Client]");
+                            // Check if this is a Blaze log line (packet direction markers)
+                            let is_blaze_log = line.text.contains("[Client→Blaze]")
+                                || line.text.contains("[Server→Blaze]")
+                                || line.text.contains("[Blaze→Client]")
+                                || line.text.contains("[Blaze→Server]");
+                            let is_sim_log = line.text.contains("[SIM]")
+                                || line.text.contains("[Orchestration]");
+                            let is_rts_log = !is_sim_log
+                                && (line.text.contains("[Client→RTS]")
+                                || line.text.contains("[RTS→Client]")
+                                || line.text.contains("[RTS→Server]")
+                                || line.text.contains("[Server→RTS]")
+                                || line.text.contains("[RTS]"));
                             
                             // Render line with color segments
                             ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 0.0;
                                 let alpha_u8 = (255.0 * alpha) as u8;
                                 
-                                if is_blaze_log {
-                                    // Special handling for Blaze logs - apply colors directly in GUI
-                                    // Format: [Client (orange) → (white) Blaze] (orange) rest
-                                    // Don't invert colored tags (orange), only invert white text
-                                    let blaze_orange = egui::Color32::from_rgb(254, 60, 0); // Keep orange as-is
-                                    let blaze_orange_alpha = egui::Color32::from_rgba_unmultiplied(
-                                        blaze_orange.r(), blaze_orange.g(), blaze_orange.b(), alpha_u8
+                                if is_rts_log {
+                                    let rts_tag_color = egui::Color32::from_rgb(56, 156, 220);
+                                    let rts_tag_alpha = egui::Color32::from_rgba_unmultiplied(
+                                        rts_tag_color.r(), rts_tag_color.g(), rts_tag_color.b(), alpha_u8
                                     );
                                     let white_base = if is_light_mode {
-                                        egui::Color32::from_rgb(0, 0, 0) // Black in light mode
+                                        egui::Color32::from_rgb(0, 0, 0)
                                     } else {
-                                        egui::Color32::from_rgb(255, 255, 255) // White in dark mode
+                                        egui::Color32::from_rgb(255, 255, 255)
                                     };
                                     let white_alpha = egui::Color32::from_rgba_unmultiplied(
                                         white_base.r(), white_base.g(), white_base.b(), alpha_u8
                                     );
-                                    
-                                    if line.text.contains("[Client→Blaze]") {
-                                        // Split at [Client→Blaze]
-                                        if let Some(pos) = line.text.find("[Client→Blaze]") {
-                                            // Text before marker
-                                            if pos > 0 {
-                                                ui.label(
-                                                    egui::RichText::new(&line.text[..pos])
-                                                        .family(egui::FontFamily::Monospace)
-                                                        .size(11.0)
-                                                        .color(white_alpha),
-                                                );
-                                            }
-                                            // [Client (orange)
+                                    if line.text.contains("[Client→RTS]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[Client→RTS]",
+                                            "Client",
+                                            "RTS",
+                                            rts_tag_alpha,
+                                            white_alpha,
+                                        );
+                                    } else if line.text.contains("[RTS→Client]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[RTS→Client]",
+                                            "RTS",
+                                            "Client",
+                                            rts_tag_alpha,
+                                            white_alpha,
+                                        );
+                                    } else if line.text.contains("[RTS→Server]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[RTS→Server]",
+                                            "RTS",
+                                            "Server",
+                                            rts_tag_alpha,
+                                            white_alpha,
+                                        );
+                                    } else if line.text.contains("[Server→RTS]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[Server→RTS]",
+                                            "Server",
+                                            "RTS",
+                                            rts_tag_alpha,
+                                            white_alpha,
+                                        );
+                                    } else if let Some(pos) = line.text.find("[RTS]") {
+                                        if pos > 0 {
                                             ui.label(
-                                                egui::RichText::new("[Client")
-                                                    .family(egui::FontFamily::Monospace)
-                                                    .size(11.0)
-                                                    .color(blaze_orange_alpha),
-                                            );
-                                            // → (white)
-                                            ui.label(
-                                                egui::RichText::new("→")
+                                                egui::RichText::new(&line.text[..pos])
                                                     .family(egui::FontFamily::Monospace)
                                                     .size(11.0)
                                                     .color(white_alpha),
                                             );
-                                            // Blaze] (orange)
-                                            ui.label(
-                                                egui::RichText::new("Blaze]")
-                                                    .family(egui::FontFamily::Monospace)
-                                                    .size(11.0)
-                                                    .color(blaze_orange_alpha),
+                                        }
+                                        ui.label(
+                                            egui::RichText::new("[RTS]")
+                                                .family(egui::FontFamily::Monospace)
+                                                .size(11.0)
+                                                .color(rts_tag_alpha),
+                                        );
+                                        let rest_start = pos + "[RTS]".len();
+                                        if rest_start < line.text.len() {
+                                            let rest = line.text[rest_start..].trim_start();
+                                            if !rest.is_empty() {
+                                            let gray_base = egui::Color32::from_rgb(140, 140, 140);
+                                            let gray_alpha = egui::Color32::from_rgba_unmultiplied(
+                                                gray_base.r(), gray_base.g(), gray_base.b(), alpha_u8
                                             );
-                                            // Rest of message (white)
-                                            let rest_start = pos + "[Client→Blaze]".len();
-                                            if rest_start < line.text.len() {
-                                                let rest = &line.text[rest_start..];
-                                                let gray_base = egui::Color32::from_rgb(140, 140, 140);
-                                                let gray_alpha = egui::Color32::from_rgba_unmultiplied(
-                                                    gray_base.r(), gray_base.g(), gray_base.b(), alpha_u8
-                                                );
-                                                if let Some((base, suffix_digits)) = rest.rsplit_once(" x") {
-                                                    if !suffix_digits.is_empty() && suffix_digits.chars().all(|c| c.is_ascii_digit()) {
-                                                        ui.label(
-                                                            egui::RichText::new(base)
-                                                                .family(egui::FontFamily::Monospace)
-                                                                .size(11.0)
-                                                                .color(white_alpha),
-                                                        );
-                                                        ui.label(
-                                                            egui::RichText::new(format!(" x{}", suffix_digits))
-                                                                .family(egui::FontFamily::Monospace)
-                                                                .size(11.0)
-                                                                .color(gray_alpha),
-                                                        );
-                                                    } else {
-                                                        ui.label(
-                                                            egui::RichText::new(rest)
-                                                                .family(egui::FontFamily::Monospace)
-                                                                .size(11.0)
-                                                                .color(white_alpha),
-                                                        );
-                                                    }
+                                            if let Some((base, suffix_digits)) = rest.rsplit_once(" x") {
+                                                if !suffix_digits.is_empty()
+                                                    && suffix_digits.chars().all(|c| c.is_ascii_digit())
+                                                {
+                                                    ui.label(
+                                                        egui::RichText::new(format!(" {base}"))
+                                                            .family(egui::FontFamily::Monospace)
+                                                            .size(11.0)
+                                                            .color(white_alpha),
+                                                    );
+                                                    ui.label(
+                                                        egui::RichText::new(format!(" x{}", suffix_digits))
+                                                            .family(egui::FontFamily::Monospace)
+                                                            .size(11.0)
+                                                            .color(gray_alpha),
+                                                    );
                                                 } else {
                                                     ui.label(
-                                                        egui::RichText::new(rest)
+                                                        egui::RichText::new(format!(" {rest}"))
                                                             .family(egui::FontFamily::Monospace)
                                                             .size(11.0)
                                                             .color(white_alpha),
                                                     );
                                                 }
+                                            } else {
+                                                ui.label(
+                                                    egui::RichText::new(format!(" {rest}"))
+                                                        .family(egui::FontFamily::Monospace)
+                                                        .size(11.0)
+                                                        .color(white_alpha),
+                                                );
+                                            }
                                             }
                                         }
+                                    }
+                                } else if is_sim_log {
+                                    let sim_tag_color = egui::Color32::from_rgb(128, 128, 128);
+                                    let orch_tag_color = egui::Color32::from_rgb(140, 180, 220);
+                                    let white_base = if is_light_mode {
+                                        egui::Color32::from_rgb(0, 0, 0)
+                                    } else {
+                                        egui::Color32::from_rgb(255, 255, 255)
+                                    };
+                                    let white_alpha = egui::Color32::from_rgba_unmultiplied(
+                                        white_base.r(), white_base.g(), white_base.b(), alpha_u8
+                                    );
+                                    let tag_marker = if line.text.contains("[Orchestration]") {
+                                        "[Orchestration]"
+                                    } else {
+                                        "[SIM]"
+                                    };
+                                    let tag_rgb = if tag_marker == "[Orchestration]" {
+                                        orch_tag_color
+                                    } else {
+                                        sim_tag_color
+                                    };
+                                    let tag_alpha = egui::Color32::from_rgba_unmultiplied(
+                                        tag_rgb.r(), tag_rgb.g(), tag_rgb.b(), alpha_u8
+                                    );
+                                    if let Some(pos) = line.text.find(tag_marker) {
+                                        if pos > 0 {
+                                            ui.label(
+                                                egui::RichText::new(&line.text[..pos])
+                                                    .family(egui::FontFamily::Monospace)
+                                                    .size(11.0)
+                                                    .color(white_alpha),
+                                            );
+                                        }
+                                        ui.label(
+                                            egui::RichText::new(tag_marker)
+                                                .family(egui::FontFamily::Monospace)
+                                                .size(11.0)
+                                                .color(tag_alpha),
+                                        );
+                                        let rest_start = pos + tag_marker.len();
+                                        if rest_start < line.text.len() {
+                                            let rest = line.text[rest_start..].trim_start();
+                                            if !rest.is_empty() {
+                                                ui.label(
+                                                    egui::RichText::new(format!(" {rest}"))
+                                                        .family(egui::FontFamily::Monospace)
+                                                        .size(11.0)
+                                                        .color(white_alpha),
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else if is_blaze_log {
+                                    let blaze_orange = egui::Color32::from_rgb(254, 60, 0);
+                                    let blaze_orange_alpha = egui::Color32::from_rgba_unmultiplied(
+                                        blaze_orange.r(), blaze_orange.g(), blaze_orange.b(), alpha_u8
+                                    );
+                                    let blaze_blue = accent_color(COLOR_CLIENT_ACCENT);
+                                    let blaze_blue_alpha = egui::Color32::from_rgba_unmultiplied(
+                                        blaze_blue.r(), blaze_blue.g(), blaze_blue.b(), alpha_u8
+                                    );
+                                    let white_base = if is_light_mode {
+                                        egui::Color32::from_rgb(0, 0, 0)
+                                    } else {
+                                        egui::Color32::from_rgb(255, 255, 255)
+                                    };
+                                    let white_alpha = egui::Color32::from_rgba_unmultiplied(
+                                        white_base.r(), white_base.g(), white_base.b(), alpha_u8
+                                    );
+
+                                    if line.text.contains("[Server→Blaze]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[Server→Blaze]",
+                                            "Server",
+                                            "Blaze",
+                                            blaze_blue_alpha,
+                                            white_alpha,
+                                        );
+                                    } else if line.text.contains("[Client→Blaze]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[Client→Blaze]",
+                                            "Client",
+                                            "Blaze",
+                                            blaze_orange_alpha,
+                                            white_alpha,
+                                        );
+                                    } else if line.text.contains("[Blaze→Server]") {
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[Blaze→Server]",
+                                            "Blaze",
+                                            "Server",
+                                            blaze_blue_alpha,
+                                            white_alpha,
+                                        );
                                     } else if line.text.contains("[Blaze→Client]") {
-                                        // Split at [Blaze→Client]
-                                        if let Some(pos) = line.text.find("[Blaze→Client]") {
-                                            // Text before marker
-                                            if pos > 0 {
-                                                ui.label(
-                                                    egui::RichText::new(&line.text[..pos])
-                                                        .family(egui::FontFamily::Monospace)
-                                                        .size(11.0)
-                                                        .color(white_alpha),
-                                                );
-                                            }
-                                            // [Blaze (orange)
-                                            ui.label(
-                                                egui::RichText::new("[Blaze")
-                                                    .family(egui::FontFamily::Monospace)
-                                                    .size(11.0)
-                                                    .color(blaze_orange_alpha),
-                                            );
-                                            // → (white)
-                                            ui.label(
-                                                egui::RichText::new("→")
-                                                    .family(egui::FontFamily::Monospace)
-                                                    .size(11.0)
-                                                    .color(white_alpha),
-                                            );
-                                            // Client] (orange)
-                                            ui.label(
-                                                egui::RichText::new("Client]")
-                                                    .family(egui::FontFamily::Monospace)
-                                                    .size(11.0)
-                                                    .color(blaze_orange_alpha),
-                                            );
-                                            // Rest of message (white)
-                                            let rest_start = pos + "[Blaze→Client]".len();
-                                            if rest_start < line.text.len() {
-                                                let rest = &line.text[rest_start..];
-                                                let gray_base = egui::Color32::from_rgb(140, 140, 140);
-                                                let gray_alpha = egui::Color32::from_rgba_unmultiplied(
-                                                    gray_base.r(), gray_base.g(), gray_base.b(), alpha_u8
-                                                );
-                                                if let Some((base, suffix_digits)) = rest.rsplit_once(" x") {
-                                                    if !suffix_digits.is_empty() && suffix_digits.chars().all(|c| c.is_ascii_digit()) {
-                                                        ui.label(
-                                                            egui::RichText::new(base)
-                                                                .family(egui::FontFamily::Monospace)
-                                                                .size(11.0)
-                                                                .color(white_alpha),
-                                                        );
-                                                        ui.label(
-                                                            egui::RichText::new(format!(" x{}", suffix_digits))
-                                                                .family(egui::FontFamily::Monospace)
-                                                                .size(11.0)
-                                                                .color(gray_alpha),
-                                                        );
-                                                    } else {
-                                                        ui.label(
-                                                            egui::RichText::new(rest)
-                                                                .family(egui::FontFamily::Monospace)
-                                                                .size(11.0)
-                                                                .color(white_alpha),
-                                                        );
-                                                    }
-                                                } else {
-                                                    ui.label(
-                                                        egui::RichText::new(rest)
-                                                            .family(egui::FontFamily::Monospace)
-                                                            .size(11.0)
-                                                            .color(white_alpha),
-                                                    );
-                                                }
-                                            }
-                                        }
+                                        render_channel_arrow_log(
+                                            ui,
+                                            &line.text,
+                                            "[Blaze→Client]",
+                                            "Blaze",
+                                            "Client",
+                                            blaze_orange_alpha,
+                                            white_alpha,
+                                        );
                                     }
                                 } else {
                                     // Normal log line - use existing color segments

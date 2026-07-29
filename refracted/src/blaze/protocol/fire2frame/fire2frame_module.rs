@@ -1,4 +1,4 @@
-//! Fire2Frame Protocol Implementation
+﻿//! Fire2Frame Protocol Implementation
 //! 
 //! This module implements the Fire2Frame protocol (16-byte header format).
 //! Not to be confused with the older FireFrame protocol (12-byte header).
@@ -89,7 +89,7 @@ impl Fire2FrameHeader {
 
     /// Same as [`Self::new_send`], with explicit `options` (byte 14). Clients that read a 16-bit
     /// message kind at the same offset as the legacy `ushort` QType use `(header[13] << 8) | header[14]`
-    /// — e.g. `0x4000` vs `0x4001` for notification subtype 0 vs 1.
+    /// -- e.g. `0x4000` vs `0x4001` for notification subtype 0 vs 1.
     pub fn new_send_with_options(
         payload_size: u32,
         component: u16,
@@ -299,7 +299,7 @@ pub const NAMED_BLAZE_COMMANDS: &[NamedBlazeCommand] = &[
     NamedBlazeCommand { component: 0, command: 0, name: "Disconnect" },
 ];
 
-/// Command name lookup for debugging — same registry as toolkit presets.
+/// Command name lookup for debugging -- same registry as toolkit presets.
 pub fn get_command_name(component: u16, command: u16) -> Option<&'static str> {
     NAMED_BLAZE_COMMANDS
         .iter()

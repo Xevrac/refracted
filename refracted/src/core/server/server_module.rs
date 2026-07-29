@@ -269,7 +269,14 @@ impl BlazeServer {
             self.start_specialized_services(&flags, &ports).await?;
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
-        
+
+        // CNC .NET TCP MessageSystem server on MESSAGING_TCP_PORT.
+        if flags.blaze {
+            crate::client::cnc::msgsystem::server::spawn(
+                crate::client::cnc::msgsystem::MESSAGING_TCP_PORT,
+            );
+        }
+
         finish_startup_progress();
         
         info!("Services have started successfully.");

@@ -1,4 +1,4 @@
-use crate::blaze::protocol::fire2frame::{get_command_name, Fire2FramePacket, NAMED_BLAZE_COMMANDS};
+﻿use crate::blaze::protocol::fire2frame::{get_command_name, Fire2FramePacket, NAMED_BLAZE_COMMANDS};
 use crate::blaze::protocol::{FireFramePacket, MessageType};
 use crate::blaze::server::inject_bus::broadcast;
 use crate::blaze::tdf::{TdfEncoder, TdfTreeNode, TdfTreeParser};
@@ -600,7 +600,7 @@ fn render_tdf_preview_block(ui: &mut egui::Ui, state: &BlazeMakeWorkbenchState, 
             });
     } else if state.tdf_preview_err.is_none() {
         ui.label(
-            egui::RichText::new("Preview empty — fix field values or wrap options.")
+            egui::RichText::new("Preview empty -- fix field values or wrap options.")
                 .weak()
                 .italics(),
         );
@@ -660,7 +660,7 @@ fn render_make_actions(ui: &mut egui::Ui, state: &mut BlazeMakeWorkbenchState, c
                         }
                         Err(_) => {
                             state.blaze_action_note = Some(
-                                "Inject channel idle — connect a Blaze client on the emulator first."
+                                "Inject channel idle -- connect a Blaze client on the emulator first."
                                     .into(),
                             );
                         }

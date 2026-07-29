@@ -1,4 +1,4 @@
-/// Blaze Component and Command definitions
+﻿/// Blaze Component and Command definitions
 /// This module provides component IDs, command names, and lookup functions
 
 use std::collections::HashMap;
@@ -142,13 +142,37 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         // EA stock: startMatchmaking. CNC 3.19.4 GameManager uses the same id for removePlayer.
         (4, 11) => Some(format!("{}.removePlayer", component_name)),
         (4, 12) => Some(format!("{}.cancelMatchmaking", component_name)),
-        (4, 13) => Some(format!("{}.finalizeGameCreation", component_name)),
+        (4, 13) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "startMatchmaking"
+            } else {
+                "finalizeGameCreation"
+            }
+        )),
         (4, 14) => Some(format!("{}.listGames", component_name)),
-        (4, 15) => Some(format!("{}.setPlayerCustomData", component_name)),
+        (4, 15) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "finalizeGameCreation"
+            } else {
+                "setPlayerCustomData"
+            }
+        )),
         (4, 16) => Some(format!("{}.createGameTemplate", component_name)),
         // EA stock id 17; CNC `returnDedicatedServerToPool` is RPC id **20** (0x14).
         (4, 17) => Some(format!("{}.returnDedicatedServerToPool", component_name)),
-        (4, 18) => Some(format!("{}.leaveGame", component_name)),
+        (4, 18) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "setPlayerCustomData"
+            } else {
+                "leaveGame"
+            }
+        )),
         (4, 19) => Some(format!("{}.selectHost", component_name)),
         (4, 20) => Some(format!(
             "{}.{}",
@@ -202,7 +226,17 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 26) => Some(format!("{}.updateMeshConnection", component_name)),
         (4, 27) => Some(format!("{}.removePlayerFromBannedList", component_name)),
         (4, 28) => Some(format!("{}.clearBannedList", component_name)),
-        (4, 29) => Some(format!("{}.getBannedPlayers", component_name)),
+        // CNC GameManager uses id 29 (0x1D) for updateMeshConnection (confirmed from the client's own
+        // Blaze log: `updateMeshConnection [0x0004::0x001D]`), not getBannedPlayers as in the EA table.
+        (4, 29) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "updateMeshConnection"
+            } else {
+                "getBannedPlayers"
+            }
+        )),
         // CNC notify id 30 = NotifyPlayerJoinCompleted; RPC addQueuedPlayerToGame is id 38 (0x26).
         (4, 30) => Some(format!("{}.NotifyPlayerJoinCompleted", component_name)),
         (4, 31) => Some(format!("{}.updateGameName", component_name)),
@@ -224,6 +258,18 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
                 "setGameModRegister"
             }
         )), // RPC id 65 / 0x41
+        // CNC GameManager async notification 80 (0x50) = NotifyGameAttribChange (id->name table
+        // sub_12AB360). Carries the `GameReady` game attribute that triggers the client's built-in
+        // engine connect to the dedicated (round 64).
+        (4, 80) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyGameAttribChange"
+            } else {
+                "notifyGameAttribChange"
+            }
+        )),
         (4, 90) => Some(format!(
             "{}.{}",
             component_name,
@@ -231,6 +277,15 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
                 "NotifyPlayerAttribChange"
             } else {
                 "notifyPlayerAttribChange"
+            }
+        )),
+        (4, 95) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyPlayerCustomDataChange"
+            } else {
+                "notifyPlayerCustomDataChange"
             }
         )),
         (4, 42) => Some(format!("{}.getGameListSubscription", component_name)),
@@ -265,9 +320,26 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (4, 103) => Some(format!("{}.getFullGameData", component_name)), // 0x67 - alternate ID
         (4, 108) => Some(format!("{}.setPlayerTeam", component_name)), // 0x6C
         (4, 109) => Some(format!("{}.changeGameTeamId", component_name)), // 0x6D
-        (4, 110) => Some(format!("{}.migrateAdminPlayer", component_name)), // 0x6E
+        (4, 110) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                "NotifyGameSettingsChange"
+            } else {
+                "migrateAdminPlayer"
+            }
+        )), // 0x6E
         (4, 111) => Some(format!("{}.getUserSetGameListSubscription", component_name)), // 0x6F
-        (4, 112) => Some(format!("{}.swapPlayersTeam", component_name)), // 0x70
+        (4, 112) => Some(format!(
+            "{}.{}",
+            component_name,
+            if crate::common::game::get_current_game_id().as_str() == "cnc" {
+                // CNC / BlazeSDK GameManager notification id 112 = NotifyGameReset.
+                "NotifyGameReset"
+            } else {
+                "swapPlayersTeam"
+            }
+        )), // 0x70
         (4, 113) => Some(format!("{}.getGameDataByUser", component_name)),
         (4, 150) => Some(format!("{}.registerDynamicDedicatedServerCreator", component_name)), // 0x96
         (4, 151) => Some(format!("{}.unregisterDynamicDedicatedServerCreator", component_name)), // 0x97
@@ -463,7 +535,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (2051, 5) => Some(format!("{}.drainConsumeable", component_name)),
         (2051, 6) => Some(format!("{}.getTemplate", component_name)), // 0x06
         
-        // NucleusIdentityComponent (1002) — core/1002
+        // NucleusIdentityComponent (1002) -- core/1002
         (1002, 1) => Some(format!("{}.updateEntitlement", component_name)),
         (1002, 2) => Some(format!("{}.updatePersona", component_name)),
         (1002, 3) => Some(format!("{}.deletePersona", component_name)),

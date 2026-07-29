@@ -1,12 +1,12 @@
-/**
+﻿/**
  * CCApp - Command & Conquer UI Replica
  * Targeting late 2011 WebKit environment
  */
 
-var ccConfig = function($routeProvider) { 
+var ccConfig = function($routeProvider) {
     $routeProvider
         .when('/', {
-            templateUrl: 'view/home.html'
+            template: '<div></div>'
         })
         .otherwise({
             redirectTo: '/'
@@ -21,12 +21,76 @@ CCApp.run(function ($rootScope) {
     if (window.CncPreLanding && CncPreLanding.getTagline) {
         $rootScope.preLandingTagline = CncPreLanding.getTagline();
     } else {
-        $rootScope.preLandingTagline = 'LOGGING YOU IN, PLEASE WAIT';
+        $rootScope.preLandingTagline = '';
     }
     $rootScope.preLandingStatus = ' ';
     $rootScope.preLandingHasShell =
         window.CncPreLanding && CncPreLanding.hasShell && CncPreLanding.hasShell();
     $rootScope.preLandingUseArt = false;
+    $rootScope.allowShellThemeSelect = true;
+    $rootScope.lobbyOpen = false;
+    $rootScope.lobbyView = 'setup';
+
+    $rootScope.openLobby = function () {
+        $rootScope.lobbyOpen = true;
+        $rootScope.lobbyView = 'setup';
+    };
+    $rootScope.exitLobby = function () {
+        $rootScope.lobbyOpen = false;
+        $rootScope.lobbyView = 'setup';
+    };
+    $rootScope.openServerBrowser = function () {
+        $rootScope.lobbyOpen = true;
+        $rootScope.lobbyView = 'browser';
+    };
+    $rootScope.closeServerBrowser = function () {
+        $rootScope.lobbyView = 'setup';
+    };
+
+    function syncThemeTemplates(id) {
+        var themeId = (window.CncShellTheme && CncShellTheme.normalize)
+            ? CncShellTheme.normalize(id)
+            : (id || 'aurora');
+        $rootScope.shellUiTheme = themeId;
+        $rootScope.shellRootTemplate = (window.CncShellTheme && CncShellTheme.rootTemplate)
+            ? CncShellTheme.rootTemplate(themeId)
+            : 'view/roots/aurora.html';
+        $rootScope.homeTemplateUrl = (window.CncShellTheme && CncShellTheme.homeTemplate)
+            ? CncShellTheme.homeTemplate(themeId)
+            : 'view/home-aurora.html';
+        $rootScope.lobbyTemplateUrl = (window.CncShellTheme && CncShellTheme.lobbyTemplate)
+            ? CncShellTheme.lobbyTemplate(themeId)
+            : 'view/lobby/lobby-aurora.html';
+    }
+
+    syncThemeTemplates(window.CncShellTheme ? CncShellTheme.get() : 'aurora');
+
+    if (window.CncShellTheme) {
+        if (CncShellTheme.onChange) {
+            CncShellTheme.onChange(function (themeId) {
+                if ($rootScope.$$phase) {
+                    syncThemeTemplates(themeId);
+                } else {
+                    $rootScope.$apply(function () {
+                        syncThemeTemplates(themeId);
+                    });
+                }
+            });
+        }
+        if (CncShellTheme.boot) {
+            CncShellTheme.boot(function (themeId) {
+                if ($rootScope.$$phase) {
+                    syncThemeTemplates(themeId);
+                } else {
+                    $rootScope.$apply(function () {
+                        syncThemeTemplates(themeId);
+                    });
+                }
+            });
+        } else if (CncShellTheme.apply) {
+            CncShellTheme.apply(CncShellTheme.get());
+        }
+    }
 });
 
 // ==========================================
@@ -178,8 +242,9 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
 // ==========================================
 CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     
-    // 1. Core User Info (Header) — $rootScope.playerName from Blaze + UnknownPlayer fallback
+    // 1. Core User Info (Header) -- $rootScope.playerName from Blaze + UnknownPlayer fallback
     $scope.wins = 2;
+    $scope.losses = 1;
     $scope.premiumDays = 90;
     $scope.selectedMode = "PVE";
     
@@ -203,6 +268,11 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
             || $scope.activeTab === 'LEARN' || $scope.activeTab === 'SUPPORT';
     };
     $scope.setMode = function(modeName) { $scope.selectedMode = modeName; };
+    $scope.openLobby = function () {
+        if ($rootScope.openLobby) {
+            $rootScope.openLobby();
+        }
+    };
 
     // 3. Shared Faction Data (Header Cluster)
     $scope.activeFaction = 'apa'; 
@@ -322,9 +392,150 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     };
 
     // ==========================================
-    // MAP LOGIC
+    // MAP LOGIC + LIVE PRESENCE
     // ==========================================
-    $scope.onlinePlayers = 100853;
+    $scope.onlinePlayers = 0;
+    $scope.onlineServers = 0;
+    $scope.buildRfr = '—';
+    $scope.buildPrism = '—';
+    $scope.buildCnc = '150805';
     $scope.mapOpen = false; 
     $scope.toggleMap = function() { $scope.mapOpen = !$scope.mapOpen; };
+
+    function applyBuildInfo(body) {
+        if (!body) {
+            return;
+        }
+        if (body.rfr) {
+            $scope.buildRfr = body.rfr;
+        }
+        if (body.prism) {
+            $scope.buildPrism = body.prism;
+        }
+        var cnc = body.cnc_rl || body.cnc;
+        if (cnc) {
+            $scope.buildCnc = cnc;
+        }
+    }
+
+    function refreshBuildInfo() {
+        try {
+            var injected = window.__CNC_BUILD;
+            if (injected && typeof injected === 'object') {
+                applyBuildInfo(injected);
+            }
+        } catch (e0) { /* ignore */ }
+        function applyBody(body) {
+            if (!body || body === true || !body.ok) {
+                return;
+            }
+            applyBuildInfo(body);
+        }
+        try {
+            if (window.jQuery && jQuery.ajax) {
+                jQuery.ajax({
+                    url: '/cnc/build-info',
+                    type: 'GET',
+                    dataType: 'json',
+                    timeout: 4000,
+                    success: function (body) {
+                        if ($scope.$$phase) {
+                            applyBody(body);
+                        } else {
+                            $scope.$apply(function () { applyBody(body); });
+                        }
+                    }
+                });
+                return;
+            }
+        } catch (e) { /* ignore */ }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/build-info', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || xhr.status < 200 || xhr.status >= 300) {
+                    return;
+                }
+                var body = null;
+                try {
+                    body = window.JSON ? JSON.parse(xhr.responseText) : null;
+                } catch (pe) { return; }
+                if ($scope.$$phase) {
+                    applyBody(body);
+                } else {
+                    $scope.$apply(function () { applyBody(body); });
+                }
+            };
+            xhr.send(null);
+        } catch (e2) { /* ignore */ }
+    }
+
+    refreshBuildInfo();
+
+    function refreshPresenceCounts() {
+        function applyBody(body) {
+            if (!body || body === true || !body.ok) {
+                return;
+            }
+            var players = body.players != null ? body.players : body.count;
+            var servers = body.servers != null ? body.servers : 0;
+            if (players == null) {
+                return;
+            }
+            $scope.onlinePlayers = players;
+            $scope.onlineServers = servers;
+        }
+        try {
+            if (window.jQuery && jQuery.ajax) {
+                jQuery.ajax({
+                    url: '/cnc/online-count',
+                    type: 'GET',
+                    dataType: 'json',
+                    timeout: 4000,
+                    success: function (body) {
+                        if ($scope.$$phase) {
+                            applyBody(body);
+                        } else {
+                            $scope.$apply(function () { applyBody(body); });
+                        }
+                    }
+                });
+                return;
+            }
+        } catch (e) { /* ignore */ }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/online-count', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || xhr.status < 200 || xhr.status >= 300) {
+                    return;
+                }
+                var body = null;
+                try {
+                    body = window.JSON ? JSON.parse(xhr.responseText) : null;
+                } catch (pe) { return; }
+                if ($scope.$$phase) {
+                    applyBody(body);
+                } else {
+                    $scope.$apply(function () { applyBody(body); });
+                }
+            };
+            xhr.send(null);
+        } catch (e2) { /* ignore */ }
+    }
+
+    refreshPresenceCounts();
+    var presencePoll;
+    function schedulePresencePoll() {
+        presencePoll = $timeout(function () {
+            refreshPresenceCounts();
+            schedulePresencePoll();
+        }, 5000);
+    }
+    schedulePresencePoll();
+    $scope.$on('$destroy', function () {
+        if (presencePoll) {
+            $timeout.cancel(presencePoll);
+        }
+    });
 });

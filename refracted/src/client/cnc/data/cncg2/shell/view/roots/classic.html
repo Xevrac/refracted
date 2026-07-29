@@ -1,0 +1,33 @@
+<div class="cc-shell-root cc-shell-root--classic">
+    <div class="cc-top-bar">
+        <div class="cc-currency-block">
+            <div class="cc-currency-segment">
+                <span class="cc-currency-pill cc-currency-pill--vp" title="VP">VP</span>
+                <div class="cc-currency-value-box">
+                    <strong class="text-white currency-value">1,000</strong>
+                </div>
+            </div>
+            <button type="button" class="btn btn-mini btn-add-currency" title="Add" aria-label="Add currency">+</button>
+            <div class="cc-currency-segment">
+                <span class="cc-currency-pill cc-currency-pill--cp" title="CP">CP</span>
+                <div class="cc-currency-value-box">
+                    <strong class="text-white currency-value">950</strong>
+                </div>
+            </div>
+        </div>
+        <div class="cc-logo-block">
+            <img src="images/cnc_title.png" alt="Command & Conquer Logo" class="cc-logo-image">
+        </div>
+        <div class="cc-options-block text-right">
+            <div class="build-info-block" aria-label="Build information">
+                <div class="build-info-line">CNC_RL/150805</div>
+                <div class="build-info-line">cncprod150805</div>
+                <div class="build-info-line">prd/rel_k/152085</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-options" ng-click="openOptions()"><span class="btn-label">OPTIONS</span></button>
+        </div>
+    </div>
+
+    <div ng-include="homeTemplateUrl" class="cc-main-view" ng-if="!lobbyOpen"></div>
+    <div ng-include="lobbyTemplateUrl" class="cc-main-view cc-main-view--lobby" ng-if="lobbyOpen"></div>
+</div>

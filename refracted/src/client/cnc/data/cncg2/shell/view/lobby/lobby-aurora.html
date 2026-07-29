@@ -1,0 +1,153 @@
+<div class="au-lobby" ng-controller="ShellLobbyController" ng-click="closeMenus()">
+    <div class="au-lobby__body" ng-show="lobbyView == 'setup'">
+        <div class="au-lobby__main">
+            <div class="au-lobby__map au-hud-frame">
+                <img class="au-lobby__map-img" src="images/cnc_background.png" alt="">
+                <div class="au-lobby__map-dim" aria-hidden="true"></div>
+                <div class="au-lobby__map-overlay" ng-click="$event.stopPropagation()">
+                    <button type="button" class="au-btn au-btn--ghost au-lobby__map-face" ng-click="toggleMapMenu($event)">
+                        {{ selectedMap.label }}
+                        <img src="images/chevron_down.svg" width="12" height="8" alt="">
+                    </button>
+                    <ul class="au-lobby__map-menu" ng-show="mapMenuOpen">
+                        <li ng-repeat="m in maps" ng-class="{active: m.id == selectedMap.id}">
+                            <a href="" ng-click="selectMap(m)">{{ m.label }}</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="au-lobby__tabs">
+                    <button type="button" ng-class="{'au-lobby__tab--on': lobbySubTab == 'GENERALS'}" ng-click="setLobbySubTab('GENERALS')">Generals</button>
+                    <button type="button" ng-class="{'au-lobby__tab--on': lobbySubTab == 'MODIFY'}" ng-click="setLobbySubTab('MODIFY')">Modify</button>
+                    <button type="button" ng-class="{'au-lobby__tab--on': lobbySubTab == 'HISTORY'}" ng-click="setLobbySubTab('HISTORY')">History</button>
+                </div>
+            </div>
+
+            <div class="au-lobby__teams">
+                <div class="au-lobby__team au-lobby__team--1">
+                    <div class="au-lobby__team-head">Team 1</div>
+                    <div class="au-lobby__slot"
+                         ng-repeat="slot in team1"
+                         ng-show="slot.occupied"
+                         ng-class="{'au-lobby__slot--local': slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
+                         ng-click="$event.stopPropagation()">
+                        <div class="au-lobby__slot-body">
+                            <div class="au-lobby__avatar-wrap">
+                                <div class="au-lobby__avatar"><img ng-src="{{ generalAvatar(slot) }}" alt=""></div>
+                                <div class="au-lobby__color-ribbon" ng-if="!slot.invitePending"
+                                     ng-style="{'background-color': slot.color}"></div>
+                            </div>
+                            <div class="au-lobby__meta">
+                                <strong>{{ slot.codename }}</strong>
+                                <span ng-if="!slot.isAi">{{ slot.displayName }}</span>
+                                <div class="au-lobby__ai" ng-if="slot.isAi">
+                                    <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
+                                </div>
+                            </div>
+                            <button type="button" class="au-lobby__menu-btn" title="Faction / general / colour"
+                                    ng-if="!slot.invitePending"
+                                    ng-click="toggleSlotMenu(1, $index, $event)"
+                                    ng-class="{open: slotMenu == slotMenuKey(1, $index)}">
+                                <span class="au-lobby__chevron"></span>
+                            </button>
+                            <button type="button" class="au-lobby__kick" ng-if="!slot.isLocal"
+                                    ng-click="clearSlot(1, $index, $event)" title="Remove">&times;</button>
+                            <ul class="au-lobby__slot-menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
+                                <li class="au-lobby__slot-menu-label">Faction</li>
+                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction()}">
+                                    <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
+                                </li>
+                                <li class="au-lobby__slot-menu-label">General</li>
+                                <li ng-repeat="g in availableGenerals(slot)"
+                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral()}">
+                                    <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
+                                </li>
+                                <li class="au-lobby__slot-menu-label">Colour</li>
+                                <li class="au-lobby__slot-colors">
+                                    <button type="button" class="au-lobby__swatch" ng-repeat="c in colors"
+                                            ng-style="{'background-color': c}"
+                                            ng-class="{on: slot.color == c}"
+                                            ng-click="setColor(slot, c, $event)"></button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="au-lobby__team-actions" ng-show="teamHasEmpty(1)">
+                        <button type="button" class="au-btn au-btn--ghost" ng-click="inviteFriend(1)">Invite</button>
+                        <button type="button" class="au-btn au-btn--primary" ng-click="addAi(1)">Add AI</button>
+                    </div>
+                </div>
+
+                <div class="au-lobby__vs"><span>VS</span></div>
+
+                <div class="au-lobby__team au-lobby__team--2">
+                    <div class="au-lobby__team-head">Team 2</div>
+                    <div class="au-lobby__slot"
+                         ng-repeat="slot in team2"
+                         ng-show="slot.occupied"
+                         ng-class="{'au-lobby__slot--local': slot.isLocal, 'menu-open': slotMenu == slotMenuKey(2, $index)}"
+                         ng-click="$event.stopPropagation()">
+                        <div class="au-lobby__slot-body">
+                            <div class="au-lobby__avatar-wrap">
+                                <div class="au-lobby__avatar"><img ng-src="{{ generalAvatar(slot) }}" alt=""></div>
+                                <div class="au-lobby__color-ribbon" ng-if="!slot.invitePending"
+                                     ng-style="{'background-color': slot.color}"></div>
+                            </div>
+                            <div class="au-lobby__meta">
+                                <strong>{{ slot.codename }}</strong>
+                                <span ng-if="!slot.isAi">{{ slot.displayName }}</span>
+                                <div class="au-lobby__ai" ng-if="slot.isAi">
+                                    <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
+                                </div>
+                            </div>
+                            <button type="button" class="au-lobby__menu-btn" title="Faction / general / colour"
+                                    ng-if="!slot.invitePending"
+                                    ng-click="toggleSlotMenu(2, $index, $event)"
+                                    ng-class="{open: slotMenu == slotMenuKey(2, $index)}">
+                                <span class="au-lobby__chevron"></span>
+                            </button>
+                            <button type="button" class="au-lobby__kick" ng-if="!slot.isLocal"
+                                    ng-click="clearSlot(2, $index, $event)" title="Remove">&times;</button>
+                            <ul class="au-lobby__slot-menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
+                                <li class="au-lobby__slot-menu-label">Faction</li>
+                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction()}">
+                                    <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
+                                </li>
+                                <li class="au-lobby__slot-menu-label">General</li>
+                                <li ng-repeat="g in availableGenerals(slot)"
+                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral()}">
+                                    <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
+                                </li>
+                                <li class="au-lobby__slot-menu-label">Colour</li>
+                                <li class="au-lobby__slot-colors">
+                                    <button type="button" class="au-lobby__swatch" ng-repeat="c in colors"
+                                            ng-style="{'background-color': c}"
+                                            ng-class="{on: slot.color == c}"
+                                            ng-click="setColor(slot, c, $event)"></button>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="au-lobby__team-actions" ng-show="teamHasEmpty(2)">
+                        <button type="button" class="au-btn au-btn--ghost" ng-click="inviteFriend(2)">Invite</button>
+                        <button type="button" class="au-btn au-btn--primary" ng-click="addAi(2)">Add AI</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="au-lobby__actions">
+                <button type="button" class="au-btn au-btn--ghost" ng-click="exitLobby()">Exit</button>
+                <button type="button" class="au-btn au-btn--primary au-lobby__start" ng-click="startBattle()">Start Battle</button>
+            </div>
+        </div>
+
+        <aside class="au-lobby__side">
+            <div class="au-side__head">Social</div>
+            <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
+        </aside>
+    </div>
+
+    <div class="au-lobby__browser" ng-show="lobbyView == 'browser'" ng-include="'view/lobby/server-browser-aurora.html'"></div>
+    <div class="au-lobby__modal" ng-show="_starting">
+        <div class="au-lobby__modal-box">Starting game..</div>
+    </div>
+</div>

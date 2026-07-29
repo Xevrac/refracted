@@ -355,6 +355,20 @@
     };
     /** Primary Blaze shell path — builds url: '/blaze/…' (matches shell.js / src.js). */
     CncProbe.runBlaze = function (resource, params) {
+        // GUARD: the native setGameAttributes path (shell cmdType 10 — an "attribute" command with no
+        // playerID) crashes the client: BlazeShellCommandExecutor_dispatch -> sub_1204230 ->
+        // fb_TypeRegistry_bindOrRefreshInstance calls a null TypeInfo vtable slot (the request TDF type is
+        // not fully registered in this build). The player path (cmdType 7, with playerID) is crash-safe
+        // (it looks up game+player and bails gracefully if missing). So never send an attribute without a
+        // playerID until the native game-attribute TDF registration is fixed.
+        if (String(resource || '').toLowerCase() === 'attribute') {
+            var pidVal = params && (params.playerID != null ? params.playerID : params.playerId);
+            if (pidVal == null || String(pidVal) === '') {
+                CncProbe.log('runBlaze: blocked "attribute" with no playerID — the native setGameAttributes ' +
+                    'path crashes the client. Send a player attribute (include playerID) instead.');
+                return;
+            }
+        }
         CncProbe.runBlazeUrl(CncProbe.blazeUrlFromResource(resource, params));
     };
     /** Experimental: _module:'blaze' + short _resource — does not dispatch on cnc.server.exe today. */
@@ -678,17 +692,74 @@
         var v = el ? String(el.value || '').trim() : '';
         return v !== '' ? v : (fallback !== undefined ? String(fallback) : '');
     };
+    CncProbe.syncPlayerAttrsHttp = function (opts) {
+        opts = opts || {};
+        if (!window.fetch) {
+            return;
+        }
+        var gid = opts.gid != null ? opts.gid : 1;
+        var pid = opts.pid != null ? opts.pid : 0;
+        var q = '/cnc/player-attrs?gid=' + encodeURIComponent(gid) +
+            '&pid=' + encodeURIComponent(pid);
+        if (opts.faction) {
+            q += '&faction=' + encodeURIComponent(opts.faction);
+        }
+        if (opts.team != null) {
+            q += '&team=' + encodeURIComponent(opts.team);
+        }
+        if (opts.startpoint != null) {
+            q += '&startpoint=' + encodeURIComponent(opts.startpoint);
+        }
+        if (opts.general != null) {
+            q += '&general=' + encodeURIComponent(opts.general);
+        }
+        if (opts.isai != null) {
+            q += '&isai=' + encodeURIComponent(opts.isai ? '1' : '0');
+        }
+        fetch(q, { method: 'POST', credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (body) {
+                CncProbe.log('player-attrs HTTP ' + JSON.stringify(body));
+            })
+            .catch(function (e) {
+                CncProbe.log('player-attrs HTTP failed: ' + e);
+            });
+    };
+    CncProbe.playerDataProbe = function (gid) {
+        if (!window.fetch) {
+            return;
+        }
+        fetch('/cnc/player-probe?gid=' + encodeURIComponent(gid != null ? gid : 1), {
+            method: 'GET',
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (body) {
+                CncProbe.log('player-probe ' + JSON.stringify(body));
+            })
+            .catch(function (e) {
+                CncProbe.log('player-probe failed: ' + e);
+            });
+    };
     CncProbe.lobbySetFaction = function (faction) {
+        CncProbe.syncPlayerAttrsHttp({ faction: faction });
         CncProbe.blazeShellSetLobbyAttr('_faction', faction);
     };
     CncProbe.lobbySetStartpoint = function (n) {
+        CncProbe.syncPlayerAttrsHttp({ startpoint: n });
         CncProbe.blazeShellSetLobbyAttr('_startpoint', n);
     };
     CncProbe.lobbySetIsAi = function (on) {
+        CncProbe.syncPlayerAttrsHttp({ isai: !!on });
         CncProbe.blazeShellSetLobbyAttr('_isai', on ? '1' : '0');
     };
     CncProbe.lobbySetTeam = function (team) {
+        CncProbe.syncPlayerAttrsHttp({ team: team });
         CncProbe.blazeShellSetLobbyAttr('_team', team);
+    };
+    CncProbe.lobbySetGeneral = function (generalId) {
+        CncProbe.syncPlayerAttrsHttp({ general: generalId });
+        CncProbe.blazeShellSetLobbyAttr('_general', generalId);
     };
     CncProbe.lobbyApplyFromForm = function () {
         CncProbe.lobbySetFaction(CncProbe.lobbyInput('cnc-probe-lobby-faction', 'USA'));

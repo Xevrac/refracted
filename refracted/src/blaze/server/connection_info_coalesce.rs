@@ -7,10 +7,11 @@ fn emit_compact(upsert_key: String, line: &str, count: u32) {
     crate::core::console::push_grpc_compact_upsert(upsert_key, &ansi);
 }
 
-/// Coalesces repeated identical Blaze traffic [Client→Blaze] / [Blaze→Client] `info!` lines.
+/// Coalesces repeated identical Blaze traffic [Client→Blaze] / [Server→Blaze] / [Blaze→Client] / [Blaze→Server] lines.
 /// Keys must omit volatile fields (e.g. MsgNum) so consecutive pings count as one signature.
 pub struct CoalescedBlazeInfo {
     scope: String,
+    blaze_session_id: Option<u64>,
     key: Option<String>,
     count: u32,
     line: String,
@@ -25,6 +26,7 @@ impl CoalescedBlazeInfo {
     pub fn new_scoped(scope: &str) -> Self {
         Self {
             scope: scope.to_string(),
+            blaze_session_id: None,
             key: None,
             count: 0,
             line: String::new(),
@@ -32,7 +34,18 @@ impl CoalescedBlazeInfo {
         }
     }
 
+    pub fn set_blaze_session_id(&mut self, blaze_session_id: Option<u64>) {
+        self.blaze_session_id = blaze_session_id;
+    }
+
+    fn normalize_line(&self, line: String) -> String {
+        self.blaze_session_id
+            .map(|sid| crate::client::cnc::dedicated_pool::normalize_blaze_wire_log_line(sid, &line))
+            .unwrap_or(line)
+    }
+
     pub fn log(&mut self, key: &str, line: String) {
+        let line = self.normalize_line(line);
         // Only coalesce known heartbeat-style rows. Other Blaze traffic should log as distinct lines.
         let coalesceable = key.contains("|KA") || key.contains("|IDLEHB");
         if !coalesceable {
@@ -73,6 +86,7 @@ impl Drop for CoalescedBlazeInfo {
 
 pub struct PingBurstCoalescer {
     scope: String,
+    blaze_session_id: Option<u64>,
     req_count: u32,
     req_line: String,
     rep_count: u32,
@@ -87,6 +101,7 @@ impl PingBurstCoalescer {
     pub fn new_scoped(scope: &str) -> Self {
         Self {
             scope: scope.to_string(),
+            blaze_session_id: None,
             req_count: 0,
             req_line: String::new(),
             rep_count: 0,
@@ -94,7 +109,18 @@ impl PingBurstCoalescer {
         }
     }
 
+    pub fn set_blaze_session_id(&mut self, blaze_session_id: Option<u64>) {
+        self.blaze_session_id = blaze_session_id;
+    }
+
+    fn normalize_line(&self, line: String) -> String {
+        self.blaze_session_id
+            .map(|sid| crate::client::cnc::dedicated_pool::normalize_blaze_wire_log_line(sid, &line))
+            .unwrap_or(line)
+    }
+
     pub fn log_request(&mut self, line: String) {
+        let line = self.normalize_line(line);
         self.req_count = self.req_count.saturating_add(1);
         self.req_line = line;
         emit_compact(
@@ -105,6 +131,7 @@ impl PingBurstCoalescer {
     }
 
     pub fn log_reply(&mut self, line: String) {
+        let line = self.normalize_line(line);
         self.rep_count = self.rep_count.saturating_add(1);
         self.rep_line = line;
         emit_compact(

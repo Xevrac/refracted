@@ -7,9 +7,9 @@
     left: 0;
     width: 450px;
     z-index: 20;
-    /* Uses the same 1px diagonal trick as the sidebar */
-    background-color: rgba(10, 10, 10, 0.85); 
-    background-image: -webkit-linear-gradient(135deg, #1c1c1c 25%, transparent 25%, transparent 50%, #1c1c1c 50%, #1c1c1c 75%, transparent 75%, transparent);
+    /* Soft hatch — high-contrast stripes make glyph edges look crunchier */
+    background-color: rgba(12, 12, 12, 0.92);
+    background-image: -webkit-linear-gradient(135deg, rgba(255,255,255,0.03) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.03) 50%, rgba(255,255,255,0.03) 75%, transparent 75%, transparent);
     background-size: 4px 4px;
 }
 
@@ -23,12 +23,13 @@
 .news-title { color: #fff; font-weight: bold; font-style: italic; font-size: 15px; vertical-align: middle; font-family: 'Eurostile-Hea', 'Eurostile-Med', sans-serif; }
 
 .news-subheader {
-    color: #808080;
-    font-size: 12px;
-    font-family: 'Eurostile-Med', sans-serif;
+    color: #d8d8d8;
+    font-size: 15px;
+    font-family: Arial, Helvetica, sans-serif;
     padding: 12px 15px;
     border-bottom: 1px solid #1a1a1a;
-    line-height: 1.35;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 .news-list { list-style: none; margin: 0; padding: 0; }
@@ -37,16 +38,17 @@
     padding: 15px;
     border-bottom: 1px solid #1a1a1a;
     cursor: pointer;
-    color: #c4c4c4;
-    font-size: 13px;
-    font-family: 'Eurostile-Med', sans-serif;
-    line-height: 1.35;
+    color: #ececec;
+    font-size: 15px;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
 
 /* Hover state mimics the sidebar hover */
 .news-item:hover {
     background-color: rgba(30, 30, 30, 0.6);
-    background-image: -webkit-linear-gradient(135deg, #313131 25%, transparent 25%, transparent 50%, #313131 50%, #313131 75%, transparent 75%, transparent);
+    background-image: -webkit-linear-gradient(135deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.04) 75%, transparent 75%, transparent);
     background-size: 4px 4px;
     color: #fff;
 }
@@ -68,37 +70,64 @@
    2. EXPANDED FULL ARTICLE VIEW
    ========================================================================= */
 .cc-news-full-panel {
-    /* Stretches perfectly to fill the cc-map-area */
     position: absolute;
     top: 0;
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(10, 10, 10, 0.95); /* Solid clean background for readability */
-    padding: 40px;
+    background: rgba(10, 10, 10, 0.96);
+    padding: 28px 36px 72px 36px;
     z-index: 30;
     overflow-y: auto;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
 }
 
-.article-title { color: #fff; font-size: 28px; margin: 0 0 5px 0; font-weight: normal; }
-.article-date { color: #888; font-size: 14px; font-weight: normal; margin: 0 0 30px 0; }
+.article-title {
+    color: #fff;
+    font-size: 42px;
+    line-height: 1.15;
+    margin: 0 120px 12px 0;
+    font-weight: bold;
+    font-family: 'Eurostile-Hea', 'Eurostile-Med', Arial, sans-serif;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.article-date {
+    color: #b0b0b0;
+    font-size: 16px;
+    font-weight: normal;
+    margin: 0 0 32px 0;
+    font-family: Arial, Helvetica, sans-serif;
+}
 
-.article-content { color: #bcbcbc; font-size: 13px; line-height: 1.55; font-family: 'Eurostile-Med', sans-serif; }
+.article-content {
+    color: #ececec;
+    font-size: 18px;
+    line-height: 1.7;
+    max-width: 920px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: normal;
+    -webkit-font-smoothing: subpixel-antialiased;
+}
 .article-content p { margin-bottom: 20px; }
+.article-content ul { color: #d4d4d4; font-size: 17px; line-height: 1.6; }
+.article-content li { margin-bottom: 8px; }
 
-/* Back to Main Button (Docked Bottom Right relative to the map area) */
 .btn-back-to-main {
     position: absolute;
-    bottom: 25px;
-    right: 25px;
-    padding: 8px 30px;
-    border-radius: 20px; /* Pill shape */
+    top: 24px;
+    right: 28px;
+    padding: 10px 28px;
+    border-radius: 20px;
     border: 1px solid #555;
     background: -webkit-linear-gradient(top, #3a3a3a, #111);
     color: #ccc;
     font-weight: bold;
-    font-size: 11px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
     cursor: pointer;
+    z-index: 31;
     -webkit-transition: all 0.2s;
     transition: all 0.2s;
 }

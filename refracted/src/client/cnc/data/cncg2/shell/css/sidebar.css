@@ -73,12 +73,12 @@
    FEEDS UI
    ========================================================================= */
 .cc-feeds-table { margin: 0; width: 100%; border-collapse: collapse; }
-.cc-feeds-table td { padding: 15px 15px 12px 20px; border-top: 1px solid #222; border-bottom: 1px solid #000; color: #ccc; font-size: 12px; }
+.cc-feeds-table td { padding: 15px 15px 12px 20px; border-top: 1px solid #222; border-bottom: 1px solid #000; color: #ddd; font-size: 13px; }
 .cc-feeds-table tbody tr { background-color: transparent; background-image: none; }
 .feed-highlight { color: #d99525; font-weight: bold; margin-left: 3px; }
-.feed-time { color: #555; font-size: 10px; vertical-align: bottom; width: 80px; padding-right: 15px !important;}
+.feed-time { color: #888; font-size: 12px; vertical-align: bottom; width: 80px; padding-right: 15px !important;}
 .feeds-promo-block { text-align: center; padding: 25px 0; border-top: 1px solid #222; }
-.feeds-promo-block p { color: #fff; font-weight: bold; font-size: 12px; margin-bottom: 10px; text-shadow: 0 1px 2px #000; }
+.feeds-promo-block p { color: #fff; font-weight: bold; font-size: 13px; margin-bottom: 10px; text-shadow: 0 1px 2px #000; }
 
 /* The 2011 WebKit Glowing Green Button */
 .btn-glow-green { display: inline-block; width: 200px; height: 34px; line-height: 32px; color: #fff; font-weight: bold; font-size: 13px; border: 1px solid #000; border-radius: 4px; background-color: #2b591b; background-image: -webkit-linear-gradient(top, #4a912a 0%, #204512 50%, #15330a 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 15px rgba(74, 255, 42, 0.4); text-shadow: 0 1px 1px #000; cursor: pointer; -webkit-transition: all 0.2s ease; transition: all 0.2s ease; }
@@ -89,15 +89,15 @@
    ========================================================================= */
 /* Leaves a 60px gap at the bottom for the fixed button row */
 .friends-scroll-area { position: absolute; top: 0; bottom: 60px; left: 0; right: 0; overflow-y: auto; }
-.friend-group-header { padding: 8px 15px; color: #b0b0b0; font-size: 13px; font-family: 'Eurostile-Med', sans-serif; border-top: 1px solid #222; border-bottom: 1px solid #000; background: rgba(255,255,255,0.02); cursor: pointer; }
+.friend-group-header { padding: 8px 15px; color: #d0d0d0; font-size: 13px; font-family: 'Eurostile-Med', Arial, sans-serif; border-top: 1px solid #222; border-bottom: 1px solid #000; background: rgba(255,255,255,0.02); cursor: pointer; }
 .friend-group-header.active-header { background: rgba(255,255,255,0.1); }
 .friend-item { padding: 9px 14px; border-bottom: 1px solid #141414; cursor: pointer; }
 .friend-item:hover { background-color: rgba(255,255,255,0.03); }
 .friend-avatar { float: left; width: 34px; height: 34px; border: 1px solid #4a912a; background: #000; cursor: pointer; }
 .friend-avatar img { width: 100%; height: 100%; display: block; }
-.friend-info { float: left; margin-left: 10px; line-height: 1.2; padding-top: 1px; }
-.friend-name { color: #d8d8d8; font-size: 12px; display: block; margin-bottom: 1px; font-family: 'Eurostile-Med', sans-serif; }
-.friend-status { color: #b9b9b9; font-size: 11px; display: block; font-family: 'Eurostile-Med', sans-serif; line-height: 1.25; }
+.friend-info { float: left; margin-left: 10px; line-height: 1.25; padding-top: 1px; }
+.friend-name { color: #ececec; font-size: 13px; display: block; margin-bottom: 2px; font-family: 'Eurostile-Med', Arial, sans-serif; }
+.friend-status { color: #c8c8c8; font-size: 12px; display: block; font-family: 'Eurostile-Med', Arial, sans-serif; line-height: 1.3; }
 
 /* Docks strictly to the bottom of the Friends Tab */
 .friends-bottom-action { position: absolute; bottom: 0; left: 0; right: 0; height: 60px; text-align: center; padding-top: 13px; border-top: 1px solid #222; background: rgba(0,0,0,0.9); -webkit-box-sizing: border-box; box-sizing: border-box; }

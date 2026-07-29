@@ -1,132 +1,171 @@
-<div class="cnc-lobby-root">
+<div class="cnc-lobby-root" ng-click="closeMenu()">
     <div class="cnc-lobby-backdrop" aria-hidden="true"></div>
     <div class="cnc-lobby-scrim" aria-hidden="true"></div>
 
-    <header class="cnc-lobby-hud">
-        <div class="cnc-lobby-hud__left">
-            <span class="cnc-lobby-badge">Skirmish</span>
-            <span class="cnc-lobby-hud__sep"></span>
-            <span class="cnc-lobby-hud__mode">{{ matchLabel }}</span>
-        </div>
-    </header>
-
     <div class="cnc-lobby-stage">
-        <div class="cnc-lobby-battle">
-            <section class="cnc-lobby-theater">
-                <div class="cnc-lobby-theater__visual" aria-hidden="true"></div>
-                <div class="cnc-lobby-theater__body">
-                    <div class="cnc-lobby-theater__copy">
-                        <p class="cnc-lobby-theater__eyebrow">Selected theater</p>
-                        <h1 class="cnc-lobby-theater__title">{{ mapLabel }}</h1>
-                        <p class="cnc-lobby-theater__path">{{ mapPath }}</p>
-                    </div>
-                    <nav class="cnc-lobby-pills">
-                        <button type="button" ng-class="{ active: subTab === 'GENERALS' }" ng-click="setSubTab('GENERALS')">Generals</button>
-                        <button type="button" ng-class="{ active: subTab === 'MODIFY GENERALS' }" ng-click="setSubTab('MODIFY GENERALS')">Modify</button>
-                        <button type="button" ng-class="{ active: subTab === 'HISTORY' }" ng-click="setSubTab('HISTORY')">History</button>
-                    </nav>
+        <div class="cnc-lobby-main">
+            <header class="cnc-lobby-top">
+                <div class="cnc-lobby-top__title">
+                    <span class="cnc-lobby-top__badge">Skirmish</span>
+                    <span class="cnc-lobby-top__mode">{{ matchLabel }}</span>
                 </div>
-            </section>
+                <label class="cnc-lobby-map" ng-click="$event.stopPropagation()">
+                    <span class="cnc-lobby-map__label">Map</span>
+                    <div class="cnc-lobby-combo cnc-lobby-combo--map" ng-class="{ active: openMenu === 'map' }">
+                        <button type="button" class="cnc-lobby-combo__face"
+                                ng-click="toggleMenu('map', $event)">{{ mapLabel }}</button>
+                        <ul class="cnc-lobby-combo__menu" ng-show="openMenu === 'map'">
+                            <li ng-repeat="m in maps"
+                                ng-class="{ active: mapPath === m.path }"
+                                ng-click="setMap(m)">{{ m.label }}</li>
+                        </ul>
+                    </div>
+                </label>
+            </header>
 
             <section class="cnc-lobby-arena">
-                <div class="cnc-lobby-team-panel">
-                    <div class="cnc-lobby-team-panel__head">
-                        <span class="cnc-lobby-team-label">Team 1</span>
-                        <span class="cnc-lobby-team-count">{{ team1Occupied() }} / 1</span>
+                <div class="cnc-lobby-team">
+                    <div class="cnc-lobby-team__head">
+                        <span>Team 1</span>
+                        <span class="cnc-lobby-team__count">{{ team1Occupied() }}/1</span>
                     </div>
-                    <div class="cnc-lobby-slot-card"
+                    <div class="cnc-lobby-slot"
                          ng-class="{ occupied: team1[0].occupied, selected: selectedSlot === team1[0] && selectedTeam === 1, 'faction-usa': team1[0].faction === 'USA', 'faction-apa': team1[0].faction === 'APA', 'faction-eu': team1[0].faction === 'EU', 'faction-gla': team1[0].faction === 'GLA' }"
                          ng-click="selectSlot(team1[0], 1, $event)">
-                        <div class="cnc-lobby-slot-card__empty" ng-if="!team1[0].occupied">
-                            <span class="cnc-lobby-slot-card__empty-icon">+</span>
-                            <span>Waiting for commander</span>
+                        <div class="cnc-lobby-slot__empty" ng-if="!team1[0].occupied">
+                            <span>Open</span>
                         </div>
-                        <div class="cnc-lobby-slot-card__filled" ng-if="team1[0].occupied">
-                            <div class="cnc-lobby-slot-card__avatar" ng-class="factionCssClass(team1[0].faction)"></div>
-                            <div class="cnc-lobby-slot-card__info">
-                                <span class="cnc-lobby-slot-card__role" ng-if="team1[0].isLocal">Host</span>
-                                <span class="cnc-lobby-slot-card__codename">{{ team1[0].codename }}</span>
-                                <span class="cnc-lobby-slot-card__name">{{ team1[0].displayName }}</span>
-                                <p class="cnc-lobby-startpoint" ng-if="team1[0].startpoint">
-                                    Start location <span class="cnc-lobby-startpoint__val">{{ startpointLabel(team1[0].startpoint) }}</span>
-                                </p>
-                                <div class="cnc-lobby-ready" ng-if="!team1[0].isAi">
-                                    <div class="cnc-lobby-ready__track"><span ng-style="{ width: team1[0].ready ? '100%' : '35%' }"></span></div>
-                                    <span class="cnc-lobby-ready__label">{{ team1[0].ready ? 'Ready' : 'Staging' }}</span>
+                        <div class="cnc-lobby-slot__body" ng-if="team1[0].occupied">
+                            <div class="cnc-lobby-slot__avatar" ng-class="factionCssClass(team1[0].faction)"></div>
+                            <div class="cnc-lobby-slot__meta">
+                                <div class="cnc-lobby-slot__name-row">
+                                    <span class="cnc-lobby-slot__codename">{{ team1[0].codename }}</span>
+                                    <span class="cnc-lobby-slot__tag" ng-if="team1[0].isLocal">Host</span>
+                                    <span class="cnc-lobby-slot__tag cnc-lobby-slot__tag--ready" ng-if="team1[0].ready">Ready</span>
                                 </div>
-                                <label class="cnc-lobby-field" ng-if="team1[0].isLocal" ng-click="$event.stopPropagation()">
-                                    <span class="cnc-lobby-field__label">Faction</span>
-                                    <select class="cnc-lobby-select"
-                                            ng-class="factionSwatchClass(team1[0].faction, true)"
-                                            ng-model="team1[0].faction"
-                                            ng-options="f.code as f.code for f in factions"
-                                            ng-change="setFaction(team1[0].faction)">
-                                    </select>
-                                </label>
+                                <div class="cnc-lobby-slot__player">{{ team1[0].displayName }}</div>
+                                <div class="cnc-lobby-slot__fields" ng-if="team1[0].isLocal" ng-click="$event.stopPropagation()">
+                                    <label class="cnc-lobby-field">
+                                        <span class="cnc-lobby-field__label">Faction</span>
+                                        <div class="cnc-lobby-combo" ng-class="factionSwatchClass(team1[0].faction, openMenu === 'host-faction')">
+                                            <button type="button" class="cnc-lobby-combo__face"
+                                                    ng-click="toggleMenu('host-faction', $event)">{{ team1[0].faction }}</button>
+                                            <ul class="cnc-lobby-combo__menu" ng-show="openMenu === 'host-faction'">
+                                                <li ng-repeat="f in factions"
+                                                    ng-class="{ active: team1[0].faction === f.code }"
+                                                    ng-click="setFaction(f.code); closeMenu()">{{ f.code }}</li>
+                                            </ul>
+                                        </div>
+                                    </label>
+                                    <label class="cnc-lobby-field">
+                                        <span class="cnc-lobby-field__label">General</span>
+                                        <div class="cnc-lobby-combo" ng-class="factionSwatchClass(team1[0].faction, openMenu === 'host-general')">
+                                            <button type="button" class="cnc-lobby-combo__face"
+                                                    ng-click="toggleMenu('host-general', $event)">{{ generalLabel(team1[0].faction, team1[0].general) }}</button>
+                                            <ul class="cnc-lobby-combo__menu" ng-show="openMenu === 'host-general'">
+                                                <li ng-repeat="g in generalOptions(team1[0])"
+                                                    ng-class="{ active: team1[0].general == g.id }"
+                                                    ng-click="setGeneral(g.id); closeMenu()">{{ g.label }}</li>
+                                            </ul>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="cnc-lobby-divider">
-                    <span class="cnc-lobby-divider__line"></span>
-                    <span class="cnc-lobby-divider__text">VS</span>
-                    <span class="cnc-lobby-divider__line"></span>
-                </div>
+                <div class="cnc-lobby-vs"><span>VS</span></div>
 
-                <div class="cnc-lobby-team-panel">
-                    <div class="cnc-lobby-team-panel__head">
-                        <span class="cnc-lobby-team-label">Team 2</span>
-                        <span class="cnc-lobby-team-count">{{ team2Occupied() }} / 1</span>
+                <div class="cnc-lobby-team">
+                    <div class="cnc-lobby-team__head">
+                        <span>Team 2</span>
+                        <span class="cnc-lobby-team__count">{{ team2Occupied() }}/1</span>
                     </div>
-                    <div class="cnc-lobby-slot-card"
+                    <div class="cnc-lobby-slot"
                          ng-class="{ occupied: team2[0].occupied, selected: selectedSlot === team2[0] && selectedTeam === 2, 'faction-usa': team2[0].faction === 'USA', 'faction-apa': team2[0].faction === 'APA', 'faction-eu': team2[0].faction === 'EU', 'faction-gla': team2[0].faction === 'GLA' }"
                          ng-click="selectSlot(team2[0], 2, $event)">
-                        <div class="cnc-lobby-slot-card__empty" ng-if="!team2[0].occupied">
-                            <span class="cnc-lobby-slot-card__empty-icon">+</span>
-                            <span class="cnc-lobby-slot-card__empty-label">Open slot</span>
-                            <div class="cnc-lobby-slot-card__actions">
-                                <button type="button" class="btn btn-options cnc-lobby-slot-action" ng-click="addAi($event)">Add AI</button>
-                                <button type="button" class="btn btn-options cnc-lobby-slot-action" ng-click="inviteFriend($event)">Invite</button>
+                        <div class="cnc-lobby-slot__empty" ng-if="!team2[0].occupied">
+                            <span>Open</span>
+                            <div class="cnc-lobby-slot__actions">
+                                <button type="button" class="cnc-lobby-btn" ng-click="addAi($event)">Add AI</button>
+                                <button type="button" class="cnc-lobby-btn" ng-click="inviteFriend($event)">Invite</button>
                             </div>
                         </div>
-                        <div class="cnc-lobby-slot-card__filled" ng-if="team2[0].occupied">
-                            <div class="cnc-lobby-slot-card__avatar" ng-class="factionCssClass(team2[0].faction)"></div>
-                            <div class="cnc-lobby-slot-card__info">
-                                <span class="cnc-lobby-slot-card__role" ng-if="team2[0].isAi">AI opponent</span>
-                                <span class="cnc-lobby-slot-card__codename">{{ team2[0].codename }}</span>
-                                <span class="cnc-lobby-slot-card__name" ng-if="!team2[0].isAi">{{ team2[0].displayName }}</span>
-                                <p class="cnc-lobby-startpoint" ng-if="team2[0].isAi && team2[0].startpoint">
-                                    Start location <span class="cnc-lobby-startpoint__val">{{ startpointLabel(team2[0].startpoint) }}</span>
-                                </p>
-                                <label class="cnc-lobby-field" ng-if="team2[0].isAi" ng-click="$event.stopPropagation()">
-                                    <span class="cnc-lobby-field__label">Difficulty</span>
-                                    <select class="cnc-lobby-select cnc-lobby-select--diff"
-                                            ng-model="team2[0].difficulty"
-                                            ng-options="d for d in aiDifficulties"
-                                            ng-change="setAiDifficulty(team2[0], team2[0].difficulty)">
-                                    </select>
-                                </label>
+                        <div class="cnc-lobby-slot__body" ng-if="team2[0].occupied">
+                            <div class="cnc-lobby-slot__avatar" ng-class="factionCssClass(team2[0].faction)"></div>
+                            <div class="cnc-lobby-slot__meta">
+                                <div class="cnc-lobby-slot__name-row">
+                                    <span class="cnc-lobby-slot__codename">{{ team2[0].codename }}</span>
+                                    <span class="cnc-lobby-slot__tag" ng-if="team2[0].isAi">AI</span>
+                                    <button type="button" class="cnc-lobby-slot__kick" ng-if="team2[0].isAi"
+                                            ng-click="removeAiSlot(team2[0], $event)">×</button>
+                                </div>
+                                <div class="cnc-lobby-slot__player" ng-if="!team2[0].isAi">{{ team2[0].displayName }}</div>
+                                <div class="cnc-lobby-slot__fields" ng-if="team2[0].isAi" ng-click="$event.stopPropagation()">
+                                    <label class="cnc-lobby-field">
+                                        <span class="cnc-lobby-field__label">Faction</span>
+                                        <div class="cnc-lobby-combo" ng-class="factionSwatchClass(team2[0].faction, openMenu === 'ai-faction')">
+                                            <button type="button" class="cnc-lobby-combo__face"
+                                                    ng-click="toggleMenu('ai-faction', $event)">{{ team2[0].faction }}</button>
+                                            <ul class="cnc-lobby-combo__menu" ng-show="openMenu === 'ai-faction'">
+                                                <li ng-repeat="f in factions"
+                                                    ng-class="{ active: team2[0].faction === f.code }"
+                                                    ng-click="setAiFaction(team2[0], f.code, $event); closeMenu()">{{ f.code }}</li>
+                                            </ul>
+                                        </div>
+                                    </label>
+                                    <label class="cnc-lobby-field">
+                                        <span class="cnc-lobby-field__label">General</span>
+                                        <div class="cnc-lobby-combo" ng-class="factionSwatchClass(team2[0].faction, openMenu === 'ai-general')">
+                                            <button type="button" class="cnc-lobby-combo__face"
+                                                    ng-click="toggleMenu('ai-general', $event)">{{ generalLabel(team2[0].faction, team2[0].general) }}</button>
+                                            <ul class="cnc-lobby-combo__menu" ng-show="openMenu === 'ai-general'">
+                                                <li ng-repeat="g in generalOptions(team2[0])"
+                                                    ng-class="{ active: team2[0].general == g.id }"
+                                                    ng-click="setAiGeneral(team2[0], g.id, $event); closeMenu()">{{ g.label }}</li>
+                                            </ul>
+                                        </div>
+                                    </label>
+                                    <label class="cnc-lobby-field">
+                                        <span class="cnc-lobby-field__label">Difficulty</span>
+                                        <div class="cnc-lobby-combo">
+                                            <button type="button" class="cnc-lobby-combo__face"
+                                                    ng-click="toggleMenu('ai-diff', $event)">{{ team2[0].difficulty }}</button>
+                                            <ul class="cnc-lobby-combo__menu" ng-show="openMenu === 'ai-diff'">
+                                                <li ng-repeat="d in aiDifficulties"
+                                                    ng-class="{ active: team2[0].difficulty === d }"
+                                                    ng-click="setAiDifficulty(team2[0], d); closeMenu()">{{ d }}</li>
+                                            </ul>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
-                            <button type="button" class="cnc-lobby-slot-card__kick" ng-if="team2[0].isAi" ng-click="removeAiSlot(team2[0], $event)" title="Remove">×</button>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <p class="cnc-lobby-toast" ng-if="statusLine">{{ statusLine }}</p>
-
-            <footer class="cnc-lobby-bar">
-                <button type="button" class="btn btn-options cnc-lobby-exit" ng-click="exitLobby()">Exit</button>
-                <div class="cnc-lobby-bar__center">
-                    <button type="button" class="btn btn-massive-green cnc-lobby-start" ng-click="startBattle()" ng-disabled="!hostReady">Start battle</button>
-                </div>
-                <span class="cnc-lobby-bar__online">{{ onlineCount | number }} online</span>
+            <footer class="cnc-lobby-actions">
+                <button type="button" class="cnc-lobby-btn" ng-click="exitLobby()">Exit</button>
+                <button type="button" class="cnc-lobby-btn cnc-lobby-btn--go" ng-click="startBattle()" ng-disabled="!hostReady">Start Battle</button>
+                <span class="cnc-lobby-actions__online">{{ onlineCount | number }} online</span>
             </footer>
         </div>
 
         <aside class="cnc-lobby-rail">
             <div class="cc-sidebar cnc-lobby-sidebar" ng-include="'view/sidebar.html'"></div>
         </aside>
+    </div>
+
+    <div class="cnc-lobby-debug">
+        <div class="cnc-lobby-debug__bar">
+            <span class="cnc-lobby-debug__label">Debug</span>
+            <button type="button" class="cnc-lobby-debug__clear" ng-click="clearDebug($event)">Clear</button>
+            <div class="cnc-lobby-debug__log" id="cnc-lobby-debug-log">
+                <div class="cnc-lobby-debug__line" ng-repeat="line in debugLines">{{ line }}</div>
+                <div class="cnc-lobby-debug__line cnc-lobby-debug__line--empty" ng-if="!debugLines.length">Ready.</div>
+            </div>
+        </div>
     </div>
 </div>

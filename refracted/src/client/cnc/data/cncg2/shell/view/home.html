@@ -25,7 +25,7 @@
                 <button class="btn btn-faction-texture" title="Select Faction"></button>
             </div>
             <div class="play-btn-stack">
-                <button class="btn btn-massive-play">PLAY</button>
+                <button class="btn btn-massive-play" ng-click="openLobby()">PLAY</button>
                 <div class="play-dropdown-wrapper">
                     <button class="btn btn-play-dropdown" data-toggle="dropdown">
                         <span class="mode-text">{{ selectedMode }}</span>
@@ -120,6 +120,14 @@
                 <div ng-include="'view/profile/profile-achievements.html'" ng-show="activeSubTab == 'ACHIEVEMENTS'"></div>
                 <div ng-include="'view/profile/profile-leaderboards.html'" ng-show="activeSubTab == 'LEADERBOARDS'"></div>
             </div>
+
+            <div class="cc-placeholder-tab" ng-show="activeTab == 'CUSTOMIZE' || activeTab == 'WATCH'">
+                <div class="cc-info-tip cc-info-tip--page">
+                    <strong>Coming soon</strong>
+                    <span ng-show="activeTab == 'CUSTOMIZE'">Customize generals and loadouts is not ready yet. This section will light up in a later build.</span>
+                    <span ng-show="activeTab == 'WATCH'">Watch is not ready yet. This section will light up in a later build.</span>
+                </div>
+            </div>
             
             <div class="cc-learn-tab" ng-show="activeTab == 'LEARN'">
                 <div ng-include="'view/learn/learn-main.html'"></div>
@@ -142,7 +150,7 @@
     <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-click="openDebug()"></button>
     <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-click="toggleAlertPopup()"></button>
     <div class="alert-popup-box" ng-show="alertPopupOpen">
-        <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator.</p>
+        <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator. All functions, features, visuals and gameplay elements are subject to change.</p>
     </div>
     
 </div>

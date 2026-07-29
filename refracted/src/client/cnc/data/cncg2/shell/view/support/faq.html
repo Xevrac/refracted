@@ -1,6 +1,9 @@
 <div class="support-block" ng-repeat="item in faqList">
     <h3>{{ item.question }}</h3>
-    <p ng-if="item.text">{{ item.text }}</p>
+    <p>
+        <span ng-if="item.text" ng-bind-html-unsafe="item.text"></span>
+        <a ng-if="item.actionText" ng-click="setTab(item.actionTab); setSubTab(item.actionSubTab)" style="color: #f6b500; cursor: pointer; text-decoration: none; font-weight: bold; margin-left: 5px;">{{ item.actionText }}</a>
+    </p>
     
     <ul ng-if="item.bullets">
         <li ng-repeat="bullet in item.bullets">{{ bullet }}</li>

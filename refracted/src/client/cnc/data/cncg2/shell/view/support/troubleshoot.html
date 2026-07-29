@@ -1,6 +1,12 @@
 <div class="support-block" ng-repeat="item in troubleshootList">
     <h3>{{ item.question }}</h3>
-    <p ng-if="item.text">{{ item.text }}</p>
+    <p>
+        <span ng-if="item.text" ng-bind-html-unsafe="item.text"></span>
+        <a ng-if="item.actionText" href="#" onclick="return false;" style="color: #f6b500; cursor: pointer; text-decoration: none; font-weight: bold; margin-left: 5px;">{{ item.actionText }}</a>
+    </p>
+    <div ng-if="item.image" style="margin-top: 15px; margin-bottom: 5px; text-align: center;">
+        <img ng-src="{{ item.image }}" alt="Support Media" style="max-width: 100%;">
+    </div>
     
     <ul ng-if="item.bullets">
         <li ng-repeat="bullet in item.bullets">{{ bullet }}</li>

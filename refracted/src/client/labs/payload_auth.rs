@@ -1,4 +1,4 @@
-use crate::blaze::tdf::TdfEncoder;
+﻿use crate::blaze::tdf::TdfEncoder;
 use crate::common::error::BlazeResult;
 use crate::jwt::{parse_jwt_token, SessionInfo};
 use bytes::Bytes;
@@ -40,7 +40,7 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
     });
 
     if jwt_token.is_empty() {
-        crate::console_println!("\x1b[38;2;255;150;150m[gRPC]\x1b[0m WARN: No JWT in TOKN — using LSX session state");
+        crate::console_println!("\x1b[38;2;255;150;150m[gRPC]\x1b[0m WARN: No JWT in TOKN -- using LSX session state");
     } else {
         crate::console_println!(
             "\x1b[38;2;0;200;255m[gRPC]\x1b[0m Extracted JWT from TOKN (length: {})",
@@ -64,7 +64,7 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
     };
 
     crate::console_println!(
-        "\x1b[38;2;0;200;255m[gRPC]\x1b[0m Blaze login — user_id={}, persona_id={}, display_name={}",
+        "\x1b[38;2;0;200;255m[gRPC]\x1b[0m Blaze login -- user_id={}, persona_id={}, display_name={}",
         session_info.user_id,
         session_info.persona_id,
         session_info.display_name

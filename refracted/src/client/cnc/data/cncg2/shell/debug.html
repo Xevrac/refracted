@@ -2,7 +2,7 @@
 <html ng-app="CncDebugPage">
 <head>
     <meta charset="utf-8">
-    <title>Command &amp; Conquer — debug probe</title>
+    <title>Command &amp; Conquer — debug</title>
     <link rel="stylesheet" href="css/debug-probe.css">
     <script src="lib/angular/angular.min.js"></script>
     <script src="lib/shell.js"></script>
@@ -11,13 +11,114 @@
     <script>
         angular.module("CncDebugPage", []);
     </script>
+    <style>
+        .cnc-debug-hub {
+            text-align: center;
+            padding: 40px 20px;
+            min-height: 80vh;
+        }
+        .cnc-debug-hub h1 {
+            font-size: 28px;
+            font-weight: 300;
+            color: #ddd;
+            margin: 0 0 8px 0;
+            letter-spacing: 1px;
+        }
+        .cnc-debug-hub p {
+            color: #999;
+            font-size: 13px;
+            margin: 0 0 24px 0;
+        }
+        .cnc-debug-grid {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .cnc-debug-grid:after {
+            content: '';
+            display: block;
+            clear: both;
+        }
+        .cnc-debug-card {
+            display: block;
+            float: left;
+            width: 48%;
+            margin: 0 1% 8px 1%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 32px 24px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+        }
+        .cnc-debug-card:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: #007acc;
+        }
+        .cnc-debug-card-icon {
+            display: block;
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        .cnc-debug-card-label {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            color: #eee;
+            margin-bottom: 6px;
+        }
+        .cnc-debug-card-desc {
+            display: block;
+            font-size: 11px;
+            color: #888;
+            line-height: 1.4;
+        }
+        .cnc-debug-card-special {
+            width: 98%;
+            margin: 0 1% 8px 1%;
+            background: rgba(0,122,204,0.06);
+            border-color: rgba(0,122,204,0.2);
+        }
+        .cnc-debug-card-special:hover {
+            border-color: #007acc;
+            background: rgba(0,122,204,0.12);
+        }
+    </style>
 </head>
 <body class="cnc-debug-standalone">
     <div class="cnc-debug-chrome">
         <a class="cnc-debug-back" href="index.html">← Shell</a>
+        <span style="color:#666;font-size:12px;margin-left:12px;">Debug</span>
     </div>
     <div class="cnc-debug-page">
-        <div class="cnc-debug-container" ng-include="'view/debug-probe.html'"></div>
+        <div class="cnc-debug-hub">
+            <h1>Debug</h1>
+            <p>The test lobby below will become the real main-game lobby.</p>
+            <div class="cnc-debug-grid">
+                <a class="cnc-debug-card cnc-debug-card-special" href="lobby.html">
+                    <span class="cnc-debug-card-icon">🎮</span>
+                    <span class="cnc-debug-card-label">Lobby</span>
+                    <span class="cnc-debug-card-desc">Test lobby — will be the real main-game lobby when integration is complete</span>
+                </a>
+                <a class="cnc-debug-card" href="page-frostbite.html">
+                    <span class="cnc-debug-card-icon">⚙️</span>
+                    <span class="cnc-debug-card-label">Frostbite</span>
+                    <span class="cnc-debug-card-desc">Engine-level debugging: RtsClient, Render, Camera, gameclient commands</span>
+                </a>
+                <a class="cnc-debug-card" href="page-salamander.html">
+                    <span class="cnc-debug-card-icon">🦎</span>
+                    <span class="cnc-debug-card-label">Salamander</span>
+                    <span class="cnc-debug-card-desc">Salamander attributes, GameReady sequences, local MP testing</span>
+                </a>
+                <a class="cnc-debug-card" href="page-js-shell.html">
+                    <span class="cnc-debug-card-icon">🌐</span>
+                    <span class="cnc-debug-card-label">JS &amp; Shell</span>
+                    <span class="cnc-debug-card-desc">Blaze shell, URL routes, authenticate, WebSocket, settings</span>
+                </a>
+            </div>
+        </div>
     </div>
 </body>
 </html>

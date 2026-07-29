@@ -1,5 +1,6 @@
 //! Toolkit UI: protocol listeners, message builders, and optional research proxies.
 
+use crate::core::frostex::{render_frostex, FrostExState};
 use crate::core::inspector::blaze_inspector::*;
 use crate::core::inspector::grpc_inspector::*;
 use crate::core::inspector::http_inspector::*;
@@ -39,6 +40,7 @@ pub struct InspectorUiState {
     pub toolkit_make_tab: ToolkitMakeTab,
     pub blaze_make: toolkit_make_blaze::BlazeMakeWorkbenchState,
     pub grpc_make: toolkit_make_grpc::GrpcMakeWorkbenchState,
+    pub frostex: FrostExState,
 }
 
 impl InspectorUiState {
@@ -75,6 +77,7 @@ impl InspectorUiState {
             toolkit_make_tab: ToolkitMakeTab::Blaze,
             blaze_make: toolkit_make_blaze::BlazeMakeWorkbenchState::default(),
             grpc_make: toolkit_make_grpc::GrpcMakeWorkbenchState::default(),
+            frostex: FrostExState::default(),
         }
     }
 }
@@ -97,6 +100,14 @@ pub fn render_toolkit(
 
     ui.horizontal(|ui| {
         if ui
+            .selectable_label(state.toolkit_workbench == ToolkitWorkbenchMode::FrostEx, "FrostEx")
+            .on_hover_text("Frostbite Explorer — browse /Data (toc, sb, ebx, cas)")
+            .clicked()
+        {
+            state.toolkit_workbench = ToolkitWorkbenchMode::FrostEx;
+        }
+        ui.label(egui::RichText::new("|").weak());
+        if ui
             .selectable_label(state.toolkit_workbench == ToolkitWorkbenchMode::Listen, "Listen")
             .clicked()
         {
@@ -112,6 +123,9 @@ pub fn render_toolkit(
     ui.separator();
 
     match state.toolkit_workbench {
+        ToolkitWorkbenchMode::FrostEx => {
+            render_frostex(ui, &mut state.frostex);
+        }
         ToolkitWorkbenchMode::Listen => {
             ui.horizontal(|ui| {
                 ui.label("Protocol:");
