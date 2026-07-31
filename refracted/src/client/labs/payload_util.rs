@@ -165,6 +165,37 @@ pub fn handle_util_set_client_state(_payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(Vec::new()))
 }
 
+/// `Util.setClientMetrics` (0x0009::0x0016) — DirtySDK UPnP/NAT report. Empty success ACK.
+pub fn handle_util_set_client_metrics(payload: &[u8]) -> BlazeResult<Bytes> {
+    let ubfl = TdfEncoder::find_int_field(payload, "UBFL").unwrap_or(0);
+    let udev = TdfEncoder::find_string_field(payload, "UDEV").unwrap_or_default();
+    let uflg = TdfEncoder::find_int_field(payload, "UFLG").unwrap_or(0);
+    let ulrc = TdfEncoder::find_int_field(payload, "ULRC").unwrap_or(0);
+    let unat = TdfEncoder::find_int_field(payload, "UNAT").unwrap_or(0);
+    let usta = TdfEncoder::find_int_field(payload, "USTA").unwrap_or(0);
+    let uwan = TdfEncoder::find_int_field(payload, "UWAN")
+        .map(|v| v as u32)
+        .or_else(|| TdfEncoder::find_long_field(payload, "UWAN").map(|v| v as u32))
+        .unwrap_or(0);
+
+    crate::debug_println!(
+        "[Util] setClientMetrics UBFL={} USTA={} UNAT={} UFLG={} ULRC={} UWAN={:#010x} UDEV={}",
+        ubfl, usta, unat, uflg, ulrc, uwan, udev
+    );
+
+    if uwan != 0 {
+        crate::session::merge_network_snapshot(crate::session::NetworkSnapshot {
+            exip_ip: Some(uwan),
+            inip_ip: None,
+            exip_port: None,
+            inip_port: None,
+            bps: None,
+        });
+    }
+
+    Ok(Bytes::from(Vec::new()))
+}
+
 pub fn handle_util_get_telemetry_server(_payload: &[u8]) -> BlazeResult<Bytes> {
     let mut response = Vec::new();
     response.extend_from_slice(&TdfEncoder::encode_string("ADRS", "https://river.data.ea.com"));

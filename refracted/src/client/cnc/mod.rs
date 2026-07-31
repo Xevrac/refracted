@@ -122,7 +122,9 @@ fn cnc_encode_preauth_qoss_field() -> Vec<u8> {
         ("aws-syd", qos_host),
     ];
     for (alias, host) in regions {
-        let region = cnc_qos_ping_site_struct(host, qos_port, "");
+        // SNA should match the LTPS alias; empty SNA leaves QosManager unable to
+        // select a bandwidth site after latency probes complete.
+        let region = cnc_qos_ping_site_struct(host, qos_port, alias);
         ltps_map.insert(alias.to_string(), region);
     }
     qoss_struct.extend_from_slice(&TdfEncoder::encode_string_struct_map_ordered("LTPS", &ltps_map));
@@ -949,7 +951,7 @@ pub fn handle_packet_fields(
         (0x0009, 0x08) => Some(handle_util_post_auth(payload)),
         (0x0009, 0x05) => Some(handle_util_get_telemetry_server(payload)),
         (0x0009, 0x09) => Some(handle_util_set_client_state(payload)),
-        (0x0009, 0x16) => Some(Err(crate::common::error::BlazeError::AuthorizationRequired)),
+        (0x0009, 0x16) => Some(handle_util_set_client_metrics(payload)),
         (0x0009, 0x1c) => Some(handle_util_set_client_state_28(payload)),
         (0x0001, 0x0a) => Some(handle_auth_login(payload)),
         (0x0001, 0x28) => Some(handle_auth_login(payload)),
@@ -1280,6 +1282,37 @@ pub fn handle_util_ping(payload: &[u8]) -> BlazeResult<Bytes> {
 
 pub fn handle_util_set_client_state(payload: &[u8]) -> BlazeResult<Bytes> {
     let _ = payload;
+    Ok(Bytes::from(Vec::new()))
+}
+
+/// `Util.setClientMetrics` (0x0009::0x0016) — DirtySDK UPnP/NAT report. Empty success ACK.
+pub fn handle_util_set_client_metrics(payload: &[u8]) -> BlazeResult<Bytes> {
+    let ubfl = TdfEncoder::find_int_field(payload, "UBFL").unwrap_or(0);
+    let udev = TdfEncoder::find_string_field(payload, "UDEV").unwrap_or_default();
+    let uflg = TdfEncoder::find_int_field(payload, "UFLG").unwrap_or(0);
+    let ulrc = TdfEncoder::find_int_field(payload, "ULRC").unwrap_or(0);
+    let unat = TdfEncoder::find_int_field(payload, "UNAT").unwrap_or(0);
+    let usta = TdfEncoder::find_int_field(payload, "USTA").unwrap_or(0);
+    let uwan = TdfEncoder::find_int_field(payload, "UWAN")
+        .map(|v| v as u32)
+        .or_else(|| TdfEncoder::find_long_field(payload, "UWAN").map(|v| v as u32))
+        .unwrap_or(0);
+
+    crate::debug_println!(
+        "\x1b[38;2;100;200;255m[CNC]\x1b[0m setClientMetrics UBFL={} USTA={} UNAT={} UFLG={} ULRC={} UWAN={:#010x} UDEV={}",
+        ubfl, usta, unat, uflg, ulrc, uwan, udev
+    );
+
+    if uwan != 0 {
+        crate::session::merge_network_snapshot(crate::session::NetworkSnapshot {
+            exip_ip: Some(uwan),
+            inip_ip: None,
+            exip_port: None,
+            inip_port: None,
+            bps: None,
+        });
+    }
+
     Ok(Bytes::from(Vec::new()))
 }
 
@@ -1898,11 +1931,13 @@ pub fn handle_game_manager_add_queued_player_to_game(payload: &[u8]) -> BlazeRes
 }
 
 pub fn handle_game_manager_register_dynamic_dedicated_server_creator(payload: &[u8]) -> BlazeResult<Bytes> {
-    let _ = payload;
+    // Prism remaps Util::preAuth (cmd 7) → GameManager 0x96 on the wire while keeping
+    // PreAuthRequest/PreAuthResponse TDFs. An empty reply clears QOSS and leaves
+    // QosManager with "PingSiteInfoByAliasMap was empty" / "No ping site configured".
     crate::debug_println!(
-        "\x1b[38;2;100;200;255m[CNC]\x1b[0m registerDynamicDedicatedServerCreator (pool creator registered)"
+        "\x1b[38;2;100;200;255m[CNC]\x1b[0m registerDynamicDedicatedServerCreator (pool creator registered; PreAuthResponse)"
     );
-    Ok(Bytes::from(Vec::new()))
+    handle_util_preauth(payload)
 }
 
 pub fn handle_game_manager_unregister_dynamic_dedicated_server_creator(payload: &[u8]) -> BlazeResult<Bytes> {
