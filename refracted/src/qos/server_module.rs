@@ -7,17 +7,28 @@ use bytes::Bytes;
 use h2::server::{self, SendResponse};
 use http::{Request, Response};
 use rustls::ServerConfig;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt, ReadBuf};
-use tokio::net::TcpStream;
+use tokio::net::{TcpStream, UdpSocket};
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error, info, warn};
 
 const QOS_TAG: &str = "\x1b[38;2;80;200;120m[QoS]\x1b[0m";
+
+/// DirtySDK latency probes use requestid < 2; bandwidth uses >= 2 (see QosApi recv path).
+const QOS_REQUEST_ID_LATENCY: u32 = 1;
+const QOS_REQUEST_ID_BANDWIDTH: u32 = 2;
+const QOS_DEFAULT_NUM_PROBES: u32 = 10;
+const QOS_DEFAULT_PROBE_SIZE: u32 = 120;
+/// Minimum UDP reply size so the client takes the response path (not the 20-byte peer-echo path).
+const QOS_UDP_REPLY_MIN: usize = 30;
+
+static QOS_REQ_SECRET: AtomicU32 = AtomicU32::new(1);
 
 /// Port roles matching Blaze preAuth QOSS (`BWPS` / `LTPS` PSA+PSP).
 #[derive(Clone, Copy)]
@@ -35,12 +46,31 @@ fn looks_like_http_request(first_line: &str) -> bool {
     matches!(
         parts[0],
         "GET" | "POST" | "HEAD" | "OPTIONS" | "PUT" | "DELETE" | "PATCH"
-    ) && parts[1].starts_with('/')
+    ) && (parts[1].starts_with('/') || parts[1].starts_with("http://") || parts[1].starts_with("https://"))
+}
+
+fn looks_like_http_prefix(buf: &[u8]) -> bool {
+    const METHODS: &[&[u8]] = &[
+        b"GET ", b"POST ", b"HEAD ", b"OPTIONS ", b"PUT ", b"DELETE ", b"PATCH ",
+    ];
+    METHODS.iter().any(|m| buf.len() >= m.len() && buf.starts_with(m))
+        || METHODS.iter().any(|m| m.starts_with(buf) && !buf.is_empty())
+}
+
+fn http_request_complete(buf: &[u8]) -> bool {
+    // Headers terminated by blank line.
+    memchr_crlf_crlf(buf).is_some()
+}
+
+fn memchr_crlf_crlf(buf: &[u8]) -> Option<usize> {
+    buf.windows(4).position(|w| w == b"\r\n\r\n").map(|i| i + 4)
 }
 
 fn classify_http_probe(path_lc: &str) -> &'static str {
     if path_lc == "/qos/firewall" {
         "firewall"
+    } else if path_lc == "/qos/firetype" {
+        "firetype"
     } else if path_lc == "/qos/qos" {
         "bandwidth"
     } else if path_lc.contains("clientcall") {
@@ -50,6 +80,128 @@ fn classify_http_probe(path_lc: &str) -> &'static str {
     } else {
         "http"
     }
+}
+
+fn next_req_secret() -> u32 {
+    let v = QOS_REQ_SECRET.fetch_add(1, Ordering::Relaxed);
+    if v == 0 {
+        QOS_REQ_SECRET.fetch_add(1, Ordering::Relaxed)
+    } else {
+        v
+    }
+}
+
+fn query_param<'a>(query: &'a str, key: &str) -> Option<&'a str> {
+    for pair in query.split('&') {
+        let mut it = pair.splitn(2, '=');
+        let k = it.next()?;
+        if k == key {
+            return Some(it.next().unwrap_or(""));
+        }
+    }
+    None
+}
+
+fn parse_u32_param(query: &str, key: &str) -> Option<u32> {
+    query_param(query, key)?.parse().ok()
+}
+
+/// Host-order style IPv4 integer DirtySDK XML parsers expect (`10.0.0.230` → `0x0A0000E6`).
+fn ipv4_to_qos_u32(ip: Ipv4Addr) -> u32 {
+    u32::from_be_bytes(ip.octets())
+}
+
+fn guess_lan_ipv4() -> Option<Ipv4Addr> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("8.8.8.8:80").ok()?;
+    match sock.local_addr().ok()?.ip() {
+        IpAddr::V4(v4) if !v4.is_unspecified() && !v4.is_loopback() => Some(v4),
+        _ => None,
+    }
+}
+
+/// IP/port to reflect in firewall XML and UDP probe replies (EXIP).
+fn reflect_endpoint(peer: SocketAddr) -> (Ipv4Addr, u16) {
+    let port = peer.port();
+    let ip = match peer.ip() {
+        IpAddr::V4(v4) if !v4.is_loopback() && !v4.is_unspecified() => v4,
+        _ => {
+            if let Some(bits) = crate::session::peek_qos_observed_exip_ip() {
+                Ipv4Addr::from(bits)
+            } else if let Some(lan) = guess_lan_ipv4() {
+                lan
+            } else {
+                Ipv4Addr::new(127, 0, 0, 1)
+            }
+        }
+    };
+    (ip, port)
+}
+
+fn build_qos_xml(qos_port: u16, qtyp: u32) -> String {
+    let secret = next_req_secret();
+    let request_id = if qtyp >= 2 {
+        QOS_REQUEST_ID_BANDWIDTH
+    } else {
+        QOS_REQUEST_ID_LATENCY
+    };
+    format!(
+        "<qos>\
+         <numprobes>{QOS_DEFAULT_NUM_PROBES}</numprobes>\
+         <probesize>{QOS_DEFAULT_PROBE_SIZE}</probesize>\
+         <qosport>{qos_port}</qosport>\
+         <requestid>{request_id}</requestid>\
+         <reqsecret>{secret}</reqsecret>\
+         </qos>"
+    )
+}
+
+fn build_firewall_xml(peer: SocketAddr, secret_hint: Option<(u32, u32)>) -> String {
+    let (ip, port) = reflect_endpoint(peer);
+    let ip_u = ipv4_to_qos_u32(ip);
+    let (request_id, secret) = secret_hint.unwrap_or_else(|| (1, next_req_secret()));
+    format!(
+        "<firewall>\
+         <numinterfaces>1</numinterfaces>\
+         <ips><ips>{ip_u}</ips></ips>\
+         <ports><ports>{port}</ports></ports>\
+         <requestid>{request_id}</requestid>\
+         <reqsecret>{secret}</reqsecret>\
+         </firewall>"
+    )
+}
+
+fn build_firetype_xml() -> String {
+    // Values other than 5 trigger the firetype status callback in DirtySDK.
+    "<firetype><firetype>1</firetype></firetype>".to_string()
+}
+
+fn http_ok_xml(body: &str) -> Vec<u8> {
+    format!(
+        "HTTP/1.1 200 OK\r\n\
+         Content-Type: text/xml\r\n\
+         Content-Length: {}\r\n\
+         Connection: keep-alive\r\n\
+         \r\n\
+         {}",
+        body.len(),
+        body
+    )
+    .into_bytes()
+}
+
+/// DirtySDK UDP probe reply: echo client header (incl. send tick at +16), stamp EXIP/port at +20/+24.
+fn build_udp_probe_reply(request: &[u8], peer: SocketAddr) -> Vec<u8> {
+    let (ip, port) = reflect_endpoint(peer);
+    let mut resp = vec![0u8; request.len().max(QOS_UDP_REPLY_MIN)];
+    let copy_len = request.len().min(resp.len());
+    resp[..copy_len].copy_from_slice(&request[..copy_len]);
+    resp[20..24].copy_from_slice(&ipv4_to_qos_u32(ip).to_be_bytes());
+    resp[24..26].copy_from_slice(&port.to_be_bytes());
+    if resp.len() >= 30 {
+        resp[26..30].copy_from_slice(&0u32.to_be_bytes());
+    }
+    resp
 }
 
 fn proto_write_varint(out: &mut Vec<u8>, mut v: u64) {
@@ -211,14 +363,21 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for PrependStream<S> {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
+        let mut filled_from_head = false;
         if self.head_off < self.head.len() {
             let rem = &self.head[self.head_off..];
             let n = rem.len().min(buf.remaining());
             buf.put_slice(&rem[..n]);
             self.head_off += n;
-            return Poll::Ready(Ok(()));
+            filled_from_head = n > 0;
+            if self.head_off < self.head.len() || buf.remaining() == 0 {
+                return Poll::Ready(Ok(()));
+            }
         }
-        Pin::new(&mut self.inner).poll_read(cx, buf)
+        match Pin::new(&mut self.inner).poll_read(cx, buf) {
+            Poll::Pending if filled_from_head => Poll::Ready(Ok(())),
+            other => other,
+        }
     }
 }
 
@@ -347,11 +506,17 @@ impl QosProtocolServer {
             },
         ];
         for bind in binds {
-            let host = self.host.clone();
+            let host_tcp = self.host.clone();
+            let host_udp = self.host.clone();
             let tls = self.ssl_context.clone();
             tokio::spawn(async move {
-                if let Err(e) = Self::run_qos_server(host, bind, tls).await {
+                if let Err(e) = Self::run_qos_server(host_tcp, bind, tls).await {
                     error!("QoS {} :{} error: {}", bind.role, bind.port, e);
+                }
+            });
+            tokio::spawn(async move {
+                if let Err(e) = Self::run_qos_udp(host_udp, bind).await {
+                    error!("QoS {} UDP :{} error: {}", bind.role, bind.port, e);
                 }
             });
         }
@@ -401,6 +566,57 @@ impl QosProtocolServer {
         }
     }
 
+    /// DirtySDK latency/bandwidth probes are SOCK_DGRAM to `.qosport` from `/qos/qos` XML.
+    async fn run_qos_udp(host: String, bind: QosBind) -> BlazeResult<()> {
+        let addr = format!("{}:{}", host, bind.port);
+        let socket = UdpSocket::bind(&addr)
+            .await
+            .map_err(|e| crate::common::error::BlazeError::Io(e))?;
+        if !crate::common::startup_progress::is_startup_in_progress() {
+            info!(
+                "{QOS_TAG} listening {} UDP ({}) on {}",
+                bind.role,
+                target_hint(bind.role),
+                addr
+            );
+        }
+
+        let mut buf = vec![0u8; 2048];
+        loop {
+            let (n, peer) = match socket.recv_from(&mut buf).await {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!("{QOS_TAG} {} UDP :{} recv error: {e}", bind.role, bind.port);
+                    continue;
+                }
+            };
+            if n < 4 {
+                continue;
+            }
+            // Client discards probes whose first dword ntohl == 0.
+            let id = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]);
+            if id == 0 {
+                continue;
+            }
+
+            crate::session::record_qos_observed_client_endpoint(peer);
+            let reply = build_udp_probe_reply(&buf[..n], peer);
+            if let Err(e) = socket.send_to(&reply, peer).await {
+                debug!(
+                    "{QOS_TAG} {peer} → {}:{} UDP reply failed: {e}",
+                    bind.role, bind.port
+                );
+                continue;
+            }
+            debug!(
+                "{QOS_TAG} {peer} → {}:{} UDP probe {n}B→{}B",
+                bind.role,
+                bind.port,
+                reply.len()
+            );
+        }
+    }
+
     async fn handle_qos_connection(
         mut stream: TcpStream,
         peer: SocketAddr,
@@ -409,15 +625,25 @@ impl QosProtocolServer {
     ) -> BlazeResult<()> {
         crate::session::record_qos_observed_client_endpoint(peer);
 
-        let mut first = [0u8; 1];
-        if let Err(e) = stream.read_exact(&mut first).await {
-            debug!("{QOS_TAG} {peer} → {}:{} no data: {e}", bind.role, bind.port);
-            return Ok(());
-        }
+        // Read a real first chunk (not 1 byte). A 1-byte peek splits "GET…" into
+        // "G" + "ET…" and both fail HTTP classification → [ignored] probes.
+        let mut first_buf = vec![0u8; 4096];
+        let n = match stream.read(&mut first_buf).await {
+            Ok(0) => {
+                debug!("{QOS_TAG} {peer} → {}:{} no data", bind.role, bind.port);
+                return Ok(());
+            }
+            Ok(n) => n,
+            Err(e) => {
+                debug!("{QOS_TAG} {peer} → {}:{} no data: {e}", bind.role, bind.port);
+                return Ok(());
+            }
+        };
+        first_buf.truncate(n);
+        let first = first_buf[0];
+        let prep = PrependStream::new(stream, first_buf);
 
-        let prep = PrependStream::new(stream, vec![first[0]]);
-
-        if first[0] == 0x16 {
+        if first == 0x16 {
             if let Some(cfg) = ssl_context {
                 debug!("{QOS_TAG} {peer} → {}:{} TLS handshake", bind.role, bind.port);
                 let acceptor = TlsAcceptor::from(cfg);
@@ -443,13 +669,13 @@ impl QosProtocolServer {
             }
         }
 
-        if first[0] == 0x50 {
+        if first == 0x50 {
             return Self::handle_qos_h2_connection(prep, peer, bind, "h2").await;
         }
 
         debug!(
-            "{QOS_TAG} {peer} → {}:{} cleartext first=0x{:02x}",
-            bind.role, bind.port, first[0]
+            "{QOS_TAG} {peer} → {}:{} cleartext first=0x{:02x} ({}B)",
+            bind.role, bind.port, first, n
         );
         Self::handle_qos_io_loop(prep, peer, bind).await
     }
@@ -588,19 +814,15 @@ impl QosProtocolServer {
             return Ok(kind);
         }
 
-        let (body, tag): (&str, &'static str) = if path_lc == "/qos/qos" {
-            ("OK", "200 /qos/qos")
-        } else if path_lc == "/qos/firewall" {
-            ("1", "200 /qos/firewall")
-        } else {
-            ("OK", "200 default")
-        };
+        let path_and_query = request.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or(path.as_str());
+        let query = path_and_query.split_once('?').map(|(_, q)| q).unwrap_or("");
+        let body = Self::qos_http_body(&path_lc, query, peer, bind.port);
         let kind = classify_http_probe(&path_lc);
 
         let body_bytes = Bytes::copy_from_slice(body.as_bytes());
         let response = Response::builder()
             .status(200)
-            .header("content-type", "text/plain")
+            .header("content-type", "text/xml")
             .header("content-length", body.len().to_string())
             .body(())
             .map_err(|e| crate::common::error::BlazeError::Http2(e.to_string()))?;
@@ -609,8 +831,10 @@ impl QosProtocolServer {
         send.send_data(body_bytes, true)?;
 
         debug!(
-            "{QOS_TAG} {peer} → {}:{} h2 {tag} {method} {path}",
-            bind.role, bind.port
+            "{QOS_TAG} {peer} → {}:{} h2 200 {method} {path} ({}B {kind})",
+            bind.role,
+            bind.port,
+            body.len()
         );
         Ok(kind)
     }
@@ -632,6 +856,7 @@ impl QosProtocolServer {
         bind: QosBind,
     ) -> BlazeResult<()> {
         let mut session = QosSessionLog::begin(peer, bind, "cleartext");
+        let mut pending = Vec::new();
         loop {
             let mut read_buf = vec![0u8; 4096];
             match tokio::time::timeout(
@@ -642,14 +867,24 @@ impl QosProtocolServer {
             {
                 Ok(Ok(0)) => break,
                 Ok(Ok(n)) => {
-                    let chunk = &read_buf[..n];
+                    pending.extend_from_slice(&read_buf[..n]);
 
-                    let (response, kind, detail) = if let Ok(s) = std::str::from_utf8(chunk) {
+                    if looks_like_http_prefix(&pending) && !http_request_complete(&pending) {
+                        if pending.len() < 16_384 {
+                            continue;
+                        }
+                    }
+
+                    let chunk = std::mem::take(&mut pending);
+                    let (response, kind, detail) = if let Ok(s) = std::str::from_utf8(&chunk) {
                         let first_line = s.lines().next().unwrap_or("").trim_end();
                         if looks_like_http_request(first_line) {
-                            let (bytes, path_tag) = Self::handle_http_qos_request(s);
+                            let (bytes, path_tag) =
+                                Self::handle_http_qos_request(s, peer, bind.port);
                             let kind = if path_tag.contains("firewall") {
                                 "firewall"
+                            } else if path_tag.contains("firetype") {
+                                "firetype"
                             } else if path_tag.contains("/qos/qos") {
                                 "bandwidth"
                             } else {
@@ -658,8 +893,8 @@ impl QosProtocolServer {
                             (bytes, kind, format!("{first_line} → {path_tag}"))
                         } else {
                             (
-                                Self::generate_binary_qos_response(chunk),
-                                "latency",
+                                Vec::new(),
+                                "ignored",
                                 format!("non-http {first_line:?}"),
                             )
                         }
@@ -670,21 +905,29 @@ impl QosProtocolServer {
                                 bind.role, bind.port
                             );
                         }
-                        (
-                            Self::generate_binary_qos_response(chunk),
-                            "latency",
-                            "binary probe".to_string(),
-                        )
+                        // Latency/bandwidth probes are UDP; TCP binary stubs are ignored.
+                        (Vec::new(), "ignored", "binary-on-tcp".to_string())
                     };
 
                     session.note_probe(kind);
-                    debug!(
-                        "{QOS_TAG} {peer} → {}:{} #{} {kind} {n}B→{}B | {detail}",
-                        bind.role,
-                        bind.port,
-                        session.probes,
-                        response.len()
-                    );
+                    if kind == "ignored" {
+                        debug!(
+                            "{QOS_TAG} {peer} → {}:{} #{} {kind} {}B | {detail}",
+                            bind.role,
+                            bind.port,
+                            session.probes,
+                            chunk.len()
+                        );
+                    } else {
+                        info!(
+                            "{QOS_TAG} {peer} → {}:{} #{} {kind} {}B→{}B | {detail}",
+                            bind.role,
+                            bind.port,
+                            session.probes,
+                            chunk.len(),
+                            response.len()
+                        );
+                    }
 
                     if !response.is_empty() {
                         if let Err(e) = stream.write_all(&response).await {
@@ -725,7 +968,30 @@ impl QosProtocolServer {
         Ok(())
     }
 
-    fn handle_http_qos_request(request: &str) -> (Vec<u8>, &'static str) {
+    fn qos_http_body(path_lc: &str, query: &str, peer: SocketAddr, bind_port: u16) -> String {
+        if path_lc == "/qos/qos" {
+            let qtyp = parse_u32_param(query, "qtyp").unwrap_or(1);
+            let qos_port = parse_u32_param(query, "prpt")
+                .map(|p| p as u16)
+                .filter(|p| *p != 0)
+                .unwrap_or(bind_port);
+            build_qos_xml(qos_port, qtyp)
+        } else if path_lc == "/qos/firewall" {
+            let rqid = parse_u32_param(query, "rqid").unwrap_or(1);
+            let rqsc = parse_u32_param(query, "rqsc").unwrap_or_else(next_req_secret);
+            build_firewall_xml(peer, Some((rqid.max(1), rqsc.max(1))))
+        } else if path_lc == "/qos/firetype" {
+            build_firetype_xml()
+        } else {
+            build_qos_xml(bind_port, 1)
+        }
+    }
+
+    fn handle_http_qos_request(
+        request: &str,
+        peer: SocketAddr,
+        bind_port: u16,
+    ) -> (Vec<u8>, &'static str) {
         let lines: Vec<&str> = request.lines().collect();
         if lines.is_empty() {
             return (Self::http_error_response(400, "Bad Request"), "400 empty");
@@ -741,34 +1007,22 @@ impl QosProtocolServer {
         }
 
         let path_query = parts[1];
-        let path = if let Some(pos) = path_query.find('?') {
-            &path_query[..pos]
-        } else {
-            path_query
+        let (path, query) = match path_query.split_once('?') {
+            Some((p, q)) => (p, q),
+            None => (path_query, ""),
         };
         let path_lc = path.to_lowercase();
-
-        let (body, tag): (&str, &'static str) = if path_lc == "/qos/qos" {
-            ("OK", "200 /qos/qos")
+        let body = Self::qos_http_body(&path_lc, query, peer, bind_port);
+        let tag: &'static str = if path_lc == "/qos/qos" {
+            "200 /qos/qos"
         } else if path_lc == "/qos/firewall" {
-            ("1", "200 /qos/firewall")
+            "200 /qos/firewall"
+        } else if path_lc == "/qos/firetype" {
+            "200 /qos/firetype"
         } else {
-            ("OK", "200 default")
+            "200 default"
         };
-
-        let bytes = format!(
-            "HTTP/1.1 200 OK\r\n\
-             Content-Type: text/plain\r\n\
-             Content-Length: {}\r\n\
-             Connection: keep-alive\r\n\
-             \r\n\
-             {}",
-            body.len(),
-            body
-        )
-        .into_bytes();
-
-        (bytes, tag)
+        (http_ok_xml(&body), tag)
     }
 
     fn http_error_response(status_code: u16, reason: &str) -> Vec<u8> {
@@ -785,14 +1039,5 @@ impl QosProtocolServer {
             reason
         )
         .into_bytes()
-    }
-
-    fn generate_binary_qos_response(_request: &[u8]) -> Vec<u8> {
-        let mut response = Vec::new();
-        response.push(0x00);
-        response.extend_from_slice(&(10u32.to_le_bytes()));
-        response.push(0x00);
-        response.extend_from_slice(&(1000000u32.to_le_bytes()));
-        response
     }
 }

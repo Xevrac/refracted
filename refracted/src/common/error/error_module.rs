@@ -183,17 +183,7 @@ impl BlazeError {
             // Authorization Errors
             BlazeError::AuthorizationRequired => ERR_AUTHORIZATION_REQUIRED,
 
-                    // Generic errors - try to map to component-specific errors
-                    BlazeError::UnknownCommand(component, command) => {
-                        // Special case: Component 9 Command 22 (setClientMetrics) should return authorization error
-                        if *component == 9 && *command == 22 {
-                            ERR_AUTHORIZATION_REQUIRED
-                        } else {
-                            // For other unknown commands, return 0 (no error) or component-specific error
-                            // Most components use error code 0 for "no error" but we'll use a generic error
-                            0 // Will be handled as UNKNOWN_ERROR
-                        }
-                    }
+            BlazeError::UnknownCommand(_, _) => 0,
             // Generic errors (use 0 for unknown)
             _ => 0,
         }

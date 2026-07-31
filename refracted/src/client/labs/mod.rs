@@ -32,7 +32,7 @@ pub fn handle_packet_fields(
         (0x0009, 0x08) => Some(payload_util::handle_util_post_auth(payload)),
         (0x0009, 0x05) => Some(payload_util::handle_util_get_telemetry_server(payload)),
         (0x0009, 0x09) => Some(payload_util::handle_util_set_client_state(payload)),
-        (0x0009, 0x16) => Some(Err(crate::common::error::BlazeError::AuthorizationRequired)),
+        (0x0009, 0x16) => Some(payload_util::handle_util_set_client_metrics(payload)),
         (0x0009, 0x1c) => Some(payload_util::handle_util_set_client_state_28(payload)),
         (0x0001, 0x0a) => Some(payload_auth::handle_auth_login(payload)),
         (0x0001, 0x28) => Some(payload_auth::handle_auth_login(payload)),
