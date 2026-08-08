@@ -33,11 +33,11 @@ You can run Refracted from a server and have your project redirect traffic to th
 ### Development
 
 Refracted comes with its own toolset for research and development.
-* **Listen** — Captures Blaze, gRPC, HTTP, and LSX traffic for analysis (see Technical details).
+* **Listen** — Captures Blaze, gRPC, HTTP, and LSX traffic for analysis.
 * **Make** — Work-in-progress Blaze and gRPC payload workbenches, with Blaze **live injection** for controlled tests.
 * **Dump** — Save captures to files for offline review (paired with **Listen**).
 
-Refracted **does not replace a full commercial backend and is not intended for this**; it implements enough *service layers* (see the technical section) to support the scenarios the project targets in the interest of our mission.
+Refracted **does not replace a full commercial backend and is not intended for this**; it implements enough service layers to support the scenarios the project targets in the interest of our mission.
 
 ## Games supported today
 
@@ -68,47 +68,7 @@ You are responsible for using Refracted **only in ways that comply with applicab
 
 ---
 
-## Technical details
-
-### Layers and protocols
-
-Refracted is implemented in **Rust** and is organized around **service layers** that mimic parts of EA-style online stacks:
-
-- **Blaze** — Binary Blaze/frostbite-style game services (including redirector and related listeners as configured per title).
-   - Refracted has support for FireFrame and Fire2Frame built-in.
-- **Web (HTTP/HTTPS)** — Web API surfaces; **gRPC-over-HTTP/2** used by some titles is handled here in addition to standard HTTP/HTTPS content backend as a webserver.
-- **LSX** — LSX-style listener where enabled for a profile.
-- **QoS** — Quality-of-service style endpoints.
-- **RTM** — RTM listener where enabled.
-
-Per-title settings also record **wire protocol variants** (e.g. **Fire2Frame** vs **FireFrame**) and build identifiers used to select behavior. **TLS** may be used for redirector traffic depending on the profile.
-
-### Source code layout
-
-The repository is organized so **shared protocols** stay separate from **title-specific** behavior:
-
-- **`refracted/`** — The Rust crate: library (`lib.rs`) plus the desktop binary (`main.rs`).
-- **Service layers** — Folders such as `blaze/`, `http/`, `web/`, `lsx/`, `qos/`, and `rtm/` each own listeners and handlers for that part of the stack. Shared helpers live in `grpc/`, `jwt/`, `session/`, and `crypto/`.
-- **`client/`** — Per-game modules (for example `labs/` for Battlefield Labs, `cnc/` for Command & Conquer). Dispatch goes through `client/mod.rs` based on the **current game id** from configuration.
-- **`common/`** — Cross-cutting pieces: game registry and ports (`game/`), paths, settings, errors, and user profiles.
-- **Configuration** — Default title list is seeded from `refracted/resources/default_games.json` into a user-editable `games.json` under the app data path.
-
-The UI in `main.rs` is intentionally thin: it starts the async server and hosts **egui** windows; protocol logic remains in the library so it can be reused or tested without the GUI.
-
-### Toolkit (research and development)
-
-The in-app **toolkit** is aimed at **documentation and research**: observing what clients send, comparing to live services, and experimenting with messages.
-
-- **Two inspection modes**
-  - **Emulator** — Records traffic that flows through Refracted while you use the local emulator.
-  - **Research (proxy)** — Forwards the client toward **upstream** services while copying traffic into the same capture buffers, so you can compare emulator behavior with live responses. Optional **proxy listeners** (HTTP/HTTPS, gRPC, Blaze, LSX) are configurable in the UI when this mode is active.
-- **Listen** — Tabbed viewers for **Blaze**, **gRPC**, **HTTP**, and **LSX** captures (timestamps, directions, payloads). You can export or save captures for offline review.
-- **Make** — Workbenches to **compose or inspect** Blaze and gRPC payloads (including presets and structured views where implemented). Blaze supports **live injection** to connected clients for controlled experiments.
-- **Labs capture replay** — For supported gateway URL patterns, optional **replay** of stored HTTP bodies can load from local `data/` files (see the `client/labs/capture` module for rules).
-
-The HTTPS proxy path is **partially implemented**; full TLS interception would require local certificate setup beyond what Refracted ships today.
-
-### Building from source
+## Building from source
 
 > Note this software is currently built and intended for use in Windows at this point in time.
 
@@ -118,14 +78,7 @@ The HTTPS proxy path is **partially implemented**; full TLS interception would r
 ```bash
 cd refracted
 cargo build --release
-```
-
-Run the desktop app:
-
-```bash
 cargo run --release
 ```
 
-Debug builds work with `cargo build` / `cargo run` without `--release` but are slower and note these take up a considerable amount of space.
-
-On Windows, the project is typically built and run from a developer shell (PowerShell or cmd) with `cargo` on your `PATH`.
+Debug builds work with `cargo build` / `cargo run` without `--release` but are slower and take up more disk space.
