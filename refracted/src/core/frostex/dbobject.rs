@@ -214,10 +214,6 @@ impl<'a> Reader<'a> {
         self.cur.position()
     }
 
-    fn remaining(&self) -> usize {
-        self.cur.get_ref().len().saturating_sub(self.pos() as usize)
-    }
-
     fn read_exact(&mut self, n: usize) -> Result<Vec<u8>, String> {
         let mut buf = vec![0u8; n];
         self.cur
@@ -233,11 +229,6 @@ impl<'a> Reader<'a> {
     fn read_i32(&mut self) -> Result<i32, String> {
         let b = self.read_exact(4)?;
         Ok(i32::from_le_bytes(b.try_into().unwrap()))
-    }
-
-    fn read_u32(&mut self) -> Result<u32, String> {
-        let b = self.read_exact(4)?;
-        Ok(u32::from_le_bytes(b.try_into().unwrap()))
     }
 
     fn read_i64(&mut self) -> Result<i64, String> {

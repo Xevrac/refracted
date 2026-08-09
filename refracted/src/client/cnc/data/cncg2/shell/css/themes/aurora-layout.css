@@ -161,6 +161,18 @@ body.cc-theme--aurora .cc-shell-root--aurora {
     border-color: #3aa0ff;
     color: #fff;
 }
+.au-btn[disabled],
+.au-btn[disabled]:hover,
+.au-btn[disabled]:focus {
+    cursor: not-allowed;
+    opacity: 0.4;
+    color: #6a7684;
+    border-color: #2a3238;
+    background: #121618;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+    pointer-events: none;
+}
 
 .au-main {
     position: absolute;
@@ -634,22 +646,30 @@ body.cc-theme--aurora .overview-stats-small {
     padding: 4px 12px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    z-index: 50;
+    z-index: 120;
+    pointer-events: auto;
 }
 .au-foot .btn-cnc-credits {
     left: 8px;
     top: 1px;
+    z-index: 121;
+    pointer-events: auto;
 }
 .au-foot button.btn-alert-marker.btn-alert-marker--debug {
     right: 12px;
     top: 8px;
+    z-index: 121;
+    pointer-events: auto;
 }
 .au-foot button.btn-alert-marker.btn-alert-marker--wop {
     right: 36px;
     top: 8px;
+    z-index: 121;
+    pointer-events: auto;
 }
 .au-foot .alert-popup-box {
     right: 36px;
     bottom: 40px;
     left: auto;
+    z-index: 122;
 }

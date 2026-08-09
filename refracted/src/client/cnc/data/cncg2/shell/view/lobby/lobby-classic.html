@@ -1,22 +1,82 @@
 <div class="cc-lobby" ng-controller="ShellLobbyController" ng-click="closeMenus()">
-    <div class="cc-lobby__body" ng-show="lobbyView == 'setup'">
+    <!-- Matchmake: find a match (browse optional) -->
+    <div class="cc-lobby__body cc-lobby__body--matchmake" ng-show="lobbyView == 'matchmake'">
+        <div class="cc-lobby__stage cc-lobby__stage--matchmake">
+            <div class="cc-lobby__matchmake-head">
+                <h2>FIND A MATCH</h2>
+                <p>Pick a map, then find a match. Join a populated lobby when available, or an idle server.</p>
+            </div>
+            <div class="cc-lobby__map-cards" ng-click="$event.stopPropagation()">
+                <button type="button"
+                        class="cc-lobby__map-card"
+                        ng-repeat="m in maps"
+                        ng-class="{on: m.id == selectedMap.id}"
+                        ng-style="mapCardStyle(m)"
+                        ng-click="selectMap(m)">
+                    <span class="cc-lobby__map-card-veil" aria-hidden="true"></span>
+                    <span class="cc-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
+                    <span class="cc-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
+                    <span class="cc-lobby__map-card-name">{{ m.label }}</span>
+                    <span class="cc-lobby__map-card-check" ng-show="m.id == selectedMap.id" aria-hidden="true"></span>
+                </button>
+            </div>
+            <div class="cc-lobby__matchmake-meta">
+                <span>Selected: {{ selectedMap.label }} ({{ mapModeLabel(selectedMap) }})</span>
+                <span>Players: {{ matchmakeMinPlayers }}–{{ matchmakeMaxPlayers }}</span>
+            </div>
+            <div class="cc-lobby__actions">
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="exitLobby()">EXIT</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="findServers()"
+                        ng-disabled="_findingMatch">BROWSE</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="findMatch()"
+                        ng-disabled="_findingMatch">{{ _findingMatch ? 'FINDING…' : 'FIND MATCH' }}</button>
+            </div>
+        </div>
+        <aside class="cc-lobby__rail">
+            <div class="cc-sidebar cc-lobby__sidebar" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
+        </aside>
+        <div class="cc-lobby__modal" ng-show="_findingMatch || _matchError">
+            <div class="cc-lobby__modal-box">
+                <div ng-show="_findingMatch && !_matchError">Finding match..</div>
+                <div ng-show="_matchError">{{ _matchError }}</div>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-show="_matchError"
+                        ng-click="dismissMatchError()">OK</button>
+            </div>
+        </div>
+        <div class="cc-lobby__modal" ng-show="_serverLostError">
+            <div class="cc-lobby__modal-box">
+                <div>{{ _serverLostError }}</div>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
+                        ng-click="dismissServerLostError()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GameRoom lobby (retail-style setup) -->
+    <div class="cc-lobby__body" ng-show="lobbyView == 'gameroom'">
         <div class="cc-lobby__stage">
+            <div class="cc-lobby__gameroom-head" ng-if="serverName">
+                <span class="cc-lobby__gameroom-server">{{ serverName }}</span>
+            </div>
             <div class="cc-lobby__map" ng-click="$event.stopPropagation()">
                 <div class="cc-lobby__map-art" aria-hidden="true"></div>
                 <div class="cc-lobby__map-veil" aria-hidden="true"></div>
                 <div class="cc-lobby__map-ui">
                     <div class="cc-lobby__tabs">
-                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'MAPS'}" ng-click="setLobbySubTab('MAPS')">SELECT MAP</button>
-                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'GENERALS'}" ng-click="setLobbySubTab('GENERALS')">GENERALS</button>
-                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'MODIFY'}" ng-click="setLobbySubTab('MODIFY')">MODIFY GENERALS</button>
-                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'HISTORY'}" ng-click="setLobbySubTab('HISTORY')">HISTORY</button>
+                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'MAPS'}" ng-click="setLobbySubTab('MAPS')"
+                                ng-disabled="!isLobbyHost()">SELECT MAP</button>
+                        <button type="button" class="cc-lobby__tab"
+                                ng-class="{active: lobbyOptionsOpen}"
+                                ng-click="openLobbyOptions($event)"
+                                ng-disabled="!isLobbyHost()">OPTIONS</button>
                     </div>
                     <div class="cc-lobby__map-chooser">
-                        <button type="button" class="cc-lobby__map-pill" ng-hide="lobbySubTab == 'MAPS'" ng-click="setLobbySubTab('MAPS')">
+                        <button type="button" class="cc-lobby__map-pill" ng-hide="lobbySubTab == 'MAPS'" ng-click="setLobbySubTab('MAPS')"
+                                ng-disabled="!isLobbyHost()">
                             {{ selectedMap.label }}
                             <span class="cc-lobby__chevron"></span>
                         </button>
-                        <ul class="cc-lobby__map-list" ng-show="lobbySubTab == 'MAPS'">
+                        <ul class="cc-lobby__map-list" ng-show="lobbySubTab == 'MAPS' && isLobbyHost()">
                             <li ng-repeat="m in maps" ng-class="{active: m.id == selectedMap.id}">
                                 <a href="" ng-click="selectMap(m)">{{ m.label }}</a>
                             </li>
@@ -33,13 +93,20 @@
                          ng-show="slot.occupied"
                          ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
                          ng-click="$event.stopPropagation()">
-                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal"
+                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal && isLobbyHost()"
                                 ng-click="clearSlot(1, $index, $event)" title="Remove">&times;</button>
                         <div class="cc-lobby__card-left">
-                            <div class="cc-lobby__portrait"><img ng-src="{{ generalAvatar(slot) }}" alt=""></div>
+                            <div class="cc-lobby__portrait"
+                                 ng-class="{'cc-lobby__portrait--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
+                                <img ng-src="{{ generalAvatar(slot) }}" alt="">
+                            </div>
                             <div class="cc-lobby__color-ribbon" ng-if="!slot.invitePending"
                                  ng-style="{'background-color': slot.color}"></div>
                             <div class="cc-lobby__tools" ng-if="!slot.invitePending">
+                                <div class="cc-lobby__ready" ng-class="{on: slot.ready}"
+                                     ng-if="!slot.isAi" title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
+                                    <span class="cc-lobby__ready-tick" ng-show="slot.ready"></span>
+                                </div>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(1, $index, $event)"
                                         ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
@@ -75,7 +142,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(1)">
+                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(1) && canAddPlayers()">
                         <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-click="inviteFriend(1)">INVITE FRIEND</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-click="addAi(1)">ADD AI</button>
                     </div>
@@ -90,13 +157,20 @@
                          ng-show="slot.occupied"
                          ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(2, $index)}"
                          ng-click="$event.stopPropagation()">
-                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal"
+                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal && isLobbyHost()"
                                 ng-click="clearSlot(2, $index, $event)" title="Remove">&times;</button>
                         <div class="cc-lobby__card-left">
-                            <div class="cc-lobby__portrait"><img ng-src="{{ generalAvatar(slot) }}" alt=""></div>
+                            <div class="cc-lobby__portrait"
+                                 ng-class="{'cc-lobby__portrait--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
+                                <img ng-src="{{ generalAvatar(slot) }}" alt="">
+                            </div>
                             <div class="cc-lobby__color-ribbon" ng-if="!slot.invitePending"
                                  ng-style="{'background-color': slot.color}"></div>
                             <div class="cc-lobby__tools" ng-if="!slot.invitePending">
+                                <div class="cc-lobby__ready" ng-class="{on: slot.ready}"
+                                     ng-if="!slot.isAi" title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
+                                    <span class="cc-lobby__ready-tick" ng-show="slot.ready"></span>
+                                </div>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(2, $index, $event)"
                                         ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
@@ -132,7 +206,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(2)">
+                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(2) && canAddPlayers()">
                         <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-click="inviteFriend(2)">INVITE FRIEND</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-click="addAi(2)">ADD AI</button>
                     </div>
@@ -140,19 +214,117 @@
             </div>
 
             <div class="cc-lobby__actions">
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="exitLobby()">EXIT</button>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startBattle()">START BATTLE</button>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="openServerBrowser()">SERVER BROWSER</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="leaveGameRoom()">LEAVE</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="toggleReady()"
+                        ng-show="!isLobbyHost()"
+                        ng-class="{ready: localReady}">{{ localReady ? 'UNREADY' : 'READY' }}</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startBattle()"
+                        ng-show="isLobbyHost()" ng-disabled="!canStartBattle()">START BATTLE</button>
             </div>
         </div>
 
         <aside class="cc-lobby__rail">
             <div class="cc-sidebar cc-lobby__sidebar" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
         </aside>
+
+        <div class="cc-lobby__modal cc-lobby__modal--options" ng-show="lobbyOptionsOpen"
+             ng-click="closeLobbyOptions()">
+            <div class="cc-lobby__modal-box cc-lobby__options" ng-click="$event.stopPropagation()">
+                <h3 class="cc-lobby__options-title">LOBBY OPTIONS</h3>
+
+                <div class="cc-lobby__options-section">
+                    <div class="cc-lobby__options-section-label">MATCH PASSWORD</div>
+                    <div class="cc-lobby__options-password">
+                        <div class="cc-lobby__options-password-row">
+                            <input type="password" class="cc-lobby__password-input"
+                                   ng-model="roomPasswordDraft"
+                                   placeholder="Optional — blank = open">
+                            <button type="button" class="cc-lobby__btn cc-lobby__password-apply"
+                                    ng-click="applyRoomPassword()">{{ passwordProtected ? 'UPDATE' : 'SET' }}</button>
+                            <button type="button" class="cc-lobby__btn cc-lobby__password-clear"
+                                    ng-show="passwordProtected"
+                                    ng-click="clearRoomPassword()"
+                                    title="Clear password">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path fill="none" stroke="#e8e0c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                          d="M4 7h16M9 7V5h6v2M6 7l1 14h10l1-14M10 11v6M14 11v6"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <span class="cc-lobby__password-flag" ng-show="passwordProtected">PROTECTED</span>
+                    </div>
+                </div>
+
+                <div class="cc-lobby__options-grid">
+                    <div class="cc-lobby__options-row">
+                        <div class="cc-lobby__options-cell cc-lobby__options-row--stub">
+                            <div class="cc-lobby__options-cell-head">
+                                <span>STARTING CASH</span>
+                                <em class="cc-lobby__options-stub">SOON</em>
+                            </div>
+                            <select ng-model="lobbyOptions.startingCash">
+                                <option value="low">LOW</option>
+                                <option value="standard">STANDARD</option>
+                                <option value="high">HIGH</option>
+                            </select>
+                        </div>
+                        <div class="cc-lobby__options-cell cc-lobby__options-row--stub">
+                            <div class="cc-lobby__options-cell-head">
+                                <span>STARTING UNITS</span>
+                                <em class="cc-lobby__options-stub">SOON</em>
+                            </div>
+                            <select ng-model="lobbyOptions.startingUnits">
+                                <option value="none">NONE</option>
+                                <option value="standard">STANDARD</option>
+                                <option value="many">MANY</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="cc-lobby__options-row">
+                        <div class="cc-lobby__options-cell cc-lobby__options-row--stub">
+                            <div class="cc-lobby__options-cell-head">
+                                <span>MODES</span>
+                                <em class="cc-lobby__options-stub">SOON</em>
+                            </div>
+                            <label class="cc-lobby__options-check">
+                                <input type="checkbox" ng-model="lobbyOptions.noBaseBuilding">
+                                NO BASE BUILDING
+                            </label>
+                            <label class="cc-lobby__options-check">
+                                <input type="checkbox" ng-model="lobbyOptions.noFogOfWar">
+                                NO FOG OF WAR
+                            </label>
+                        </div>
+                        <div class="cc-lobby__options-cell cc-lobby__options-cell--note">
+                            <div class="cc-lobby__options-note">
+                                Match rules are placeholders until the dedicated path wires them through.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cc-lobby__options-actions">
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
+                            ng-click="closeLobbyOptions()">DONE</button>
+                </div>
+            </div>
+        </div>
+        <div class="cc-lobby__modal" ng-show="_starting || _startError">
+            <div class="cc-lobby__modal-box">
+                <div ng-show="_starting && !_startError">Starting game..</div>
+                <div ng-show="_startError">{{ _startError }}</div>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-show="_startError"
+                        ng-click="dismissStartError()">OK</button>
+            </div>
+        </div>
+        <div class="cc-lobby__modal" ng-show="_serverLostError">
+            <div class="cc-lobby__modal-box">
+                <div>{{ _serverLostError }}</div>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
+                        ng-click="dismissServerLostError()">OK</button>
+            </div>
+        </div>
     </div>
 
     <div class="cc-lobby__browser" ng-show="lobbyView == 'browser'" ng-include="'view/lobby/server-browser-classic.html'"></div>
-    <div class="cc-lobby__modal" ng-show="_starting">
-        <div class="cc-lobby__modal-box">Starting game..</div>
-    </div>
 </div>

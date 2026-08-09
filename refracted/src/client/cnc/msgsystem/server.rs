@@ -1,9 +1,7 @@
-﻿//! CNC `Rts.Messaging` TCP hub -- transparent MITM to dedicated Prism `ServerHost` on :18387.
 //!
 //! Production architecture (single server-side owner):
 //! - **Prism** `prism.cnc.network.dll` on the dedicated owns ServerHost join + post-StartGame
 //!   gameplay frames (co-located with the native sim).
-//! - **Refracted** only MITMs client `:18386` ↔ dedicated `:18387` and runs SimuCloud
 //!   orchestration toward `:18388`.
 //!
 //! Do not reintroduce an embedded ServerHost here for production joins -- that splits the
@@ -69,7 +67,7 @@ fn bind_listener(bind: SocketAddr) -> std::io::Result<TcpListener> {
 
 pub async fn accept_loop(bind: SocketAddr) -> std::io::Result<()> {
     let listener = bind_listener(bind)?;
-    info!("[{LOG_TAG}] Message hub listening on {bind} -- MITM→dedicated :18387 (Prism ServerHost)");
+    info!("[{LOG_TAG}] Message hub listening on {bind} -- bridge?dedicated :18387 (Prism ServerHost)");
     loop {
         let (stream, peer) = match listener.accept().await {
             Ok(v) => v,

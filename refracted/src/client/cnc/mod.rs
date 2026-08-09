@@ -1,5 +1,4 @@
 ﻿//! Command & Conquer 
-//!
 //! Wire dispatch from [`crate::client`] and Blaze/HTTP handlers once this title is implemented.
 
 pub mod dedicated_pool;
@@ -129,7 +128,6 @@ fn cnc_encode_preauth_qoss_field() -> Vec<u8> {
     }
     qoss_struct.extend_from_slice(&TdfEncoder::encode_string_struct_map_ordered("LTPS", &ltps_map));
 
-    // Retail CNC 3.19.4 `PreAuthResponse::QOSS::SVID` (SDK log).
     qoss_struct.extend_from_slice(&TdfEncoder::encode_int("SVID", 1_161_889_797));
 
     TdfEncoder::encode_struct("QOSS", &qoss_struct).to_vec()
@@ -180,7 +178,6 @@ fn content_type_for(path: &Path) -> &'static str {
         "gif" => "image/gif",
         "svg" => "image/svg+xml",
         "ico" => "image/x-icon",
-        // Chrome 15 / EAWebKit whitelist old x-font-* types; modern font/*
         // is often rejected for @font-face.
         "woff" => "application/font-woff",
         "woff2" => "font/woff2",
@@ -216,24 +213,48 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/api/start-battle" && is_post {
         return Some(handle_cnc_start_battle(body));
     }
-    // GET/POST /cnc/select-map?gid=&path= -- lobby records the chosen map for a gid. The Blaze
-    // createGame wire drops the level (blazeCreateGame validates then discards it), so this side-channel
-    // is how the lobby's map reaches the DEDICATED spawn + game data. Client loads it via local RtsSettings.
     if base == "cnc/select-map" {
         return Some(handle_cnc_select_map(query, body));
     }
-    // POST /cnc/player-attrs -- lobby faction/team/startpoint/general (Blaze setPlayerAttributes
-    // deadlocks the JS thread; same side-channel pattern as select-map).
     if base == "cnc/player-attrs" && is_post {
         return Some(handle_cnc_player_attrs(query, body));
     }
-    // GET/POST /cnc/shell-theme — persist Classic/Aurora UI root across sessions.
     if base == "cnc/shell-theme" {
         return Some(handle_cnc_shell_theme(is_post, body));
     }
     // GET /cnc/player-probe?gid= -- validate map + player lobby/CreateGame fields.
     if base == "cnc/player-probe" && is_get {
         return Some(handle_cnc_player_probe(query));
+    }
+    if base == "cnc/game-list" && is_get {
+        let _ = body;
+        return Some(handle_cnc_game_list());
+    }
+    if base == "cnc/game-password" && is_post {
+        return Some(handle_cnc_game_password(query, body));
+    }
+    if base == "cnc/verify-game-password" && is_post {
+        return Some(handle_cnc_verify_game_password(query, body));
+    }
+    if base == "cnc/server-ping" && is_get {
+        return Some(handle_cnc_server_ping(query));
+    }
+    if base == "cnc/leave-game" && is_post {
+        return Some(handle_cnc_leave_game(query));
+    }
+    if base == "cnc/player-ready" && is_post {
+        return Some(handle_cnc_player_ready(query));
+    }
+    if base == "cnc/lobby-roster" && is_get {
+        return Some(handle_cnc_lobby_roster(query));
+    }
+    if base == "cnc/dedicated-pool" && is_get {
+        let _ = body;
+        return Some(HttpResponse::new(
+            200,
+            "application/json",
+            dedicated_pool::lobby_pool_status_json().into_bytes(),
+        ));
     }
     if !is_post {
         return None;
@@ -307,7 +328,6 @@ fn handle_cnc_online_count() -> HttpResponse {
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
-/// Aurora rail build lines (`RFR/…`, `prism/…`, `cnc_rl/…`).
 fn handle_cnc_build_info() -> HttpResponse {
     let body = shell_build_info_json();
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
@@ -317,7 +337,7 @@ const CNC_RL_BUILD: &str = "150805";
 
 fn shell_build_info_json() -> serde_json::Value {
     let rfr = env!("CARGO_PKG_VERSION").to_string();
-    let prism = resolve_prism_version().unwrap_or_else(|| "—".to_string());
+    let prism = resolve_prism_version().unwrap_or_else(|| "?".to_string());
     serde_json::json!({
         "ok": true,
         "rfr": rfr,
@@ -495,7 +515,6 @@ fn normalize_shell_theme_id(raw: &str) -> &'static str {
     }
 }
 
-/// GET/POST `/cnc/shell-theme` — Classic vs Aurora UI root preference.
 /// Body/file JSON: `{ "theme": "classic"|"aurora", "defaultTheme": "classic"|"aurora" }`.
 fn handle_cnc_shell_theme(is_post: bool, body: &[u8]) -> HttpResponse {
     let path = shell_theme_prefs_path();
@@ -563,10 +582,6 @@ fn handle_cnc_shell_theme(is_post: bool, body: &[u8]) -> HttpResponse {
     }
 }
 
-/// GET/POST `/cnc/select-map?gid=<n>&path=<levelPath>` -- records the lobby's chosen map for a gid.
-/// Consumed by the dedicated spawn (`_level` ATTR), NotifyGameSetup, and the MessageSystem server's
-/// dynamic `LoadMap` (retail dedicated → client control channel). Blaze createGame drops the level
-/// on the wire; this is the native side-channel that keeps host, dedicated, and MS in sync.
 fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
     let mut gid: i64 = 1;
@@ -604,11 +619,16 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
         );
     }
     game_state::set_map_path(gid, &path);
+    tracing::info!(
+        target: "cnc",
+        "[CNC] select-map gid={} path=\"{}\"",
+        gid,
+        path
+    );
     let body = serde_json::json!({ "ok": true, "gid": gid, "path": path });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
-/// POST `/cnc/player-attrs` — lobby faction/team/start/general without Blaze setPlayerAttributes.
 /// Query or JSON: `gid`, `pid` (0 = host), `faction`, `team`, `startpoint`, `general`, `isai`.
 fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
@@ -743,6 +763,224 @@ fn handle_cnc_player_probe(query: Option<&str>) -> HttpResponse {
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
+fn handle_cnc_game_list() -> HttpResponse {
+    let body = game_state::browser_game_list_json();
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn parse_gid_pid_password(query: Option<&str>, body: &[u8]) -> (i64, i64, String) {
+    let mut gid: i64 = 0;
+    let mut pid: i64 = 0;
+    let mut password = String::new();
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                let decoded = percent_decode_plus(v);
+                match k {
+                    "gid" => gid = decoded.parse().unwrap_or(0),
+                    "pid" | "persona" | "player" => pid = decoded.parse().unwrap_or(0),
+                    "password" | "pass" | "pwd" => password = decoded,
+                    _ => {}
+                }
+            }
+        }
+    }
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
+        if let Some(g) = v.get("gid").and_then(|g| g.as_i64()) {
+            gid = g;
+        }
+        if let Some(p) = v
+            .get("pid")
+            .or_else(|| v.get("persona"))
+            .and_then(|p| p.as_i64().or_else(|| p.as_u64().map(|u| u as i64)))
+        {
+            pid = p;
+        }
+        if let Some(s) = v
+            .get("password")
+            .or_else(|| v.get("pass"))
+            .or_else(|| v.get("pwd"))
+            .and_then(|x| x.as_str())
+        {
+            password = s.to_string();
+        }
+    }
+    if pid <= 0 {
+        let session = crate::session::get_user_session();
+        if session.persona_id != 0 {
+            pid = session.persona_id as i64;
+        }
+    }
+    (gid, pid, password)
+}
+
+fn handle_cnc_game_password(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    let (gid, pid, password) = parse_gid_pid_password(query, body);
+    if gid <= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"gid required"}"#.to_vec(),
+        );
+    }
+    let resp = game_state::set_game_password(gid, pid, &password);
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m game-password gid={} pid={} protected={}",
+        gid,
+        pid,
+        resp.get("passwordProtected").and_then(|v| v.as_bool()).unwrap_or(false)
+    );
+    HttpResponse::new(200, "application/json", resp.to_string().into_bytes())
+}
+
+fn handle_cnc_verify_game_password(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    let (gid, pid, password) = parse_gid_pid_password(query, body);
+    if gid <= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"gid required"}"#.to_vec(),
+        );
+    }
+    let resp = game_state::verify_game_password(gid, pid, &password);
+    let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m verify-game-password gid={} pid={} ok={}",
+        gid,
+        pid,
+        ok
+    );
+    HttpResponse::new(
+        if ok { 200 } else { 403 },
+        "application/json",
+        resp.to_string().into_bytes(),
+    )
+}
+
+fn handle_cnc_server_ping(query: Option<&str>) -> HttpResponse {
+    let mut host = String::new();
+    let mut port = dedicated_pool::DEDICATED_PING_TCP_PORT;
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                match k {
+                    "host" => host = percent_decode_plus(v),
+                    "port" => {
+                        if let Ok(p) = percent_decode_plus(v).parse::<u16>() {
+                            port = p;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    let ms = if host.is_empty() {
+        None
+    } else {
+        dedicated_pool::probe_host_rtt_ms(&host, Some(port))
+    };
+    let body = serde_json::json!({ "ok": ms.is_some(), "pingMs": ms, "host": host, "port": port });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn handle_cnc_leave_game(query: Option<&str>) -> HttpResponse {
+    let mut gid: i64 = 0;
+    let mut pid: i64 = 0;
+    let mut force = false;
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                match k {
+                    "gid" => gid = percent_decode_plus(v).parse().unwrap_or(0),
+                    "pid" => pid = percent_decode_plus(v).parse().unwrap_or(0),
+                    "force" => {
+                        let s = percent_decode_plus(v);
+                        force = s == "1" || s.eq_ignore_ascii_case("true");
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    if pid <= 0 {
+        let session = crate::session::get_user_session();
+        if session.persona_id != 0 {
+            pid = session.persona_id as i64;
+        }
+    }
+    if gid <= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"gid required"}"#.to_vec(),
+        );
+    }
+    let body = game_state::leave_gameroom_ex(gid, pid, force || pid <= 0);
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m leave-game gid={} pid={} force={} ? {}",
+        gid,
+        pid,
+        force || pid <= 0,
+        body
+    );
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn handle_cnc_player_ready(query: Option<&str>) -> HttpResponse {
+    let mut gid: i64 = 1;
+    let mut pid: i64 = 0;
+    let mut ready = true;
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                match k {
+                    "gid" => gid = percent_decode_plus(v).parse().unwrap_or(1),
+                    "pid" => pid = percent_decode_plus(v).parse().unwrap_or(0),
+                    "ready" => {
+                        let s = percent_decode_plus(v);
+                        ready = s == "1" || s.eq_ignore_ascii_case("true");
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    if pid <= 0 {
+        let session = crate::session::get_user_session();
+        pid = if session.persona_id == 0 {
+            1000
+        } else {
+            session.persona_id as i64
+        };
+    }
+    let ok = game_state::set_player_ready(gid, pid, ready);
+    let body = serde_json::json!({
+        "ok": ok,
+        "gid": gid,
+        "pid": pid,
+        "ready": ready,
+        "allReady": game_state::all_humans_ready(gid),
+        "admin": game_state::host_persona_for_gid(gid),
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn handle_cnc_lobby_roster(query: Option<&str>) -> HttpResponse {
+    let mut gid: i64 = 1;
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                if k == "gid" {
+                    gid = percent_decode_plus(v).parse().unwrap_or(1);
+                }
+            }
+        }
+    }
+    let body = game_state::lobby_roster_json(gid);
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
 /// POST `/cnc/api/start-battle` -- advance game state for a given GID (testing API).
 fn handle_cnc_start_battle(body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
@@ -757,6 +995,17 @@ fn handle_cnc_start_battle(body: &[u8]) -> HttpResponse {
     let phase = game_state::get_phase(gid);
     if phase == game_state::GamePhase::InGame {
         return HttpResponse::new(200, "application/json", br#"{"ok":true,"info":"already in game"}"#.to_vec());
+    }
+
+    if !game_state::all_humans_ready(gid) {
+        let body = serde_json::json!({
+            "ok": false,
+            "error": "not_all_ready",
+            "gid": gid,
+            "allReady": false,
+            "admin": game_state::host_persona_for_gid(gid),
+        });
+        return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
     }
 
     game_state::set_phase(gid, game_state::GamePhase::InGame);
@@ -877,7 +1126,20 @@ fn try_read_http_file(root: &Path, rel: &Path, is_head: bool) -> Option<HttpResp
             } else {
                 bytes
             };
-            return Some(HttpResponse::new(200, ct, body));
+            let mut response = HttpResponse::new(200, ct, body);
+            if matches!(
+                ct,
+                "text/html" | "application/javascript" | "text/javascript" | "text/css"
+            ) {
+                response.headers.insert(
+                    "Cache-Control".to_string(),
+                    "no-cache, no-store, must-revalidate".to_string(),
+                );
+                response
+                    .headers
+                    .insert("Pragma".to_string(), "no-cache".to_string());
+            }
+            return Some(response);
         }
     }
     None
@@ -934,7 +1196,6 @@ pub fn handle_redirector_get_server_instance(_payload: &[u8]) -> BlazeResult<Byt
         valu.extend_from_slice(&TdfEncoder::encode_int("IP\0\0", ip));
         valu.extend_from_slice(&TdfEncoder::encode_int("PORT", ports.blaze_main as i32));
     }));
-    // 0 = plain TCP on blaze_main (TLS to 127.0.0.1 often yields SDK disconnect / RPC stall).
     response.extend_from_slice(&TdfEncoder::encode_int("SECU", 0));
     response.extend_from_slice(&TdfEncoder::encode_int("XDNS", 0));
     Ok(Bytes::from(response))
@@ -976,7 +1237,6 @@ pub fn handle_packet_fields(
         (0x0007, 0x5900) => Some(handle_stats_command_22784(payload)),
         (0x0007, 0x7100) => Some(handle_stats_command_28928(payload)),
         // createGame (RPC 1) -- some CNC client builds send this instead of resetDedicatedServer (0x16/0x19).
-        // Both routes create a game via the reset-dedicated-server flow (CreateGameRequest → JoinGameResponse).
         (0x0004, 0x01) => Some(handle_game_manager_reset_dedicated_server(payload)),
         (0x0004, 0x03) => Some(handle_game_manager_advance_game_state(payload)),
         (0x0004, 0x04) => Some(handle_game_manager_set_game_settings(payload)),
@@ -1285,7 +1545,6 @@ pub fn handle_util_set_client_state(payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(Vec::new()))
 }
 
-/// `Util.setClientMetrics` (0x0009::0x0016) — DirtySDK UPnP/NAT report. Empty success ACK.
 pub fn handle_util_set_client_metrics(payload: &[u8]) -> BlazeResult<Bytes> {
     let ubfl = TdfEncoder::find_int_field(payload, "UBFL").unwrap_or(0);
     let udev = TdfEncoder::find_string_field(payload, "UDEV").unwrap_or_default();
@@ -1475,7 +1734,6 @@ fn cnc_join_game_response(gid: i64) -> Bytes {
     Bytes::from(response)
 }
 
-/// `JoinGameResponse` variant used after **`resetDedicatedServer`** / CNC create (`sub_A4DAE0` → `sub_A4BB60`):
 /// matches **`handle_game_manager_command_16`** (GID + JGS + **`OCAL`**) and now also emits **`NTOP`**
 /// so the client picks up the intended network topology (PEER vs DEDICATED).
 fn cnc_join_game_response_with_ocal(gid: i64, gsid: Option<i64>) -> Bytes {
@@ -1485,8 +1743,6 @@ fn cnc_join_game_response_with_ocal(gid: i64, gsid: Option<i64>) -> Bytes {
         .map(|id| id.to_string())
         .unwrap_or_default();
     // Blaze `JoinGameResponse` must lead with `GID`/`JGS` -- a leading `SRVR` string breaks the RTS
-    // client's TDF unpack (`sub_A4BB60`) and leaves `mGameId` at 0. Shell `serverID` uses tag `SRVR`
-    // after the standard fields (`sub_11FBCF0`).
     response.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     response.extend_from_slice(&TdfEncoder::encode_int("JGS ", JGS_JOINED_GAME));
     response.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_DEFAULT));
@@ -1509,8 +1765,33 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
     } else {
         session.persona_id as i64
     };
-    if !game_state::is_player_in_game(gid, pid) {
-        game_state::seed_from_join(gid);
+    let name = if session.display_name.is_empty() {
+        "Player".to_string()
+    } else {
+        session.display_name.clone()
+    };
+    if !game_state::join_password_allowed(gid, pid) {
+        crate::debug_println!(
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (password required - verify via shell / ATTR _password)",
+            gid,
+            pid
+        );
+        return Err(crate::common::error::BlazeError::AuthorizationRequired);
+    }
+    if let Some(player) = game_state::ensure_client_player(gid, pid, &name) {
+        crate::debug_println!(
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame gid={} pid={} host={} (GameRoom lobby)",
+            gid,
+            pid,
+            game_state::host_persona_for_gid(gid)
+        );
+        let _ = player;
+    } else {
+        crate::debug_println!(
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame gid={} pid={} (no game row)",
+            gid,
+            pid
+        );
     }
     Ok(cnc_join_game_response(gid))
 }
@@ -1529,11 +1810,41 @@ pub fn cnc_extract_join_game_id(payload: &[u8]) -> i64 {
 }
 
 /// CNC dedicated reset (`CreateGameRequest` in / `JoinGameResponse` out). Also mapped at EA id `0x16`.
-///
-/// `blazeCreateGame` drives **`0x0004::0x0019`** with **`CreateGameRequest`** (GNAM, GSET, HNET, …). Reply must match
-/// the **`JoinGameResponse`** shape the RTS client unpacks after **`sub_A4BB60`** (include **`OCAL`**).
 pub fn handle_game_manager_reset_dedicated_server(payload: &[u8]) -> BlazeResult<Bytes> {
     let gid = cnc_extract_reset_game_id(payload);
+    let _ = game_state::adopt_host_lobby_pending_into(gid);
+    game_state::adopt_host_lobby_pending_attrs_into(gid);
+    if let Some(attr_level) = extract_attr_level(payload) {
+        let pending = game_state::get_map_path(gid);
+        if pending.is_empty() {
+            tracing::warn!(
+                target: "cnc",
+                "[CNC] resetDedicated ATTR._level=\"{}\" but PENDING empty - adopting ATTR (lobby select-map missed)",
+                attr_level
+            );
+            game_state::set_map_path(gid, &attr_level);
+        } else if pending != attr_level {
+            tracing::info!(
+                target: "cnc",
+                "[CNC] resetDedicated map: PENDING=\"{}\" ATTR=\"{}\" - inject will force PENDING",
+                pending,
+                attr_level
+            );
+        } else {
+            tracing::info!(
+                target: "cnc",
+                "[CNC] resetDedicated map=\"{}\" (PENDING==ATTR)",
+                pending
+            );
+        }
+    } else {
+        tracing::info!(
+            target: "cnc",
+            "[CNC] resetDedicated gid={} PENDING=\"{}\" (no ATTR._level on wire)",
+            gid,
+            game_state::get_map_path(gid)
+        );
+    }
     game_state::seed_from_reset(payload, gid);
     // Resolve the dedicated session id the reset will land on even if the pool assignment hasn't
     // been created yet (the encrypted-Fire2 path builds this reply before orchestrate runs), so the
@@ -1627,7 +1938,67 @@ pub fn handle_game_manager_update_mesh_connection(payload: &[u8]) -> BlazeResult
 }
 
 /// CNC `GameManager.removePlayer` (**`0x0004::0x000B`** -- same numeric id as EA `startMatchmaking`).
-pub fn handle_game_manager_remove_player(_payload: &[u8]) -> BlazeResult<Bytes> {
+pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
+    let gid = TdfEncoder::find_long_field(payload, "GID ")
+        .or_else(|| TdfEncoder::find_long_field(payload, "GID"))
+        .or_else(|| TdfEncoder::find_int_field(payload, "GID ").map(|v| v as i64))
+        .or_else(|| TdfEncoder::find_int_field(payload, "GID").map(|v| v as i64))
+        .unwrap_or(0);
+    let pid = TdfEncoder::find_long_field(payload, "PID ")
+        .or_else(|| TdfEncoder::find_long_field(payload, "PID"))
+        .or_else(|| TdfEncoder::find_int_field(payload, "PID ").map(|v| v as i64))
+        .or_else(|| TdfEncoder::find_int_field(payload, "PID").map(|v| v as i64))
+        .unwrap_or(0);
+    let reason = TdfEncoder::find_int_field(payload, "REAS")
+        .filter(|&r| r != PLAYER_REMOVED_REASON_PLAYER_KICKED)
+        .unwrap_or(PLAYER_REMOVED_REASON_PLAYER_LEFT);
+
+    if gid <= 0 {
+        crate::debug_println!(
+            "\x1b[38;2;255;165;0m[CNC]\x1b[0m removePlayer: could not parse GID ({} bytes)",
+            payload.len()
+        );
+        return Ok(Bytes::from(Vec::new()));
+    }
+
+    let remaining_humans = if pid > 0 {
+        game_state::remove_player_ex(gid, pid)
+    } else {
+        Some((game_state::human_player_count(gid), false))
+    };
+
+    if pid > 0 {
+        fireframe::request_client_local_game_teardown(gid, pid, reason);
+    }
+
+    match remaining_humans {
+        Some((0, _)) => {
+            let _ = game_state::reclaim_after_empty_humans(gid);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m removePlayer gid={} pid={} - empty humans; reclaim Idle + Standby",
+                gid,
+                pid
+            );
+        }
+        Some((n, converted)) => {
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m removePlayer gid={} pid={} - humans remaining={}{}",
+                gid,
+                pid,
+                n,
+                if converted { " (converted?AI)" } else { "" }
+            );
+        }
+        None => {
+            dedicated_pool::release_gid(gid);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m removePlayer gid={} pid={} - no game; pool released",
+                gid,
+                pid
+            );
+        }
+    }
+
     Ok(Bytes::from(Vec::new()))
 }
 
@@ -1642,7 +2013,7 @@ pub fn handle_game_manager_advance_game_state(payload: &[u8]) -> BlazeResult<Byt
     if gid > 0 {
         game_state::set_phase(gid, game_state::GamePhase::InGame);
         crate::debug_println!(
-            "\x1b[38;2;255;215;0m[CNC]\x1b[0m advanceGameState gid={} → InGame",
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m advanceGameState gid={} ? InGame",
             gid
         );
     } else {
@@ -1744,8 +2115,6 @@ pub fn handle_game_manager_command_16(payload: &[u8]) -> BlazeResult<Bytes> {
 }
 
 /// `GameManager.getGameListSnapshot` (0x0004::0x0064).
-///
-/// Per BlazeSDK `gamebrowser.tdf`: reply is `GetGameListResponse` (`glid`, `maxf`, `ngd`, …).
 /// Game rows are **not** inline -- the client expects follow-up `NotifyGameListUpdate` (cmd 201).
 pub fn handle_game_manager_get_game_list_snapshot(_payload: &[u8]) -> BlazeResult<Bytes> {
     let gids = game_state::all_game_gids();
@@ -1890,7 +2259,6 @@ pub fn handle_game_manager_list_game_data(payload: &[u8]) -> BlazeResult<Bytes> 
     Ok(Bytes::from(response))
 }
 
-/// Wire tag for `GetFullGameDataResponse::mGames` (client SDK field `LGAM`).
 const GFGD_MGAMES_LIST_TAG: &str = "LGAM";
 
 /// `GameManager.getFullGameData` (0x0004::0x0067 / 0x002C) -- `GetFullGameDataResponse::mGames`.
@@ -1931,7 +2299,6 @@ pub fn handle_game_manager_add_queued_player_to_game(payload: &[u8]) -> BlazeRes
 }
 
 pub fn handle_game_manager_register_dynamic_dedicated_server_creator(payload: &[u8]) -> BlazeResult<Bytes> {
-    // Prism remaps Util::preAuth (cmd 7) → GameManager 0x96 on the wire while keeping
     // PreAuthRequest/PreAuthResponse TDFs. An empty reply clears QOSS and leaves
     // QosManager with "PingSiteInfoByAliasMap was empty" / "No ping site configured".
     crate::debug_println!(
@@ -2050,14 +2417,13 @@ pub fn build_user_sessions_user_added_notification() -> BlazeResult<Bytes> {
     Ok(Bytes::from(response))
 }
 
-// GameManager `GSTA` (verified from client binary value->name table @0x16ecb10):
 //   NEW_STATE=0, INITIALIZING=1, INACTIVE_VIRTUAL=2, PRE_GAME=130(0x82), IN_GAME=131(0x83),
 //   POST_GAME=4, RESETABLE=7. NOTE: PRE_GAME/IN_GAME are NOT 1/2 -- 1 is INITIALIZING, 2 is
 //   INACTIVE_VIRTUAL. Sending 1/2 leaves the game stuck in INITIALIZING and it never starts.
 #[allow(dead_code)]
-const GSTA_INITIALIZING: i32 = 1;
+pub(crate) const GSTA_INITIALIZING: i32 = 1;
 #[allow(dead_code)]
-const GSTA_PRE_GAME: i32 = 130;
+pub(crate) const GSTA_PRE_GAME: i32 = 130;
 pub(crate) const GSTA_IN_GAME: i32 = 131;
 #[allow(dead_code)]
 const GSTA_POST_GAME: i32 = 4;
@@ -2069,7 +2435,6 @@ fn cnc_resolve_notify_game_uuid(request_payload: &[u8]) -> String {
 }
 
 /// GameManager `NotifyGameStateChange` (`0x0004` / `0x64`): root `GID\0` + `GSTA` (BFP4FToolsWV / CNC launcher).
-/// Wire command matches client→server `getGameListSnapshot`; payload is the two-field notify shape.
 pub fn build_game_manager_notify_game_state_change(gid: i64, gsta: i32) -> BlazeResult<Bytes> {
     let mut out = Vec::new();
     out.extend_from_slice(&TdfEncoder::encode_int("GID\0", gid as i32));
@@ -2077,16 +2442,23 @@ pub fn build_game_manager_notify_game_state_change(gid: i64, gsta: i32) -> Blaze
     Ok(Bytes::from(out))
 }
 
+pub const PLAYER_REMOVED_REASON_GAME_DESTROYED: i32 = 4;
+pub const PLAYER_REMOVED_REASON_PLAYER_LEFT: i32 = 6;
+pub const PLAYER_REMOVED_REASON_PLAYER_KICKED: i32 = 8;
+
+pub fn build_game_manager_notify_player_removed(
+    gid: i64,
+    pid: i64,
+    reason: i32,
+) -> BlazeResult<Bytes> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
+    out.extend_from_slice(&TdfEncoder::encode_long("PID ", pid));
+    out.extend_from_slice(&TdfEncoder::encode_int("REAS", reason));
+    Ok(Bytes::from(out))
+}
+
 /// GameManager `NotifyGameAttribChange` (`0x0004` / cmd **80** / `0x50`).
-///
-/// This is the LAST-MILE trigger for the real client↔dedicated UDP connect (round 64). The client's
-/// CNCLive Blaze callback `onGameAttributeUpdated` (sub_1204D70) fires on this notification and, when
-/// the game has attribute `GameReady`, posts `RtsBlazeJoinGameMessage` → `RtsClientJoinGameMessage`
-/// → `sub_A648F0` → `ClientJoinMultiplayerMessage("127.0.0.1:25200")` → engine `Client_updateState`
-/// state 0xC → `ClientConnectToAddress` → opens the real UDP socket to the dedicated. Requires
-/// player CDAT `AuthToken` (same value as `RtsClientSettings.EAGenericAuthToken` / dedicated express login).
-///
-/// Wire TDF (handler sub_1282160 reads gid u64 @+8, attrib map @+16): tag-ordered `ATTR` then `GID `.
 pub fn build_game_manager_notify_game_attrib_change(
     gid: i64,
     attrs: &indexmap::IndexMap<String, String>,
@@ -2097,7 +2469,6 @@ pub fn build_game_manager_notify_game_attrib_change(
     Ok(Bytes::from(out))
 }
 
-/// Player states (verified from client binary): ACTIVE_CONNECTING=2, ACTIVE_MIGRATING=3,
 /// ACTIVE_CONNECTED=4. After the joining client reports its mesh connection (updateMeshConnection),
 /// the server must flip it to ACTIVE_CONNECTED so `createGameNetworkCb` fires and the game proceeds.
 pub const PLAYER_STATE_ACTIVE_CONNECTED: i32 = 4;
@@ -2117,15 +2488,68 @@ pub fn build_game_manager_notify_game_player_state_change(
 }
 
 /// Notify pooled `cnc.server.exe` to run `resetDedicatedServer` (cmd 220 / `NotifyCreateDynamicDedicatedServerGame`).
-/// IDA: root `GID` + nested `GREQ` → `CreateGameRequest` (`sub_12986A0` / `sub_1293290`).
 pub fn build_notify_create_dynamic_dedicated_server_game(
     gid: i64,
     create_request: &[u8],
 ) -> BlazeResult<Bytes> {
+    let greq = inject_level_attr(gid, create_request).unwrap_or_else(|| create_request.to_vec());
+
     let mut out = Vec::new();
     out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
-    out.extend_from_slice(&TdfEncoder::encode_struct("GREQ", create_request));
+    out.extend_from_slice(&TdfEncoder::encode_struct("GREQ", &greq));
     Ok(Bytes::from(out))
+}
+
+fn inject_level_attr(gid: i64, create_request: &[u8]) -> Option<Vec<u8>> {
+    let map_path = game_state::get_map_path(gid);
+    if map_path.is_empty() {
+        return None;
+    }
+
+    let (_, _, start, total_len) = TdfEncoder::scan_root_level_fields(create_request)
+        .into_iter()
+        .find(|(tag, ty, _, _)| tag == "ATTR" && *ty == 0x05)?;
+    let end = start.checked_add(total_len)?;
+    if total_len < 4 || end > create_request.len() {
+        return None;
+    }
+
+    let mut pairs =
+        TdfEncoder::decode_string_string_map_untagged(&create_request[start + 4..end]).ok()?;
+    if pairs.get("_level").map(String::as_str) == Some(map_path.as_str()) {
+        return None; // already correct -- keep the echo verbatim
+    }
+    let prev = pairs
+        .get("_level")
+        .cloned()
+        .unwrap_or_else(|| "<none>".into());
+    tracing::info!(
+        target: "cnc",
+        "[CNC] inject _level gid={} \"{}\" ? \"{}\"",
+        gid,
+        prev,
+        map_path
+    );
+    pairs.insert("_level".to_string(), map_path);
+
+    let mut out = Vec::with_capacity(create_request.len() + 64);
+    out.extend_from_slice(&create_request[..start]);
+    out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("ATTR", &pairs));
+    out.extend_from_slice(&create_request[end..]);
+    Some(out)
+}
+
+fn extract_attr_level(create_request: &[u8]) -> Option<String> {
+    let (_, _, start, total_len) = TdfEncoder::scan_root_level_fields(create_request)
+        .into_iter()
+        .find(|(tag, ty, _, _)| tag == "ATTR" && *ty == 0x05)?;
+    let end = start.checked_add(total_len)?;
+    if total_len < 4 || end > create_request.len() {
+        return None;
+    }
+    let pairs =
+        TdfEncoder::decode_string_string_map_untagged(&create_request[start + 4..end]).ok()?;
+    pairs.get("_level").filter(|s| !s.is_empty()).cloned()
 }
 
 /// Blaze persona id used as host in CNC GameManager notifies (`ADMN`, `PROS`, **`PHID`**, etc.).
@@ -2140,8 +2564,6 @@ fn cnc_notify_host_persona_i32() -> i32 {
 }
 
 /// GameManager `NotifyGameSetup` (`0x0004` / `0x14`): pushed after successful reset/create so the client wires the game into `mGameMap`.
-/// CNC / BFP4FToolsWV also labels this path “NotifyServerGameSetup”; same opcode and `GAME` payload.
-///
 /// **`GAME.HNET`**: copied from the request only when it is already a root **`LIST`** of **`STRUCT`** rows
 /// (`0x04` / item `0x03`); otherwise encoded like stock **`GameSetup`**: list of struct rows (**`EXIP`** / **`INIP`**).
 pub fn build_game_manager_notify_game_setup(
@@ -2222,8 +2644,6 @@ pub fn build_game_manager_notify_game_setup(
         out
     };
 
-    // serverid rides in ATTR (mGameAttributeMap), DSTR (mDedicatedServerAttributeMap), and MATR
-    // (mMeshAttributes @Game+0x29C — what sub_12016F0 / CreateMessageSystem Join actually reads).
     // Derived from the dedicated address.
     let serverid = {
         let sid_ip = (if host_exip_ip != 0 { host_exip_ip } else { host_inip_ip }) as u32;
@@ -2248,10 +2668,10 @@ pub fn build_game_manager_notify_game_setup(
     if !map_path.is_empty() {
         attr_map.insert("_level".to_string(), map_path);
     }
+    crate::client::cnc::game_state::apply_password_flag_to_attrs(gid, &mut attr_map);
     let mut dstr_map = indexmap::IndexMap::new();
     dstr_map.insert("serverid".to_string(), serverid.clone());
-    // MATR = mMeshAttribs → Game::mMeshAttributes @+0x29C (sub_12016F0 Join + CANA).
-    // Confirmed via IDA: Game+0x168 iface vfn+0x68 returns this+308 = +0x29C.
+    crate::client::cnc::game_state::apply_password_secret_to_attrs(gid, &mut dstr_map);
     let mut matr_map = indexmap::IndexMap::new();
     matr_map.insert("serverid".to_string(), serverid);
 
@@ -2365,10 +2785,6 @@ pub fn build_dedicated_host_notify_game_setup(
     // Blaze packed-tag order: ADMN ATTR CAP DHST DSTR GID GNAM GSET GSID GSTA HNET MATR NTOP
     // PHST THST UUID VOIP XNNC XSES.
     //
-    // serverid must be on MATR (ReplicatedGameData::mMeshAttribs → Game::mMeshAttributes @+0x29C).
-    // sub_12016F0 / CreateMessageSystem Join resolves CustomAttribute::serverid from that map
-    // (Game+0x168 iface vfn → this+308 = +0x29C). ATTR-only NotifyGameAttribChange never fills it;
-    // omitting MATR here → literal "unknown" → Dns.GetHostAddresses SocketException on dedicated.
     let serverid = {
         let sid_ip = (if exip_ip != 0 { exip_ip } else { inip_ip }) as u32;
         if sid_ip != 0 {
@@ -2393,11 +2809,13 @@ pub fn build_dedicated_host_notify_game_setup(
         ded_attr.insert("_level".to_string(), ded_map_path);
     }
     ded_attr.insert("serverid".to_string(), serverid.clone());
+    crate::client::cnc::game_state::apply_password_secret_to_attrs(gid, &mut ded_attr);
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("ATTR", &ded_attr));
     game.extend_from_slice(&TdfEncoder::encode_long_list("CAP ", &[0x20, 0]));
     game.extend_from_slice(&TdfEncoder::encode_struct("DHST", &host_hpid(host_persona)));
     let mut dstr_map = indexmap::IndexMap::new();
     dstr_map.insert("serverid".to_string(), serverid.clone());
+    crate::client::cnc::game_state::apply_password_secret_to_attrs(gid, &mut dstr_map);
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("DSTR", &dstr_map));
     game.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     game.extend_from_slice(&TdfEncoder::encode_string("GNAM", &gnam));
@@ -2486,7 +2904,6 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     let gnam = game_state::game_name(gid);
     let game_uuid = game_state::game_uuid(gid);
 
-    // serverid: Join (sub_12016F0) reads Game::mMeshAttributes from MATR; CANA also uses that map
     // (and DSTR for dedicated-server attribs). Keep ATTR too for general game-attribute consumers.
     // See build_game_manager_notify_game_setup / build_dedicated_host_notify_game_setup.
     let serverid = {
@@ -2508,7 +2925,6 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     attr.insert("serverid".to_string(), serverid.clone());
     let mut dstr = indexmap::IndexMap::new();
     dstr.insert("serverid".to_string(), serverid.clone());
-    // MATR = mMeshAttribs → Game::mMeshAttributes (Join / CANA serverid lookup).
     let mut matr = indexmap::IndexMap::new();
     matr.insert("serverid".to_string(), serverid);
 
@@ -2549,7 +2965,6 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
 }
 
 /// One `ListGameData` row: nested `GAME` (`ReplicatedGameData`) + `PROS` roster.
-/// Matches Blaze `GetFullGameDataResponse::mGames` / client SDK `ListGameData` layout.
 fn build_list_game_data_entry(gid: i64) -> BlazeResult<Vec<u8>> {
     let game = build_replicated_game_data_fields(gid);
     let pros = game_state::gfgd_roster_entries_for_gid(gid);
@@ -2580,10 +2995,8 @@ pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes>
 }
 
 /// `Blaze::GameManager::NotifyPlatformHostInitialized` (component `0x0004`, command `0x47`).
-///
 /// Sent immediately after `NotifyGameSetup` so `GameManagerAPI` flips the platform-host state and
 /// stops waiting for an injection notification on a peer-hosted game.
-///
 /// Wire: **`GID `**, **`HPID`** (long persona id), **`PHST`** (platform host slot id = 0).
 /// Do not use **`PHID`** as INTEGER -- persona ids exceed single-byte varints and the client only consumes the first byte (`0`).
 pub fn build_game_manager_notify_platform_host_initialized(gid: i64) -> BlazeResult<Bytes> {
@@ -2604,12 +3017,9 @@ pub fn build_game_manager_notify_player_join_completed(gid: i64) -> BlazeResult<
 }
 
 /// `GameManager.NotifyPlayerJoining` (`0x0004` / `0x0015`, cmd 21).
-///
 /// Sent to the dedicated HOST session so its GMGR adds the joining client to game `gid`'s roster.
-/// Wire (verified from the BF4 dedicated dump): `GID` (long) + `PDAT` (ReplicatedGamePlayer struct,
 /// same row schema as `NotifyGameSetup::PROS`). Without this the dedicated hosts the game but keeps
 /// an EMPTY roster (`[GAME] dropping onNotifyPlayerCustomDataChanged for unknown local player`) and
-/// therefore never binds/accepts the client's Frostbite UDP connection (`Connected players: 0`).
 pub fn build_game_manager_notify_player_joining(
     player: &game_state::CncPlayer,
     gid: i64,
@@ -2623,7 +3033,6 @@ pub fn build_game_manager_notify_player_joining(
 }
 
 /// `GameManager.NotifyJoiningPlayerInitiateConnections` (`0x0004` / `0x0016`).
-///
 /// Sent after `NotifyPlatformHostInitialized` so the client's `onNotifyJoiningPlayerInitiateConnections`
 /// handler finds the game with its host address set and calls `preInitGameNetwork` / `fb_Blaze_connection_queue_incoming_fireframe`.
 /// Payload layout matches `NotifyGameSetup`: `GAME` struct + `PROS` + `QUEU` + `REAS`.
@@ -2646,7 +3055,6 @@ fn encode_reas_dataless(dctx: i32) -> Bytes {
 }
 
 /// Emit `REAS = UNION{ member 1 = ResetDedicatedServerSetupContext: VALU{ ERR=0 } }` (client reset path).
-///
 /// Dedicated host notify uses [`encode_reas_dataless`] with DCTX=4 instead.
 fn encode_reas_reset_dedicated() -> Bytes {
     encode_union_struct("REAS", 1, |body| {
@@ -2963,6 +3371,31 @@ mod notify_game_setup_tests {
     }
 
     #[test]
+    fn notify_player_removed_encodes_gid_pid_reas() {
+        let payload = build_game_manager_notify_player_removed(
+            1,
+            1_201_618_778,
+            PLAYER_REMOVED_REASON_PLAYER_LEFT,
+        )
+        .expect("encode");
+        assert_eq!(TdfEncoder::find_long_field(&payload, "GID "), Some(1));
+        assert_eq!(
+            TdfEncoder::find_long_field(&payload, "PID "),
+            Some(1_201_618_778)
+        );
+        assert_eq!(
+            TdfEncoder::find_int_field(&payload, "REAS"),
+            Some(PLAYER_REMOVED_REASON_PLAYER_LEFT)
+        );
+        assert_ne!(
+            TdfEncoder::find_int_field(&payload, "REAS"),
+            Some(PLAYER_REMOVED_REASON_PLAYER_KICKED),
+            "PLAYER_KICKED triggers FrontEndTest on client"
+        );
+        TdfTreeParser::parse_packet(&payload).expect("parse tree");
+    }
+
+    #[test]
     fn notify_setup_nested_uuid_non_empty() {
         let payload = build_game_manager_notify_game_setup(&[], 1).expect("encode");
         let u = TdfEncoder::find_string_field(&payload, "UUID").expect("UUID in GAME");
@@ -2988,7 +3421,6 @@ mod notify_game_setup_tests {
         );
     }
 
-    // Regression: REAS=127 is `INVALID_MEMBER` → client cancels the freshly built game.
     // Dedicated reset must use `rdsc` (member 1) so the client does not run create/finalize paths.
     #[test]
     fn notify_setup_reas_is_reset_dedicated_not_cancel_sentinel() {
@@ -3085,8 +3517,6 @@ mod notify_game_setup_tests {
     }
 
     /// serverid must ride in the INITIAL NotifyGameSetup (create/reset, join, and dedicated-host).
-    /// Join CreateMessageSystem (sub_12016F0) reads Game::mMeshAttributes from **MATR**, not ATTR.
-    /// Without MATR.serverid the dedicated caches "unknown" and ClientNetWrapper throws SocketException.
     #[test]
     fn notify_setup_carries_serverid_in_initial_attr() {
         reset_test_games();
@@ -3143,7 +3573,7 @@ mod notify_game_setup_tests {
         );
         assert!(has(&dpayload, b"serverid\0"), "serverid key missing (dedicated host)");
         assert!(has(&dpayload, b"127.0.0.1\0"), "serverid value missing (dedicated host)");
-        assert!(game_has_matr(&dpayload), "MATR missing (dedicated host) — Join needs mMeshAttributes");
+        assert!(game_has_matr(&dpayload), "MATR missing (dedicated host) - Join needs mesh attributes");
     }
 
     /// AUDIT: recursively verify EVERY struct we emit (top-level + nested) lists its fields in
@@ -3211,6 +3641,10 @@ mod notify_game_setup_tests {
         audit("notify_player_join_completed", build_game_manager_notify_player_join_completed(1));
         audit("notify_game_state_change", build_game_manager_notify_game_state_change(1, 130));
         audit("notify_game_player_state_change", build_game_manager_notify_game_player_state_change(1, 1201618778, 4));
+        audit(
+            "notify_player_removed",
+            build_game_manager_notify_player_removed(1, 1201618778, PLAYER_REMOVED_REASON_PLAYER_LEFT),
+        );
         audit(
             "notify_player_custom_data_change",
             Ok(Bytes::from(game_state::build_notify_player_custom_data_change(
@@ -3410,6 +3844,7 @@ mod notify_game_setup_tests {
             slot: 0,
             team: 1,
             is_ai: false,
+            ready: false,
             attribs: indexmap::IndexMap::new(),
             custom_data: indexmap::IndexMap::new(),
             stat: 2,
@@ -3477,6 +3912,7 @@ mod notify_game_setup_tests {
             slot: 0,
             team: 1,
             is_ai: false,
+            ready: false,
             attribs: indexmap::IndexMap::new(),
             custom_data: indexmap::IndexMap::new(),
             stat: 2,

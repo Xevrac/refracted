@@ -23,20 +23,8 @@
                 <h1 class="au-hero__title">{{ playerName }}</h1>
                 <p class="au-hero__lead">Wins {{ wins }} · Losses {{ losses }}</p>
                 <div class="au-hero__actions">
-                    <button type="button" class="au-btn au-btn--primary" ng-click="openLobby()">PLAY {{ selectedMode }}</button>
-                    <div class="au-mode">
-                        <button type="button" class="au-btn au-btn--ghost" data-toggle="dropdown">Mode</button>
-                        <ul class="dropdown-menu">
-                            <li><a href="" ng-click="setMode('PVP')">PVP</a></li>
-                            <li><a href="" ng-click="setMode('PVE')">PVE</a></li>
-                            <li><a href="" ng-click="setMode('1v1')">1v1</a></li>
-                            <li><a href="" ng-click="setMode('Team Battle')">Team Battle</a></li>
-                            <li><a href="" ng-click="setMode('Onslaught')">Onslaught</a></li>
-                            <li><a href="" ng-click="setMode('Custom Skirmish')">Custom Skirmish</a></li>
-                            <li><a href="" ng-click="setMode('Practice PvE')">Practice PvE</a></li>
-                        </ul>
-                    </div>
-                    <button type="button" class="au-btn au-btn--ghost">Create party</button>
+                    <button type="button" class="au-btn au-btn--primary" ng-click="openLobby()">PLAY</button>
+                    <button type="button" class="au-btn au-btn--ghost" disabled="disabled" title="Coming soon">Create party</button>
                 </div>
             </div>
             <div class="au-hero__art">

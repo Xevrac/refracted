@@ -2,7 +2,6 @@
  * Shell UI theme — Classic vs Aurora.
  * Active theme: applied now. Default theme: used on next shell boot.
  * Persists: localStorage + Refracted GET/POST /cnc/shell-theme (prefs JSON).
- * EAWebKit 13.2 / ES5 only.
  */
 (function (global) {
     var STORAGE_KEY = 'cnc_shell_ui_theme';
@@ -224,6 +223,8 @@
     function set(id) {
         var prefs = readLocalPrefs();
         prefs.theme = apply(id);
+           with the last committed active theme so Classic/Aurora sticks. */
+        prefs.defaultTheme = prefs.theme;
         writeLocalPrefs(prefs);
         persistRemote(prefs);
         return prefs.theme;
@@ -235,6 +236,17 @@
         writeLocalPrefs(prefs);
         persistRemote(prefs);
         return prefs.defaultTheme;
+    }
+
+    function restore(themeId, defaultThemeId) {
+        var prefs = {
+            theme: normalize(themeId),
+            defaultTheme: normalize(defaultThemeId || themeId)
+        };
+        writeLocalPrefs(prefs);
+        persistRemote(prefs);
+        apply(prefs.theme);
+        return prefs.theme;
     }
 
     function list() {
@@ -268,12 +280,13 @@
 
     function boot(done) {
         fetchRemote(function (prefs) {
-            /* Boot applies default theme (next-session preference). */
-            prefs.theme = prefs.defaultTheme;
+            var bootId = normalize(prefs.theme || prefs.defaultTheme);
+            prefs.theme = bootId;
+            prefs.defaultTheme = normalize(prefs.defaultTheme || bootId);
             writeLocalPrefs(prefs);
-            apply(prefs.theme);
+            apply(bootId);
             if (typeof done === 'function') {
-                done(prefs.theme);
+                done(bootId);
             }
         });
     }
@@ -301,6 +314,7 @@
         getDefault: getDefault,
         set: set,
         setDefault: setDefault,
+        restore: restore,
         apply: apply,
         list: list,
         hint: hint,

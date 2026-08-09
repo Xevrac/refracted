@@ -1,4 +1,4 @@
-﻿//! Transparent TCP MITM between game `ClientHost` and dedicated Prism `ServerHost` on
+﻿//! Transparent TCP bridge between game `ClientHost` and dedicated Prism `ServerHost` on
 //! [`DEDICATED_SERVERHOST_PORT`]. When dedicated is not listening, the hub closes the
 //! client connection (Prism owns production ServerHost -- no Refracted join substitute).
 
@@ -19,7 +19,6 @@ use super::messages::{
 use super::wire::SimpleFrame;
 use super::LOG_TAG;
 
-/// Dedicated `Rts.Messaging` ServerHost listen port (Prism patches retail 54321 → here).
 pub const DEDICATED_SERVERHOST_PORT: u16 = 18387;
 
 const UPSTREAM_CONNECT_TIMEOUT: Duration = Duration::from_millis(200);
@@ -79,7 +78,7 @@ pub async fn relay_pair(
 
     log_rts_system(
         client_peer,
-        &format!("Client↔Server (upstream {upstream_peer})"),
+        &format!("Client?Server (upstream {upstream_peer})"),
     );
 
     let client_to_server = async {

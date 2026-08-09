@@ -85,7 +85,7 @@
                         <select class="opt-select"
                                 ng-model="settings.shellUiTheme"
                                 ng-options="theme.id as theme.label for theme in shellThemeOptions"
-                                ng-change="applyShellTheme()"></select>
+                                ng-change="onShellThemeDraftChange()"></select>
                         <p class="opt-hint">{{ shellThemeHint }}</p>
                     </div>
                     <div class="opt-group opt-group--disabled">

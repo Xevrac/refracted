@@ -1,4 +1,3 @@
-//! Embedded negotiation/bootstrap frames (`frames/*.bin` via `tools/msgsys-dump`).
 
 /// Client-channel `ProtocolVersion` (matches `ClientChannelDescriptor` metadata `<Version>2</Version>`
 /// + retail empty-auth ref). Required for SimuCloud handshake because

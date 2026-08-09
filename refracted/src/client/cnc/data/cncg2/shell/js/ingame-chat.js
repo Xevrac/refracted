@@ -1,9 +1,6 @@
 /**
  * In-game chat (WebPathIngameChat → ChatWinProc).
  *
- * IDA (CnC.server.exe):
- *   SetChatVisibility true|false  → sub_B75F90 (ChatWinProc vt+120)
- *   Open keys HkatOpenGlobalChat / HkatOpenTeamChat → sub_B725C0 shows ChatWinProc
  *   ServerPlayer.Chat              → ServerPlayerChatMessage (GameServer net msg)
  *   ServerPlayer.ChangeChatChannel → channel switch before send
  *   UI.HudChat                    → UIHudChatMessage (HUD display event)

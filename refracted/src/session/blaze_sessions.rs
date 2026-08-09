@@ -179,10 +179,33 @@ pub fn sync_all_from_global_session() {
 }
 
 pub fn unregister(id: u64) {
-    let mut m = registry().lock();
-    m.remove(&id);
-    drop(m);
-    if crate::common::game::get_current_game_id().as_str() == "cnc" {
+    let (persona_id, clnt) = {
+        let m = registry().lock();
+        match m.get(&id) {
+            Some(e) => (e.persona_id, e.clnt.clone()),
+            None => (None, None),
+        }
+    };
+    let is_cnc = crate::common::game::get_current_game_id().as_str() == "cnc";
+    let was_dedicated = is_cnc
+        && (crate::client::cnc::dedicated_pool::is_dedicated_blaze_session(id)
+            || clnt
+                .as_deref()
+                .map(crate::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
+                .unwrap_or(false));
+
+    {
+        let mut m = registry().lock();
+        m.remove(&id);
+    }
+    if is_cnc {
+        if !was_dedicated {
+            if let Some(pid) = persona_id {
+                if pid > 0 {
+                    crate::client::cnc::game_state::purge_persona_from_lobbies(pid as i64);
+                }
+            }
+        }
         crate::client::cnc::dedicated_pool::on_session_gone(id);
     }
     persist_sessions_to_disk();

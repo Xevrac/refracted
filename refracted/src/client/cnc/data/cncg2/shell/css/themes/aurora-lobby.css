@@ -170,7 +170,294 @@
     background: rgba(0, 136, 255, 0.12);
 }
 
-/* Three-column team row — no overlap with VS */
+.au-lobby__tabs button:disabled {
+    opacity: 0.38;
+    cursor: default;
+    color: #5a6a7a;
+}
+
+/* Password / options fields reused inside the options modal */
+.au-lobby__password-input {
+    display: block;
+    float: left;
+    width: 70%;
+    height: 32px;
+    margin: 0 8px 0 0;
+    padding: 0 10px;
+    border: 1px solid #3a4a58;
+    background: #0a1016;
+    color: #e8f0f8;
+    font-size: 12px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+.au-lobby__password-flag {
+    display: inline-block;
+    margin-left: 8px;
+    color: #d4b45a;
+    font-weight: bold;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    line-height: 32px;
+    vertical-align: top;
+}
+
+.au-lobby__modal-box.au-lobby__options {
+    width: 644px;
+    max-width: 94%;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    padding: 23px 28px 21px;
+    text-align: left;
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    border-color: rgba(58, 160, 255, 0.35);
+    background: rgba(8, 14, 20, 0.98);
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+}
+
+.au-lobby__options-title {
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(58, 160, 255, 0.22);
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #e6edf5;
+    text-align: center;
+}
+
+.au-lobby__options-section {
+    margin: 0 0 16px 0;
+}
+
+.au-lobby__options-section-label {
+    margin: 0 0 9px 0;
+    color: #8b9aab;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* Table row — reliable vertical align on old CEF/WebKit (floats drift). */
+.au-lobby__options-password {
+    overflow: visible;
+}
+
+.au-lobby__options-password-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 8px 0;
+}
+
+.au-lobby__options .au-lobby__password-input {
+    display: table-cell;
+    float: none;
+    width: auto;
+    height: 37px;
+    margin: 0;
+    padding: 0 12px;
+    font-size: 14px;
+    line-height: 35px;
+    vertical-align: middle;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby__options .au-lobby__password-flag {
+    display: block;
+    float: none;
+    margin: 9px 0 0 0;
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.au-lobby__options-password-row .au-btn {
+    display: table-cell;
+    float: none;
+    height: 37px;
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
+    line-height: 35px;
+    vertical-align: middle;
+    text-align: center;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby__password-apply {
+    width: 88px;
+    min-width: 88px;
+    padding: 0 14px !important;
+}
+
+.au-lobby__password-clear {
+    width: 37px;
+    min-width: 37px;
+    max-width: 37px;
+    padding: 0 !important;
+    line-height: 37px;
+    font-size: 0;
+}
+
+.au-lobby__password-clear svg {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+.au-lobby__options-grid {
+    width: 100%;
+    margin: 0 0 4px 0;
+}
+
+.au-lobby__options-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 10px 0;
+    margin: 0 -10px 10px;
+}
+
+.au-lobby__options-cell {
+    display: table-cell;
+    width: 50%;
+    vertical-align: top;
+    padding: 12px 14px;
+    border: 1px solid rgba(58, 160, 255, 0.18);
+    background: rgba(12, 20, 28, 0.9);
+}
+
+.au-lobby__options-cell-head {
+    overflow: hidden;
+    margin: 0 0 10px 0;
+}
+
+.au-lobby__options-cell-head span {
+    float: left;
+    color: #8b9aab;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.au-lobby__options-stub {
+    float: right;
+    margin: 0;
+    padding: 2px 6px;
+    border: 1px solid rgba(106, 122, 138, 0.45);
+    color: #7a8a9a;
+    font-size: 10px;
+    font-style: normal;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.au-lobby__options-cell select {
+    display: block;
+    width: 100%;
+    height: 32px;
+    padding: 0 28px 0 10px;
+    border: 1px solid #3a4a58;
+    border-radius: 0;
+    background-color: #0a1016;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #8b9aab 50%),
+        linear-gradient(135deg, #8b9aab 50%, transparent 50%);
+    background-position:
+        calc(100% - 14px) calc(50% - 1px),
+        calc(100% - 8px) calc(50% - 1px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    color: #e8f0f8;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    line-height: 30px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+    cursor: pointer;
+}
+
+.au-lobby__options-cell select:focus {
+    border-color: rgba(58, 160, 255, 0.55);
+}
+
+.au-lobby__options-cell select option {
+    background: #0a1016;
+    color: #e8f0f8;
+}
+
+.au-lobby__options-check {
+    display: block !important;
+    margin: 0 0 8px 0;
+    color: #c8d4e0 !important;
+    font-size: 12px !important;
+    letter-spacing: 0.04em !important;
+    text-transform: none !important;
+    font-weight: normal !important;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.au-lobby__options-check:last-child {
+    margin-bottom: 0;
+}
+
+.au-lobby__options-check input {
+    margin-right: 8px;
+    width: 13px;
+    height: 13px;
+    vertical-align: middle;
+}
+
+.au-lobby__options-row--stub {
+    opacity: 0.88;
+}
+
+.au-lobby__options-cell--note {
+    border-style: dashed;
+    background: rgba(10, 16, 22, 0.75);
+}
+
+.au-lobby__options-note {
+    color: #6a7a8a;
+    font-size: 11px;
+    line-height: 1.45;
+    letter-spacing: 0.03em;
+}
+
+.au-lobby__options-actions {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(58, 160, 255, 0.18);
+    text-align: center;
+}
+
+.au-lobby__options-actions .au-btn {
+    margin-top: 0 !important;
+    min-width: 161px;
+    height: 39px;
+    padding: 0 21px;
+    font-size: 14px;
+    line-height: 37px;
+    vertical-align: middle;
+}
+
 .au-lobby__team {
     display: table-cell;
     vertical-align: top;
@@ -254,6 +541,7 @@
     float: left;
     width: 48px;
     margin: 0 10px 0 0;
+    position: relative;
 }
 
 .au-lobby__avatar {
@@ -263,6 +551,12 @@
     border: 1px solid rgba(0, 136, 255, 0.35);
     background: #0c0f0d;
     overflow: hidden;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby__avatar--host {
+    border: 2px solid #f5c518;
 }
 
 .au-lobby__avatar img {
@@ -284,6 +578,41 @@
     position: relative;
     z-index: 1;
     padding-right: 4px;
+}
+
+.au-lobby__ready {
+    position: absolute;
+    top: 50%;
+    right: 54px;
+    width: 22px;
+    height: 22px;
+    margin-top: -11px;
+    padding: 0;
+    border: 1px solid #3a4a58;
+    background: rgba(18, 24, 28, 0.95);
+    z-index: 12;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby__ready.on {
+    border-color: #2ecc71;
+    background: rgba(16, 48, 28, 0.95);
+}
+
+.au-lobby__ready-tick {
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 5px;
+    height: 9px;
+    margin-left: -4px;
+    margin-top: -6px;
+    border: solid #3dff8a;
+    border-width: 0 2px 2px 0;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
 }
 
 .au-lobby__menu-btn {
@@ -484,27 +813,24 @@
     right: 0;
     bottom: 0;
     left: 0;
-    padding: 18px 20px;
+    padding: 14px 18px 16px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    background: #0a0d0b;
+    background: #070a0c;
     z-index: 5;
+    overflow: hidden;
 }
 
-.au-lobby-browser__panel {
-    position: absolute;
-    top: 18px;
-    left: 20px;
-    right: 20px;
-    bottom: 18px;
-    padding: 18px;
-    overflow: auto;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
+.au-lobby-browser__bar {
+    overflow: hidden;
+    margin: 0 0 10px 0;
+    padding: 0 0 10px 0;
+    border-bottom: 1px solid #1c2a32;
 }
 
 .au-lobby-browser__title {
-    margin: 0 0 14px 0;
+    float: left;
+    margin: 4px 14px 0 0;
     font-family: 'Eurostile-Hea', Arial, sans-serif;
     font-size: 18px;
     letter-spacing: 0.1em;
@@ -512,36 +838,536 @@
     color: #e6edf5;
 }
 
-.au-lobby-browser__table {
-    margin-top: 14px;
+.au-lobby-browser__count {
+    float: left;
+    margin-top: 10px;
+    color: #6f8498;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.au-lobby-browser__bar-actions {
+    float: right;
+}
+
+.au-lobby-browser__bar-actions .au-btn {
+    float: left;
+    margin-left: 8px;
+    min-width: 88px;
+    height: 30px;
+    line-height: 28px;
+    padding: 0 12px;
+    font-size: 11px;
+}
+
+.au-lobby-browser__filters {
+    overflow: visible;
+    margin: 0 0 12px 0;
+    min-height: 32px;
+}
+
+.au-lobby-browser__filter {
+    float: left;
+    margin: 0 6px 0 0;
+    padding: 0 14px;
+    height: 32px;
+    line-height: 30px;
+    border: 1px solid #2a3a46;
+    background: rgba(12, 18, 22, 0.9);
+    color: #9ab0c2;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    vertical-align: top;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.au-lobby-browser__filter.on {
+    border-color: #3aa0ff;
+    color: #e8f4ff;
+    background: rgba(20, 48, 72, 0.95);
+}
+
+.au-lobby-browser__body {
+    position: absolute;
+    top: 108px;
+    left: 18px;
+    right: 18px;
+    bottom: 16px;
+    overflow: hidden;
+}
+
+.au-lobby-browser__list {
+    position: relative;
+    float: left;
+    width: 64%;
+    height: 100%;
     border: 1px solid #1c2a32;
+    background: rgba(8, 12, 14, 0.92);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby-browser__list .au-lobby-browser__row--head {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+}
+
+.au-lobby-browser__scroll {
+    position: absolute;
+    top: 34px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
 }
 
 .au-lobby-browser__row {
+    display: block;
     overflow: hidden;
-    padding: 10px 12px;
-    border-bottom: 1px solid #1c2a32;
+    width: 100%;
+    padding: 0 10px;
+    height: 34px;
+    line-height: 34px;
+    border: 0;
+    border-bottom: 1px solid #152028;
+    background: transparent;
+    color: #d5e0ea;
     font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 .au-lobby-browser__row--head {
-    background: rgba(0, 0, 0, 0.35);
-    color: #8b9aab;
+    background: rgba(0, 0, 0, 0.45);
+    color: #7f93a6;
     font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: default;
+    font-size: 10px;
+}
+
+.au-lobby-browser__row--server:hover {
+    background: rgba(40, 70, 96, 0.35);
+}
+
+.au-lobby-browser__row--server.on {
+    background: rgba(40, 92, 140, 0.45);
+    box-shadow: inset 3px 0 0 #3aa0ff;
+}
+
+.au-lobby-browser__row--server.disabled {
+    opacity: 0.55;
+}
+
+.au-lobby-browser__col {
+    float: left;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.au-lobby-browser__col--lock { width: 4%; text-align: center; }
+.au-lobby-browser__col--server { width: 30%; }
+.au-lobby-browser__col--map { width: 24%; }
+.au-lobby-browser__col--players { width: 12%; }
+.au-lobby-browser__col--ping { width: 14%; }
+.au-lobby-browser__col--state { width: 16%; }
+
+.au-lobby-browser__padlock {
+    display: inline-block;
+    position: relative;
+    width: 9px;
+    height: 7px;
+    margin-top: 5px;
+    border: 1.5px solid #d4b45a;
+    border-radius: 1px;
+    background: rgba(212, 180, 90, 0.32);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    vertical-align: middle;
+}
+.au-lobby-browser__padlock:before {
+    content: '';
+    position: absolute;
+    left: 1.5px;
+    top: -5px;
+    width: 3px;
+    height: 4px;
+    border: 1.5px solid #d4b45a;
+    border-bottom: 0;
+    border-radius: 3px 3px 0 0;
+}
+.au-lobby-browser__padlock:after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 1.5px;
+    margin-left: -1px;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: #d4b45a;
+}
+
+.au-lobby-browser__pw-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.55);
+}
+.au-lobby-browser__pw-box {
+    width: 320px;
+    margin: 120px auto 0;
+    padding: 18px 20px;
+    background: #121820;
+    border: 1px solid #3a4a58;
+    color: #d8e0e8;
+}
+.au-lobby-browser__pw-box h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+}
+.au-lobby-browser__pw-box p {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #9aabba;
+}
+.au-lobby-browser__pw-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #3a4a58;
+    background: #0a1016;
+    color: #e8f0f8;
+}
+.au-lobby-browser__pw-err {
+    margin-top: 8px;
+    color: #e07070;
+    font-size: 12px;
+}
+.au-lobby-browser__pw-actions {
+    margin-top: 14px;
+    text-align: right;
+}
+.au-lobby-browser__pw-actions .au-btn {
+    margin-left: 8px;
+}
+
+.au-lobby-browser__ping {
+    display: inline-block;
+    vertical-align: middle;
+    width: 10px;
+    height: 10px;
+    margin: -2px 6px 0 0;
+    border: 1px solid #3a4a58;
+    background: #1a2228;
+}
+
+.au-lobby-browser__ping.ping--good {
+    border-color: #2ecc71;
+    background: #1f8a4a;
+}
+
+.au-lobby-browser__ping.ping--ok {
+    border-color: #e6b84d;
+    background: #a07a20;
+}
+
+.au-lobby-browser__ping.ping--bad {
+    border-color: #e06a5a;
+    background: #8a3028;
+}
+
+.au-lobby-browser__ping.ping--unk {
+    opacity: 0.5;
+}
+
+.au-lobby-browser__detail {
+    float: right;
+    width: 34%;
+    height: 100%;
+    border: 1px solid #1c2a32;
+    background: rgba(10, 14, 16, 0.96);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.au-lobby-browser__art {
+    position: relative;
+    height: 150px;
+    background-color: #0a1014;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-bottom: 1px solid #1c2a32;
+}
+
+.au-lobby-browser__art-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 70px;
+    background: -webkit-linear-gradient(top, rgba(10,14,16,0), rgba(10,14,16,0.95));
+    background: linear-gradient(to bottom, rgba(10,14,16,0), rgba(10,14,16,0.95));
+}
+
+.au-lobby-browser__art-meta {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    z-index: 1;
+    color: #e8f0f8;
+}
+
+.au-lobby-browser__mode {
+    display: block;
+    margin-bottom: 2px;
+    color: #7eb8ff;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.au-lobby-browser__art-meta strong {
+    font-size: 16px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.au-lobby-browser__detail-name {
+    margin: 12px 14px 8px;
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    color: #e6edf5;
+}
+
+.au-lobby-browser__stats {
+    list-style: none;
+    margin: 0 14px 14px;
+    padding: 0;
+    border-top: 1px solid #1c2a32;
+}
+
+.au-lobby-browser__stats li {
+    overflow: hidden;
+    padding: 8px 0;
+    border-bottom: 1px solid #152028;
+    font-size: 12px;
+}
+
+.au-lobby-browser__stats span {
+    float: left;
+    color: #7f93a6;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 10px;
+}
+
+.au-lobby-browser__stats strong {
+    float: right;
+    color: #e6edf5;
+    font-weight: normal;
+}
+
+.au-btn.au-lobby-browser__join {
+    display: block;
+    width: auto;
+    margin: 0 14px 14px;
+    height: 42px;
+    line-height: 42px;
+    padding: 0 16px;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby-browser__join:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.au-lobby-browser__empty,
+.au-lobby-browser__detail-empty {
+    padding: 28px 16px;
+    color: #8b9aab;
+    text-align: center;
+    font-size: 12px;
+}
+
+.au-lobby__matchmake-head h2 {
+    margin: 0 0 8px;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+}
+
+.au-lobby__matchmake-head p {
+    margin: 0 0 16px;
+    color: #8b9aab;
+    font-size: 13px;
+}
+
+.au-lobby__matchmake-meta {
+    margin: 6px 0 14px;
+    color: #8b9aab;
+    font-size: 12px;
+    overflow: hidden;
+}
+
+.au-lobby__matchmake-meta span {
+    display: inline-block;
+    margin-right: 18px;
+}
+
+.au-lobby__map-cards {
+    overflow: hidden;
+    margin: 0 -6px 8px -6px;
+}
+
+.au-lobby__map-card {
+    position: relative;
+    float: left;
+    width: 31.33%;
+    height: 124px;
+    margin: 0 1% 12px 1%;
+    padding: 0;
+    border: 1px solid #1c2a32;
+    background-color: #0a1014;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    cursor: pointer;
+    overflow: hidden;
+    text-align: left;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.au-lobby__map-card:hover {
+    border-color: #3aa0ff;
+}
+
+.au-lobby__map-card.on {
+    border-color: #3aa0ff;
+    -webkit-box-shadow: 0 0 0 1px rgba(58, 160, 255, 0.55), 0 0 14px rgba(0, 136, 255, 0.28);
+    box-shadow: 0 0 0 1px rgba(58, 160, 255, 0.55), 0 0 14px rgba(0, 136, 255, 0.28);
+}
+
+.au-lobby__map-card-veil {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 72%;
+    background: -webkit-linear-gradient(top, rgba(7,9,11,0) 0%, rgba(7,9,11,0.88) 100%);
+    background: linear-gradient(180deg, rgba(7,9,11,0) 0%, rgba(7,9,11,0.88) 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.au-lobby__map-card-accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    z-index: 2;
+}
+
+.au-lobby__map-card-mode {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 3;
+    padding: 2px 7px;
+    background: rgba(8, 12, 16, 0.82);
+    border: 1px solid #1c2a32;
+    color: #c8d4e0;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.au-lobby__map-card.on .au-lobby__map-card-mode {
+    border-color: rgba(58, 160, 255, 0.45);
+    color: #e8f4ff;
+}
+
+.au-lobby__map-card-name {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    z-index: 3;
+    color: #f0f4f8;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.03em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+.au-lobby__map-card-check {
+    position: absolute;
+    left: 10px;
+    top: 8px;
+    z-index: 3;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #3aa0ff;
+    background: rgba(0, 80, 140, 0.85);
+}
+
+.au-lobby__map-card-check:after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid #9ad0ff;
+    border-width: 0 2px 2px 0;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+}
+
+.au-lobby__gameroom-head {
+    margin-bottom: 10px;
+    font-size: 12px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
-.au-lobby-browser__row span {
-    float: left;
-    width: 25%;
+.au-lobby__gameroom-server {
+    color: #e8f0f8;
+    font-weight: bold;
+    margin-right: 12px;
 }
 
-.au-lobby-browser__empty {
-    padding: 28px 12px;
-    color: #8b9aab;
-    text-align: center;
-    font-size: 13px;
+.au-lobby__gameroom-role {
+    color: #5ec4a8;
 }
 
 .au-lobby__modal {
@@ -550,24 +1376,33 @@
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 40;
+    z-index: 80;
     background: rgba(0, 0, 0, 0.55);
+}
+
+/* Root-level accident: never cover the social rail (content column only). */
+.au-lobby > .au-lobby__modal {
+    right: 320px;
 }
 
 .au-lobby__modal-box {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 280px;
-    margin: -38px 0 0 -140px;
-    padding: 22px 16px;
+    width: 320px;
+    margin: -70px 0 0 -160px;
+    padding: 22px 16px 18px;
     border: 1px solid #1c2a32;
     background: rgba(10, 14, 16, 0.97);
     color: #e6edf5;
     font-family: 'Eurostile-Hea', Arial, sans-serif;
-    font-size: 22px;
+    font-size: 18px;
     letter-spacing: 0.05em;
     text-align: center;
-    -webkit-box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    line-height: 1.35;
+}
+
+.au-lobby__modal-box .au-btn {
+    margin-top: 16px;
+    min-width: 120px;
 }

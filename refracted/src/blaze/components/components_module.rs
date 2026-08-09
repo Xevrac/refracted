@@ -258,9 +258,6 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
                 "setGameModRegister"
             }
         )), // RPC id 65 / 0x41
-        // CNC GameManager async notification 80 (0x50) = NotifyGameAttribChange (id->name table
-        // sub_12AB360). Carries the `GameReady` game attribute that triggers the client's built-in
-        // engine connect to the dedicated (round 64).
         (4, 80) => Some(format!(
             "{}.{}",
             component_name,
@@ -289,7 +286,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
             }
         )),
         (4, 42) => Some(format!("{}.getGameListSubscription", component_name)),
-        (4, 100) => Some(format!("{}.getGameListSnapshot", component_name)), // 0x64
+        (4, 100) => Some(format!("{}.getGameListSnapshot", component_name)), // 0x64; CNC NOTIFICATION → NotifyGameStateChange via enrich_capture_command_name
         (4, 201) => Some(format!(
             "{}.{}",
             component_name,
@@ -334,7 +331,6 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
             "{}.{}",
             component_name,
             if crate::common::game::get_current_game_id().as_str() == "cnc" {
-                // CNC / BlazeSDK GameManager notification id 112 = NotifyGameReset.
                 "NotifyGameReset"
             } else {
                 "swapPlayersTeam"
@@ -557,6 +553,52 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         
         _ => None,
     }
+}
+
+pub fn enrich_capture_command_name(
+    component: u16,
+    command: u16,
+    msg_type: &str,
+    payload: &[u8],
+    existing: Option<&str>,
+) -> Option<String> {
+    let is_notif = msg_type.to_ascii_uppercase().contains("NOTIF");
+
+    if component == 4 && command == 80 {
+        let base = existing
+            .map(|s| s.split('(').next().unwrap_or(s).trim_end().to_string())
+            .unwrap_or_else(|| {
+                get_command_name(component, command)
+                    .unwrap_or_else(|| "GameManager.NotifyGameAttribChange".to_string())
+            });
+        if let Some(attrs) =
+            crate::blaze::tdf::TdfEncoder::find_string_string_map_field(payload, "ATTR")
+        {
+            if !attrs.is_empty() {
+                let keys: Vec<&str> = attrs.keys().map(|k| k.as_str()).collect();
+                return Some(format!("{}({})", base, keys.join(",")));
+            }
+        }
+        return Some(base);
+    }
+
+    if component == 4
+        && command == 100
+        && is_notif
+        && crate::common::game::get_current_game_id() == "cnc"
+    {
+        return Some("GameManager.NotifyGameStateChange".to_string());
+    }
+
+    if component == 4
+        && command == 40
+        && is_notif
+        && crate::common::game::get_current_game_id() == "cnc"
+    {
+        return Some("GameManager.NotifyPlayerRemoved".to_string());
+    }
+
+    None
 }
 
 /// Check if a component/command combination is handled
