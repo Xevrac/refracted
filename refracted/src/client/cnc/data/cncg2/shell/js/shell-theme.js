@@ -223,7 +223,7 @@
     function set(id) {
         var prefs = readLocalPrefs();
         prefs.theme = apply(id);
-           with the last committed active theme so Classic/Aurora sticks. */
+        // Keep defaultTheme in sync with last committed active theme so Classic/Aurora sticks.
         prefs.defaultTheme = prefs.theme;
         writeLocalPrefs(prefs);
         persistRemote(prefs);

@@ -228,20 +228,20 @@ struct ArrayRepeater {
 }
 
 #[derive(Clone)]
-struct Complex {
-    name: String,
-    fields: Vec<Field>,
+pub(crate) struct Complex {
+    pub name: String,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Clone)]
-struct Field {
-    name: String,
+pub(crate) struct Field {
+    pub name: String,
     typ: FieldType,
-    value: FieldValue,
+    pub value: FieldValue,
 }
 
 #[derive(Clone)]
-enum FieldValue {
+pub(crate) enum FieldValue {
     Complex(Complex),
     ClassRef(u32),
     Array(Complex),
@@ -270,6 +270,30 @@ struct Dbx {
     instances: Vec<(EbxGuid, Complex)>,
     enumerations: HashMap<u16, HashMap<i32, String>>,
     is_primary_instance: bool,
+}
+
+/// Parsed EBX tree for placement harvest (`ebx_positions`).
+pub(crate) struct DbxTree {
+    pub true_filename: String,
+    pub external_guids: Vec<(EbxGuid, EbxGuid)>,
+    pub internal_guids: Vec<EbxGuid>,
+    pub instances: Vec<(EbxGuid, Complex)>,
+}
+
+/// Parse EBX into a tree suitable for BlueprintTransform harvest.
+pub(crate) fn parse_dbx_for_positions(data: &[u8]) -> Result<DbxTree, String> {
+    let dbx = Dbx::parse(data)?;
+    Ok(DbxTree {
+        true_filename: dbx.true_filename,
+        external_guids: dbx.external_guids,
+        internal_guids: dbx.internal_guids,
+        instances: dbx.instances,
+    })
+}
+
+/// Re-export tree types under a stable path for `ebx_positions`.
+pub(crate) mod position_tree {
+    pub(crate) use super::{Complex, DbxTree, Field, FieldValue};
 }
 
 impl Dbx {

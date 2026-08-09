@@ -2874,7 +2874,7 @@ fn options_window(ctx: &egui::Context, open: &mut bool) {
                         &mut app_settings.auto_start_emulator,
                         "Autostart Emulator on launch",
                     )
-                    .on_hover_text("Starts the emulator when Refracted opens (also: -autoEmu). Headless: -noGui -autoEmu")
+                    .on_hover_text("Starts the emulator when Refracted opens (also: -autoEmu). Headless: -noGui -autoEmu or rfrcli --game <id>")
                     .changed()
                 {
                     settings_changed = true;
@@ -3228,7 +3228,7 @@ async fn main() -> Result<()> {
         if !(cli.auto_emu || settings_auto) {
             eprintln!("-noGui requires -autoEmu (or Options → Autostart Emulator).");
             eprintln!("Example: refracted.exe -noGui -autoEmu");
-            eprintln!("Or use: refracted-headless --game <id>");
+            eprintln!("Or use: rfrcli --game <id>");
             return Err(anyhow::anyhow!("-noGui without auto-start"));
         }
 

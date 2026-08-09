@@ -4,8 +4,8 @@ path = "src/main.rs"
 required-features = ["desktop"]
 
 [[bin]]
-name = "refracted-headless"
-path = "src/bin/refracted_headless.rs"
+name = "rfrcli"
+path = "src/bin/rfrcli.rs"
 
 [build-dependencies]
 base64 = "0.22"
@@ -119,7 +119,7 @@ desktop = [
 build = "build.rs"
 edition = "2021"
 name = "refracted"
-version = "0.4.1592"
+version = "0.4.1601"
 
 [target."cfg(windows)".build-dependencies]
 winres = "0.1"

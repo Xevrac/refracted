@@ -4,6 +4,7 @@ pub mod archetype;
 pub mod catalog;
 pub mod dbobject;
 pub mod ebx;
+pub mod ebx_positions;
 pub mod icons;
 pub mod index;
 pub mod meshset;

@@ -2,6 +2,9 @@
 
 use crate::core::frostex::archetype::Archetype;
 use crate::core::frostex::ebx::{register_ebx_guid, EbxGuidTable};
+use crate::core::frostex::ebx_positions::{
+    extract_ebx_placements, filter_with_positions, write_placements_by_map,
+};
 use crate::core::frostex::icons::{FrostIcon, IconAtlas};
 use crate::core::frostex::index::{AssetKind, AssetRef, DataIndex, OpenJob, TreeNode, TreeNodeKind};
 use crate::core::frostex::preview::{format_size, needs_heavy_preview, PreviewState};
@@ -410,6 +413,21 @@ fn render_dump_options_window(ctx: &egui::Context, state: &mut FrostExState) {
             ui.checkbox(&mut pending.options.res, "RES");
             ui.checkbox(&mut pending.options.chunk, "Chunks");
             ui.checkbox(&mut pending.options.file, "Loose files");
+            ui.add_enabled_ui(pending.options.ebx, |ui| {
+                ui.checkbox(
+                    &mut pending.options.ebx_positions,
+                    "EBX entity positions CSV (per-map under entity_positions/)",
+                )
+                .on_hover_text(
+                    "Requires EBX. Writes entity_positions/<map>.csv for Prism EntityBench.",
+                );
+            });
+            if pending.options.ebx_positions && !pending.options.ebx {
+                ui.colored_label(
+                    egui::Color32::YELLOW,
+                    "Positions CSV needs EBX checked — TOC alone has no BlueprintTransform data.",
+                );
+            }
             ui.separator();
 
             let any = pending.options.toc
@@ -1013,8 +1031,10 @@ impl FrostExState {
             finished: None,
         }));
         let progress_thread = progress.clone();
+        let ebx_table = ctx.ebx_guid_table.clone();
         thread::spawn(move || {
             let mut wrote = 0usize;
+            let mut placement_rows = Vec::new();
             for asset in assets {
                 {
                     let mut p = progress_thread.lock();
@@ -1026,6 +1046,25 @@ impl FrostExState {
                     let rel = rip_relative_path(&asset);
                     let dest = out_dir.join(&rel);
                     match prepare_rip(&ctx, &asset, &dest).and_then(|(bytes, final_path)| {
+                        if asset.kind == AssetKind::Ebx {
+                            if let Ok(raw) = ctx.extract_bytes(&asset) {
+                                let rel_ebx = final_path
+                                    .strip_prefix(&out_dir)
+                                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                                    .unwrap_or_else(|_| asset.name.clone());
+                                if let Ok(rows) = extract_ebx_placements(
+                                    &raw,
+                                    &rel_ebx,
+                                    if ebx_table.is_empty() {
+                                        None
+                                    } else {
+                                        Some(&ebx_table)
+                                    },
+                                ) {
+                                    placement_rows.extend(rows);
+                                }
+                            }
+                        }
                         if let Some(parent) = final_path.parent() {
                             std::fs::create_dir_all(parent)
                                 .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
@@ -1040,9 +1079,27 @@ impl FrostExState {
                 }
                 progress_thread.lock().done += 1;
             }
+
+            let mut extra = String::new();
+            if !placement_rows.is_empty() {
+                let with_pos = filter_with_positions(&placement_rows);
+                match write_placements_by_map(&out_dir, &with_pos) {
+                    Ok(summary) => {
+                        extra = format!(
+                            "; entity_positions/ {} maps, {} placements",
+                            summary.map_count, summary.row_count
+                        );
+                    }
+                    Err(err) => {
+                        progress_thread.lock().errors += 1;
+                        extra = format!("; positions CSV failed: {err}");
+                    }
+                }
+            }
+
             let errors = progress_thread.lock().errors;
             progress_thread.lock().finished = Some(format!(
-                "Rip done: wrote {wrote}/{total} to {} ({} errors)",
+                "Rip done: wrote {wrote}/{total} to {} ({} errors){extra}",
                 out_dir.display(),
                 errors
             ));

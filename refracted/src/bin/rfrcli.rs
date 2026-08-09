@@ -14,8 +14,8 @@ use tracing_subscriber::registry::LookupSpan;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "refracted-headless",
-    about = "Refracted Blaze emulator (headless) — game selection + terminal logs only"
+    name = "rfrcli",
+    about = "Refracted Blaze emulator CLI — game selection + terminal logs only"
 )]
 struct Args {
     /// Game id from games.json (e.g. cnc, bf-labs)
@@ -232,7 +232,7 @@ async fn main() -> ExitCode {
     }
 
     let game = refracted::common::game::get_current_game_id();
-    info!("Refracted headless — game={game} listen={}", args.listen_host);
+    info!("rfrcli — game={game} listen={}", args.listen_host);
 
     let ports_in_use = BlazeServer::check_all_ports(&args.listen_host);
     if !ports_in_use.is_empty() {

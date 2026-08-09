@@ -5,6 +5,9 @@ use crate::core::frostex::dbobject::parse_db_bytes;
 use crate::core::frostex::ebx::{
     dump_ebx_text_with_table, is_ebx, register_ebx_guid, EbxGuidTable,
 };
+use crate::core::frostex::ebx_positions::{
+    extract_ebx_placements, filter_with_positions, write_placements_by_map, EbxPlacement,
+};
 use crate::core::frostex::index::{AssetKind, AssetRef, DataIndex, OpenProgress, TreeNodeKind};
 use crate::core::frostex::meshset::{decode_meshset, looks_like_meshset};
 use crate::core::frostex::preview::{looks_textual, safe_filename};
@@ -31,6 +34,8 @@ pub struct DumpOptions {
     pub res: bool,
     pub chunk: bool,
     pub file: bool,
+    /// After EBX dump, harvest BlueprintTransform placements → entity_positions/<map>.csv
+    pub ebx_positions: bool,
 }
 
 impl Default for DumpOptions {
@@ -42,6 +47,7 @@ impl Default for DumpOptions {
             res: true,
             chunk: true,
             file: true,
+            ebx_positions: true,
         }
     }
 }
@@ -330,6 +336,9 @@ pub fn run_full_dump(
         ..DumpReport::default()
     };
 
+    let mut placement_rows: Vec<EbxPlacement> = Vec::new();
+    let harvest_positions = options.ebx_positions && options.ebx;
+
     for asset in assets {
         {
             let mut p = progress.lock();
@@ -353,6 +362,19 @@ pub fn run_full_dump(
         } else {
             match prepare_rip_with_table(&ctx, &asset, &dest, Some(&ebx_guid_table)).and_then(
                 |(bytes, final_path)| {
+                    if harvest_positions && asset.kind == AssetKind::Ebx {
+                        if let Ok(raw) = ctx.extract_bytes(&asset) {
+                            let rel_ebx = final_path
+                                .strip_prefix(&out_dir)
+                                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                                .unwrap_or_else(|_| asset.name.clone());
+                            if let Ok(rows) =
+                                extract_ebx_placements(&raw, &rel_ebx, Some(&ebx_guid_table))
+                            {
+                                placement_rows.extend(rows);
+                            }
+                        }
+                    }
                     if let Some(parent) = final_path.parent() {
                         std::fs::create_dir_all(parent)
                             .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
@@ -402,6 +424,73 @@ pub fn run_full_dump(
             p.failed = report.failed;
             p.skipped = report.skipped;
         }
+    }
+
+    if harvest_positions {
+        let with_pos = filter_with_positions(&placement_rows);
+        {
+            let mut p = progress.lock();
+            p.phase = format!(
+                "Writing entity_positions/ ({} with pos / {} instances)…",
+                with_pos.len(),
+                placement_rows.len()
+            );
+        }
+        match write_placements_by_map(&out_dir, &with_pos) {
+            Ok(summary) => {
+                report.wrote += summary.files.len();
+                *report.by_kind.entry("EbxPositions".into()).or_default() += summary.files.len();
+                for (rel, n) in &summary.files {
+                    let bytes = out_dir
+                        .join(rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+                        .metadata()
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    report.entries.push(DumpEntry {
+                        asset_name: rel.clone(),
+                        rel_path: rel.clone(),
+                        kind: "EbxPositions".into(),
+                        ok: true,
+                        detail: format!("{n} placements"),
+                        bytes,
+                    });
+                }
+                report.entries.push(DumpEntry {
+                    asset_name: "entity_positions/".into(),
+                    rel_path: "entity_positions/".into(),
+                    kind: "EbxPositions".into(),
+                    ok: true,
+                    detail: format!(
+                        "{} maps, {} placements with world pos (of {} instances)",
+                        summary.map_count,
+                        summary.row_count,
+                        placement_rows.len()
+                    ),
+                    bytes: 0,
+                });
+            }
+            Err(err) => {
+                report.failed += 1;
+                report.entries.push(DumpEntry {
+                    asset_name: "entity_positions/".into(),
+                    rel_path: "entity_positions/".into(),
+                    kind: "EbxPositions".into(),
+                    ok: false,
+                    detail: err,
+                    bytes: 0,
+                });
+            }
+        }
+    } else if options.ebx_positions && !options.ebx {
+        report.entries.push(DumpEntry {
+            asset_name: "entity_positions/".into(),
+            rel_path: "entity_positions/".into(),
+            kind: "EbxPositions".into(),
+            ok: false,
+            detail: "skipped: enable EBX — positions CSV is harvested from EBX, not TOC".into(),
+            bytes: 0,
+        });
+        report.skipped += 1;
     }
 
     report.elapsed_secs = started.elapsed().as_secs_f32();
