@@ -66,6 +66,18 @@
             mode: '3v3',
             image: MAP_THUMB,
             accent: '#3a9a8a'
+        },
+        {
+            // LevelDescriptionAsset 8f9625ea — MP/PVE FirstPlayable_MPHorde_Final.
+            // Internal name is Horde; player-facing mode is Onslaught (UI/SFX/ONSLAUGHT2P).
+            // EBX Description.Name is empty — "Canyon Basin" is a roster label from the cliff-ringed layout.
+            id: 'onslaught-fp',
+            label: 'Canyon Basin',
+            path: 'Levels/MP/PVE/FirstPlayable_MPHorde_Final/FirstPlayable_MPHorde_Final',
+            slots: 2,
+            mode: 'ONSLAUGHT',
+            image: MAP_THUMB,
+            accent: '#b84a2a'
         }
     ];
 

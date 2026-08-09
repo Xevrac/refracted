@@ -1,3 +1,4 @@
+/**
  * CCApp - Command & Conquer UI Replica
  * Targeting late 2011 WebKit environment
  */
