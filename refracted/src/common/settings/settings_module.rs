@@ -10,6 +10,9 @@ use crate::common::user_profile::UserProfiles;
 pub struct AppSettings {
     pub debug_logging: bool,
     pub theme: String, // "light" or "dark"
+    /// When true, desktop GUI starts the emulator automatically (dev convenience).
+    #[serde(default)]
+    pub auto_start_emulator: bool,
 }
 
 impl Default for AppSettings {
@@ -17,6 +20,7 @@ impl Default for AppSettings {
         Self {
             debug_logging: false,
             theme: "dark".to_string(),
+            auto_start_emulator: false,
         }
     }
 }

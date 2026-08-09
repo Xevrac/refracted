@@ -338,6 +338,8 @@ struct RefractedApp {
     show_disclaimer_popup: bool,
     inspector_state: InspectorUiState, // Inspector UI state
     startup_maximize_pending: bool,
+    /// One-shot: start emulator on first update (settings / -autoEmu).
+    pending_autostart_emulator: bool,
 }
 
 impl RefractedApp {
@@ -346,6 +348,8 @@ impl RefractedApp {
         log_buffer: LogBuffer,
         packet_buffer: PacketBuffer,
         log_rx: Receiver<LogLine>,
+        auto_start_emulator: bool,
+        game_override: Option<String>,
     ) -> Self {
         // Set global log buffer for stdout capture
         init_global_buffer(log_buffer.clone());
@@ -370,12 +374,17 @@ impl RefractedApp {
         );
         cc.egui_ctx.set_style(style);
 
-        if let Err(e) = refracted::common::boot::boot_emulator(refracted::common::boot::BootOptions::default()) {
+        if let Err(e) = refracted::common::boot::boot_emulator(refracted::common::boot::BootOptions {
+            data_dir: None,
+            game_id: game_override,
+        }) {
             eprintln!("Failed to initialize settings: {}", e);
         } else {
             let settings = refracted::common::settings::get_settings();
             apply_theme(&cc.egui_ctx, &settings.app_settings.theme);
         }
+        let pending_autostart = auto_start_emulator
+            || refracted::common::settings::get_app_settings().auto_start_emulator;
         // Initialize inspector state
         let mut inspector_state = InspectorUiState::new();
         let proxy_settings = refracted::common::settings::get_proxy_settings();
@@ -422,6 +431,7 @@ impl RefractedApp {
             show_disclaimer_popup: false,
             inspector_state,
             startup_maximize_pending: true,
+            pending_autostart_emulator: pending_autostart,
         }
     }
 
@@ -1127,6 +1137,12 @@ impl RefractedApp {
 
 impl eframe::App for RefractedApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.pending_autostart_emulator {
+            self.pending_autostart_emulator = false;
+            if !self.server_running && !self.proxy_running {
+                self.start_server();
+            }
+        }
         if self.startup_maximize_pending {
             ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
             self.startup_maximize_pending = false;
@@ -2852,6 +2868,17 @@ fn options_window(ctx: &egui::Context, open: &mut bool) {
                 if ui.checkbox(&mut app_settings.debug_logging, "Enable Debug Logging").changed() {
                     settings_changed = true;
                 }
+
+                if ui
+                    .checkbox(
+                        &mut app_settings.auto_start_emulator,
+                        "Autostart Emulator on launch",
+                    )
+                    .on_hover_text("Starts the emulator when Refracted opens (also: -autoEmu). Headless: -noGui -autoEmu")
+                    .changed()
+                {
+                    settings_changed = true;
+                }
                 
                 ui.add_space(10.0);
                 
@@ -3089,8 +3116,136 @@ fn proxy_window(ctx: &egui::Context, open: &mut bool, inspector_state: &mut Insp
     }
 }
 
+#[derive(Debug, Default, Clone)]
+struct CliLaunchFlags {
+    /// Skip egui and run the emulator in the console (`-noGui` / `--no-gui`).
+    no_gui: bool,
+    /// Autostart emulator (`-autoEmu` / `--auto-emu`); with GUI also honors Options setting.
+    auto_emu: bool,
+    /// Optional game id override (`-g` / `--game`), same as headless.
+    game: Option<String>,
+}
+
+fn parse_cli_launch_flags(args: impl IntoIterator<Item = String>) -> CliLaunchFlags {
+    let mut flags = CliLaunchFlags::default();
+    let mut iter = args.into_iter().skip(1); // skip exe
+    while let Some(arg) = iter.next() {
+        let lower = arg.to_ascii_lowercase();
+        match lower.as_str() {
+            "-nogui" | "--no-gui" | "/nogui" => flags.no_gui = true,
+            "-autoemu" | "--auto-emu" | "/autoemu" => flags.auto_emu = true,
+            "-g" | "--game" => flags.game = iter.next(),
+            other if other.starts_with("--game=") => {
+                flags.game = Some(other.trim_start_matches("--game=").to_string());
+            }
+            other if other.starts_with("-g=") => {
+                flags.game = Some(other.trim_start_matches("-g=").to_string());
+            }
+            _ => {}
+        }
+    }
+    flags
+}
+
+#[cfg(windows)]
+fn ensure_console_for_headless() {
+    type BOOL = i32;
+    type DWORD = u32;
+    type HANDLE = *mut std::ffi::c_void;
+    extern "system" {
+        fn AttachConsole(dw_process_id: DWORD) -> BOOL;
+        fn AllocConsole() -> BOOL;
+        fn GetStdHandle(n_std_handle: DWORD) -> HANDLE;
+        fn SetConsoleMode(h_console_handle: HANDLE, dw_mode: DWORD) -> BOOL;
+        fn GetConsoleMode(h_console_handle: HANDLE, lp_mode: *mut DWORD) -> BOOL;
+    }
+    const ATTACH_PARENT_PROCESS: DWORD = 0xFFFFFFFF;
+    const STD_OUTPUT_HANDLE: DWORD = 0xFFFFFFF5; // (DWORD)-11
+    const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            let _ = AllocConsole();
+        }
+        let hout = GetStdHandle(STD_OUTPUT_HANDLE);
+        if !hout.is_null() && hout != (-1isize as HANDLE) {
+            let mut mode: DWORD = 0;
+            if GetConsoleMode(hout, &mut mode) != 0 {
+                let _ = SetConsoleMode(hout, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+            }
+        }
+    }
+    let _ = colored::control::set_virtual_terminal(true);
+}
+
+async fn run_headless_emulator(listen_host: &str) -> Result<()> {
+    let ports_in_use = BlazeServer::check_all_ports(listen_host);
+    if !ports_in_use.is_empty() {
+        eprintln!("The following ports are already in use:");
+        for (port, name) in &ports_in_use {
+            eprintln!("  - Port {port} ({name})");
+        }
+        eprintln!("Free these ports before starting the server.");
+        return Err(anyhow::anyhow!("ports in use"));
+    }
+
+    info!("Starting Refracted Emulator (no GUI)...");
+    match BlazeServer::new(listen_host.to_string()).await {
+        Ok(mut emulator) => match emulator.start_emulator().await {
+            Ok(()) => {
+                info!("Refracted Emulator has been shut down gracefully");
+                Ok(())
+            }
+            Err(e) => {
+                error!("Emulator error: {e}");
+                Err(anyhow::anyhow!("emulator error: {e}"))
+            }
+        },
+        Err(e) => {
+            error!("Failed to create emulator: {e}");
+            Err(anyhow::anyhow!("create emulator: {e}"))
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cli = parse_cli_launch_flags(std::env::args());
+
+    // Headless path: -noGui -autoEmu (or Autostart setting already on).
+    if cli.no_gui {
+        #[cfg(windows)]
+        ensure_console_for_headless();
+
+        if let Err(e) = refracted::common::boot::boot_emulator(refracted::common::boot::BootOptions {
+            data_dir: None,
+            game_id: cli.game.clone(),
+        }) {
+            eprintln!("Failed to initialize settings: {}", e);
+            return Err(anyhow::anyhow!("boot failed: {e}"));
+        }
+
+        let settings_auto = refracted::common::settings::get_app_settings().auto_start_emulator;
+        if !(cli.auto_emu || settings_auto) {
+            eprintln!("-noGui requires -autoEmu (or Options → Autostart Emulator).");
+            eprintln!("Example: refracted.exe -noGui -autoEmu");
+            eprintln!("Or use: refracted-headless --game <id>");
+            return Err(anyhow::anyhow!("-noGui without auto-start"));
+        }
+
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"))
+            .add_directive("rustls=warn".parse().unwrap())
+            .add_directive("h2=warn".parse().unwrap());
+        let _ = tracing_subscriber::fmt()
+            .with_target(false)
+            .with_env_filter(filter)
+            .try_init();
+
+        let game = refracted::common::game::get_current_game_id();
+        info!("Refracted -noGui — game={game} listen={EMULATOR_LISTEN_HOST}");
+        return run_headless_emulator(EMULATOR_LISTEN_HOST).await;
+    }
+
     let log_buffer = Arc::new(Mutex::new(Vec::new()));
     let (log_tx, log_rx) = std::sync::mpsc::channel::<LogLine>();
     init_log_line_sender(log_tx);
@@ -3114,6 +3269,8 @@ async fn main() -> Result<()> {
     };
 
     let packet_buffer = Arc::new(Mutex::new(Vec::new()));
+    let game_override = cli.game.clone();
+    let auto_emu_cli = cli.auto_emu;
     
     if let Err(e) = eframe::run_native(
         "Refracted",
@@ -3124,6 +3281,8 @@ async fn main() -> Result<()> {
                 log_buffer.clone(),
                 packet_buffer.clone(),
                 log_rx,
+                auto_emu_cli,
+                game_override.clone(),
             ))
         }),
     ) {
