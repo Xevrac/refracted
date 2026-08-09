@@ -72,12 +72,25 @@ pub fn pushes_after_reset_dedicated_server(
     pushes_client_join_after_reset(request, gid)
 }
 
+pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    let Some(pid) = rematch_teardown_persona(gid) else {
+        return Ok(Vec::new());
+    };
+    crate::debug_println!(
+        "\x1b[38;2;100;200;255m[CNC]\x1b[0m rematch teardown before JoinGameResponse gid={} pid={}",
+        gid,
+        pid
+    );
+    pushes_notify_player_removed(gid, pid, super::PLAYER_REMOVED_REASON_GAME_DESTROYED)
+}
+
 /// Client-side join notifies after `resetDedicatedServer` (no dedicated orchestration).
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
         gid
     );
+
     // Same order as `joinGame`: **NotifyGameSetup first** so `mGameMap` has the game before
     // `NotifyGameStateChange` / platform-host notifies (avoids "unknown local game" GMGR warnings).
     let setup = super::build_game_manager_notify_game_setup(request, gid)?;
@@ -161,18 +174,53 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     ])
 }
 
+fn rematch_teardown_persona(gid: i64) -> Option<i64> {
+    let host = super::game_state::host_player_for_gid(gid);
+    if host.persona_id > 0
+        && !host.is_ai
+        && !super::dedicated_pool::is_dedicated_synthetic_persona(host.persona_id)
+    {
+        return Some(host.persona_id);
+    }
+    super::game_state::players_for_gid(gid)
+        .into_iter()
+        .find(|p| {
+            p.persona_id > 0
+                && !p.is_ai
+                && !super::dedicated_pool::is_dedicated_synthetic_persona(p.persona_id)
+        })
+        .map(|p| p.persona_id)
+}
+
 pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> {
+    pushes_after_join_game_lobby(request, false)
+}
+
+pub fn pushes_after_join_game_lobby(
+    request: &[u8],
+    defer_mesh: bool,
+) -> BlazeResult<Vec<OutgoingPush>> {
     let gid = super::cnc_extract_join_game_id(request);
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameStateChange + NotifyGameSetup + NotifyPlatformHostInitialized after joinGame (gid={})",
-        gid
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized after joinGame (gid={}){}",
+        gid,
+        if defer_mesh {
+            " [lobby — mesh deferred]"
+        } else {
+            ""
+        }
     );
 
     let setup = super::build_game_manager_notify_game_setup_join(gid)?;
     let wire_setup = notification_envelope(0x0004, 0x0014, &setup);
     let pl0 = wire_setup.len();
 
-    let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_RESETABLE)?;
+    let gsta = if defer_mesh {
+        super::GSTA_PRE_GAME
+    } else {
+        super::GSTA_INITIALIZING
+    };
+    let gstate = super::build_game_manager_notify_game_state_change(gid, gsta)?;
     let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
     let pl1 = wire_gstate.len();
 
@@ -180,15 +228,7 @@ pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> 
     let wire_phost = notification_envelope(0x0004, 0x0047, &phost);
     let pl2 = wire_phost.len();
 
-    let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;
-    let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
-    let pl_initiate = wire_initiate.len();
-
-    let join_done = super::build_game_manager_notify_player_join_completed(gid)?;
-    let wire_join_done = notification_envelope(0x0004, 0x001E, &join_done);
-    let pl3 = wire_join_done.len();
-
-    Ok(vec![
+    let mut out = vec![
         OutgoingPush {
             wire: wire_setup,
             component: 0x0004,
@@ -222,7 +262,13 @@ pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> 
                 pl2
             ),
         },
-        OutgoingPush {
+    ];
+
+    if !defer_mesh {
+        let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;
+        let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
+        let pl_initiate = wire_initiate.len();
+        out.push(OutgoingPush {
             wire: wire_initiate,
             component: 0x0004,
             command: 0x0016,
@@ -232,8 +278,12 @@ pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> 
                 "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl_initiate
             ),
-        },
-        OutgoingPush {
+        });
+
+        let join_done = super::build_game_manager_notify_player_join_completed(gid)?;
+        let wire_join_done = notification_envelope(0x0004, 0x001E, &join_done);
+        let pl3 = wire_join_done.len();
+        out.push(OutgoingPush {
             wire: wire_join_done,
             component: 0x0004,
             command: 0x001E,
@@ -243,8 +293,10 @@ pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> 
                 "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl3
             ),
-        },
-    ])
+        });
+    }
+
+    Ok(out)
 }
 
 pub fn pushes_after_login_persona() -> BlazeResult<Vec<OutgoingPush>> {
@@ -344,9 +396,6 @@ pub fn pushes_after_set_player_attributes(
 
 /// Seed AuthToken before GameReady.
 ///
-/// CNC GameReady (`sub_1204D70` → `sub_12A6650`) reads **player attributes** `"AuthToken"`
-/// (string map). `NotifyPlayerCustomDataChange.CDAT` is a BlazeSDK **blob** -- keep that
-/// notify shape correct, and also publish the attribute the join path actually looks up.
 pub fn pushes_auth_token_custom_data(gid: i64, pid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     let mut blobs = indexmap::IndexMap::new();
     blobs.insert(
@@ -491,22 +540,13 @@ pub fn pushes_advance_game_to_ingame(gid: i64) -> BlazeResult<Vec<OutgoingPush>>
 
 /// Round 64 / D38: `NotifyGameAttribChange` (comp 4, cmd 80) carrying `GameReady` (+ `CnCGameId`).
 ///
-/// On the **client**, `onGameAttributeUpdated` (sub_1204D70) posts `RtsBlazeJoinGameMessage` and
-/// drives the connect chain (MsgSys TCP in CNCO; retail also had UDP 25200).
 /// On the **dedicated**, the same notify is required so CNCLive publishes into
-/// `RtsServer::handleMessage` (0xA739D0) — mirror via `game_state::enqueue_game_ready_to_dedicated`.
 pub fn pushes_game_ready_attrib(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameAttribChange(GameReady) (gid={})",
         gid
     );
     let mut attrs = indexmap::IndexMap::new();
-    // Source of truth = exe string literals (CnC.server.exe), NOT a shared style:
-    //   GameReady / CnCGameId  → game ATTR  (sub_1204D70)
-    //   AuthToken              → player ATTR (sub_12A6650) — seeded separately
-    //   serverid               → mesh MATR key after CustomAttribute:: strip
-    //                            (sub_12016F0 / sub_11FE7F0); also echoed here but
-    //                            Join resolves MATR from NotifyGameSetup, not this ATTR.
     let serverid = super::dedicated_pool::host_for_gid(gid)
         .map(|h| {
             let ip = (if h.exip_ip != 0 { h.exip_ip } else { h.inip_ip }) as u32;
@@ -517,6 +557,7 @@ pub fn pushes_game_ready_attrib(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     attrs.insert("CnCGameId".to_string(), gid.to_string());
     attrs.insert("serverid".to_string(), serverid);
     attrs.insert("GameReady".to_string(), "1".to_string());
+    super::game_state::apply_password_flag_to_attrs(gid, &mut attrs);
     let body = super::build_game_manager_notify_game_attrib_change(gid, &attrs)?;
     let wire = notification_envelope(0x0004, 0x0050, &body);
     let pl = wire.len();
@@ -528,6 +569,124 @@ pub fn pushes_game_ready_attrib(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
         blaze_send_label: "NotifyGameAttribChange(GameReady) -> client engine connect",
         info_log_line: format!(
             "[Blaze→Client] GameManager.NotifyGameAttribChange Component=4, Command=80, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    }])
+}
+
+pub fn pushes_password_attrib(
+    gid: i64,
+    protected: bool,
+    secret: Option<&str>,
+) -> BlazeResult<Vec<OutgoingPush>> {
+    let mut attrs = indexmap::IndexMap::new();
+    let with_secret = secret.filter(|s| !s.is_empty()).is_some();
+    if protected {
+        attrs.insert(super::game_state::ATTR_PASSWORD_FLAG.to_string(), "1".to_string());
+        if let Some(s) = secret.filter(|s| !s.is_empty()) {
+            attrs.insert(super::game_state::ATTR_PASSWORD_SECRET.to_string(), s.to_string());
+        }
+    } else {
+        attrs.insert(super::game_state::ATTR_PASSWORD_FLAG.to_string(), "0".to_string());
+        attrs.insert(super::game_state::ATTR_PASSWORD_SECRET.to_string(), String::new());
+    }
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameAttribChange(password) gid={} protected={} secret={}",
+        gid,
+        protected,
+        with_secret
+    );
+    let body = super::build_game_manager_notify_game_attrib_change(gid, &attrs)?;
+    let wire = notification_envelope(0x0004, 0x0050, &body);
+    let pl = wire.len();
+    Ok(vec![OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x0050,
+        tdf_body: body.to_vec(),
+        blaze_send_label: "NotifyGameAttribChange",
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyGameAttribChange Component=4, Command=80, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    }])
+}
+
+pub fn pushes_notify_player_removed(gid: i64, pid: i64, reason: i32) -> BlazeResult<Vec<OutgoingPush>> {
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyPlayerRemoved gid={} pid={} reas={}",
+        gid,
+        pid,
+        reason
+    );
+    let body = super::build_game_manager_notify_player_removed(gid, pid, reason)?;
+    let wire = notification_envelope(0x0004, 0x0028, &body);
+    let pl = wire.len();
+    Ok(vec![OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x0028,
+        tdf_body: body.to_vec(),
+        blaze_send_label: "NotifyPlayerRemoved",
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyPlayerRemoved Component=4, Command=40, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    }])
+}
+
+pub fn request_client_local_game_teardown(gid: i64, pid: i64, reason: i32) {
+    if gid <= 0 || pid <= 0 {
+        return;
+    }
+    let sid = super::game_state::blaze_session_for_persona(pid)
+        .or_else(|| super::game_state::client_session_for_gid(gid));
+    let Some(sid) = sid else {
+        crate::debug_println!(
+            "\x1b[38;2;255;165;0m[CNC]\x1b[0m NotifyPlayerRemoved skipped — no client session (gid={} pid={})",
+            gid,
+            pid
+        );
+        return;
+    };
+    match pushes_notify_player_removed(gid, pid, reason) {
+        Ok(pushes) if !pushes.is_empty() => {
+            enqueue_pending_pushes(sid, pushes);
+            let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+            crate::debug_println!(
+                "\x1b[38;2;100;200;255m[CNC]\x1b[0m queued NotifyPlayerRemoved → client #{} gid={} pid={} reas={}",
+                sid,
+                gid,
+                pid,
+                reason
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            crate::debug_println!(
+                "\x1b[38;2;255;165;0m[CNC]\x1b[0m NotifyPlayerRemoved encode failed: {}",
+                e
+            );
+        }
+    }
+}
+
+pub fn pushes_dedicated_reclaim_idle(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameStateChange(RESETABLE) reclaim → dedicated (gid={})",
+        gid
+    );
+    let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_RESETABLE)?;
+    let wire = notification_envelope(0x0004, 0x0064, &gstate);
+    let pl = wire.len();
+    Ok(vec![OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x0064,
+        tdf_body: gstate.to_vec(),
+        blaze_send_label: "NotifyGameStateChange(RESETABLE) dedicated reclaim",
+        info_log_line: format!(
+            "[Blaze→Server] GameManager.NotifyGameStateChange Component=4, Command=100, Size={}, MsgType=NOTIFICATION, MsgNum=0",
             pl
         ),
     }])

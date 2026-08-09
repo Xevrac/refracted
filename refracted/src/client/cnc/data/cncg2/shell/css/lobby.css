@@ -1,4 +1,4 @@
-/* Classic shell lobby — Generals 2 alpha layout (EAWebKit-safe) */
+/* Classic shell lobby — Generals 2 alpha layout (legacy in-game web shell safe) */
 
 .cc-main-view--lobby {
     position: absolute;
@@ -135,6 +135,14 @@
     color: #fff;
     border-color: rgba(70, 160, 230, 0.95);
     background: rgba(28, 90, 150, 0.9);
+}
+
+.cc-lobby__tab:disabled {
+    opacity: 0.38;
+    cursor: default;
+    color: #6a7380;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(8, 16, 28, 0.55);
 }
 
 .cc-lobby__map-chooser {
@@ -320,6 +328,13 @@
     border: 1px solid #777;
     background: #111;
     overflow: hidden;
+    position: relative;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__portrait--host {
+    border: 2px solid #f5c518;
 }
 
 .cc-lobby__portrait img {
@@ -344,8 +359,43 @@
     z-index: 6;
 }
 
-.cc-lobby__arrow {
+.cc-lobby__ready {
+    display: inline-block;
+    vertical-align: top;
+    width: 54px;
+    height: 16px;
+    margin: 0 4px 0 0;
+    padding: 0;
+    border: 1px solid #3a3a3a;
+    background: rgba(12, 12, 12, 0.95);
+    position: relative;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__ready.on {
+    border-color: #2ecc71;
+    background: rgba(20, 60, 30, 0.95);
+}
+
+.cc-lobby__ready-tick {
     display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 5px;
+    height: 9px;
+    margin-left: -4px;
+    margin-top: -6px;
+    border: solid #3dff8a;
+    border-width: 0 2px 2px 0;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+}
+
+.cc-lobby__arrow {
+    display: inline-block;
+    vertical-align: top;
     width: 54px;
     height: 16px;
     margin: 0;
@@ -542,7 +592,283 @@
     filter: brightness(1.08);
 }
 
-/* Bottom actions pinned to stage floor */
+.cc-lobby__password-input {
+    display: block;
+    float: left;
+    width: 70%;
+    height: 32px;
+    margin: 0 8px 0 0;
+    padding: 0 10px;
+    border: 1px solid #5a5238;
+    background: #0e0e0c;
+    color: #e8e0c8;
+    font-size: 12px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+.cc-lobby__password-flag {
+    display: inline-block;
+    margin-left: 8px;
+    color: #c9a227;
+    font-weight: bold;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    line-height: 32px;
+    vertical-align: top;
+}
+
+.cc-lobby__modal-box.cc-lobby__options {
+    width: 644px;
+    max-width: 94%;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    padding: 23px 28px 21px;
+    text-align: left;
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    border-color: rgba(74, 144, 200, 0.75);
+    background: rgba(10, 18, 28, 0.98);
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+}
+
+.cc-lobby__options-title {
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(74, 144, 200, 0.35);
+    font-size: 18px;
+    letter-spacing: 0.1em;
+    text-align: center;
+    color: #fff;
+}
+
+.cc-lobby__options-section {
+    margin: 0 0 16px 0;
+}
+
+.cc-lobby__options-section-label {
+    margin: 0 0 9px 0;
+    color: #a89a78;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+}
+
+/* Table row — reliable vertical align on old CEF/WebKit (floats drift). */
+.cc-lobby__options-password {
+    overflow: visible;
+}
+
+.cc-lobby__options-password-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 8px 0;
+}
+
+.cc-lobby__options .cc-lobby__password-input {
+    display: table-cell;
+    float: none;
+    width: auto;
+    height: 37px;
+    margin: 0;
+    padding: 0 12px;
+    font-size: 14px;
+    line-height: 35px;
+    vertical-align: middle;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__options .cc-lobby__password-flag {
+    display: block;
+    float: none;
+    margin: 9px 0 0 0;
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.cc-lobby__options-password-row .cc-lobby__btn {
+    display: table-cell;
+    float: none;
+    height: 37px;
+    margin: 0;
+    padding: 0;
+    font-size: 12px;
+    line-height: 35px;
+    vertical-align: middle;
+    text-align: center;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__password-apply {
+    width: 88px;
+    min-width: 88px;
+    padding: 0 14px !important;
+}
+
+.cc-lobby__password-clear {
+    width: 37px;
+    min-width: 37px;
+    max-width: 37px;
+    padding: 0 !important;
+    line-height: 37px;
+    font-size: 0;
+}
+
+.cc-lobby__password-clear svg {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+}
+
+.cc-lobby__options-grid {
+    width: 100%;
+    margin: 0 0 4px 0;
+}
+
+.cc-lobby__options-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 10px 0;
+    margin: 0 -10px 10px;
+}
+
+.cc-lobby__options-cell {
+    display: table-cell;
+    width: 50%;
+    vertical-align: top;
+    padding: 12px 14px;
+    border: 1px solid rgba(74, 144, 200, 0.28);
+    background: rgba(12, 22, 34, 0.92);
+}
+
+.cc-lobby__options-cell-head {
+    overflow: hidden;
+    margin: 0 0 10px 0;
+}
+
+.cc-lobby__options-cell-head span {
+    float: left;
+    color: #a89a78;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+}
+
+.cc-lobby__options-stub {
+    float: right;
+    margin: 0;
+    padding: 2px 6px;
+    border: 1px solid rgba(106, 98, 80, 0.55);
+    color: #7a7058;
+    font-size: 10px;
+    font-style: normal;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+}
+
+.cc-lobby__options-cell select {
+    display: block;
+    width: 100%;
+    height: 32px;
+    padding: 0 28px 0 10px;
+    border: 1px solid #5a5238;
+    border-radius: 0;
+    background-color: #0e0e0c;
+    background-image:
+        linear-gradient(45deg, transparent 50%, #a89a78 50%),
+        linear-gradient(135deg, #a89a78 50%, transparent 50%);
+    background-position:
+        calc(100% - 14px) calc(50% - 1px),
+        calc(100% - 8px) calc(50% - 1px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    color: #e8e0c8;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    line-height: 30px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+    cursor: pointer;
+}
+
+.cc-lobby__options-cell select:focus {
+    border-color: #8a7a50;
+}
+
+.cc-lobby__options-cell select option {
+    background: #0e0e0c;
+    color: #e8e0c8;
+}
+
+.cc-lobby__options-check {
+    display: block !important;
+    margin: 0 0 8px 0;
+    color: #d8d0b8 !important;
+    font-size: 12px !important;
+    letter-spacing: 0.04em !important;
+    font-weight: normal !important;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.cc-lobby__options-check:last-child {
+    margin-bottom: 0;
+}
+
+.cc-lobby__options-check input {
+    margin-right: 8px;
+    width: 13px;
+    height: 13px;
+    vertical-align: middle;
+}
+
+.cc-lobby__options-row--stub {
+    opacity: 0.88;
+}
+
+.cc-lobby__options-cell--note {
+    border-style: dashed;
+    background: rgba(10, 16, 24, 0.75);
+}
+
+.cc-lobby__options-note {
+    color: #6a6250;
+    font-size: 11px;
+    line-height: 1.45;
+    letter-spacing: 0.03em;
+}
+
+.cc-lobby__options-actions {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(74, 144, 200, 0.28);
+    text-align: center;
+}
+
+.cc-lobby__options-actions .cc-lobby__btn {
+    float: none;
+    display: inline-block;
+    margin-top: 0 !important;
+    min-width: 161px;
+    height: 39px;
+    padding: 0 21px;
+    font-size: 14px;
+    line-height: 37px;
+    vertical-align: middle;
+}
+
 .cc-lobby__actions {
     position: absolute;
     left: 0;
@@ -599,12 +925,30 @@
     background-image: url('../view/image/btn_bg_01_over.png');
 }
 
+.cc-lobby__btn--ok,
+.cc-lobby__btn--join {
+    position: static;
+    left: auto;
+    width: auto;
+    min-width: 140px;
+    margin-left: 0;
+    background-color: #37a414;
+    background-image: url('../view/image/btn_bg_03.png');
+}
+
 .cc-lobby__btn:hover {
     -webkit-filter: brightness(1.08);
     filter: brightness(1.08);
 }
 
-/* Server browser */
+.cc-lobby__btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+    -webkit-filter: none;
+    filter: none;
+}
+
+/* Server browser — Battlefield-style list + detail */
 .cc-lobby__browser,
 .cc-lobby-browser {
     position: absolute;
@@ -612,96 +956,582 @@
     right: 0;
     bottom: 0;
     left: 0;
-    padding: 20px 28px;
+    padding: 16px 22px 18px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     background: #080808;
     z-index: 10;
-}
-
-.cc-lobby-browser__head {
-    margin: 0 0 18px 0;
     overflow: hidden;
 }
 
-.cc-lobby-browser__head .cc-lobby__btn {
+.cc-lobby-browser__bar {
+    overflow: hidden;
+    margin: 0 0 10px 0;
+    padding: 0 0 10px 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.cc-lobby-browser__bar .cc-lobby__btn--exit {
     float: left;
-    margin: 0 16px 0 0;
+    margin: 0 14px 0 0;
+}
+
+.cc-lobby-browser__bar .cc-lobby__btn--browse {
+    float: right;
+    margin: 0;
 }
 
 .cc-lobby-browser__title {
-    margin: 6px 0 0 0;
-    display: inline-block;
+    float: left;
+    margin: 6px 14px 0 0;
     font-family: 'Eurostile-Hea', Arial, sans-serif;
-    font-size: 22px;
+    font-size: 20px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #fff;
 }
 
-.cc-lobby-browser__panel {
-    border: 1px solid #2a2a2a;
-    background: rgba(16, 16, 16, 0.95);
-    padding: 16px;
+.cc-lobby-browser__count {
+    float: left;
+    margin-top: 12px;
+    color: #777;
+    font-size: 10px;
+    letter-spacing: 0.08em;
 }
 
-.cc-lobby-browser__table {
-    margin-top: 16px;
+.cc-lobby-browser__filters {
+    overflow: visible;
+    margin: 0 0 12px 0;
+    min-height: 30px;
+}
+
+.cc-lobby-browser__filter {
+    float: left;
+    margin: 0 6px 0 0;
+    padding: 0 14px;
+    height: 30px;
+    line-height: 28px;
+    border: 1px solid #333;
+    background: #111;
+    color: #999;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-align: center;
+    vertical-align: top;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.cc-lobby-browser__filter.on {
+    border-color: #5a9ad4;
+    color: #fff;
+    background: #1a2a38;
+}
+
+.cc-lobby-browser__body {
+    position: absolute;
+    top: 104px;
+    left: 22px;
+    right: 22px;
+    bottom: 18px;
+    overflow: hidden;
+}
+
+.cc-lobby-browser__list {
+    position: relative;
+    float: left;
+    width: 64%;
+    height: 100%;
     border: 1px solid #2a2a2a;
+    background: #101010;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby-browser__list .cc-lobby-browser__row--head {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+}
+
+.cc-lobby-browser__scroll {
+    position: absolute;
+    top: 32px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
 }
 
 .cc-lobby-browser__row {
     display: block;
     overflow: hidden;
-    padding: 10px 12px;
-    border-bottom: 1px solid #222;
-    font-size: 12px;
+    width: 100%;
+    padding: 0 10px;
+    height: 32px;
+    line-height: 32px;
+    border: 0;
+    border-bottom: 1px solid #1a1a1a;
+    background: transparent;
+    color: #ddd;
+    font-size: 11px;
+    text-align: left;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 .cc-lobby-browser__row--head {
     background: #111;
-    color: #9a9a9a;
+    color: #888;
     font-weight: bold;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    cursor: default;
+    font-size: 10px;
 }
 
-.cc-lobby-browser__row span {
+.cc-lobby-browser__row--server:hover {
+    background: #181818;
+}
+
+.cc-lobby-browser__row--server.on {
+    background: #1c2830;
+    box-shadow: inset 3px 0 0 #5a9ad4;
+}
+
+.cc-lobby-browser__row--server.disabled {
+    opacity: 0.5;
+}
+
+.cc-lobby-browser__col {
     float: left;
-    width: 25%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
-.cc-lobby-browser__empty {
-    padding: 28px 12px;
-    color: #666;
-    font-size: 13px;
-    text-align: center;
-}
+.cc-lobby-browser__col--lock { width: 4%; text-align: center; }
+.cc-lobby-browser__col--server { width: 30%; }
+.cc-lobby-browser__col--map { width: 24%; }
+.cc-lobby-browser__col--players { width: 12%; }
+.cc-lobby-browser__col--ping { width: 14%; }
+.cc-lobby-browser__col--state { width: 16%; }
 
-.cc-lobby__modal {
+.cc-lobby-browser__padlock {
+    display: inline-block;
+    position: relative;
+    width: 9px;
+    height: 7px;
+    margin-top: 5px;
+    border: 1.5px solid #c9a227;
+    border-radius: 1px;
+    background: rgba(201, 162, 39, 0.28);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    vertical-align: middle;
+}
+.cc-lobby-browser__padlock:before {
+    content: '';
     position: absolute;
+    left: 1.5px;
+    top: -5px;
+    width: 3px;
+    height: 4px;
+    border: 1.5px solid #c9a227;
+    border-bottom: 0;
+    border-radius: 3px 3px 0 0;
+}
+.cc-lobby-browser__padlock:after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 1.5px;
+    margin-left: -1px;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: #c9a227;
+}
+
+.cc-lobby-browser__pw-modal {
+    position: absolute;
+    left: 0;
     top: 0;
     right: 0;
     bottom: 0;
-    left: 0;
     z-index: 40;
+    background: rgba(0, 0, 0, 0.6);
+}
+.cc-lobby-browser__pw-box {
+    width: 340px;
+    margin: 120px auto 0;
+    padding: 18px 20px;
+    background: #1a1a16;
+    border: 1px solid #5a5238;
+    color: #e8e0c8;
+}
+.cc-lobby-browser__pw-box h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+}
+.cc-lobby-browser__pw-box p {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #a89a78;
+}
+.cc-lobby-browser__pw-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #5a5238;
+    background: #0e0e0c;
+    color: #e8e0c8;
+}
+.cc-lobby-browser__pw-err {
+    margin-top: 8px;
+    color: #d06050;
+    font-size: 12px;
+}
+.cc-lobby-browser__pw-actions {
+    margin-top: 14px;
+    text-align: right;
+}
+.cc-lobby-browser__pw-actions .cc-lobby__btn {
+    margin-left: 8px;
+}
+
+.cc-lobby-browser__ping {
+    display: inline-block;
+    vertical-align: middle;
+    width: 8px;
+    height: 8px;
+    margin: -2px 6px 0 0;
+    border: 1px solid #444;
+    background: #222;
+}
+
+.cc-lobby-browser__ping.ping--good { border-color: #2ecc71; background: #1f8a4a; }
+.cc-lobby-browser__ping.ping--ok { border-color: #e6b84d; background: #a07a20; }
+.cc-lobby-browser__ping.ping--bad { border-color: #e06a5a; background: #8a3028; }
+.cc-lobby-browser__ping.ping--unk { opacity: 0.5; }
+
+.cc-lobby-browser__detail {
+    float: right;
+    width: 34%;
+    height: 100%;
+    border: 1px solid #2a2a2a;
+    background: #101010;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.cc-lobby-browser__art {
+    position: relative;
+    height: 140px;
+    background-color: #0a0a0a;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.cc-lobby-browser__art-fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 64px;
+    background: -webkit-linear-gradient(top, rgba(16,16,16,0), rgba(16,16,16,0.95));
+    background: linear-gradient(to bottom, rgba(16,16,16,0), rgba(16,16,16,0.95));
+}
+
+.cc-lobby-browser__art-meta {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    z-index: 1;
+    color: #fff;
+}
+
+.cc-lobby-browser__mode {
+    display: block;
+    margin-bottom: 2px;
+    color: #8ab4d8;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+}
+
+.cc-lobby-browser__art-meta strong {
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.cc-lobby-browser__detail-name {
+    margin: 12px 14px 8px;
+    font-size: 14px;
+    letter-spacing: 0.06em;
+    color: #fff;
+}
+
+.cc-lobby-browser__stats {
+    list-style: none;
+    margin: 0 14px 14px;
+    padding: 0;
+    border-top: 1px solid #222;
+}
+
+.cc-lobby-browser__stats li {
+    overflow: hidden;
+    padding: 7px 0;
+    border-bottom: 1px solid #1a1a1a;
+    font-size: 11px;
+}
+
+.cc-lobby-browser__stats span {
+    float: left;
+    color: #777;
+    letter-spacing: 0.06em;
+    font-size: 9px;
+}
+
+.cc-lobby-browser__stats strong {
+    float: right;
+    color: #ddd;
+    font-weight: normal;
+}
+
+.cc-lobby-browser__join {
+    display: block;
+    width: auto;
+    margin: 0 14px 14px;
+    min-width: 0;
+    height: 40px;
+    line-height: 40px;
+    padding: 0 16px;
+    text-align: center;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby-browser__empty,
+.cc-lobby-browser__detail-empty {
+    padding: 28px 16px;
+    color: #777;
+    text-align: center;
+    font-size: 11px;
+}
+
+.cc-lobby__matchmake-head h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+}
+
+.cc-lobby__matchmake-head p {
+    margin: 0 0 16px;
+    color: #888;
+    font-size: 12px;
+}
+
+.cc-lobby__matchmake-meta {
+    margin: 4px 0 18px;
+    color: #888;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    overflow: hidden;
+}
+
+.cc-lobby__matchmake-meta span {
+    display: inline-block;
+    margin-right: 18px;
+}
+
+.cc-lobby__gameroom-head {
+    margin-bottom: 10px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+}
+
+.cc-lobby__gameroom-server {
+    color: #ddd;
+    font-weight: bold;
+    margin-right: 12px;
+}
+
+.cc-lobby__gameroom-role {
+    color: #7cb342;
+}
+
+/* Matchmake: CSGO-style map card grid (float layout for WebKit 535). */
+.cc-lobby__stage--matchmake {
+    padding-bottom: 56px;
+}
+
+.cc-lobby__map-cards {
+    overflow: hidden;
+    margin: 0 -6px 10px -6px;
+}
+
+.cc-lobby__map-card {
+    position: relative;
+    float: left;
+    width: 31.33%;
+    height: 118px;
+    margin: 0 1% 12px 1%;
+    padding: 0;
+    border: 1px solid #3a3a3a;
+    background-color: #121212;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    cursor: pointer;
+    overflow: hidden;
+    text-align: left;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    -webkit-box-shadow: 0 0 0 1px #0a0a0a;
+    box-shadow: 0 0 0 1px #0a0a0a;
+}
+
+.cc-lobby__map-card:hover {
+    border-color: #6aa8d8;
+}
+
+.cc-lobby__map-card.on {
+    border-color: #4aa0e8;
+    -webkit-box-shadow: 0 0 0 1px #4aa0e8, 0 0 12px rgba(40, 130, 220, 0.45);
+    box-shadow: 0 0 0 1px #4aa0e8, 0 0 12px rgba(40, 130, 220, 0.45);
+}
+
+.cc-lobby__map-card-veil {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 70%;
+    background: -webkit-linear-gradient(top, rgba(0,0,0,0) 0%, rgba(0,0,0,0.82) 100%);
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.82) 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+.cc-lobby__map-card-accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    z-index: 2;
+}
+
+.cc-lobby__map-card-mode {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 3;
+    padding: 2px 7px;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #ececec;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__map-card-name {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+    z-index: 3;
+    color: #fff;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.cc-lobby__map-card-check {
+    position: absolute;
+    left: 10px;
+    top: 8px;
+    z-index: 3;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #4aa0e8;
+    background: rgba(20, 60, 100, 0.9);
+}
+
+.cc-lobby__map-card-check:after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid #7ec8ff;
+    border-width: 0 2px 2px 0;
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+}
+
+.cc-lobby__stage--matchmake .cc-lobby__actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+/* Dim + center over lobby stage only (not the social rail). */
+.cc-lobby__modal {
+    position: absolute;
+    top: 0;
+    right: 320px;
+    bottom: 0;
+    left: 0;
+    z-index: 80;
     background: rgba(0, 0, 0, 0.58);
+}
+
+/* Inside .cc-lobby__stage the rail inset is already applied via parent width. */
+.cc-lobby__stage .cc-lobby__modal {
+    right: 0;
 }
 
 .cc-lobby__modal-box {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 280px;
-    margin: -38px 0 0 -140px;
-    padding: 22px 16px;
+    width: 320px;
+    margin: -70px 0 0 -160px;
+    padding: 22px 16px 18px;
     border: 1px solid #4a90c8;
     background: rgba(10, 20, 32, 0.96);
     color: #fff;
     font-family: 'Eurostile-Hea', Arial, sans-serif;
-    font-size: 22px;
+    font-size: 18px;
     letter-spacing: 0.04em;
     text-align: center;
+    line-height: 1.35;
     -webkit-box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+}
+
+.cc-lobby__modal-box .cc-lobby__btn {
+    float: none;
+    margin-top: 16px;
 }

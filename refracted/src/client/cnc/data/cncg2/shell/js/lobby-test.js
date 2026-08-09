@@ -1,12 +1,8 @@
 /**
  * Skirmish lobby — map + general pick (1 host + 1 AI).
  *
- * General IDs are RtsGeneral.ServerId (Frostbite HashId) from
  * StaticData/Generals + Faction*_Blueprints GeneralsToLoad — not UI slot 1..3.
- * Alpha datamine has APA / ESC(EU) / GLA only; USA PlayerData has no generals.
  *
- * Alpha_Tutorial forces the Tutorial general for the chosen faction (retail
- * assignPlayers / local-player path is hardcoded for that level).
  */
 (function (window) {
     'use strict';
@@ -1062,10 +1058,7 @@
             return out;
         }
 
-        // Full retail-style Start Battle sequence (verified against the binary):
-        //   1. blazeCreateGame <name> <capacity> <level>  (sub_A4E2D0 -> GameManager -> resetDedicatedServer)
         //      = the "Setting up game" step. Synchronous runner: returns once the game is created/joined.
-        //   2. NotifyGameSetup settles -> local SDK Game object exists.
         //   3. Apply host faction + add AI slots (AddRemotePlayer) + AI attrs   (now there IS a Game to act on)
         //   4. RtsClient.StartGame -> ClientNetworkAdapter::startGame -> level load -> ingame.
         // blaze* commands block until their RPC completes, so we space the stages with $timeout to let
@@ -1089,10 +1082,6 @@
             var level = $scope.mapPath || BENCHMARK_MAP.path;
 
             // 1. Create / claim the dedicated game via the ASYNC shell path (/blaze/createGame).
-            // Do NOT use the native `RtsClient.blazeCreateGame` here: it calls BlazeCommandRunner_waitAndRun
-            // which does WaitForSingleObject(120s) on the calling thread and deadlocks (the createGame
-            // completion callback is pumped on that same thread). The shell URL path is fire-and-forget and
-            // drives the full join (NotifyGameSetup -> mesh -> finalizeGameCreation) without blocking.
             if (CncProbe.markBlazeCreatePending) {
                 CncProbe.markBlazeCreatePending();
             }
@@ -1151,13 +1140,9 @@
                     });
                 }, 2500);
 
-                var startDelay = 3500 + (ais.length * 300) + 1400;
-                $timeout(function () {
-                    CncProbe.log('Lobby START: RtsClient.StartGame');
-                    CncProbe.runGame('RtsClient.StartGame');
-                    $scope.pushDebug('Starting battle…');
-                    $scope._starting = false;
-                }, startDelay);
+                CncProbe.log(
+                    'Lobby START: waiting for Blaze GameReady / LeaveIngame (no RtsClient.StartGame)');
+                $scope.pushDebug('Waiting for dedicated match ready…');
             }
         };
 

@@ -83,7 +83,6 @@ body.cc-theme {
     -webkit-font-smoothing: subpixel-antialiased;
 }
 
-<<<<<<< HEAD
 /* Chrome 15 / WebKit 535: optimizeLegibility + @font-face blanks text.
    Keep auto on the whole tree (links/labels included). */
 .cc-theme,
@@ -95,13 +94,6 @@ body.cc-theme {
 .cc-theme a {
     text-rendering: auto !important;
     -webkit-font-smoothing: subpixel-antialiased;
-=======
-/* CHROME 15 TEXT RENDERING BUG FIX */
-/* optimizeLegibility combined with @font-face causes text to disappear in WebKit 535 */
-.cc-theme, .cc-theme button, .cc-theme input, .cc-theme select, .cc-theme textarea,
-h1, h2, h3, h4, h5, h6, .cc-username {
-    text-rendering: auto !important;
->>>>>>> origin/main
 }
 .clearfix:before, .clearfix:after { content: " "; display: table; }
 .clearfix:after { clear: both; }
@@ -154,7 +146,7 @@ h1, h2, h3, h4, h5, h6, .cc-username {
     display: block; width: 100%; height: 70px;
     font-size: 46px; font-weight: bold; color: #fff; line-height: 70px;
     font-family: 'Eurostile-Hea', 'Eurostile-Med', Arial, sans-serif;
-    padding: 0; border-radius: 12px 12px 0 0; margin: 0;
+    padding: 0; border-radius: 12px; margin: 0;
     text-shadow: 0 1px 2px #000;
     text-rendering: auto !important; 
     background-color: #176BC0;
@@ -611,6 +603,15 @@ h1, h2, h3, h4, h5, h6, .cc-username {
 .btn.btn-create-party:focus {
     outline: none;
     background: transparent;
+}
+.btn.btn-create-party[disabled],
+.btn.btn-create-party[disabled]:hover,
+.btn.btn-create-party[disabled]:focus {
+    cursor: not-allowed;
+    opacity: 0.38;
+    -webkit-filter: grayscale(100%);
+    filter: grayscale(100%);
+    pointer-events: none;
 }
 .btn-create-party-art {
     display: block;

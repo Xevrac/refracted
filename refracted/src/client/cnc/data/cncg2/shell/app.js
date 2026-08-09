@@ -1,4 +1,3 @@
-﻿/**
  * CCApp - Command & Conquer UI Replica
  * Targeting late 2011 WebKit environment
  */
@@ -29,22 +28,30 @@ CCApp.run(function ($rootScope) {
     $rootScope.preLandingUseArt = false;
     $rootScope.allowShellThemeSelect = true;
     $rootScope.lobbyOpen = false;
-    $rootScope.lobbyView = 'setup';
+    $rootScope.lobbyView = 'matchmake';
 
     $rootScope.openLobby = function () {
         $rootScope.lobbyOpen = true;
-        $rootScope.lobbyView = 'setup';
+        $rootScope.lobbyView = 'matchmake';
+    };
+    $rootScope.openGameRoom = function () {
+        $rootScope.lobbyOpen = true;
+        $rootScope.lobbyView = 'gameroom';
     };
     $rootScope.exitLobby = function () {
         $rootScope.lobbyOpen = false;
-        $rootScope.lobbyView = 'setup';
+        $rootScope.lobbyView = 'matchmake';
     };
     $rootScope.openServerBrowser = function () {
         $rootScope.lobbyOpen = true;
         $rootScope.lobbyView = 'browser';
     };
     $rootScope.closeServerBrowser = function () {
-        $rootScope.lobbyView = 'setup';
+        $rootScope.lobbyView = 'matchmake';
+    };
+    $rootScope.leaveGameRoom = function () {
+        $rootScope.$broadcast('cnc:leaveGameRoom');
+        $rootScope.lobbyView = 'matchmake';
     };
 
     function syncThemeTemplates(id) {
@@ -190,19 +197,18 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
         window.location.href = 'debug.html';
     };
 
-    // Options Modal
-    $scope.optionsOpen = false;
-    $scope.openOptions = function() { $scope.optionsOpen = true; };
-    $scope.closeOptions = function() { $scope.optionsOpen = false; };
-    
-    // Credits Modal
-    $scope.creditsOpen = false;
-    $scope.openCredits = function() { $scope.creditsOpen = true; };
-    $scope.closeCredits = function() { $scope.creditsOpen = false; };
-    
-    // Alert Marker Popup
-    $scope.alertPopupOpen = false;
-    $scope.toggleAlertPopup = function() { $scope.alertPopupOpen = !$scope.alertPopupOpen; };
+    $rootScope.optionsOpen = false;
+    $rootScope.openOptions = function () { $rootScope.optionsOpen = true; };
+    $rootScope.closeOptions = function () { $rootScope.optionsOpen = false; };
+
+    $rootScope.creditsOpen = false;
+    $rootScope.openCredits = function () { $rootScope.creditsOpen = true; };
+    $rootScope.closeCredits = function () { $rootScope.creditsOpen = false; };
+
+    $rootScope.alertPopupOpen = false;
+    $rootScope.toggleAlertPopup = function () {
+        $rootScope.alertPopupOpen = !$rootScope.alertPopupOpen;
+    };
 
     // Global Context Menu Logic (Mouse Tracking)
     $scope.friendContextMenu = { open: false, x: 0, y: 0, friend: null };

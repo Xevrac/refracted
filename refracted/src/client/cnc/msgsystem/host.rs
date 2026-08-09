@@ -1,7 +1,5 @@
 //! Offline / unit-test helpers for Victory Client MessageSystem join wire shapes.
 //!
-//! Production ServerHost lives in Prism (`prism.cnc.network.dll` / `DedicatedJoinBootstrap`).
-//! Refracted only MITMs that session; these encoders are for dump parity tests.
 
 use super::messages::{DEFAULT_PERSONA_ID, DEFAULT_PLAYER_HANDLE};
 
@@ -35,7 +33,7 @@ mod tests {
     use super::super::negotiation::{SERVER_HELLO, SERVER_READY_TO_START};
 
     #[test]
-    fn join_context_defaults_are_retail_shaped() {
+    fn join_context_defaults_are_wire_shaped() {
         let ctx = JoinContext::default();
         assert_eq!(ctx.player_handle, 1);
         assert_eq!(ctx.persona, DEFAULT_PERSONA_ID);
@@ -43,7 +41,7 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_frames_match_dumps() {
+    fn bootstrap_frames_match_embedded() {
         assert_eq!(
             encode_server_hello_frame(1, DEFAULT_PERSONA_ID, 0, 0, 0),
             SERVER_HELLO

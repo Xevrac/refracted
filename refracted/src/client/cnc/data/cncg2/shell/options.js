@@ -136,6 +136,9 @@ CCApp.controller('OptionsController', function($scope) {
     ];
     $scope.allowShellThemeSelect = !!$scope.$root.allowShellThemeSelect;
 
+    var themeSnapshot = null;
+    var themeSaveCommitted = false;
+
     function refreshShellThemeHint() {
         if (window.CncShellTheme && CncShellTheme.hint) {
             $scope.shellThemeHint = CncShellTheme.hint($scope.settings.shellUiTheme);
@@ -143,6 +146,41 @@ CCApp.controller('OptionsController', function($scope) {
             $scope.shellThemeHint = '';
         }
     }
+
+    function readCommittedTheme() {
+        return {
+            theme: (window.CncShellTheme && CncShellTheme.get) ? CncShellTheme.get() : 'aurora',
+            defaultTheme: (window.CncShellTheme && CncShellTheme.getDefault)
+                ? CncShellTheme.getDefault()
+                : ((window.CncShellTheme && CncShellTheme.get) ? CncShellTheme.get() : 'aurora')
+        };
+    }
+
+    function captureThemeSnapshot() {
+        themeSnapshot = readCommittedTheme();
+        $scope.settings.shellUiTheme = themeSnapshot.theme;
+        $scope.settings.shellUiThemeDefault = themeSnapshot.defaultTheme;
+        themeSaveCommitted = false;
+        refreshShellThemeHint();
+    }
+
+    function revertThemeDraft() {
+        if (!themeSnapshot) {
+            themeSnapshot = readCommittedTheme();
+        }
+        $scope.settings.shellUiTheme = themeSnapshot.theme;
+        $scope.settings.shellUiThemeDefault = themeSnapshot.defaultTheme;
+        if (window.CncShellTheme && CncShellTheme.get &&
+                CncShellTheme.get() !== themeSnapshot.theme) {
+            if (CncShellTheme.restore) {
+                CncShellTheme.restore(themeSnapshot.theme, themeSnapshot.defaultTheme);
+            } else if (CncShellTheme.apply) {
+                CncShellTheme.apply(themeSnapshot.theme);
+            }
+        }
+        refreshShellThemeHint();
+    }
+
     refreshShellThemeHint();
 
     function executeShell(resource, extra, onResponse) {
@@ -339,13 +377,22 @@ CCApp.controller('OptionsController', function($scope) {
         });
     };
 
+    $scope.onShellThemeDraftChange = function() {
+        if (!$scope.allowShellThemeSelect) {
+            return;
+        }
+        refreshShellThemeHint();
+    };
+
     $scope.applyShellTheme = function() {
         if (!$scope.allowShellThemeSelect) {
             return;
         }
         var id = $scope.settings.shellUiTheme || 'aurora';
         if (window.CncShellTheme && CncShellTheme.set) {
-            $scope.settings.shellUiTheme = CncShellTheme.set(id);
+            id = CncShellTheme.set(id);
+            $scope.settings.shellUiTheme = id;
+            $scope.settings.shellUiThemeDefault = id;
         }
         refreshShellThemeHint();
     };
@@ -369,16 +416,22 @@ CCApp.controller('OptionsController', function($scope) {
         applyPartial(buildApplyPayloadFromSettings());
         executeShell('/usersettings/applyAudio');
         if ($scope.allowShellThemeSelect) {
-            $scope.applyShellTheme();
             refreshShellThemeHint();
         }
     };
 
     $scope.actionSave = function() {
         var payload = buildApplyPayloadFromSettings();
+        var pendingTheme = null;
         if ($scope.allowShellThemeSelect) {
-            $scope.applyShellTheme();
-            $scope.applyShellThemeDefault();
+            pendingTheme = $scope.settings.shellUiTheme || 'aurora';
+            themeSaveCommitted = true;
+            themeSnapshot = {
+                theme: pendingTheme,
+                defaultTheme: pendingTheme
+            };
+            $scope.settings.shellUiTheme = pendingTheme;
+            $scope.settings.shellUiThemeDefault = pendingTheme;
         }
         executeShell('/usersettings/apply', payload, function () {
             executeShell('/usersettings/applyAudio', null, function () {
@@ -386,18 +439,18 @@ CCApp.controller('OptionsController', function($scope) {
             });
         });
         $scope.closeOptions();
+        if (pendingTheme && window.CncShellTheme && CncShellTheme.set) {
+            CncShellTheme.set(pendingTheme);
+            refreshShellThemeHint();
+        }
     };
 
     $scope.actionCancel = function() {
         executeShell('/usersettings/discard');
         loadUserSettings();
-        if ($scope.allowShellThemeSelect && window.CncShellTheme && CncShellTheme.get) {
-            $scope.settings.shellUiTheme = CncShellTheme.get();
-            $scope.settings.shellUiThemeDefault = CncShellTheme.getDefault
-                ? CncShellTheme.getDefault()
-                : $scope.settings.shellUiTheme;
-            CncShellTheme.apply($scope.settings.shellUiTheme);
-            refreshShellThemeHint();
+        if ($scope.allowShellThemeSelect) {
+            revertThemeDraft();
+            themeSaveCommitted = false;
         }
         $scope.closeOptions();
     };
@@ -407,13 +460,11 @@ CCApp.controller('OptionsController', function($scope) {
             loadUserSettings();
             loadDisplayConfig();
             loadGraphicsOptions();
-            if ($scope.allowShellThemeSelect && window.CncShellTheme && CncShellTheme.get) {
-                $scope.settings.shellUiTheme = CncShellTheme.get();
-                $scope.settings.shellUiThemeDefault = CncShellTheme.getDefault
-                    ? CncShellTheme.getDefault()
-                    : $scope.settings.shellUiTheme;
-                refreshShellThemeHint();
+            if ($scope.allowShellThemeSelect) {
+                captureThemeSnapshot();
             }
+        } else if ($scope.allowShellThemeSelect && !themeSaveCommitted) {
+            revertThemeDraft();
         }
     });
 

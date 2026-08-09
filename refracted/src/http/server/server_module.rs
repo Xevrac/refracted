@@ -247,7 +247,7 @@ impl HttpProtocolServer {
                                 error!("TLS peer incompatible - client/server protocol version mismatch");
                             } else if error_str.contains("forcibly closed") || error_str.contains("10054") {
                                 error!("[TLS] Client closed connection during handshake - likely certificate rejection");
-                                error!("[TLS] Check if CertVerifyCertificateChainPolicy hook is being called");
+                                error!("[TLS] Check whether the client accepted this server certificate (local trust / redirect tooling)");
                             }
                             
                             // Check if this might be a TLS version issue

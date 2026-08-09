@@ -230,7 +230,13 @@ async fn flush_pending_cnc_pushes(
             return Ok(false);
         }
         if is_dedicated {
-            info!("{}", push.info_log_line.trim());
+            info!(
+                "{}",
+                crate::client::cnc::dedicated_pool::normalize_blaze_wire_log_line(
+                    blaze_session_id,
+                    push.info_log_line.trim(),
+                )
+            );
         } else {
             let pl = push.wire.len();
             info_coalesce.log(
@@ -245,7 +251,31 @@ async fn flush_pending_cnc_pushes(
     Ok(true)
 }
 
-fn capture_outgoing_packet(packet: &Fire2FramePacket, raw_data: &[u8]) {
+fn packet_dir_out(blaze_session_id: Option<u64>) -> PacketDirection {
+    if blaze_session_id
+        .is_some_and(crate::client::cnc::dedicated_pool::is_dedicated_blaze_session)
+    {
+        PacketDirection::BlazeToDedicated
+    } else {
+        PacketDirection::BlazeToClient
+    }
+}
+
+fn packet_dir_in(blaze_session_id: Option<u64>) -> PacketDirection {
+    if blaze_session_id
+        .is_some_and(crate::client::cnc::dedicated_pool::is_dedicated_blaze_session)
+    {
+        PacketDirection::DedicatedToBlaze
+    } else {
+        PacketDirection::ClientToBlaze
+    }
+}
+
+fn capture_outgoing_packet(
+    packet: &Fire2FramePacket,
+    raw_data: &[u8],
+    blaze_session_id: Option<u64>,
+) {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -257,7 +287,7 @@ fn capture_outgoing_packet(packet: &Fire2FramePacket, raw_data: &[u8]) {
     capture_packet(CapturedPacket {
         capture_seq: 0,
         timestamp,
-        direction: PacketDirection::BlazeToClient,
+        direction: packet_dir_out(blaze_session_id),
         component: packet.header.component,
         command: packet.header.command,
         msg_num: packet.header.msg_num,
@@ -485,7 +515,7 @@ impl BlazeProtocolServer {
                         error!("TLS peer incompatible - client/server protocol version mismatch");
                     } else if error_str.contains("forcibly closed") || error_str.contains("10054") {
                         error!("[TLS] Client closed connection during handshake - likely certificate rejection");
-                        error!("[TLS] Check if CertVerifyCertificateChainPolicy hook is being called");
+                        error!("[TLS] Check whether the client accepted this server certificate");
                     }
                     
                     // Check if this might be a TLS version issue
@@ -653,7 +683,7 @@ impl BlazeProtocolServer {
                                             }
                                         }
                                     }
-                                    capture_outgoing_packet(&pkt, &data);
+                                    capture_outgoing_packet(&pkt, &data, state.blaze_session_id);
                                     let mt = pkt.header.msg_type.to_string();
                                     let wl = data.len();
                                     let inj_key = key_b2c_blaze_inject(
@@ -746,7 +776,7 @@ impl BlazeProtocolServer {
                                     error!("Encryption error for idle UserSessionExtendedDataUpdate: {}", e);
                                 }
                             }
-                            capture_outgoing_packet(&packet, &data);
+                            capture_outgoing_packet(&packet, &data, state.blaze_session_id);
                             let pl = packet.payload.len();
                             let hb_line = format!(
                                 "[Blaze→Client] UserSessionExtendedDataUpdate Component=30722, Command=1, Size={}, MsgType=NOTIFICATION, MsgNum=0 (idle heartbeat)",
@@ -917,7 +947,7 @@ impl BlazeProtocolServer {
                     if !blaze_send(&mut stream, &keepalive_data, addr, name, "KEEPALIVE REPLY").await? {
                         return Ok(());
                     }
-                    capture_outgoing_packet(&keepalive_reply, &keepalive_data);
+                    capture_outgoing_packet(&keepalive_reply, &keepalive_data, state.blaze_session_id);
                     let klr = format!(
                         "[Blaze→Client] Component=0, Command=0, Size=16, MsgType=REPLY, MsgNum={}",
                         header.msg_num
@@ -1013,7 +1043,7 @@ impl BlazeProtocolServer {
                 let incoming_seq = capture_packet(CapturedPacket {
                     capture_seq: 0,
                     timestamp,
-                    direction: PacketDirection::ClientToBlaze,
+                    direction: packet_dir_in(state.blaze_session_id),
                     component: header.component,
                     command: header.command,
                     msg_num: header.msg_num,
@@ -1076,7 +1106,7 @@ impl BlazeProtocolServer {
                                 }
                             }
 
-                            capture_outgoing_packet(&user_auth_packet, &user_auth_data);
+                            capture_outgoing_packet(&user_auth_packet, &user_auth_data, state.blaze_session_id);
                             if !blaze_send(&mut stream, &user_auth_data, addr, name, "UserAuthenticated notification").await? {
                                 return Ok(());
                             }
@@ -1108,7 +1138,7 @@ impl BlazeProtocolServer {
                                 }
                             }
                             
-                            capture_outgoing_packet(&response_packet, &response_data);
+                            capture_outgoing_packet(&response_packet, &response_data, state.blaze_session_id);
                             if !blaze_send(&mut stream, &response_data, addr, name, "createAccount REPLY").await? {
                                 return Ok(());
                             }
@@ -1154,7 +1184,7 @@ impl BlazeProtocolServer {
                                 }
                             }
 
-                            capture_outgoing_packet(&user_added_packet, &user_added_data);
+                            capture_outgoing_packet(&user_added_packet, &user_added_data, state.blaze_session_id);
                             if !blaze_send(&mut stream, &user_added_data, addr, name, "UserAdded notification").await? {
                                 return Ok(());
                             }
@@ -1265,9 +1295,9 @@ impl BlazeProtocolServer {
                                 None
                             };
 
-                            capture_outgoing_packet(&response_packet, &response_data);
+                            capture_outgoing_packet(&response_packet, &response_data, state.blaze_session_id);
                             if let Some((ref p, ref d)) = optional_notification {
-                                capture_outgoing_packet(p, d);
+                                capture_outgoing_packet(p, d, state.blaze_session_id);
                             }
 
                             // Log before each write.
@@ -1371,11 +1401,60 @@ impl BlazeProtocolServer {
                             // Break out of the while loop to read more data from the stream
                             break;
                         } else {
+                            if crate::common::game::get_current_game_id() == "cnc"
+                                && packet.header.component == 0x0004
+                                && (packet.header.command == 0x0019 || packet.header.command == 0x0016)
+                            {
+                                let gid = crate::client::cnc::cnc_extract_reset_game_id(&packet.payload);
+                                if let Ok(teardown) = crate::client::cnc::fireframe::pushes_rematch_teardown_before_reset_reply(gid)
+                                {
+                                    for push in teardown {
+                                        capture_packet(CapturedPacket {
+                                            capture_seq: 0,
+                                            timestamp: SystemTime::now()
+                                                .duration_since(UNIX_EPOCH)
+                                                .unwrap_or_default()
+                                                .as_secs_f64(),
+                                            direction: packet_dir_out(state.blaze_session_id),
+                                            component: push.component,
+                                            command: push.command,
+                                            msg_num: 0,
+                                            msg_type: "NOTIFICATION".to_string(),
+                                            payload_size: push.tdf_body.len(),
+                                            payload: push.tdf_body.clone(),
+                                            raw_packet: push.wire.clone(),
+                                            command_name: crate::blaze::components::get_command_name(
+                                                push.component, push.command,
+                                            )
+                                            .map(|s| s.to_string()),
+                                            metadata_size: 0,
+                                        });
+                                        if !blaze_send(
+                                            &mut stream,
+                                            &push.wire,
+                                            addr,
+                                            name,
+                                            push.blaze_send_label,
+                                        )
+                                        .await?
+                                        {
+                                            return Ok(());
+                                        }
+                                        let pl = push.wire.len();
+                                        info_coalesce.log(
+                                            &key_b2c_notif(push.component, push.command, pl),
+                                            push.info_log_line,
+                                        );
+                                        sleep(Duration::from_millis(15)).await;
+                                    }
+                                    sleep(Duration::from_millis(40)).await;
+                                }
+                            }
                             // Normal response: write to client before inspector capture (avoid blocking on packet_buffer lock).
                             if !blaze_send(&mut stream, &response_data, addr, name, "REPLY").await? {
                                 return Ok(());
                             }
-                            capture_outgoing_packet(&response_packet, &response_data);
+                            capture_outgoing_packet(&response_packet, &response_data, state.blaze_session_id);
                             let log_size = response_packet.total_size();
                             let is_ping_reply = packet.header.component == 9 && packet.header.command == 2;
                             if is_ping_reply {
@@ -1471,7 +1550,7 @@ impl BlazeProtocolServer {
                                 info_coalesce.log(&key_b2c_notif(0x7802, 0x01, pl), line);
                             }
 
-                            capture_outgoing_packet(&user_session_update_packet, &user_session_update_data);
+                            capture_outgoing_packet(&user_session_update_packet, &user_session_update_data, state.blaze_session_id);
                             if !blaze_write_only(&mut stream, &user_session_update_data, addr, name, "UserSessionExtendedDataUpdate after GameManager cmd 3").await? {
                                 return Ok(());
                             }
@@ -1520,7 +1599,7 @@ impl BlazeProtocolServer {
                                         .duration_since(UNIX_EPOCH)
                                         .unwrap_or_default()
                                         .as_secs_f64(),
-                                    direction: PacketDirection::BlazeToClient,
+                                    direction: packet_dir_out(state.blaze_session_id),
                                     component: push.component,
                                     command: push.command,
                                     msg_num: 0,
@@ -1627,26 +1706,51 @@ impl BlazeProtocolServer {
                                             gid,
                                         )
                                     {
-                                        crate::client::cnc::game_state::defer_client_join_pushes(
-                                            gid, client_sid, pushes,
-                                        );
+                                        if let Some((flush_sid, flush_pushes)) =
+                                            crate::client::cnc::game_state::defer_client_join_pushes(
+                                                gid, client_sid, pushes,
+                                            )
+                                        {
+                                            crate::client::cnc::fireframe::enqueue_pending_pushes(
+                                                flush_sid,
+                                                flush_pushes,
+                                            );
+                                            tracing::info!(
+                                                target: "cnc",
+                                                "[CNC] flushed deferred client join (host already ready, gid={})",
+                                                gid
+                                            );
+                                        } else {
+                                            tracing::info!(
+                                                target: "cnc",
+                                                "[CNC] deferred client join notifies until dedicated host ready (gid={})",
+                                                gid
+                                            );
+                                        }
                                     }
                                     let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
-                                    crate::debug_println!(
-                                        "\x1b[38;2;100;200;255m[CNC]\x1b[0m deferred client join notifies until dedicated host ready (gid={})",
-                                        gid
-                                    );
                                 }
                             } else {
 
                             crate::debug_println!(
-                                "\x1b[38;2;255;215;0m[CNC]\x1b[0m pushing NotifyGameStateChange + NotifyGameSetup + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after {} (gid={})",
-                                flow_label, gid
+                                "\x1b[38;2;255;215;0m[CNC]\x1b[0m pushing NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized after {} (gid={}){}",
+                                flow_label,
+                                gid,
+                                if is_join {
+                                    " [lobby - mesh deferred until Start Battle]"
+                                } else {
+                                    ""
+                                }
                             );
 
+                            let join_gsta = if is_join {
+                                crate::client::cnc::GSTA_PRE_GAME
+                            } else {
+                                crate::client::cnc::GSTA_INITIALIZING
+                            };
                             let gstate_payload = match crate::client::cnc::build_game_manager_notify_game_state_change(
                                 gid,
-                                crate::client::cnc::GSTA_RESETABLE,
+                                join_gsta,
                             ) {
                                 Ok(p) => p,
                                 Err(e) => {
@@ -1681,7 +1785,7 @@ impl BlazeProtocolServer {
                                 );
                                 info_coalesce.log(&key_b2c_notif(0x0004, 0x64, pl), line);
                             }
-                            capture_outgoing_packet(&gstate_packet, &gstate_data);
+                            capture_outgoing_packet(&gstate_packet, &gstate_data, state.blaze_session_id);
 
                             let setup_payload = match if is_join {
                                 crate::client::cnc::build_game_manager_notify_game_setup_join(gid)
@@ -1724,7 +1828,7 @@ impl BlazeProtocolServer {
                                 );
                                 info_coalesce.log(&key_b2c_notif(0x0004, 0x14, pl), line);
                             }
-                            capture_outgoing_packet(&setup_packet, &setup_data);
+                            capture_outgoing_packet(&setup_packet, &setup_data, state.blaze_session_id);
                             // **`blaze_send` flushes** each Fire2 envelope; **`blaze_write_only`** can coalesce with the prior REPLY/cipher layer and confuse TLS clients that decrypt **packet-at-a-time**.
                             if !blaze_send(
                                 &mut stream,
@@ -1800,7 +1904,7 @@ impl BlazeProtocolServer {
                                 );
                                 info_coalesce.log(&key_b2c_notif(0x0004, 0x47, pl), line);
                             }
-                            capture_outgoing_packet(&phost_packet, &phost_data);
+                            capture_outgoing_packet(&phost_packet, &phost_data, state.blaze_session_id);
                             if !blaze_send(
                                 &mut stream,
                                 &phost_data,
@@ -1817,112 +1921,111 @@ impl BlazeProtocolServer {
                                 return Ok(());
                             }
 
-                            sleep(Duration::from_millis(15)).await;
+                            if !is_join {
+                                sleep(Duration::from_millis(15)).await;
 
-                            let initiate_payload = match crate::client::cnc::build_game_manager_notify_joining_player_initiate_connections(gid) {
-                                Ok(p) => p,
-                                Err(e) => {
-                                    crate::debug_println!(
-                                        "\x1b[38;2;255;100;100m[CNC]\x1b[0m NotifyJoiningPlayerInitiateConnections encode failed: {:?}",
-                                        e
-                                    );
-                                    return Err(e);
-                                }
-                            };
-                            let initiate_packet = Fire2FramePacket::new_send(
-                                0x0004,
-                                0x16,
-                                0,
-                                MessageType::Notification,
-                                initiate_payload,
-                            );
-                            let mut initiate_data = initiate_packet.to_bytes().to_vec();
-                            if state.crypto_enabled && !initiate_data.is_empty() {
-                                if let Err(e) = state.c_out.encrypt(&mut initiate_data) {
-                                    error!(
-                                        "Encryption error for NotifyJoiningPlayerInitiateConnections: {}",
-                                        e
-                                    );
-                                }
-                            }
-                            {
-                                let pl = initiate_packet.payload.len();
-                                let line = format!(
-                                    "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                                    pl
+                                let initiate_payload = match crate::client::cnc::build_game_manager_notify_joining_player_initiate_connections(gid) {
+                                    Ok(p) => p,
+                                    Err(e) => {
+                                        crate::debug_println!(
+                                            "\x1b[38;2;255;100;100m[CNC]\x1b[0m NotifyJoiningPlayerInitiateConnections encode failed: {:?}",
+                                            e
+                                        );
+                                        return Err(e);
+                                    }
+                                };
+                                let initiate_packet = Fire2FramePacket::new_send(
+                                    0x0004,
+                                    0x16,
+                                    0,
+                                    MessageType::Notification,
+                                    initiate_payload,
                                 );
-                                info_coalesce.log(&key_b2c_notif(0x0004, 0x16, pl), line);
-                            }
-                            capture_outgoing_packet(&initiate_packet, &initiate_data);
-                            if !blaze_send(
-                                &mut stream,
-                                &initiate_data,
-                                addr,
-                                name,
-                                if is_join {
-                                    "NotifyJoiningPlayerInitiateConnections after joinGame"
-                                } else {
-                                    "NotifyJoiningPlayerInitiateConnections after resetDedicatedServer"
-                                },
-                            )
-                            .await?
-                            {
-                                return Ok(());
-                            }
-
-                            sleep(Duration::from_millis(15)).await;
-
-                            let join_done_payload = match crate::client::cnc::build_game_manager_notify_player_join_completed(gid) {
-                                Ok(p) => p,
-                                Err(e) => {
-                                    crate::debug_println!(
-                                        "\x1b[38;2;255;100;100m[CNC]\x1b[0m NotifyPlayerJoinCompleted encode failed: {:?}",
-                                        e
-                                    );
-                                    return Err(e);
+                                let mut initiate_data = initiate_packet.to_bytes().to_vec();
+                                if state.crypto_enabled && !initiate_data.is_empty() {
+                                    if let Err(e) = state.c_out.encrypt(&mut initiate_data) {
+                                        error!(
+                                            "Encryption error for NotifyJoiningPlayerInitiateConnections: {}",
+                                            e
+                                        );
+                                    }
                                 }
-                            };
-                            let join_done_packet = Fire2FramePacket::new_send(
-                                0x0004,
-                                0x1E,
-                                0,
-                                MessageType::Notification,
-                                join_done_payload,
-                            );
-                            let mut join_done_data = join_done_packet.to_bytes().to_vec();
-                            if state.crypto_enabled && !join_done_data.is_empty() {
-                                if let Err(e) = state.c_out.encrypt(&mut join_done_data) {
-                                    error!(
-                                        "Encryption error for NotifyPlayerJoinCompleted: {}",
-                                        e
+                                {
+                                    let pl = initiate_packet.payload.len();
+                                    let line = format!(
+                                        "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                                        pl
                                     );
+                                    info_coalesce.log(&key_b2c_notif(0x0004, 0x16, pl), line);
                                 }
-                            }
-                            {
-                                let pl = join_done_packet.payload.len();
-                                let line = format!(
-                                    "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                                    pl
+                                capture_outgoing_packet(&initiate_packet, &initiate_data, state.blaze_session_id);
+                                if !blaze_send(
+                                    &mut stream,
+                                    &initiate_data,
+                                    addr,
+                                    name,
+                                    "NotifyJoiningPlayerInitiateConnections after resetDedicatedServer",
+                                )
+                                .await?
+                                {
+                                    return Ok(());
+                                }
+
+                                sleep(Duration::from_millis(15)).await;
+
+                                let join_done_payload = match crate::client::cnc::build_game_manager_notify_player_join_completed(gid) {
+                                    Ok(p) => p,
+                                    Err(e) => {
+                                        crate::debug_println!(
+                                            "\x1b[38;2;255;100;100m[CNC]\x1b[0m NotifyPlayerJoinCompleted encode failed: {:?}",
+                                            e
+                                        );
+                                        return Err(e);
+                                    }
+                                };
+                                let join_done_packet = Fire2FramePacket::new_send(
+                                    0x0004,
+                                    0x1E,
+                                    0,
+                                    MessageType::Notification,
+                                    join_done_payload,
                                 );
-                                info_coalesce.log(&key_b2c_notif(0x0004, 0x1E, pl), line);
+                                let mut join_done_data = join_done_packet.to_bytes().to_vec();
+                                if state.crypto_enabled && !join_done_data.is_empty() {
+                                    if let Err(e) = state.c_out.encrypt(&mut join_done_data) {
+                                        error!(
+                                            "Encryption error for NotifyPlayerJoinCompleted: {}",
+                                            e
+                                        );
+                                    }
+                                }
+                                {
+                                    let pl = join_done_packet.payload.len();
+                                    let line = format!(
+                                        "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                                        pl
+                                    );
+                                    info_coalesce.log(&key_b2c_notif(0x0004, 0x1E, pl), line);
+                                }
+                                capture_outgoing_packet(&join_done_packet, &join_done_data, state.blaze_session_id);
+                                if !blaze_send(
+                                    &mut stream,
+                                    &join_done_data,
+                                    addr,
+                                    name,
+                                    "NotifyPlayerJoinCompleted after resetDedicatedServer",
+                                )
+                                .await?
+                                {
+                                    return Ok(());
+                                }
+                            } else {
+                                crate::debug_println!(
+                                    "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame lobby: skipped InitiateConnections + PlayerJoinCompleted (gid={})",
+                                    gid
+                                );
                             }
-                            capture_outgoing_packet(&join_done_packet, &join_done_data);
-                            if !blaze_send(
-                                &mut stream,
-                                &join_done_data,
-                                addr,
-                                name,
-                                if is_join {
-                                    "NotifyPlayerJoinCompleted after joinGame"
-                                } else {
-                                    "NotifyPlayerJoinCompleted after resetDedicatedServer"
-                                },
-                            )
-                            .await?
-                            {
-                                return Ok(());
-                            }
-                            } // end is_join (joinGame immediate notifies)
+                            } // end is_join / resetDedicatedServer notify block
                         }
 
                         // CNC GameManager notifications after `setGameSettings` (cmd 4): NotifyGameSettingsChange.
@@ -1954,7 +2057,7 @@ impl BlazeProtocolServer {
                                         .duration_since(UNIX_EPOCH)
                                         .unwrap_or_default()
                                         .as_secs_f64(),
-                                    direction: PacketDirection::BlazeToClient,
+                                    direction: packet_dir_out(state.blaze_session_id),
                                     component: push.component,
                                     command: push.command,
                                     msg_num: 0,
@@ -2025,7 +2128,7 @@ impl BlazeProtocolServer {
                         if let Some(error_name) = error_name_opt {
                             // Known error - log normally
                             crate::console_println!(
-                                "\x1b[38;2;255;100;100m[Blaze\x1b[0m→\x1b[38;2;255;100;100mClient]\x1b[0m ERROR_REPLY {} -> {} (Code: {}), Size={}, MsgNum={}",
+                                "\x1b[38;2;255;100;100m[Blaze→Client]\x1b[0m ERROR_REPLY {} -> {} (Code: {}), Size={}, MsgNum={}",
                                 cmd_name,
                                 error_name,
                                 error_code,
@@ -2036,7 +2139,7 @@ impl BlazeProtocolServer {
                             // Unknown error - log with special marker
                             let component_name = crate::blaze::components::get_component_name(packet.header.component);
                             crate::console_println!(
-                                "\x1b[38;2;255;165;0m[⚠️  UNKNOWN ERROR_REPLY]\x1b[0m {} -> UNKNOWN_ERROR Component={} ({}), Command={}, ErrorCode={} (⚠️  Please investigate and add to blaze_errors.rs), Size={}, MsgNum={}",
+                                "\x1b[38;2;255;165;0m[??  UNKNOWN ERROR_REPLY]\x1b[0m {} -> UNKNOWN_ERROR Component={} ({}), Command={}, ErrorCode={} (??  Please investigate and add to blaze_errors.rs), Size={}, MsgNum={}",
                                 cmd_name,
                                 packet.header.component,
                                 component_name,
@@ -2048,7 +2151,7 @@ impl BlazeProtocolServer {
                         }
                         
                         // Capture error reply for inspection
-                        capture_outgoing_packet(&error_packet, &error_data);
+                        capture_outgoing_packet(&error_packet, &error_data, state.blaze_session_id);
                         
                         // Send error reply
                         if !blaze_write_only(&mut stream, &error_data, addr, name, "ERROR_REPLY").await? {
@@ -2193,7 +2296,7 @@ impl BlazeProtocolServer {
                                     capture_packet(CapturedPacket {
                                         capture_seq: 0,
                                         timestamp: ts,
-                                        direction: PacketDirection::BlazeToClient,
+                                        direction: packet_dir_out(state.blaze_session_id),
                                         component,
                                         command,
                                         msg_num,
@@ -2359,7 +2462,7 @@ impl BlazeProtocolServer {
                 let fire_incoming_seq = capture_packet(CapturedPacket {
                     capture_seq: 0,
                     timestamp,
-                    direction: PacketDirection::ClientToBlaze,
+                    direction: packet_dir_in(state.blaze_session_id),
                     component,
                     command,
                     msg_num: packet_id as u32,
@@ -2376,9 +2479,11 @@ impl BlazeProtocolServer {
                     && command == 0x0096
                 {
                     if let Some(sid) = state.blaze_session_id {
-                        crate::client::cnc::dedicated_pool::on_register_creator(sid);
+                        crate::client::cnc::dedicated_pool::on_register_creator(sid, &payload);
                     }
                 }
+
+                let mut blaze_error: u16 = 0;
 
                 if crate::common::game::get_current_game_id() == "cnc"
                     && component == 0x0004
@@ -2391,15 +2496,24 @@ impl BlazeProtocolServer {
                             gid,
                             &payload,
                         ) {
-                            Some(dedicated_sid) => crate::debug_println!(
-                                "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m pre-reply assigned session #{} → gid={}",
-                                dedicated_sid,
-                                gid
-                            ),
-                            None => crate::debug_println!(
-                                "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m pre-reply: no idle pooled dedicated (gid={})",
-                                gid
-                            ),
+                            Some(dedicated_sid) => {
+                                crate::client::cnc::dedicated_pool::clear_no_dedicated_server();
+                                crate::debug_println!(
+                                    "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m pre-reply assigned session #{} ? gid={}",
+                                    dedicated_sid,
+                                    gid
+                                );
+                            }
+                            None => {
+                                blaze_error = crate::client::cnc::dedicated_pool
+                                    ::GAMEMANAGER_ERR_NO_DEDICATED_SERVER_FOUND;
+                                crate::client::cnc::dedicated_pool::note_no_dedicated_server();
+                                crate::debug_println!(
+                                    "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m pre-reply: no idle pooled dedicated (gid={}) -- replying GAMEMANAGER_ERR_NO_DEDICATED_SERVER_FOUND ({})",
+                                    gid,
+                                    blaze_error
+                                );
+                            }
                         }
                     }
                 }
@@ -2411,12 +2525,47 @@ impl BlazeProtocolServer {
                 let response_payload =
                     handle_packet_fields(component, command, &payload, fire_incoming_seq)?;
 
+                if crate::common::game::get_current_game_id() == "cnc"
+                    && component == 0x0004
+                    && (command == 0x0019 || command == 0x0016)
+                    && blaze_error == 0
+                {
+                    if let Some(sid) = state.blaze_session_id {
+                        let gid = crate::client::cnc::cnc_extract_reset_game_id(&payload);
+                        if let Ok(pushes) =
+                            crate::client::cnc::fireframe::pushes_client_join_after_reset(&payload, gid)
+                        {
+                            if let Some((flush_sid, flush_pushes)) =
+                                crate::client::cnc::game_state::defer_client_join_pushes(
+                                    gid, sid, pushes,
+                                )
+                            {
+                                crate::client::cnc::fireframe::enqueue_pending_pushes(
+                                    flush_sid,
+                                    flush_pushes,
+                                );
+                                tracing::info!(
+                                    target: "cnc",
+                                    "[CNC] flushed deferred client join (pre-reply, host already ready, gid={})",
+                                    gid
+                                );
+                            } else {
+                                tracing::info!(
+                                    target: "cnc",
+                                    "[CNC] deferred client join notifies (pre-reply, gid={})",
+                                    gid
+                                );
+                            }
+                        }
+                    }
+                }
+
                 let mut response_data = Vec::with_capacity(12 + response_payload.len());
                 let response_size = response_payload.len() as u16;
                 response_data.extend_from_slice(&response_size.to_be_bytes());
                 response_data.extend_from_slice(&component.to_be_bytes());
                 response_data.extend_from_slice(&command.to_be_bytes());
-                response_data.extend_from_slice(&0u16.to_be_bytes()); // error
+                response_data.extend_from_slice(&blaze_error.to_be_bytes()); // error
                 response_data.extend_from_slice(&0x1000u16.to_be_bytes()); // reply qtype
                 response_data.extend_from_slice(&packet_id.to_be_bytes());
                 response_data.extend_from_slice(&response_payload);
@@ -2427,7 +2576,7 @@ impl BlazeProtocolServer {
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs_f64(),
-                    direction: PacketDirection::BlazeToClient,
+                    direction: packet_dir_out(state.blaze_session_id),
                     component,
                     command,
                     msg_num: packet_id as u32,
@@ -2471,6 +2620,59 @@ impl BlazeProtocolServer {
                     }
                 }
 
+                if crate::common::game::get_current_game_id() == "cnc"
+                    && component == 0x0004
+                    && (command == 0x0019 || command == 0x0016)
+                    && blaze_error == 0
+                {
+                    let gid = crate::client::cnc::cnc_extract_reset_game_id(&payload);
+                    if let Ok(teardown) =
+                        crate::client::cnc::fireframe::pushes_rematch_teardown_before_reset_reply(gid)
+                    {
+                        for push in teardown {
+                            capture_packet(CapturedPacket {
+                                capture_seq: 0,
+                                timestamp: SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs_f64(),
+                                direction: packet_dir_out(state.blaze_session_id),
+                                component: push.component,
+                                command: push.command,
+                                msg_num: 0,
+                                msg_type: "NOTIFICATION".to_string(),
+                                payload_size: push.tdf_body.len(),
+                                payload: push.tdf_body.clone(),
+                                raw_packet: push.wire.clone(),
+                                command_name: crate::blaze::components::get_command_name(
+                                    push.component,
+                                    push.command,
+                                )
+                                .map(|s| s.to_string()),
+                                metadata_size: 0,
+                            });
+                            if !blaze_send(
+                                &mut stream,
+                                &push.wire,
+                                addr,
+                                name,
+                                push.blaze_send_label,
+                            )
+                            .await?
+                            {
+                                return Ok(());
+                            }
+                            let pl = push.wire.len();
+                            info_coalesce.log(
+                                &key_b2c_notif(push.component, push.command, pl),
+                                push.info_log_line,
+                            );
+                            sleep(Duration::from_millis(15)).await;
+                        }
+                        sleep(Duration::from_millis(40)).await;
+                    }
+                }
+
                 if !blaze_send(&mut stream, &response_data, addr, name, "REPLY").await? {
                     return Ok(());
                 }
@@ -2493,9 +2695,65 @@ impl BlazeProtocolServer {
                             (0x0004, 0x0009) => {
                                 let gid = crate::client::cnc::cnc_extract_join_game_id(&payload);
                                 crate::client::cnc::dedicated_pool::on_game_active(sid, gid, None);
+                                crate::debug_println!(
+                                    "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame ? GameRoom lobby notifies (FireFrame, gid={})",
+                                    gid
+                                );
+                                match crate::client::cnc::fireframe::pushes_after_join_game_lobby(
+                                    &payload, true,
+                                ) {
+                                    Ok(pushes) => {
+                                        for push in pushes {
+                                            capture_packet(CapturedPacket {
+                                                capture_seq: 0,
+                                                timestamp: SystemTime::now()
+                                                    .duration_since(UNIX_EPOCH)
+                                                    .unwrap_or_default()
+                                                    .as_secs_f64(),
+                                                direction: packet_dir_out(state.blaze_session_id),
+                                                component: push.component,
+                                                command: push.command,
+                                                msg_num: 0,
+                                                msg_type: "NOTIFICATION".to_string(),
+                                                payload_size: push.tdf_body.len(),
+                                                payload: push.tdf_body.clone(),
+                                                raw_packet: push.wire.clone(),
+                                                command_name: crate::blaze::components::get_command_name(
+                                                    push.component,
+                                                    push.command,
+                                                )
+                                                .map(|s| s.to_string()),
+                                                metadata_size: 0,
+                                            });
+                                            if !blaze_send(
+                                                &mut stream,
+                                                &push.wire,
+                                                addr,
+                                                name,
+                                                push.blaze_send_label,
+                                            )
+                                            .await?
+                                            {
+                                                return Ok(());
+                                            }
+                                            let pl = push.wire.len();
+                                            info_coalesce.log(
+                                                &key_b2c_notif(push.component, push.command, pl),
+                                                push.info_log_line,
+                                            );
+                                            sleep(Duration::from_millis(15)).await;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        crate::debug_println!(
+                                            "\x1b[38;2;255;100;100m[CNC]\x1b[0m joinGame lobby pushes failed: {:?}",
+                                            e
+                                        );
+                                    }
+                                }
                             }
                             (0x0004, 0x0096) => {
-                                crate::client::cnc::dedicated_pool::on_register_creator(sid);
+                                crate::client::cnc::dedicated_pool::on_register_creator(sid, &payload);
                             }
                             (0x0004, 0x0097) => {
                                 crate::client::cnc::dedicated_pool::on_unregister_creator(sid);
@@ -2523,7 +2781,7 @@ impl BlazeProtocolServer {
                                     .duration_since(UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs_f64(),
-                                direction: PacketDirection::BlazeToClient,
+                                direction: packet_dir_out(state.blaze_session_id),
                                 component: push.component,
                                 command: push.command,
                                 msg_num: 0,
@@ -2556,7 +2814,6 @@ impl BlazeProtocolServer {
                             );
                         }
 
-                        // Only auto-advance PRE_GAME → IN_GAME after attributes once Blaze is
                         // already in PRE_GAME. Working CNC stays INITIALIZING through GameReady /
                         // ClientConnect; advancing here early regresses that path.
                         // Do not emit cmd 0x70 -- that is NotifyGameReset on CNC.
@@ -2575,7 +2832,7 @@ impl BlazeProtocolServer {
                                             .duration_since(UNIX_EPOCH)
                                             .unwrap_or_default()
                                             .as_secs_f64(),
-                                        direction: PacketDirection::BlazeToClient,
+                                        direction: packet_dir_out(state.blaze_session_id),
                                         component: push.component,
                                         command: push.command,
                                         msg_num: 0,
@@ -2617,30 +2874,11 @@ impl BlazeProtocolServer {
                     }
                 }
 
-                // resetDedicatedServer (0x19 / EA 0x16): the reply was just sent, but the RESETTING
-                // client still needs NotifyGameSetup (+ state / platform-host / join notifies) so
-                // GameManagerAPI builds its local Game object and joins. Without these the SDK waits on
-                // the reset job, times out after ~20s, and null-derefs (ACCESS_VIOLATION @0x4 in the
-                // Blaze dispatch). orchestrate_client_reset already ran pre-reply and queued cmd 220 to
-                // the dedicated; it is idempotent, so pushes_after_reset_dedicated_server reuses that
-                // assignment for THST/HNET/GSID instead of allocating a second dedicated.
                 if crate::common::game::get_current_game_id() == "cnc"
                     && component == 0x0004
                     && (command == 0x0019 || command == 0x0016)
                 {
-                    if let Some(sid) = state.blaze_session_id {
-                        let gid = crate::client::cnc::cnc_extract_reset_game_id(&payload);
-                        if let Ok(pushes) =
-                            crate::client::cnc::fireframe::pushes_client_join_after_reset(&payload, gid)
-                        {
-                            crate::client::cnc::game_state::defer_client_join_pushes(gid, sid, pushes);
-                            let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
-                            crate::debug_println!(
-                                "\x1b[38;2;100;200;255m[CNC]\x1b[0m deferred client join notifies (raw path, gid={})",
-                                gid
-                            );
-                        }
-                    }
+                    let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
                 }
 
                 // updateMeshConnection (0x1D): the joining client reported it connected to the dedicated.
@@ -2689,7 +2927,7 @@ impl BlazeProtocolServer {
                                             .duration_since(UNIX_EPOCH)
                                             .unwrap_or_default()
                                             .as_secs_f64(),
-                                        direction: PacketDirection::BlazeToClient,
+                                        direction: packet_dir_out(state.blaze_session_id),
                                         component: push.component,
                                         command: push.command,
                                         msg_num: 0,
@@ -2744,7 +2982,7 @@ impl BlazeProtocolServer {
                                     .duration_since(UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs_f64(),
-                                direction: PacketDirection::BlazeToClient,
+                                direction: packet_dir_out(state.blaze_session_id),
                                 component: push.component,
                                 command: push.command,
                                 msg_num: 0,
@@ -2798,6 +3036,12 @@ impl BlazeProtocolServer {
                             if let Some((client_sid, pushes)) =
                                 crate::client::cnc::game_state::complete_dedicated_host_setup(resolved_gid)
                             {
+                                tracing::info!(
+                                    target: "cnc",
+                                    "[CNC] releasing deferred client join after dedicated finalize (gid={} pushes={})",
+                                    resolved_gid,
+                                    pushes.len()
+                                );
                                 crate::client::cnc::fireframe::enqueue_pending_pushes(client_sid, pushes);
                                 let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
                             }
@@ -2819,7 +3063,7 @@ impl BlazeProtocolServer {
                                     .duration_since(UNIX_EPOCH)
                                     .unwrap_or_default()
                                     .as_secs_f64(),
-                                direction: PacketDirection::BlazeToClient,
+                                direction: packet_dir_out(state.blaze_session_id),
                                 component: push.component,
                                 command: push.command,
                                 msg_num: 0,
@@ -2872,7 +3116,7 @@ impl BlazeProtocolServer {
                             capture_packet(CapturedPacket {
                                 capture_seq: 0,
                                 timestamp: ts,
-                                direction: PacketDirection::BlazeToClient,
+                                direction: packet_dir_out(state.blaze_session_id),
                                 component: push.component,
                                 command: push.command,
                                 msg_num: 0,
@@ -2928,7 +3172,7 @@ impl BlazeProtocolServer {
                                 .duration_since(UNIX_EPOCH)
                                 .unwrap_or_default()
                                 .as_secs_f64(),
-                            direction: PacketDirection::BlazeToClient,
+                            direction: packet_dir_out(state.blaze_session_id),
                             component: push.component,
                             command: push.command,
                             msg_num: 0,

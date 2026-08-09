@@ -59,7 +59,9 @@
     background: #fff;
 }
 
-.cc-shell-root--classic .btn-options-close {
+/* Options overlay lives outside the shell root include — key off body theme. */
+body.cc-theme--classic .btn-options-close,
+body.cc-theme--cnc-alpha .btn-options-close {
     top: -12px;
     right: -12px;
     width: 32px;
@@ -72,11 +74,14 @@
     box-shadow: 0 2px 10px rgba(0,0,0,0.8);
     border-radius: 16px;
 }
-.cc-shell-root--classic .btn-options-close:hover {
+body.cc-theme--classic .btn-options-close:hover,
+body.cc-theme--cnc-alpha .btn-options-close:hover {
     -webkit-filter: brightness(1.2);
 }
-.cc-shell-root--classic .btn-options-close::before,
-.cc-shell-root--classic .btn-options-close::after {
+body.cc-theme--classic .btn-options-close::before,
+body.cc-theme--classic .btn-options-close::after,
+body.cc-theme--cnc-alpha .btn-options-close::before,
+body.cc-theme--cnc-alpha .btn-options-close::after {
     display: none;
 }
 

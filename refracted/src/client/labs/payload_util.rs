@@ -165,7 +165,6 @@ pub fn handle_util_set_client_state(_payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(Vec::new()))
 }
 
-/// `Util.setClientMetrics` (0x0009::0x0016) — DirtySDK UPnP/NAT report. Empty success ACK.
 pub fn handle_util_set_client_metrics(payload: &[u8]) -> BlazeResult<Bytes> {
     let ubfl = TdfEncoder::find_int_field(payload, "UBFL").unwrap_or(0);
     let udev = TdfEncoder::find_string_field(payload, "UDEV").unwrap_or_default();

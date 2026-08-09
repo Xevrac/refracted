@@ -258,8 +258,7 @@ pub async fn start_https_proxy(
     _target_port: u16,     // Kept for compatibility but not used
     running: Arc<std::sync::atomic::AtomicBool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // HTTPS: simplified passthrough; full TLS interception would need local CA and cert generation.
-    warn!("HTTPS proxy is not fully implemented; TLS interception needs certificate handling");
+    warn!("HTTPS proxy is not fully implemented; decrypting HTTPS needs certificate handling");
     start_http_proxy(listen_port, "".to_string(), 0, running).await
 }
 

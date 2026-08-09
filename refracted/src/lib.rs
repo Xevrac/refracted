@@ -7,7 +7,6 @@
 //! - [`nucleus`] -- Game-agnostic identity/account layer (Settings → Accounts); feeds Blaze handler inputs.
 //! - [`client`] -- Title-specific logic (`labs`, `cnc`, …), selected by [`common::game`] from `games.json`.
 //!
-//! The binary in `main.rs` hosts the desktop UI; the library is structured so servers and handlers stay testable and separated from egui.
 
 // Core modules
 pub mod core;

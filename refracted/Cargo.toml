@@ -1,12 +1,16 @@
 [[bin]]
 name = "refracted"
 path = "src/main.rs"
+required-features = ["desktop"]
+
+[[bin]]
+name = "refracted-headless"
+path = "src/bin/refracted_headless.rs"
 
 [build-dependencies]
 base64 = "0.22"
 image = "0.24"
 toml = "0.8"
-winres = "0.1"
 
 [dependencies]
 aes = "0.8"
@@ -17,36 +21,53 @@ bytes = "1.0"
 cbc = "0.1"
 chrono = "0.4"
 colored = "2.0"
-eframe = "0.27"
-egui = "0.27"
 flate2 = "1.0"
 futures = "0.3"
 generic-array = "0.14"
 h2 = "0.3"
 hex = "0.4"
 http = "0.2"
-image = "0.24"
 md5 = "0.7"
 parking_lot = "0.12"
 rand = "0.8"
 rc4 = "0.1"
 rcgen = "0.12"
-resvg = "0.43"
-rfd = "0.13"
 rustls = "0.21"
 rustls-pemfile = "1.0"
 serde_bytes = "0.11"
 serde_json = "1.0"
 sha2 = "0.10"
 thiserror = "1.0"
-tiny-skia = "0.11"
 tokio-rustls = "0.24"
 tracing = "0.1"
-usvg = "0.43"
+
+[dependencies.clap]
+features = ["derive"]
+version = "4.5"
+
+[dependencies.eframe]
+optional = true
+version = "0.27"
+
+[dependencies.egui]
+optional = true
+version = "0.27"
+
+[dependencies.image]
+optional = true
+version = "0.24"
 
 [dependencies.indexmap]
 features = ["serde"]
 version = "2.0"
+
+[dependencies.resvg]
+optional = true
+version = "0.43"
+
+[dependencies.rfd]
+optional = true
+version = "0.13"
 
 [dependencies.serde]
 features = ["derive"]
@@ -54,6 +75,10 @@ version = "1.0"
 
 [dependencies.socket2]
 version = "0.5"
+
+[dependencies.tiny-skia]
+optional = true
+version = "0.11"
 
 [dependencies.tokio]
 features = ["full"]
@@ -74,7 +99,32 @@ features = [
 ]
 version = "0.3"
 
-[dependencies.winapi]
+[dependencies.usvg]
+optional = true
+version = "0.43"
+
+[features]
+default = ["desktop"]
+desktop = [
+    "dep:eframe",
+    "dep:egui",
+    "dep:rfd",
+    "dep:resvg",
+    "dep:tiny-skia",
+    "dep:usvg",
+    "dep:image",
+]
+
+[package]
+build = "build.rs"
+edition = "2021"
+name = "refracted"
+version = "0.4.1592"
+
+[target."cfg(windows)".build-dependencies]
+winres = "0.1"
+
+[target."cfg(windows)".dependencies.winapi]
 features = [
     "wincon",
     "processthreadsapi",
@@ -85,9 +135,3 @@ features = [
     "psapi",
 ]
 version = "0.3"
-
-[package]
-build = "build.rs"
-edition = "2021"
-name = "refracted"
-version = "0.4.1509"

@@ -1,4 +1,3 @@
-﻿//! Local QoS coordinator -- BlazeSDK `QosManager` / DirtySDK `QosClient` probe endpoints (BWPS/LTPS).
 
 use crate::common::error::{io_is_expected_peer_close, BlazeResult};
 use crate::core::inspector::inspector_module::{capture_grpc, CapturedGrpc, GrpcDirection};
@@ -20,7 +19,6 @@ use tracing::{debug, error, info, warn};
 
 const QOS_TAG: &str = "\x1b[38;2;80;200;120m[QoS]\x1b[0m";
 
-/// DirtySDK latency probes use requestid < 2; bandwidth uses >= 2 (see QosApi recv path).
 const QOS_REQUEST_ID_LATENCY: u32 = 1;
 const QOS_REQUEST_ID_BANDWIDTH: u32 = 2;
 const QOS_DEFAULT_NUM_PROBES: u32 = 10;
@@ -106,7 +104,6 @@ fn parse_u32_param(query: &str, key: &str) -> Option<u32> {
     query_param(query, key)?.parse().ok()
 }
 
-/// Host-order style IPv4 integer DirtySDK XML parsers expect (`10.0.0.230` → `0x0A0000E6`).
 fn ipv4_to_qos_u32(ip: Ipv4Addr) -> u32 {
     u32::from_be_bytes(ip.octets())
 }
@@ -172,7 +169,6 @@ fn build_firewall_xml(peer: SocketAddr, secret_hint: Option<(u32, u32)>) -> Stri
 }
 
 fn build_firetype_xml() -> String {
-    // Values other than 5 trigger the firetype status callback in DirtySDK.
     "<firetype><firetype>1</firetype></firetype>".to_string()
 }
 
@@ -190,7 +186,6 @@ fn http_ok_xml(body: &str) -> Vec<u8> {
     .into_bytes()
 }
 
-/// DirtySDK UDP probe reply: echo client header (incl. send tick at +16), stamp EXIP/port at +20/+24.
 fn build_udp_probe_reply(request: &[u8], peer: SocketAddr) -> Vec<u8> {
     let (ip, port) = reflect_endpoint(peer);
     let mut resp = vec![0u8; request.len().max(QOS_UDP_REPLY_MIN)];
@@ -399,7 +394,6 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for PrependStream<S> {
     }
 }
 
-/// Session counter / probe kinds -- INFO only at begin + end (BlazeSDK span: connected → qos completed).
 struct QosSessionLog {
     peer: SocketAddr,
     bind: QosBind,
@@ -412,7 +406,6 @@ struct QosSessionLog {
 
 impl QosSessionLog {
     fn begin(peer: SocketAddr, bind: QosBind, transport: &'static str) -> Self {
-        // DirtySDK QosClient dials preAuth PSA (BWPS/LTPS) -- peer is the Blaze client NetConn IP.
         info!(
             "{QOS_TAG} begin {peer} → {}:{} ({}) via {}",
             bind.role, bind.port, target_hint(bind.role), transport
@@ -539,7 +532,15 @@ impl QosProtocolServer {
             .bind(addr.parse().map_err(|e| {
                 crate::common::error::BlazeError::InvalidPacket(format!("Invalid address: {}", e))
             })?)
-            .map_err(|e| crate::common::error::BlazeError::Io(e))?;
+            .map_err(|e| {
+                let code = e.raw_os_error().unwrap_or(0);
+                error!(
+                    "{QOS_TAG} {} TCP bind {}:{} failed: {e} (os={code}). \
+                     If address already in use, stop the other Refracted / free the port.",
+                    bind.role, host, bind.port
+                );
+                crate::common::error::BlazeError::Io(e)
+            })?;
         let listener = socket
             .listen(128)
             .map_err(|e| crate::common::error::BlazeError::Io(e))?;
@@ -566,12 +567,20 @@ impl QosProtocolServer {
         }
     }
 
-    /// DirtySDK latency/bandwidth probes are SOCK_DGRAM to `.qosport` from `/qos/qos` XML.
     async fn run_qos_udp(host: String, bind: QosBind) -> BlazeResult<()> {
         let addr = format!("{}:{}", host, bind.port);
-        let socket = UdpSocket::bind(&addr)
-            .await
-            .map_err(|e| crate::common::error::BlazeError::Io(e))?;
+        let socket = match UdpSocket::bind(&addr).await {
+            Ok(s) => s,
+            Err(e) => {
+                let code = e.raw_os_error().unwrap_or(0);
+                error!(
+                    "{QOS_TAG} {} UDP bind {}:{} failed: {e} (os={code}). \
+                     If address already in use, stop the other Refracted / free the port.",
+                    bind.role, host, bind.port
+                );
+                return Err(crate::common::error::BlazeError::Io(e));
+            }
+        };
         if !crate::common::startup_progress::is_startup_in_progress() {
             info!(
                 "{QOS_TAG} listening {} UDP ({}) on {}",

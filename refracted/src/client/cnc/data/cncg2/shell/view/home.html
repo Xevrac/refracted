@@ -26,21 +26,6 @@
             </div>
             <div class="play-btn-stack">
                 <button class="btn btn-massive-play" ng-click="openLobby()">PLAY</button>
-                <div class="play-dropdown-wrapper">
-                    <button class="btn btn-play-dropdown" data-toggle="dropdown">
-                        <span class="mode-text">{{ selectedMode }}</span>
-                        <img src="images/chevron_down.svg" class="mode-arrow" width="16" height="10" alt="">
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a href="" ng-click="setMode('PVP')">PVP</a></li>
-                        <li><a href="" ng-click="setMode('PVE')">PVE</a></li>
-                        <li><a href="" ng-click="setMode('1v1')">1v1</a></li>
-                        <li><a href="" ng-click="setMode('Team Battle')">Team Battle</a></li>
-                        <li><a href="" ng-click="setMode('Onslaught')">Onslaught</a></li>
-                        <li><a href="" ng-click="setMode('Custom Skirmish')">Custom Skirmish</a></li>
-                        <li><a href="" ng-click="setMode('Practice PvE')">Practice PvE</a></li>
-                    </ul>
-                </div>
             </div>
             <div class="right-docked-items">
                 <div class="premium-badge-wrapper">
@@ -53,7 +38,7 @@
         </div>
 
         <div class="cc-party-cluster text-right">
-            <button type="button" class="btn btn-create-party">
+            <button type="button" class="btn btn-create-party" disabled="disabled" title="Coming soon">
                 <img src="images/create-a-party.png" alt="Create a party" class="btn-create-party-art" width="204" height="107">
             </button>
         </div>

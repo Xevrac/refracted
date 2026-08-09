@@ -154,7 +154,7 @@
         </div>
 
         <h5 class="cnc-probe-subhead">Add AI player (retail)</h5>
-        <p class="probe-hint"><strong>Add AI</strong> runs <code>RtsClient.AddRemotePlayer</code> (team 2, startpoint 2). GMGR <code>addQueuedPlayerToGame</code> (RPC 38) fires only after level spawn sets <code>[RtsGameClient+0xE5]</code>. Create game first, then Add AI → <strong>blazeGetPlayers (roster)</strong>.</p>
+        <p class="probe-hint"><strong>Add AI</strong> runs <code>RtsClient.AddRemotePlayer</code> (team 2, startpoint 2). GMGR <code>addQueuedPlayerToGame</code> (RPC 38) fires after level bind is ready. Create game first, then Add AI → <strong>blazeGetPlayers (roster)</strong>.</p>
         <div class="probe-row">
             <button class="probe-btn probe-btn--primary" type="button" onclick="CncProbe.promptInGameAddAi()">Add AI</button>
             <button class="probe-btn" type="button" onclick="CncProbe.syncAiFromGetPlayers()">blazeGetPlayers (roster)</button>

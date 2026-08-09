@@ -1,4 +1,7 @@
+use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
+
+static APP_DATA_DIR_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 pub fn executable_dir() -> Option<PathBuf> {
     std::env::current_exe()
@@ -6,8 +9,19 @@ pub fn executable_dir() -> Option<PathBuf> {
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
 }
 
-/// `{exe_dir}/data`, or `./data` if the executable path is unavailable.
+pub fn set_app_data_dir(path: PathBuf) {
+}
+
 pub fn app_data_dir() -> PathBuf {
+    if let Some(dir) = APP_DATA_DIR_OVERRIDE.lock().clone() {
+        return dir;
+    }
+    if let Ok(dir) = std::env::var("REFRACTED_DATA_DIR") {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
     executable_dir()
         .map(|d| d.join("data"))
         .unwrap_or_else(|| PathBuf::from("data"))

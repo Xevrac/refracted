@@ -1,5 +1,4 @@
 /**
- * Persists Blaze / shell auth hints from shellaccesslayer JSON responses and syncs to Angular $rootScope.
  * Also accepts: sessionStorage, window.__CNC_BLAZE, postMessage (cnc:persona), game-injected fields (DSNM, etc.).
  */
 (function (window) {
@@ -107,6 +106,14 @@
             }
             n = String(n).trim();
             return n ? n : UNKNOWN_PLAYER;
+        },
+
+        getPersonaId: function () {
+            if (CncBlazeState.personaId == null || CncBlazeState.personaId === '') {
+                return 0;
+            }
+            var n = Number(CncBlazeState.personaId);
+            return isNaN(n) ? 0 : n;
         },
 
         applyExternalHints: function () {

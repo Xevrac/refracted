@@ -1,5 +1,4 @@
 /**
- * CNC debug probe — shellaccesslayer (EAWebKit) + gameclient (Frostbite) hooks.
  * Patterns: https://github.com/Xevrac/cnc_backend/wiki
  */
 (function (window) {
@@ -32,13 +31,46 @@
             }
             if (res && typeof res === 'object') {
                 var blob = JSON.stringify(res);
+                var errText = ((res.error != null ? String(res.error) : '')
+                    + ' ' + (res.errorCode != null ? String(res.errorCode) : '')
+                    + ' ' + (res.status != null ? String(res.status) : '')
+                    + ' ' + blob).toUpperCase();
+                var noIdle = errText.indexOf('NO_DEDICATED') >= 0
+                    || errText.indexOf('0X12D') >= 0
+                    || errText.indexOf('ERR_NO_DEDICATED') >= 0
+                    || res.errorCode === 301
+                    || res.status === 301
+                    || res.error === 301;
                 if (blob.indexOf('ALREADY_GAME_MEMBER') >= 0) {
                     CncProbe._inBlazeGame = true;
                 }
-                if (res.success === true || res.status === 0) {
+                if (CncProbe._pendingBlazeCreate && noIdle) {
+                    CncProbe._pendingBlazeCreate = false;
+                    CncProbe._inBlazeGame = false;
+                    if (typeof CncProbe.onLobbyStartResult === 'function') {
+                        CncProbe.onLobbyStartResult({
+                            ok: false,
+                            noIdle: true,
+                            res: res
+                        });
+                    }
+                } else if (!noIdle && (res.success === true || res.status === 0)
+                    && !res.error && res.errorCode == null) {
                     if (CncProbe._pendingBlazeCreate) {
                         CncProbe._inBlazeGame = true;
                         CncProbe._pendingBlazeCreate = false;
+                    }
+                    if (typeof CncProbe.onLobbyStartResult === 'function') {
+                        CncProbe.onLobbyStartResult({ ok: true, res: res });
+                    }
+                } else if (CncProbe._pendingBlazeCreate) {
+                    CncProbe._pendingBlazeCreate = false;
+                    if (typeof CncProbe.onLobbyStartResult === 'function') {
+                        CncProbe.onLobbyStartResult({
+                            ok: false,
+                            noIdle: noIdle,
+                            res: res
+                        });
                     }
                 }
             }
@@ -56,7 +88,7 @@
         },
         runShell: function (req) {
             if (!CncProbe.hasShell()) {
-                CncProbe.log('shellaccesslayer not available (not in EAWebKit game shell).');
+                CncProbe.log('shellaccesslayer not available (not in the in-game web shell).');
                 return;
             }
             req = req || {};
@@ -332,6 +364,7 @@
             games: '/blaze/games',
             creategame: '/blaze/createGame',
             joingame: '/blaze/joinGame',
+            removeplayer: '/blaze/removePlayer',
             attribute: '/blaze/attribute'
         };
         var base;
@@ -356,11 +389,6 @@
     /** Primary Blaze shell path — builds url: '/blaze/…' (matches shell.js / src.js). */
     CncProbe.runBlaze = function (resource, params) {
         // GUARD: the native setGameAttributes path (shell cmdType 10 — an "attribute" command with no
-        // playerID) crashes the client: BlazeShellCommandExecutor_dispatch -> sub_1204230 ->
-        // fb_TypeRegistry_bindOrRefreshInstance calls a null TypeInfo vtable slot (the request TDF type is
-        // not fully registered in this build). The player path (cmdType 7, with playerID) is crash-safe
-        // (it looks up game+player and bails gracefully if missing). So never send an attribute without a
-        // playerID until the native game-attribute TDF registration is fixed.
         if (String(resource || '').toLowerCase() === 'attribute') {
             var pidVal = params && (params.playerID != null ? params.playerID : params.playerId);
             if (pidVal == null || String(pidVal) === '') {
@@ -464,8 +492,7 @@
         CncProbe.log(
             'Add AI (retail only):\n' +
             '  • RtsClient.AddRemotePlayer <team> <startpoint> queues the slot locally.\n' +
-            '  • Client flushes to GMGR addQueuedPlayerToGame (RPC 38) once [RtsGameClient+0xE5] is set.\n' +
-            '  • That flag is set by vtable slot 3 after ClientLevel_spawnEntities (post level bind).\n' +
+            '  • Client flushes to GMGR addQueuedPlayerToGame (RPC 38) after level bind is ready.\n' +
             '  • After add, use blazeGetPlayers or CncProbe.setLobbyAiPid(ai_pid).\n\n' +
             'Create game first via createGame / resetDedicatedServer — do not joinGame after (already a member).'
         );
@@ -828,11 +855,9 @@
         );
     };
 
-    /** event/game — internal Blaze game event hook (cmd 12 when payload present) */
     CncProbe.blazeShellEventGame = function () {
         CncProbe.runBlaze('event/game');
     };
-    /** event/player — internal Blaze player event hook (cmd 13 when payload present) */
     CncProbe.blazeShellEventPlayer = function () {
         CncProbe.runBlaze('event/player');
     };

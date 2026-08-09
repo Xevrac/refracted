@@ -1,4 +1,3 @@
-﻿// Blaze Inspector - UI for viewing captured Blaze packets with TDF parsing
 
 use crate::blaze::tdf::{TdfEncoder, TdfTreeNode};
 use crate::common::discovery;
@@ -21,6 +20,7 @@ pub enum BlazeListDirectionFilter {
     #[default]
     All,
     ClientToBlaze,
+    DedicatedToBlaze,
     BlazeToClient,
     BlazeToDedicated,
 }
@@ -30,6 +30,7 @@ impl BlazeListDirectionFilter {
         match self {
             BlazeListDirectionFilter::All => true,
             BlazeListDirectionFilter::ClientToBlaze => d == PacketDirection::ClientToBlaze,
+            BlazeListDirectionFilter::DedicatedToBlaze => d == PacketDirection::DedicatedToBlaze,
             BlazeListDirectionFilter::BlazeToClient => d == PacketDirection::BlazeToClient,
             BlazeListDirectionFilter::BlazeToDedicated => d == PacketDirection::BlazeToDedicated,
         }
@@ -40,6 +41,7 @@ impl BlazeListDirectionFilter {
         match self {
             BlazeListDirectionFilter::All => "All directions",
             BlazeListDirectionFilter::ClientToBlaze => "Client -> Blaze",
+            BlazeListDirectionFilter::DedicatedToBlaze => "Dedicated -> Blaze",
             BlazeListDirectionFilter::BlazeToClient => "Blaze -> Client",
             BlazeListDirectionFilter::BlazeToDedicated => "Blaze -> Dedicated",
         }
@@ -141,6 +143,21 @@ fn payload_contains_hex_pattern(payload: &[u8], hex_lower: &str) -> bool {
     payload.windows(pat.len()).any(|w| w == pat.as_slice())
 }
 
+fn payload_contains_printable_needle(payload: &[u8], needle_lower: &str) -> bool {
+    if needle_lower.len() < 2 {
+        return false;
+    }
+    let mut s = String::with_capacity(payload.len().min(4096));
+    for &b in payload.iter().take(8192) {
+        if (0x20..=0x7e).contains(&b) {
+            s.push(b as char);
+        } else if !s.is_empty() && !s.ends_with(' ') {
+            s.push(' ');
+        }
+    }
+    s.to_ascii_lowercase().contains(needle_lower)
+}
+
 fn blaze_packet_matches_filter(
     p: &CapturedPacket,
     filter_trim: &str,
@@ -168,6 +185,9 @@ fn blaze_packet_matches_filter(
     )
     .to_lowercase();
     if hay.contains(&f) {
+        return true;
+    }
+    if payload_contains_printable_needle(&p.payload, &f) {
         return true;
     }
     if let Ok(raw) = u64::from_str_radix(&f, 16) {
@@ -525,6 +545,11 @@ pub fn render_blaze_inspector(
                     );
                     ui.selectable_value(
                         &mut state.direction_filter,
+                        BlazeListDirectionFilter::DedicatedToBlaze,
+                        BlazeListDirectionFilter::DedicatedToBlaze.label(),
+                    );
+                    ui.selectable_value(
+                        &mut state.direction_filter,
                         BlazeListDirectionFilter::BlazeToClient,
                         BlazeListDirectionFilter::BlazeToClient.label(),
                     );
@@ -612,6 +637,9 @@ fn render_packet_list(
                         let direction_color = match packet.direction {
                             PacketDirection::ClientToBlaze => {
                                 egui::Color32::from_rgb(100, 150, 255)
+                            }
+                            PacketDirection::DedicatedToBlaze => {
+                                egui::Color32::from_rgb(120, 200, 255)
                             }
                             PacketDirection::BlazeToClient => {
                                 egui::Color32::from_rgb(255, 150, 100)
@@ -1077,6 +1105,7 @@ fn render_packet_details(
         ui.label(egui::RichText::new("Direction:").heading());
         let direction_color = match direction {
             PacketDirection::ClientToBlaze => egui::Color32::from_rgb(100, 150, 255),
+            PacketDirection::DedicatedToBlaze => egui::Color32::from_rgb(120, 200, 255),
             PacketDirection::BlazeToClient => egui::Color32::from_rgb(255, 150, 100),
             PacketDirection::BlazeToDedicated => egui::Color32::from_rgb(150, 220, 120),
         };

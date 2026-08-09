@@ -1,10 +1,10 @@
-﻿//! Dedicated-server pool registry (`returnDedicatedServerToPool`, creator registration).
 
 use parking_lot::Mutex;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,6 +13,7 @@ use crate::blaze::tdf::TdfEncoder;
 static POOL: OnceLock<Mutex<HashMap<u64, DedicatedServerEntry>>> = OnceLock::new();
 static ASSIGNMENTS: OnceLock<Mutex<HashMap<i64, GameAssignment>>> = OnceLock::new();
 static IDENTITIES: OnceLock<Mutex<HashMap<u64, DedicatedIdentity>>> = OnceLock::new();
+static LAST_NO_DEDICATED_UNIX: AtomicU64 = AtomicU64::new(0);
 
 fn pool() -> &'static Mutex<HashMap<u64, DedicatedServerEntry>> {
     POOL.get_or_init(|| Mutex::new(HashMap::new()))
@@ -33,12 +34,12 @@ struct DedicatedIdentity {
     persona_id: u64,
 }
 
-/// Allocate (or return the existing) distinct identity for a pooled dedicated `cnc.server.exe`:
-/// display name `CNCO<N>` -- N = lowest number not currently in use, so a freed slot is reused --
-/// plus a random persona id in a range that never collides with player profiles (static client is
-/// 1201618778; generated profiles use 10_000_000_000_000+). Idempotent per session. Giving each
-/// dedicated its OWN persona is what keeps `THST.HPID` distinct from every real client, so a joining
-/// client connects OUT to the dedicated instead of assuming the topology-host role itself.
+pub const DEDICATED_SYNTHETIC_PERSONA_BASE: i64 = 20_000_000_000_000;
+
+pub fn is_dedicated_synthetic_persona(pid: i64) -> bool {
+    pid >= DEDICATED_SYNTHETIC_PERSONA_BASE
+}
+
 pub fn allocate_dedicated_identity(session_id: u64) -> (String, u64) {
     let mut m = identities().lock();
     if let Some(existing) = m.get(&session_id) {
@@ -49,7 +50,8 @@ pub fn allocate_dedicated_identity(session_id: u64) -> (String, u64) {
     while used.contains(&number) {
         number += 1;
     }
-    let persona_id = 20_000_000_000_000u64 + rand::thread_rng().gen_range(0..9_999_999_999u64);
+    let persona_id = (DEDICATED_SYNTHETIC_PERSONA_BASE as u64)
+        + rand::thread_rng().gen_range(0..9_999_999_999u64);
     let name = format!("CNCO{number}");
     m.insert(
         session_id,
@@ -62,8 +64,6 @@ fn free_dedicated_identity(session_id: u64) {
     identities().lock().remove(&session_id);
 }
 
-/// Return the pooled-dedicated identity (persona id, `CNCO<N>` name) assigned to `session_id`, if any.
-/// Used so a dedicated server's own Blaze responses report its own persona rather than the client's.
 pub fn dedicated_identity_for_session(session_id: u64) -> Option<(u64, String)> {
     identities()
         .lock()
@@ -106,24 +106,134 @@ pub struct DedicatedServerEntry {
     pub peer: String,
     pub clnt: Option<String>,
     pub display_name: Option<String>,
+    pub server_hostname: Option<String>,
     pub persona_id: Option<u64>,
     pub state: DedicatedPoolState,
     pub current_gid: Option<i64>,
     pub game_name: Option<String>,
     pub last_event_unix_secs: u64,
     pub creator_registered: bool,
+    pub current_map: Option<String>,
+}
+
+pub fn browser_server_name(entry: &DedicatedServerEntry) -> String {
+    entry
+        .server_hostname
+        .clone()
+        .or_else(|| entry.game_name.clone())
+        .unwrap_or_else(|| {
+            peer_display_fallback(&entry.peer)
+                .unwrap_or_else(|| format!("Dedicated #{}", entry.blaze_session_id))
+        })
+}
+
+fn peer_display_fallback(peer: &str) -> Option<String> {
+    let ip = peer.parse::<SocketAddr>().ok()?.ip().to_string();
+    if ip == "127.0.0.1" || ip == "::1" {
+        Some(local_machine_hostname())
+    } else {
+        Some(ip)
+    }
+}
+
+fn local_machine_hostname() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "SERVER".to_string())
+        .trim()
+        .trim_end_matches('.')
+        .to_ascii_uppercase()
+}
+
+fn normalize_hostname_label(raw: &str) -> String {
+    let s = raw.trim().trim_matches('\0');
+    let s = s
+        .strip_prefix("PCC/")
+        .or_else(|| s.strip_prefix("pcc/"))
+        .unwrap_or(s);
+    let s = s.split('.').next().unwrap_or(s);
+    if s.chars().all(|c| c.is_ascii_lowercase() || c == '-' || c == '_') {
+        s.to_ascii_uppercase()
+    } else {
+        s.to_string()
+    }
+}
+
+fn looks_like_server_hostname(s: &str) -> bool {
+    let s = s.trim();
+    !s.is_empty()
+        && s.len() <= 64
+        && !s.contains('@')
+        && !s.eq_ignore_ascii_case("RtsBlazeServer")
+        && !s.starts_with("CNCO")
+}
+
+fn extract_server_hostname(payload: &[u8], peer: &str) -> String {
+    for tag in &["HNAM", "HOST", "MACH", "SNAM", "CNAM"] {
+        if let Some(s) = TdfEncoder::find_string_field(payload, tag) {
+            let label = normalize_hostname_label(&s);
+            if looks_like_server_hostname(&label) {
+                return label;
+            }
+        }
+    }
+    if let Some(pcc) = extract_pcc_hostname(payload) {
+        return normalize_hostname_label(&pcc);
+    }
+    peer_display_fallback(peer).unwrap_or_else(local_machine_hostname)
+}
+
+fn extract_pcc_hostname(payload: &[u8]) -> Option<String> {
+    let hay = String::from_utf8_lossy(payload);
+    let lower = hay.to_ascii_lowercase();
+    let idx = lower.find("pcc/")?;
+    let rest = &hay[idx + 4..];
+    let end = rest
+        .find(|c: char| c.is_whitespace() || c == '\0' || c == '"' || c == '\'')
+        .unwrap_or(rest.len().min(64));
+    let name = rest[..end].trim();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_string())
+    }
+}
+pub const DEDICATED_PING_TCP_PORT: u16 = crate::client::cnc::msgsystem::DEDICATED_SERVERHOST_PORT;
+
+pub fn probe_host_rtt_ms(host: &str, port: Option<u16>) -> Option<u32> {
+    use std::net::{IpAddr, SocketAddr, TcpStream};
+    use std::time::{Duration, Instant};
+
+    let ip: IpAddr = host
+        .parse::<SocketAddr>()
+        .map(|sa| sa.ip())
+        .or_else(|_| host.parse::<IpAddr>())
+        .ok()?;
+    if ip.is_loopback() {
+        return Some(1);
+    }
+    let addr = SocketAddr::new(ip, port.unwrap_or(DEDICATED_PING_TCP_PORT));
+    let start = Instant::now();
+    let _stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
+    let ms = start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
+    Some(ms.max(1).min(9999))
+}
+
+pub fn probe_server_rtt_ms(peer: &str) -> Option<u32> {
+    probe_host_rtt_ms(peer, Some(DEDICATED_PING_TCP_PORT))
+}
+
+fn standby_gid_for_session(blaze_session_id: u64) -> i64 {
+    10_000 + (blaze_session_id % 900_000) as i64
 }
 
 #[derive(Debug, Clone)]
 struct GameAssignment {
     _client_session_id: u64,
     dedicated_session_id: u64,
-    /// Host endpoints snapshotted when the dedicated was assigned, so NotifyGameSetup (`THST`/`HNET`)
-    /// and the shell `serverID` stay correct even if the pool entry is later churned by a sync.
     host: DedicatedHostContext,
 }
 
-/// Dedicated host endpoints used in client `NotifyGameSetup` (`THST` / `HNET`).
 #[derive(Debug, Clone, Copy)]
 pub struct DedicatedHostContext {
     pub blaze_session_id: u64,
@@ -156,7 +266,50 @@ fn parse_peer_ipv4(peer: &str) -> i32 {
 }
 
 /// Game UDP port for pooled dedicated servers (Prism `BindDedicatedPoolUdpListen`).
-const DEDICATED_GAME_UDP_PORT: i32 = 25200;
+pub const DEDICATED_GAME_UDP_PORT: i32 = 25200;
+
+pub const GAMEMANAGER_ERR_NO_DEDICATED_SERVER_FOUND: u16 = 301;
+
+pub fn note_no_dedicated_server() {
+    LAST_NO_DEDICATED_UNIX.store(now_secs(), Ordering::Relaxed);
+}
+
+pub fn clear_no_dedicated_server() {
+    LAST_NO_DEDICATED_UNIX.store(0, Ordering::Relaxed);
+}
+
+pub fn last_no_dedicated_unix() -> u64 {
+    LAST_NO_DEDICATED_UNIX.load(Ordering::Relaxed)
+}
+
+pub fn idle_creator_count() -> usize {
+    sync_from_blaze_sessions();
+    pool()
+        .lock()
+        .values()
+        .filter(|e| {
+            e.creator_registered
+                && matches!(
+                    e.state,
+                    DedicatedPoolState::Idle | DedicatedPoolState::CreatorRegistered
+                )
+        })
+        .count()
+}
+
+pub fn lobby_pool_status_json() -> String {
+    let idle = idle_creator_count();
+    let last = last_no_dedicated_unix();
+    let creators = list_entries().len();
+    format!(
+        "{{\"idle\":{idle},\"creators\":{creators},\"lastNoDedicatedAt\":{last},\"noDedicated\":{}}}",
+        if last > 0 && now_secs().saturating_sub(last) <= 15 {
+            "true"
+        } else {
+            "false"
+        }
+    )
+}
 
 fn upsert_from_blaze_session(
     entry: &mut DedicatedServerEntry,
@@ -164,8 +317,10 @@ fn upsert_from_blaze_session(
 ) {
     entry.peer = s.peer.clone();
     entry.clnt = s.clnt.clone();
-    entry.display_name = s.display_name.clone();
-    entry.persona_id = s.persona_id;
+    if !entry.creator_registered {
+        entry.display_name = s.display_name.clone();
+        entry.persona_id = s.persona_id;
+    }
     entry.last_event_unix_secs = now_secs();
 }
 
@@ -219,12 +374,14 @@ fn ensure_pool_entry(blaze_session_id: u64) {
                 .clone()
                 .or_else(|| Some("RtsBlazeServer".to_string())),
             display_name: s.display_name,
+            server_hostname: None,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
             game_name: None,
             last_event_unix_secs: now_secs(),
             creator_registered: false,
+            current_map: None,
         }
     } else {
         DedicatedServerEntry {
@@ -232,19 +389,23 @@ fn ensure_pool_entry(blaze_session_id: u64) {
             peer: String::new(),
             clnt: Some("RtsBlazeServer".to_string()),
             display_name: None,
+            server_hostname: None,
             persona_id: None,
             state: DedicatedPoolState::Connected,
             current_gid: None,
             game_name: None,
             last_event_unix_secs: now_secs(),
             creator_registered: false,
+            current_map: None,
         }
     };
     pool().lock().insert(blaze_session_id, entry);
 }
 
-/// Pick an idle pool member with `registerDynamicDedicatedServerCreator` completed.
-pub fn acquire_idle_creator(exclude_session_id: u64) -> Option<DedicatedServerEntry> {
+pub fn acquire_idle_creator_for_map(
+    exclude_session_id: u64,
+    _wanted_map: Option<&str>,
+) -> Option<DedicatedServerEntry> {
     sync_from_blaze_sessions();
     let m = pool().lock();
     let mut candidates: Vec<_> = m
@@ -259,32 +420,40 @@ pub fn acquire_idle_creator(exclude_session_id: u64) -> Option<DedicatedServerEn
         })
         .cloned()
         .collect();
-    candidates.sort_by_key(|e| match e.state {
-        DedicatedPoolState::Idle => 0,
-        DedicatedPoolState::CreatorRegistered => 1,
-        _ => 2,
+    candidates.sort_by_key(|e| {
+        let state_rank = match e.state {
+            DedicatedPoolState::Idle => 0,
+            DedicatedPoolState::CreatorRegistered => 1,
+            _ => 2,
+        };
+        (state_rank, e.blaze_session_id)
     });
     candidates.into_iter().next()
 }
 
-/// Dedicated session id a `resetDedicatedServer` for `gid` will resolve to: the existing
-/// assignment if one was already made, otherwise the idle creator `orchestrate_client_reset`
-/// would pick. Non-reserving, so it is safe to call while building the reset reply (before the
-/// assignment is created) -- this is what lets the reply carry `GSID`/`SRVR` (shell `serverID`).
+pub fn acquire_idle_creator(exclude_session_id: u64) -> Option<DedicatedServerEntry> {
+    acquire_idle_creator_for_map(exclude_session_id, None)
+}
+
+pub fn note_dedicated_map(blaze_session_id: u64, map_path: Option<&str>) {
+    let mut m = pool().lock();
+    if let Some(e) = m.get_mut(&blaze_session_id) {
+        e.current_map = map_path.map(|s| s.to_string());
+        e.last_event_unix_secs = now_secs();
+    }
+}
+
 pub fn peek_dedicated_for_gid(gid: i64) -> Option<u64> {
     if let Some(a) = assignments().lock().get(&gid) {
         return Some(a.dedicated_session_id);
     }
+    if let Some(entry) = dedicated_for_standby_gid(gid) {
+        return Some(entry.blaze_session_id);
+    }
     acquire_idle_creator(0).map(|e| e.blaze_session_id)
 }
 
-/// Build the host context for a pooled dedicated entry (persona + INIP/EXIP endpoints).
 fn host_context_from_entry(entry: &DedicatedServerEntry) -> DedicatedHostContext {
-    // The dedicated host identity (THST.HPID) must NOT equal a real player's persona. If it does --
-    // which happens in test setups where the client and the cnc.server.exe authenticate with the same
-    // profile -- the joining client sees THST.HPID == its own persona, concludes it is the topology
-    // host itself, and never connects out to the dedicated at HNET (25200). Fall back to a synthetic
-    // per-session id whenever the pooled dedicated's persona collides with the local client persona.
     let client_persona = crate::session::get_user_session().persona_id as u64;
     let persona = match entry.persona_id {
         Some(p) if p != 0 && p != client_persona => p,
@@ -313,7 +482,6 @@ fn host_context_from_entry(entry: &DedicatedServerEntry) -> DedicatedHostContext
 }
 
 pub fn host_for_gid(gid: i64) -> Option<DedicatedHostContext> {
-    // Prefer the snapshot taken at assignment time; fall back to a live pool lookup.
     if let Some(a) = assignments().lock().get(&gid) {
         return Some(a.host);
     }
@@ -330,17 +498,48 @@ pub fn orchestrate_client_reset(
     if is_dedicated_blaze_session(client_session_id) {
         return None;
     }
-    if let Some(existing) = assignments().lock().get(&gid) {
-        return Some(existing.dedicated_session_id);
+    if let Some(existing_sid) = assignments().lock().get(&gid).map(|a| a.dedicated_session_id) {
+        if super::game_state::has_orchestration(gid) {
+            return Some(existing_sid);
+        }
+        crate::debug_println!(
+            "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m stale assignment gid={} dedicated #{} (no orch) — re-orchestrating",
+            gid,
+            existing_sid
+        );
+        assignments().lock().remove(&gid);
+        {
+            let mut m = pool().lock();
+            if let Some(e) = m.get_mut(&existing_sid) {
+                e.state = DedicatedPoolState::Idle;
+                e.last_event_unix_secs = now_secs();
+            }
+        }
     }
-    let dedicated = acquire_idle_creator(client_session_id)?;
+    let wanted_map = super::game_state::get_map_path(gid);
+    let wanted_map = if wanted_map.is_empty() { None } else { Some(wanted_map) };
+    let dedicated = if let Some(bound) = dedicated_for_standby_gid(gid) {
+        bound
+    } else {
+        acquire_idle_creator_for_map(client_session_id, wanted_map.as_deref())?
+    };
     let dedicated_sid = dedicated.blaze_session_id;
     let host = host_context_from_entry(&dedicated);
+
+    crate::debug_println!(
+        "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m gid={} → session #{} map={:?} (was {:?}) — reload on assign",
+        gid,
+        dedicated_sid,
+        wanted_map.as_deref().unwrap_or("<none>"),
+        dedicated.current_map.as_deref().unwrap_or("<none>")
+    );
+
     {
         let mut m = pool().lock();
         if let Some(e) = m.get_mut(&dedicated_sid) {
             e.state = DedicatedPoolState::InUse;
             e.current_gid = Some(gid);
+            e.current_map = wanted_map.clone();
             e.last_event_unix_secs = now_secs();
         }
     }
@@ -404,10 +603,6 @@ pub fn orchestrate_client_reset(
         }
     }
 
-    // Announce the joining client to the dedicated roster -- not the host.
-    // The game is seeded with the host only, so the client must be added to the roster first and
-    // then carried in NotifyPlayerJoining's PDAT; otherwise the dedicated is told "the host is
-    // joining its own game" and no client player is ever created.
     let client_session = crate::session::blaze_sessions::get_session(client_session_id);
     let client_persona = client_session
         .as_ref()
@@ -457,8 +652,90 @@ pub fn orchestrate_client_reset(
 }
 
 pub fn release_gid(gid: i64) {
-    assignments().lock().remove(&gid);
+    let dedicated_sid = assignments().lock().remove(&gid).map(|a| a.dedicated_session_id);
     super::game_state::clear_orchestration(gid);
+    if let Some(sid) = dedicated_sid {
+        let mut m = pool().lock();
+        if let Some(e) = m.get_mut(&sid) {
+            e.state = DedicatedPoolState::Idle;
+            e.current_gid = None;
+            e.game_name = None;
+            e.current_map = None;
+            e.last_event_unix_secs = now_secs();
+            crate::debug_println!(
+                "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} Idle after release_gid={} (awaiting unload)",
+                sid,
+                gid
+            );
+        }
+    }
+}
+
+pub fn bound_dedicated_for_gid(gid: i64) -> Option<u64> {
+    if let Some(a) = assignments().lock().get(&gid) {
+        return Some(a.dedicated_session_id);
+    }
+    if let Some(entry) = dedicated_for_standby_gid(gid) {
+        return Some(entry.blaze_session_id);
+    }
+    super::game_state::dedicated_session_id_for_gid(gid)
+}
+
+pub fn reclaim_gid_to_idle_pool(gid: i64) -> Option<u64> {
+    let dedicated_sid = bound_dedicated_for_gid(gid);
+
+    assignments().lock().remove(&gid);
+    super::game_state::clear_blaze_one_shot_flags(gid);
+    super::game_state::clear_orchestration(gid);
+
+    let Some(sid) = dedicated_sid else {
+        crate::debug_println!(
+            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m reclaim gid={} — no bound dedicated",
+            gid
+        );
+        return None;
+    };
+
+    {
+        let mut m = pool().lock();
+        if let Some(e) = m.get_mut(&sid) {
+            let keep_gid = e.current_gid.unwrap_or(gid);
+            e.state = DedicatedPoolState::Idle;
+            e.game_name = None;
+            e.current_gid = Some(keep_gid);
+            e.current_map = None;
+            e.last_event_unix_secs = now_secs();
+            crate::debug_println!(
+                "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} Idle after empty humans (gid={} standby={}) — unload requested",
+                sid,
+                gid,
+                keep_gid
+            );
+        }
+    }
+
+    Some(sid)
+}
+
+pub fn request_dedicated_level_unload(blaze_session_id: u64, gid: i64) {
+    match super::fireframe::pushes_dedicated_reclaim_idle(gid) {
+        Ok(pushes) if !pushes.is_empty() => {
+            super::fireframe::enqueue_pending_pushes(blaze_session_id, pushes);
+            let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+            crate::debug_println!(
+                "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m queued reclaim/unload notify → dedicated #{} gid={}",
+                blaze_session_id,
+                gid
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            crate::debug_println!(
+                "\x1b[38;2;255;165;0m[Dedicated pool]\x1b[0m reclaim notify encode failed: {}",
+                e
+            );
+        }
+    }
 }
 
 /// Blaze session id of the client that owns this `gid` assignment.
@@ -498,7 +775,6 @@ pub fn sync_from_blaze_sessions() {
     });
     for s in sessions {
         // A session that already completed registerDynamicDedicatedServerCreator stays in the pool
-        // regardless of its `clnt` string -- the CLNT->RtsBlazeServer patch does not always reach
         // blaze-main's preAuth CINF.CLNT, and evicting a registered creator here is what made
         // host_for_gid/acquire_idle_creator return None right after orchestrate assigned it.
         let already_registered = m.get(&s.id).map(|e| e.creator_registered).unwrap_or(false);
@@ -511,60 +787,105 @@ pub fn sync_from_blaze_sessions() {
             peer: s.peer.clone(),
             clnt: s.clnt.clone(),
             display_name: s.display_name.clone(),
+            server_hostname: None,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
             game_name: None,
             last_event_unix_secs: now_secs(),
             creator_registered: false,
+            current_map: None,
         });
         upsert_from_blaze_session(entry, &s);
     }
 }
 
-pub fn on_register_creator(blaze_session_id: u64) {
+pub fn dedicated_for_standby_gid(gid: i64) -> Option<DedicatedServerEntry> {
+    sync_from_blaze_sessions();
+    pool()
+        .lock()
+        .values()
+        .find(|e| e.creator_registered && e.current_gid == Some(gid))
+        .cloned()
+}
+
+pub fn on_register_creator(blaze_session_id: u64, register_payload: &[u8]) {
     ensure_pool_entry(blaze_session_id);
-    // A dedicated that registers as a pool creator gets its OWN identity (CNCO<N> + distinct persona),
-    // stamped onto the Blaze session so it never carries the shared client persona. This is the
-    // reliable detection point -- the CLNT->RtsBlazeServer patch does not always reach preAuth.
+    if pool()
+        .lock()
+        .get(&blaze_session_id)
+        .map(|e| e.creator_registered && e.current_gid.is_some())
+        .unwrap_or(false)
+    {
+        return;
+    }
     let (name, persona) = allocate_dedicated_identity(blaze_session_id);
     crate::session::blaze_sessions::set_dedicated_identity(blaze_session_id, &name, persona);
-    let mut m = pool().lock();
-    if let Some(e) = m.get_mut(&blaze_session_id) {
-        e.creator_registered = true;
-        e.state = DedicatedPoolState::Idle;
-        e.persona_id = Some(persona);
-        e.display_name = Some(name);
-        e.last_event_unix_secs = now_secs();
-    }
+    let gid = standby_gid_for_session(blaze_session_id);
+    let hostname = {
+        let mut m = pool().lock();
+        let hostname = if let Some(e) = m.get(&blaze_session_id) {
+            extract_server_hostname(register_payload, &e.peer)
+        } else {
+            extract_server_hostname(register_payload, "")
+        };
+        if let Some(e) = m.get_mut(&blaze_session_id) {
+            e.creator_registered = true;
+            e.state = DedicatedPoolState::Idle;
+            e.persona_id = Some(persona);
+            e.display_name = Some(name.clone());
+            e.server_hostname = Some(hostname.clone());
+            e.current_gid = Some(gid);
+            e.last_event_unix_secs = now_secs();
+        }
+        hostname
+    };
+    super::game_state::ensure_standby_game(gid, &hostname, blaze_session_id);
+    crate::debug_println!(
+        "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} registered as {} (browser={} gid={})",
+        blaze_session_id,
+        name,
+        hostname,
+        gid
+    );
 }
 
 pub fn on_unregister_creator(blaze_session_id: u64) {
-    let mut m = pool().lock();
-    if let Some(e) = m.get_mut(&blaze_session_id) {
-        e.creator_registered = false;
-        e.state = DedicatedPoolState::Connected;
-        e.last_event_unix_secs = now_secs();
+    {
+        let mut m = pool().lock();
+        if let Some(e) = m.get_mut(&blaze_session_id) {
+            e.creator_registered = false;
+            e.state = DedicatedPoolState::Connected;
+            e.current_gid = None;
+            e.last_event_unix_secs = now_secs();
+        }
     }
+    super::game_state::destroy_games_for_dedicated(blaze_session_id);
 }
 
 pub fn on_return_to_pool(blaze_session_id: u64, payload: &[u8]) {
     sync_from_blaze_sessions();
     let gid = TdfEncoder::find_int_field(payload, "GID").map(|v| v as i64);
-    let mut m = pool().lock();
-    if let Some(e) = m.get_mut(&blaze_session_id) {
-        e.state = DedicatedPoolState::Idle;
-        e.current_gid = gid;
-        e.game_name = None;
-        e.last_event_unix_secs = now_secs();
-        crate::debug_println!(
-            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} returned to pool (gid={:?})",
-            blaze_session_id,
-            gid
-        );
-    }
     if let Some(g) = gid {
-        release_gid(g);
+        let _ = reclaim_gid_to_idle_pool(g);
+        super::game_state::force_standby_reset(g);
+        crate::debug_println!(
+            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} returned to pool (gid={})",
+            blaze_session_id,
+            g
+        );
+    } else {
+        let mut m = pool().lock();
+        if let Some(e) = m.get_mut(&blaze_session_id) {
+            e.state = DedicatedPoolState::Idle;
+            e.current_map = None;
+            e.game_name = None;
+            e.last_event_unix_secs = now_secs();
+            crate::debug_println!(
+                "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} returned to pool (no gid)",
+                blaze_session_id
+            );
+        }
     }
 }
 
@@ -580,10 +901,23 @@ pub fn on_game_active(blaze_session_id: u64, gid: i64, game_name: Option<String>
 }
 
 pub fn on_session_gone(blaze_session_id: u64) {
+    let owned_gid = {
+        let m = pool().lock();
+        m.get(&blaze_session_id).map(|e| {
+            e.current_gid
+                .unwrap_or_else(|| standby_gid_for_session(blaze_session_id))
+        })
+    };
     pool().lock().remove(&blaze_session_id);
-    assignments().lock().retain(|_, a| a.dedicated_session_id != blaze_session_id);
-    // Free the CNCO<N> slot so a later dedicated can reuse the lowest free number.
+    assignments()
+        .lock()
+        .retain(|_, a| a.dedicated_session_id != blaze_session_id);
     free_dedicated_identity(blaze_session_id);
+    super::game_state::destroy_games_for_dedicated(blaze_session_id);
+    if let Some(gid) = owned_gid {
+        super::game_state::note_server_lost(gid);
+        super::game_state::destroy_game(gid);
+    }
 }
 
 pub fn list_entries() -> Vec<DedicatedServerEntry> {

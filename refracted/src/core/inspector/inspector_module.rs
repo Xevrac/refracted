@@ -7,7 +7,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 pub enum InspectorMode {
     /// Capture and inspect traffic handled by Refracted itself.
     Emulator,
-    /// Proxy the game client toward upstream services and capture in the middle (research tooling).
     Research,
 }
 
@@ -50,6 +49,7 @@ pub struct CapturedPacket {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PacketDirection {
     ClientToBlaze,
+    DedicatedToBlaze,
     BlazeToClient,
     BlazeToDedicated,
 }
@@ -58,6 +58,7 @@ impl PacketDirection {
     pub fn to_string(&self) -> &'static str {
         match self {
             PacketDirection::ClientToBlaze => "Client->Blaze",
+            PacketDirection::DedicatedToBlaze => "Dedicated->Blaze",
             PacketDirection::BlazeToClient => "Blaze->Client",
             PacketDirection::BlazeToDedicated => "Blaze->Dedicated",
         }
@@ -244,6 +245,15 @@ pub fn get_global_lsx_buffer() -> Option<LsxBuffer> {
 
 /// Capture a Blaze packet; returns the assigned [`CapturedPacket::capture_seq`] when buffered.
 pub fn capture_packet(mut packet: CapturedPacket) -> Option<u64> {
+    if let Some(label) = crate::blaze::components::enrich_capture_command_name(
+        packet.component,
+        packet.command,
+        &packet.msg_type,
+        &packet.payload,
+        packet.command_name.as_deref(),
+    ) {
+        packet.command_name = Some(label);
+    }
     let seq = next_toolkit_capture_seq();
     packet.capture_seq = seq;
     if let Some(buffer) = get_global_packet_buffer() {

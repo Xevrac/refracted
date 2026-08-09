@@ -1,3 +1,4 @@
+pub mod boot;
 pub mod build_profile;
 pub mod dev_env_banner;
 pub mod discovery;

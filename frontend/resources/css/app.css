@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
+    ::selection {
+        background: rgba(0, 136, 255, 0.35);
+        color: #fff;
+    }
+}
+
+@layer components {
+    .ref-canvas {
+        position: relative;
+        min-height: 100svh;
+        background-color: #0a0b0d;
+    }
+
+    .ref-wallpaper {
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 0;
+        width: 100%;
+        height: 100svh;
+        overflow: hidden;
+        background-color: #0a0b0d;
+    }
+
+    .ref-wallpaper::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: var(--ref-wallpaper);
+        background-position: center;
+        background-size: cover;
+        background-repeat: no-repeat;
+    }
+
+    .ref-wallpaper::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            180deg,
+            rgba(10, 11, 13, 0.2) 0%,
+            rgba(10, 11, 13, 0.35) 55%,
+            rgba(10, 11, 13, 0.85) 100%
+        );
+    }
+
+    .ref-canvas > :not(.ref-wallpaper) {
+        position: relative;
+        z-index: 1;
+    }
+
+    .ref-panel {
+        background: rgba(18, 20, 23, 0.88);
+        border: 1px solid rgba(42, 48, 56, 0.95);
+        box-shadow:
+            0 0 0 1px rgba(0, 136, 255, 0.08),
+            0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .ref-slide {
+        opacity: 0;
+        transform: translateX(18px);
+        transition:
+            opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+            transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+        pointer-events: none;
+    }
+
+    .ref-slide.is-active {
+        opacity: 1;
+        transform: translateX(0);
+        pointer-events: auto;
+    }
+
+    .ref-slide.is-exit {
+        opacity: 0;
+        transform: translateX(-14px);
+    }
+
+    .ref-reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+            opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+            transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .ref-reveal.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-rise,
+    .animate-rise-2,
+    .animate-rise-3,
+    .animate-fade,
+    .ref-slide,
+    .ref-reveal {
+        animation: none !important;
+        transition: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}

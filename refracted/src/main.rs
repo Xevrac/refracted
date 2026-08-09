@@ -166,10 +166,9 @@ impl Write for StdoutCapture {
                     
                     let (text, colors) = refracted::core::console::parse_ansi_codes(line);
                     // Build segments from colors
-                    use eframe::egui;
                     let mut segments = Vec::new();
                     let mut last_pos = 0;
-                    let mut current_color = egui::Color32::WHITE;
+                    let mut current_color = refracted::core::console::RgbColor::WHITE;
                     
                     for (pos, color) in &colors {
                         if *pos > last_pos {
@@ -182,7 +181,7 @@ impl Write for StdoutCapture {
                         segments.push((text[last_pos..].to_string(), current_color));
                     }
                     if segments.is_empty() {
-                        segments.push((text.clone(), egui::Color32::WHITE));
+                        segments.push((text.clone(), refracted::core::console::RgbColor::WHITE));
                     }
                     
                     buffer.push(refracted::core::console::LogLine {
@@ -371,21 +370,12 @@ impl RefractedApp {
         );
         cc.egui_ctx.set_style(style);
 
-        let _ = refracted::common::paths::ensure_app_data_dir();
-        let settings_path = refracted::common::paths::settings_json_path();
-        if let Err(e) = refracted::common::settings::init_settings(settings_path) {
+        if let Err(e) = refracted::common::boot::boot_emulator(refracted::common::boot::BootOptions::default()) {
             eprintln!("Failed to initialize settings: {}", e);
         } else {
-            // Sync profile to session state
-            refracted::common::user_profile::sync_profile_to_session();
-            
-            // Apply theme
             let settings = refracted::common::settings::get_settings();
             apply_theme(&cc.egui_ctx, &settings.app_settings.theme);
         }
-
-        refracted::session::blaze_sessions::load_persisted_sessions();
-
         // Initialize inspector state
         let mut inspector_state = InspectorUiState::new();
         let proxy_settings = refracted::common::settings::get_proxy_settings();
@@ -732,7 +722,7 @@ impl RefractedApp {
         
         // Show hint in shell
         use refracted::core::console::capture_line;
-        let hint = "\x1b[38;2;128;128;128m[Console]\x1b[0m \x1b[38;2;100;200;255mINFO\x1b[0m Started in Proxy mode - Use Toolkit tab to view intercepted traffic!";
+        let hint = "\x1b[38;2;128;128;128m[Console]\x1b[0m \x1b[38;2;100;200;255mINFO\x1b[0m Started in Proxy mode - Use Toolkit tab to view captured traffic!";
         println!("{}", hint);
         capture_line(hint);
     }
@@ -1451,7 +1441,7 @@ impl eframe::App for RefractedApp {
                         if self.proxy_running {
                             let hint_color = egui::Color32::from_rgba_unmultiplied(100, 200, 255, 255);
                             ui.label(
-                                egui::RichText::new("Started in Proxy mode - Use Toolkit tab to view intercepted traffic!")
+                                egui::RichText::new("Started in Proxy mode - Use Toolkit tab to view captured traffic!")
                                     .family(egui::FontFamily::Monospace)
                                     .size(11.0)
                                     .color(hint_color),
@@ -1478,22 +1468,22 @@ impl eframe::App for RefractedApp {
 
                         // Helper function to invert color for light mode
                         // Only invert white/light text colors, keep colored tags as-is
-                        let invert_color = |color: egui::Color32| -> egui::Color32 {
+                        let invert_color = |color: refracted::core::console::RgbColor| -> egui::Color32 {
                             if is_light_mode {
                                 // Check if color is white (255, 255, 255) or very close to white
                                 // Only invert pure white or very light gray text, keep all colored tags unchanged
-                                let is_white_text = (color.r() == 255 && color.g() == 255 && color.b() == 255) ||
-                                                   (color.r() > 240 && color.g() > 240 && color.b() > 240);
+                                let is_white_text = (color.r == 255 && color.g == 255 && color.b == 255) ||
+                                                   (color.r > 240 && color.g > 240 && color.b > 240);
                                 
                                 if is_white_text {
                                     // Invert white text to black
                                     egui::Color32::from_rgb(0, 0, 0)
                                 } else {
                                     // Keep colored tags unchanged (all non-white colors)
-                                    color
+                                    egui::Color32::from_rgb(color.r, color.g, color.b)
                                 }
                             } else {
-                                color
+                                egui::Color32::from_rgb(color.r, color.g, color.b)
                             }
                         };
                         

@@ -1,21 +1,96 @@
 <div class="cc-lobby-browser">
-    <div class="cc-lobby-browser__head">
+    <div class="cc-lobby-browser__bar">
         <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="closeServerBrowser()">BACK</button>
         <h2 class="cc-lobby-browser__title">Server Browser</h2>
+        <span class="cc-lobby-browser__count">{{ visibleBrowserGames().length }} LISTED</span>
+        <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="refreshGameList()">REFRESH</button>
     </div>
-    <div class="cc-lobby-browser__panel">
-        <div class="cc-info-tip cc-info-tip--page">
-            <strong>Coming soon</strong>
-            <span>Browse for servers is coming soon.</span>
-        </div>
-        <div class="cc-lobby-browser__table">
+
+    <div class="cc-lobby-browser__filters">
+        <button type="button" class="cc-lobby-browser__filter"
+                ng-class="{on: browserListFilter == 'all'}"
+                ng-click="setBrowserListFilter('all')">ALL</button>
+        <button type="button" class="cc-lobby-browser__filter"
+                ng-class="{on: browserListFilter == 'joinable'}"
+                ng-click="setBrowserListFilter('joinable')">JOINABLE</button>
+        <button type="button" class="cc-lobby-browser__filter"
+                ng-class="{on: browserListFilter == 'idle'}"
+                ng-click="setBrowserListFilter('idle')">IDLE</button>
+    </div>
+
+    <div class="cc-lobby-browser__body">
+        <div class="cc-lobby-browser__list">
             <div class="cc-lobby-browser__row cc-lobby-browser__row--head">
-                <span>Server</span>
-                <span>Map</span>
-                <span>Players</span>
-                <span>State</span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--lock" title="Password"></span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--server">Server</span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--map">Map</span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--players">Players</span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--ping">Ping</span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--state">State</span>
             </div>
-            <div class="cc-lobby-browser__empty">No sessions listed yet.</div>
+            <div class="cc-lobby-browser__scroll">
+                <button type="button"
+                        class="cc-lobby-browser__row cc-lobby-browser__row--server"
+                        ng-repeat="g in visibleBrowserGames()"
+                        ng-class="{on: isBrowserGameSelected(g), disabled: g.joinable === false}"
+                        ng-click="selectBrowserGame(g)">
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--lock">
+                        <span class="cc-lobby-browser__padlock" ng-show="g.passwordProtected" title="Password protected"></span>
+                    </span>
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--map">{{ browserMapLabel(g) }}</span>
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--players">{{ g.humans }}/{{ g.maxPlayers || g.players || 8 }}</span>
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--ping">
+                        <span class="cc-lobby-browser__ping" ng-class="pingTone(g)"></span>
+                        {{ formatPing(g) }}
+                    </span>
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--state">{{ g.phase }}</span>
+                </button>
+                <div class="cc-lobby-browser__empty" ng-show="!visibleBrowserGames().length">No servers match this filter.</div>
+            </div>
+        </div>
+
+        <div class="cc-lobby-browser__detail">
+            <div ng-show="selectedBrowserGame">
+                <div class="cc-lobby-browser__art"
+                     ng-style="{'background-image': 'url(' + browserMapThumb(selectedBrowserGame) + ')'}">
+                    <div class="cc-lobby-browser__art-fade"></div>
+                    <div class="cc-lobby-browser__art-meta">
+                        <span class="cc-lobby-browser__mode">{{ browserMapMode(selectedBrowserGame) }}</span>
+                        <strong>{{ browserMapLabel(selectedBrowserGame) }}</strong>
+                    </div>
+                </div>
+                <h3 class="cc-lobby-browser__detail-name">{{ selectedBrowserGame.name || ('Game ' + selectedBrowserGame.gid) }}</h3>
+                <ul class="cc-lobby-browser__stats">
+                    <li><span>PLAYERS</span><strong>{{ selectedBrowserGame.humans }}/{{ selectedBrowserGame.maxPlayers || 8 }}</strong></li>
+                    <li><span>PING</span><strong>{{ formatPing(selectedBrowserGame) }}</strong></li>
+                    <li><span>STATE</span><strong>{{ selectedBrowserGame.phase }}</strong></li>
+                    <li><span>PASSWORD</span><strong>{{ selectedBrowserGame.passwordProtected ? 'YES' : 'NO' }}</strong></li>
+                    <li><span>ID</span><strong>{{ selectedBrowserGame.gid || '—' }}</strong></li>
+                </ul>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--join cc-lobby-browser__join"
+                        ng-click="joinBrowserGame(selectedBrowserGame)"
+                        ng-disabled="selectedBrowserGame.joinable === false">JOIN SERVER</button>
+            </div>
+            <div class="cc-lobby-browser__detail-empty" ng-show="!selectedBrowserGame">
+                Select a server to view details.
+            </div>
+        </div>
+    </div>
+
+    <div class="cc-lobby-browser__pw-modal" ng-show="_joinPasswordPrompt">
+        <div class="cc-lobby-browser__pw-box">
+            <h3>PASSWORD REQUIRED</h3>
+            <p>This server is password protected.</p>
+            <input type="password" class="cc-lobby-browser__pw-input"
+                   ng-model="_joinPasswordValue"
+                   placeholder="Enter password"
+                   ng-keydown="$event.keyCode == 13 && confirmJoinPassword()">
+            <div class="cc-lobby-browser__pw-err" ng-show="_joinPasswordError">{{ _joinPasswordError }}</div>
+            <div class="cc-lobby-browser__pw-actions">
+                <button type="button" class="cc-lobby__btn" ng-click="cancelJoinPassword()">CANCEL</button>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--join" ng-click="confirmJoinPassword()">JOIN</button>
+            </div>
         </div>
     </div>
 </div>
