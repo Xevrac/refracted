@@ -22,6 +22,10 @@
 
     <div class="au-lobby-browser__body">
         <div class="au-lobby-browser__list">
+            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-lobby-browser__row au-lobby-browser__row--head">
                 <span class="au-lobby-browser__col au-lobby-browser__col--lock" title="Password"></span>
                 <span class="au-lobby-browser__col au-lobby-browser__col--server">Server</span>
@@ -53,9 +57,12 @@
         </div>
 
         <div class="au-lobby-browser__detail">
+            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div ng-show="selectedBrowserGame">
-                <div class="au-lobby-browser__art"
-                     ng-style="{'background-image': 'url(' + browserMapThumb(selectedBrowserGame) + ')'}">
+                <div class="au-lobby-browser__art au-lobby-browser__art--ph">
                     <div class="au-lobby-browser__art-fade"></div>
                     <div class="au-lobby-browser__art-meta">
                         <span class="au-lobby-browser__mode">{{ browserMapMode(selectedBrowserGame) }}</span>

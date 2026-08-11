@@ -18,6 +18,10 @@
     <div class="au-stage" ng-class="{'au-stage--subnav': hasSubnavRow()}">
         <div class="au-live" ng-show="activeTab == 'LIVE'">
         <div class="au-hero au-hud-frame" ng-show="!activeNewsArticle">
+            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-hero__copy">
                 <p class="au-eyebrow">Theater ready</p>
                 <h1 class="au-hero__title">{{ playerName }}</h1>

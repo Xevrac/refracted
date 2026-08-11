@@ -11,7 +11,6 @@
                         class="cc-lobby__map-card"
                         ng-repeat="m in maps"
                         ng-class="{on: m.id == selectedMap.id}"
-                        ng-style="mapCardStyle(m)"
                         ng-click="selectMap(m)">
                     <span class="cc-lobby__map-card-veil" aria-hidden="true"></span>
                     <span class="cc-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
@@ -60,29 +59,56 @@
             </div>
             <div class="cc-lobby__map" ng-click="$event.stopPropagation()">
                 <div class="cc-lobby__map-art" aria-hidden="true"></div>
-                <div class="cc-lobby__map-veil" aria-hidden="true"></div>
-                <div class="cc-lobby__map-ui">
-                    <div class="cc-lobby__tabs">
-                        <button type="button" class="cc-lobby__tab" ng-class="{active: lobbySubTab == 'MAPS'}" ng-click="setLobbySubTab('MAPS')"
-                                ng-disabled="!isLobbyHost()">SELECT MAP</button>
-                        <button type="button" class="cc-lobby__tab"
-                                ng-class="{active: lobbyOptionsOpen}"
-                                ng-click="openLobbyOptions($event)"
-                                ng-disabled="!isLobbyHost()">OPTIONS</button>
-                    </div>
-                    <div class="cc-lobby__map-chooser">
-                        <button type="button" class="cc-lobby__map-pill" ng-hide="lobbySubTab == 'MAPS'" ng-click="setLobbySubTab('MAPS')"
-                                ng-disabled="!isLobbyHost()">
-                            {{ selectedMap.label }}
-                            <span class="cc-lobby__chevron"></span>
-                        </button>
-                        <ul class="cc-lobby__map-list" ng-show="lobbySubTab == 'MAPS' && isLobbyHost()">
-                            <li ng-repeat="m in maps" ng-class="{active: m.id == selectedMap.id}">
-                                <a href="" ng-click="selectMap(m)">{{ m.label }}</a>
-                            </li>
-                        </ul>
+                <div class="cc-lobby__map-setup">
+                    <button type="button" class="cc-lobby__maps-btn"
+                            ng-click="openMapPicker($event)"
+                            ng-disabled="!isLobbyHost()">MAPS</button>
+                    <button type="button" class="cc-lobby__gear"
+                            title="Options"
+                            ng-click="openLobbyOptions($event)"
+                            ng-disabled="!isLobbyHost()"
+                            ng-class="{on: lobbyOptionsOpen}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="none" stroke="#e8e0c8" stroke-width="1.8" stroke-linejoin="round"
+                                  d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
+                            <path fill="none" stroke="#e8e0c8" stroke-width="1.8" stroke-linejoin="round"
+                                  d="M19.4 13l1.6.9-2 3.4-1.9-.5c-.5.4-1 .7-1.6.9L15 20h-6l-.5-2.3c-.6-.2-1.1-.5-1.6-.9l-1.9.5-2-3.4 1.6-.9c-.1-.6-.1-1.2 0-1.8L3 10.3l2-3.4 1.9.5c.5-.4 1-.7 1.6-.9L9 4h6l.5 2.3c.6.2 1.1.5 1.6.9l1.9-.5 2 3.4-1.6.9c.1.6.1 1.2 0 1.8z"/>
+                        </svg>
+                    </button>
+                    <div class="cc-lobby__banner-mapname">
+                        <strong>{{ selectedMap.label }}</strong>
+                        <span>{{ mapModeLabel(selectedMap) }}</span>
                     </div>
                 </div>
+                <div class="cc-lobby__map-preview">
+                    <div class="cc-lobby__map-frame cc-lobby__map-frame--look">
+                        <div class="cc-lobby__map-crop">
+                            <img class="cc-lobby__map-img" ng-src="{{ lobbyMinimapSrc(selectedMap) }}"
+                                 ng-style="minimapCropStyle(selectedMap)" alt="">
+                        </div>
+                        <span class="cc-lobby__pip"
+                              ng-repeat="sp in mapStartpoints()"
+                              ng-style="startPipStyle(sp)"
+                              ng-class="{taken: startpointOwner(sp.id), mine: startpointOwner(sp.id) && startpointOwner(sp.id).isLocal}"
+                              title="Start {{ sp.id }}">{{ startPipLabel(sp) }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="cc-lobby__chat cc-lobby__chat--bar">
+                <div class="cc-lobby__chat-log">
+                    <div class="cc-lobby__chat-line" ng-repeat="msg in lobbyChat">
+                        <span class="cc-lobby__chat-user">{{ msg.user }}</span>{{ msg.text }}
+                    </div>
+                    <div class="cc-lobby__chat-empty" ng-show="!lobbyChat.length">MESSAGE THE LOBBY</div>
+                </div>
+                <form class="cc-lobby__chat-form" action="javascript:void(0)"
+                      ng-submit="sendLobbyChat($event)" ng-click="$event.stopPropagation()">
+                    <input type="text" class="cc-lobby__chat-input"
+                           ng-model="lobbyChatDraft"
+                           maxlength="200"
+                           autocomplete="off"
+                           placeholder="SAY SOMETHING">
+                </form>
             </div>
 
             <div class="cc-lobby__teams">
@@ -107,10 +133,14 @@
                                      ng-if="!slot.isAi" title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
                                     <span class="cc-lobby__ready-tick" ng-show="slot.ready"></span>
                                 </div>
+                                <button type="button" class="cc-lobby__start-badge"
+                                        ng-click="openStartModal(slot, $event)"
+                                        ng-disabled="!canChangeStartpoint(slot)"
+                                        title="Start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(1, $index, $event)"
                                         ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
-                                        title="Faction / general / colour"></button>
+                                        title="Faction / house / colour"></button>
                             </div>
                             <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
@@ -171,10 +201,14 @@
                                      ng-if="!slot.isAi" title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
                                     <span class="cc-lobby__ready-tick" ng-show="slot.ready"></span>
                                 </div>
+                                <button type="button" class="cc-lobby__start-badge"
+                                        ng-click="openStartModal(slot, $event)"
+                                        ng-disabled="!canChangeStartpoint(slot)"
+                                        title="Start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(2, $index, $event)"
                                         ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
-                                        title="Faction / general / colour"></button>
+                                        title="Faction / house / colour"></button>
                             </div>
                             <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
@@ -236,9 +270,12 @@
                     <div class="cc-lobby__options-section-label">MATCH PASSWORD</div>
                     <div class="cc-lobby__options-password">
                         <div class="cc-lobby__options-password-row">
-                            <input type="password" class="cc-lobby__password-input"
-                                   ng-model="roomPasswordDraft"
-                                   placeholder="Optional — blank = open">
+                            <div class="cc-lobby__options-password-field">
+                                <input type="password" class="cc-lobby__password-input"
+                                       ng-model="roomPasswordDraft"
+                                       placeholder="Optional — blank = open">
+                            </div>
+                            <div class="cc-lobby__options-password-actions">
                             <button type="button" class="cc-lobby__btn cc-lobby__password-apply"
                                     ng-click="applyRoomPassword()">{{ passwordProtected ? 'UPDATE' : 'SET' }}</button>
                             <button type="button" class="cc-lobby__btn cc-lobby__password-clear"
@@ -250,6 +287,7 @@
                                           d="M4 7h16M9 7V5h6v2M6 7l1 14h10l1-14M10 11v6M14 11v6"/>
                                 </svg>
                             </button>
+                            </div>
                         </div>
                         <span class="cc-lobby__password-flag" ng-show="passwordProtected">PROTECTED</span>
                     </div>
@@ -306,6 +344,58 @@
                 <div class="cc-lobby__options-actions">
                     <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
                             ng-click="closeLobbyOptions()">DONE</button>
+                </div>
+            </div>
+        </div>
+        <div class="cc-lobby__modal cc-lobby__modal--maps" ng-show="mapPickerOpen"
+             ng-click="closeMapPicker()">
+            <div class="cc-lobby__modal-box cc-lobby__maps-modal" ng-click="$event.stopPropagation()">
+                <h3 class="cc-lobby__maps-modal-title">MAPS</h3>
+                <div class="cc-lobby__maps-split">
+                    <div class="cc-lobby__maps-list-cell">
+                        <div class="cc-lobby__maps-list">
+                            <div class="cc-lobby__maps-row"
+                                 ng-repeat="m in maps"
+                                 ng-class="{on: m.id == pickerMap().id}"
+                                 ng-click="previewMapInPicker(m)">
+                                <span class="cc-lobby__maps-row-name">{{ m.label }}</span>
+                                <span class="cc-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cc-lobby__maps-preview-cell">
+                        <div class="cc-lobby__maps-preview-art">
+                            <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
+                                 ng-style="minimapCropStyle(pickerMap())" alt="">
+                        </div>
+                        <div class="cc-lobby__maps-preview-meta">
+                            <strong>{{ pickerMap().label }}</strong>
+                            <span>{{ mapModeLabel(pickerMap()) }}</span>
+                            <span ng-show="pickerMap().slots">{{ mapPlayerLabel(pickerMap()) }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="cc-lobby__options-actions">
+                    <button type="button" class="cc-lobby__btn" ng-click="closeMapPicker()">CANCEL</button>
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="confirmMapPicker()">SELECT</button>
+                </div>
+            </div>
+        </div>
+        <div class="cc-lobby__modal cc-lobby__modal--start" ng-show="startModalSlot"
+             ng-click="closeStartModal()">
+            <div class="cc-lobby__modal-box cc-lobby__start-modal" ng-click="$event.stopPropagation()">
+                <h3 class="cc-lobby__start-modal-title">START LOCATION</h3>
+                <p class="cc-lobby__start-modal-copy">Pick a spawn. ? is random.</p>
+                <div class="cc-lobby__start-grid">
+                    <button type="button"
+                            ng-repeat="opt in startChoices"
+                            class="cc-lobby__start-cell"
+                            ng-class="{on: startModalSlot.startpoint == opt.id, taken: startTakenByOther(opt.id, startModalSlot)}"
+                            ng-click="pickStartFromModal(opt.id)"
+                            ng-disabled="!canChangeStartpoint(startModalSlot) || startTakenByOther(opt.id, startModalSlot)">{{ opt.label }}</button>
+                </div>
+                <div class="cc-lobby__options-actions">
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="closeStartModal()">DONE</button>
                 </div>
             </div>
         </div>
