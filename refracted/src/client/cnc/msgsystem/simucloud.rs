@@ -56,7 +56,7 @@ pub fn split_map_path(full: &str) -> (String, String) {
 }
 
 fn protocol_version_frame() -> SimpleFrame {
-    SimpleFrame::from_wire(super::negotiation::PROTOCOL_VERSION)
+    super::negotiation::encode_protocol_version()
 }
 
 /// Serialize `SimuCloud.CreateGame` payload (type id comes from negotiated PTM).
@@ -673,11 +673,14 @@ mod tests {
 
     #[test]
     fn parse_retail_simucloud_ptm_finds_create_game() {
-        const PTM: &[u8] = include_bytes!("frames/simucloud_ptm.bin");
-        let payload_len = u32::from_le_bytes([PTM[2], PTM[3], PTM[4], PTM[5]]) as usize;
-        let payload = &PTM[6..6 + payload_len];
+        let Some(ptm) = super::super::negotiation::read_frame_dump("simucloud_ptm.bin") else {
+            eprintln!("skip dump-parity: frames/simucloud_ptm.bin not present");
+            return;
+        };
+        let payload_len = u32::from_le_bytes([ptm[2], ptm[3], ptm[4], ptm[5]]) as usize;
+        let payload = &ptm[6..6 + payload_len];
         let create = parse_type_id_for_suffix(payload, "CreateGame").expect("CreateGame in simucloud_ptm.bin");
-        assert_eq!(create, 2, "msgsys-dump SimuCloud CreateGame typeId");
+        assert_eq!(create, 2, "SimuCloud CreateGame typeId");
         let ready = parse_type_id_for_suffix(payload, "GameReady").expect("GameReady in simucloud_ptm.bin");
         assert_eq!(ready, 4);
     }
@@ -700,15 +703,11 @@ mod tests {
         let frame = protocol_version_frame();
         assert_eq!(frame.type_id, PROTOCOL_VERSION_TYPE_ID);
         // Retail ClientNetWrapper sends payloadLen=7 (version + empty auth ref, not null).
-        assert_eq!(
-            frame.payload.len(),
-            7,
-            "regenerate frames: dotnet run -c Release in tools/msgsys-dump"
-        );
+        assert_eq!(frame.payload.len(), 7);
         let version = u32::from_le_bytes(frame.payload[0..4].try_into().unwrap());
         assert_eq!(
             version, 2,
-            "ClientChannelDescriptor metadata <Version> is 2 -- regenerate frames if this fails"
+            "ClientChannelDescriptor metadata <Version> is 2"
         );
     }
 }

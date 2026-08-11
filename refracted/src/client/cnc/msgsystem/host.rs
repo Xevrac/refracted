@@ -32,7 +32,7 @@ mod tests {
     use super::super::messages::{
         encode_server_hello_frame, encode_server_ready_to_start_frame,
     };
-    use super::super::negotiation::{SERVER_HELLO, SERVER_READY_TO_START};
+    use super::super::negotiation::read_frame_dump;
 
     #[test]
     fn join_context_defaults_are_retail_shaped() {
@@ -44,10 +44,18 @@ mod tests {
 
     #[test]
     fn bootstrap_frames_match_dumps() {
+        let Some(hello) = read_frame_dump("server_hello.bin") else {
+            eprintln!("skip dump-parity: frames/server_hello.bin not present");
+            return;
+        };
+        let Some(ready) = read_frame_dump("server_ready.bin") else {
+            eprintln!("skip dump-parity: frames/server_ready.bin not present");
+            return;
+        };
         assert_eq!(
             encode_server_hello_frame(1, DEFAULT_PERSONA_ID, 0, 0, 0),
-            SERVER_HELLO
+            hello
         );
-        assert_eq!(encode_server_ready_to_start_frame(), SERVER_READY_TO_START);
+        assert_eq!(encode_server_ready_to_start_frame(), ready);
     }
 }

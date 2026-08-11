@@ -3143,7 +3143,7 @@ dependencies = [
 
 [[package]]
 name = "refracted"
-version = "0.4.1508"
+version = "0.4.1510"
 dependencies = [
  "aes",
  "anyhow",
