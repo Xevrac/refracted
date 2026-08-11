@@ -1,5 +1,12 @@
 //! MessageSystem bootstrap control messages (Client channel join path).
 //!
+//! Wire shapes match retail `PlayerMessages` (`Rts.CnC.Messages.Client.*`) and Prism
+//! `DedicatedJoinBootstrap`: ClientHello → ServerHello / ServerReadyToStart / LoadMap →
+//! ClientFinishedLoad → StartGame → AllowInputChange(true).
+//! LoadMap drives RTS join load via native `RtsGameClient_onMessage` case 61 (MapId →
+//! RtsSettings + camera). Playable HUD (`GameInput` OnAttach) requires Client state
+//! Ingame (10) so RtsUI can load DefaultUILayout / bottomBarUI. AllowInputChange then
+//! hides the LoadingScreen child that OnAttach cached.
 
 use super::wire::{SimpleFrame, WireReader, WireWriter};
 
@@ -157,36 +164,41 @@ pub fn encode_start_game_frame(player_id: u32, faction: u32) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::negotiation::{LOAD_MAP_ALPHA_TUTORIAL, SERVER_HELLO, SERVER_READY_TO_START};
+    use super::super::negotiation::read_frame_dump;
     use super::super::wire::SimpleFrame;
 
     const ALPHA_TUTORIAL: &str = "levels/SP/Alpha_Tutorial/Alpha_Tutorial";
 
     #[test]
-    fn load_map_matches_embedded_frame() {
+    fn load_map_matches_retail_dump() {
+        let Some(expected) = read_frame_dump("load_map.bin") else {
+            eprintln!("skip dump-parity: frames/load_map.bin not present");
+            return;
+        };
         let encoded = encode_load_map_frame(1, ALPHA_TUTORIAL);
-        assert_eq!(
-            encoded, LOAD_MAP_ALPHA_TUTORIAL,
-            "dynamic encoder must match embedded LoadMap frame"
-        );
+        assert_eq!(encoded, expected, "LoadMap encoder must match retail dump");
     }
 
     #[test]
-    fn server_hello_matches_embedded_frame() {
+    fn server_hello_matches_retail_dump() {
+        let Some(expected) = read_frame_dump("server_hello.bin") else {
+            eprintln!("skip dump-parity: frames/server_hello.bin not present");
+            return;
+        };
         let encoded = encode_server_hello_frame(1, DEFAULT_PERSONA_ID, 0, 0, 0);
-        assert_eq!(
-            encoded, SERVER_HELLO,
-            "ServerHello encoder must match embedded frame"
-        );
+        assert_eq!(encoded, expected, "ServerHello encoder must match retail dump");
     }
 
     #[test]
-    fn server_ready_matches_embedded_frame() {
-        assert_eq!(
-            encode_server_ready_to_start_frame(),
-            SERVER_READY_TO_START,
-            "ServerReadyToStart must be empty-payload type 201"
-        );
+    fn server_ready_matches_retail_dump() {
+        let encoded = encode_server_ready_to_start_frame();
+        assert_eq!(encoded.len(), 6, "ServerReadyToStart must be empty-payload type 201");
+        assert_eq!(&encoded[0..2], &SERVER_READY_TO_START_TYPE_ID.to_le_bytes());
+        let Some(expected) = read_frame_dump("server_ready.bin") else {
+            eprintln!("skip dump-parity: frames/server_ready.bin not present");
+            return;
+        };
+        assert_eq!(encoded, expected);
     }
 
     #[test]

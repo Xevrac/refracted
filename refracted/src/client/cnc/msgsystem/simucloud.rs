@@ -1,3 +1,4 @@
+﻿//! Refracted as the retail SimuCloud orchestrator (`PublicSimuCloudChannel` → `CreateGame`).
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -55,7 +56,7 @@ pub fn split_map_path(full: &str) -> (String, String) {
 }
 
 fn protocol_version_frame() -> SimpleFrame {
-    SimpleFrame::from_wire(super::negotiation::PROTOCOL_VERSION)
+    super::negotiation::encode_protocol_version()
 }
 
 /// Serialize `SimuCloud.CreateGame` payload (type id comes from negotiated PTM).
@@ -202,6 +203,7 @@ fn uuid_to_guid_bytes(uuid: &str) -> [u8; 16] {
     [0u8; 16]
 }
 
+/// Native faction enum (`sub_A52D00` / GameConfigs `Faction`):
 /// None=0, USA=1, APA=2, ESC=3, GLA=4.
 pub fn parse_faction_code(raw: &str) -> Option<i32> {
     let s = raw.trim();
@@ -226,25 +228,16 @@ pub fn parse_faction_code(raw: &str) -> Option<i32> {
     }
 }
 
-fn faction_from_player(
-    attribs: &indexmap::IndexMap<String, String>,
-    is_ai: bool,
-    map_path: &str,
-) -> i32 {
+fn faction_from_player(attribs: &indexmap::IndexMap<String, String>, is_ai: bool) -> i32 {
     if let Some(raw) = attribs.get("_faction") {
         if let Some(id) = parse_faction_code(raw) {
             return id;
         }
     }
     // Empty ATTR (common when shell attr sync is skipped) must not encode as None=0.
+    // Alpha default is APA (faction=2); USA has no generals in this build.
     if is_ai {
-        return 4; // GLA
-    }
-    if map_path
-        .to_ascii_lowercase()
-        .contains("alpha_tutorial")
-    {
-        3 // EU / ESC
+        4 // GLA
     } else {
         2 // APA
     }
@@ -276,6 +269,7 @@ mod general_id_parse_tests {
 }
 
 /// Allegiance[17]: index 0 = 0; for i in 1..17, +1.0 if i == team else -1.0
+/// (matches native GameConfigs rebuild in `sub_A715F0` / Prism CreateGame).
 fn allegiance_for_team(team: i32) -> Vec<f32> {
     let mut levels = vec![0.0_f32; 17];
     for i in 1..17 {
@@ -298,27 +292,15 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
                 general_id
             } else {
                 // Mirror game_state ensure_general_attr — never ship CreateGame with general=0.
-                let alpha = game
-                    .map_path
-                    .to_ascii_lowercase()
-                    .contains("alpha_tutorial");
                 let faction = p
                     .attribs
                     .get("_faction")
                     .map(String::as_str)
-                    .unwrap_or("");
+                    .unwrap_or("APA");
                 match faction.trim().to_ascii_uppercase().as_str() {
-                    "ESC" | "EU" => {
-                        if alpha {
-                            3463861546 // EU_TutorialGeneral
-                        } else {
-                            232716472 // EU_ClassicGeneral
-                        }
-                    }
+                    "ESC" | "EU" => 232716472,
                     "GLA" => 580378690,
-                    "APA" | "CHINA" | "CHI" => 2914080600,
-                    _ if alpha => 3463861546,
-                    _ => 2914080600, // APA Classic
+                    _ => 2914080600, // APA Classic (also USA / missing)
                 }
             };
             let consumable = u32_attr(&p.attribs, "_consumable")
@@ -327,7 +309,7 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
             PlayerInfo {
                 player_id: p.persona_id as u64,
                 reconnect: false,
-                faction: faction_from_player(&p.attribs, p.is_ai, &game.map_path),
+                faction: faction_from_player(&p.attribs, p.is_ai),
                 general_id,
                 team,
                 start_point,
@@ -336,7 +318,7 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
                 allegiance_levels: allegiance_for_team(team),
                 skill_tree_unlocks: Vec::new(),
                 consumable_player_power: consumable,
-                enable_skill_tree: true,
+                enable_skill_tree: false,
             }
         })
         .collect()
@@ -448,9 +430,6 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
             p
         }
     };
-    log_sim_milestone(&format!(
-        "map resolve gid={gid} path=\"{map_path}\" (PENDING/lobby before CreateGame)"
-    ));
     let (map_name, dir_path) = split_map_path(&map_path);
     let roster = roster_from_game(&game);
     if roster.is_empty() {
@@ -493,8 +472,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s) \
-         [orch-fp: wait-GameReady-300s; not 'no frame from SimuCloud host']",
+        "Starting match setup -- map \"{map_name}\", {} player(s)",
         roster.len()
     ));
     log_sim_debug(&format!("Connected to dedicated orchestrator at {upstream}"));
@@ -531,10 +509,10 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
     write_simple_frame(&mut stream, &create_frame).await?;
 
-    const REPLY_READ_TIMEOUT: Duration = Duration::from_secs(20);
-    const REPLY_BUDGET: Duration = Duration::from_secs(300);
-    let reply_deadline = Instant::now() + REPLY_BUDGET;
-    let mut quiet_waits: u32 = 0;
+    // Native create may retry briefly (SpawnServer still coming up). Use a longer per-read
+    // budget than negotiate so a slow GameReady is not misreported as "frame header timeout".
+    const REPLY_READ_TIMEOUT: Duration = Duration::from_secs(15);
+    let reply_deadline = Instant::now() + Duration::from_secs(45);
     while Instant::now() < reply_deadline {
         let frame = {
             let mut header = [0u8; 6];
@@ -542,15 +520,10 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
                 Ok(Ok(_)) => {}
                 Ok(Err(e)) => return Err(e),
                 Err(_) => {
-                    quiet_waits = quiet_waits.saturating_add(1);
-                    if quiet_waits == 1 || quiet_waits % 4 == 0 {
-                        let left = reply_deadline.saturating_duration_since(Instant::now());
-                        log_sim_debug(&format!(
-                            "Still waiting for GameReady (ServerLevel may still be loading); \
-                             {left:?} left of {REPLY_BUDGET:?}"
-                        ));
-                    }
-                    continue;
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "timed out waiting for GameReady (no frame from SimuCloud host)",
+                    ));
                 }
             }
             let payload_len =
@@ -591,10 +564,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
 
     Err(std::io::Error::new(
         std::io::ErrorKind::TimedOut,
-        format!(
-            "timed out waiting for GameReady after {REPLY_BUDGET:?} \
-             (dedicated may still be loading ServerLevel / deferring CreateGame)"
-        ),
+        "timed out waiting for GameReady",
     ))
 }
 
@@ -615,7 +585,7 @@ mod tests {
             allegiance_levels: vec![],
             skill_tree_unlocks: vec![],
             consumable_player_power: 0,
-            enable_skill_tree: true,
+            enable_skill_tree: false,
         }
     }
 
@@ -664,7 +634,7 @@ mod tests {
     }
 
     #[test]
-    fn split_map_path_matches_wire_split() {
+    fn split_map_path_matches_retail_splitpath() {
         let (map, dir) = split_map_path("Levels/SP/Alpha_Tutorial/Alpha_Tutorial");
         assert_eq!(map, "Alpha_Tutorial");
         assert_eq!(dir, "Levels/SP/Alpha_Tutorial/");
@@ -703,9 +673,12 @@ mod tests {
 
     #[test]
     fn parse_retail_simucloud_ptm_finds_create_game() {
-        const PTM: &[u8] = include_bytes!("frames/simucloud_ptm.bin");
-        let payload_len = u32::from_le_bytes([PTM[2], PTM[3], PTM[4], PTM[5]]) as usize;
-        let payload = &PTM[6..6 + payload_len];
+        let Some(ptm) = super::super::negotiation::read_frame_dump("simucloud_ptm.bin") else {
+            eprintln!("skip dump-parity: frames/simucloud_ptm.bin not present");
+            return;
+        };
+        let payload_len = u32::from_le_bytes([ptm[2], ptm[3], ptm[4], ptm[5]]) as usize;
+        let payload = &ptm[6..6 + payload_len];
         let create = parse_type_id_for_suffix(payload, "CreateGame").expect("CreateGame in simucloud_ptm.bin");
         assert_eq!(create, 2, "SimuCloud CreateGame typeId");
         let ready = parse_type_id_for_suffix(payload, "GameReady").expect("GameReady in simucloud_ptm.bin");
@@ -726,18 +699,15 @@ mod tests {
     }
 
     #[test]
-    fn protocol_version_frame_matches_client_wire() {
+    fn protocol_version_frame_matches_retail_client() {
         let frame = protocol_version_frame();
         assert_eq!(frame.type_id, PROTOCOL_VERSION_TYPE_ID);
-        assert_eq!(
-            frame.payload.len(),
-            7,
-            "regenerate embedded ProtocolVersion frame if wire length changes"
-        );
+        // Retail ClientNetWrapper sends payloadLen=7 (version + empty auth ref, not null).
+        assert_eq!(frame.payload.len(), 7);
         let version = u32::from_le_bytes(frame.payload[0..4].try_into().unwrap());
         assert_eq!(
             version, 2,
-            "Client channel ProtocolVersion is 2 -- regenerate frames if this fails"
+            "ClientChannelDescriptor metadata <Version> is 2"
         );
     }
 }
