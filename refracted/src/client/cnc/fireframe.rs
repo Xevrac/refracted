@@ -111,10 +111,9 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
     let pl_initiate = wire_initiate.len();
 
-    let join_done = super::build_game_manager_notify_player_join_completed(gid)?;
-    let wire_join_done = notification_envelope(0x0004, 0x001E, &join_done);
-    let pl_join_done = wire_join_done.len();
-
+    // Do **not** send NotifyPlayerJoinCompleted here. Blaze `sub_1280D30` looks the player up on
+    // the Game mesh list; that list is empty until the client finishes `preInitGameNetwork` and
+    // reports `updateMeshConnection`. Same-tick JoinCompleted null-derefs `player+0x58`.
     Ok(vec![
         OutgoingPush {
             wire: wire_setup,
@@ -158,17 +157,6 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
             info_log_line: format!(
                 "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl_initiate
-            ),
-        },
-        OutgoingPush {
-            wire: wire_join_done,
-            component: 0x0004,
-            command: 0x001E,
-            tdf_body: join_done.to_vec(),
-            blaze_send_label: "NotifyPlayerJoinCompleted after resetDedicatedServer",
-            info_log_line: format!(
-                "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl_join_done
             ),
         },
     ])
@@ -279,21 +267,7 @@ pub fn pushes_after_join_game_lobby(
                 pl_initiate
             ),
         });
-
-        let join_done = super::build_game_manager_notify_player_join_completed(gid)?;
-        let wire_join_done = notification_envelope(0x0004, 0x001E, &join_done);
-        let pl3 = wire_join_done.len();
-        out.push(OutgoingPush {
-            wire: wire_join_done,
-            component: 0x0004,
-            command: 0x001E,
-            tdf_body: join_done.to_vec(),
-            blaze_send_label: "NotifyPlayerJoinCompleted after joinGame",
-            info_log_line: format!(
-                "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl3
-            ),
-        });
+        // NotifyPlayerJoinCompleted waits for updateMeshConnection (see pushes_player_join_completed).
     }
 
     Ok(out)
@@ -485,6 +459,24 @@ pub fn pushes_after_update_mesh_connection(gid: i64, pid: i64) -> BlazeResult<Ve
         blaze_send_label: "NotifyGamePlayerStateChange(ACTIVE_CONNECTED) after updateMeshConnection",
         info_log_line: format!(
             "[Blaze→Client] GameManager.NotifyGamePlayerStateChange Component=4, Command=116, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    }])
+}
+
+/// After the joining client reports mesh, Blaze `sub_1280D30` can find the player on the Game mesh list.
+pub fn pushes_player_join_completed(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    let body = super::build_game_manager_notify_player_join_completed(gid)?;
+    let wire = notification_envelope(0x0004, 0x001E, &body);
+    let pl = wire.len();
+    Ok(vec![OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x001E,
+        tdf_body: body.to_vec(),
+        blaze_send_label: "NotifyPlayerJoinCompleted after updateMeshConnection",
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
             pl
         ),
     }])

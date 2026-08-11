@@ -2,6 +2,11 @@
     <!-- Matchmake: pick criteria, then browse/join -->
     <div class="au-lobby__body au-lobby__body--matchmake" ng-show="lobbyView == 'matchmake'">
         <div class="au-lobby__main au-lobby__matchmake">
+            <div class="au-lobby__matchmake-panel">
+            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-lobby__matchmake-head">
                 <h2>Find a Match</h2>
                 <p>Pick a map, then find a match. You’ll join a lobby with players when available, or an idle server.</p>
@@ -11,7 +16,6 @@
                         class="au-lobby__map-card"
                         ng-repeat="m in maps"
                         ng-class="{on: m.id == selectedMap.id}"
-                        ng-style="mapCardStyle(m)"
                         ng-click="selectMap(m)">
                     <span class="au-lobby__map-card-veil" aria-hidden="true"></span>
                     <span class="au-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
@@ -23,6 +27,7 @@
             <div class="au-lobby__matchmake-meta">
                 <span>Selected: {{ selectedMap.label }} ({{ mapModeLabel(selectedMap) }})</span>
                 <span>Players: {{ matchmakeMinPlayers }}–{{ matchmakeMaxPlayers }}</span>
+            </div>
             </div>
             <div class="au-lobby__actions">
                 <button type="button" class="au-btn au-btn--ghost" ng-click="exitLobby()">Exit</button>
@@ -48,6 +53,10 @@
             </div>
         </div>
         <aside class="au-lobby__side">
+            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-side__head">Social</div>
             <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
         </aside>
@@ -59,29 +68,72 @@
             <div class="au-lobby__gameroom-head" ng-if="serverName">
                 <span class="au-lobby__gameroom-server">{{ serverName }}</span>
             </div>
-            <div class="au-lobby__map au-hud-frame">
-                <img class="au-lobby__map-img" src="images/cnc_background.png" alt="">
-                <div class="au-lobby__map-dim" aria-hidden="true"></div>
-                <div class="au-lobby__map-overlay" ng-click="$event.stopPropagation()">
-                    <button type="button" class="au-btn au-btn--ghost au-lobby__map-face" ng-click="toggleMapMenu($event)"
-                            ng-disabled="!isLobbyHost()">
-                        {{ selectedMap.label }}
-                        <img src="images/chevron_down.svg" width="12" height="8" alt="">
-                    </button>
-                    <ul class="au-lobby__map-menu" ng-show="mapMenuOpen && isLobbyHost()">
-                        <li ng-repeat="m in maps" ng-class="{active: m.id == selectedMap.id}">
-                            <a href="" ng-click="selectMap(m)">{{ m.label }}</a>
-                        </li>
-                    </ul>
+            <div class="au-lobby__room">
+                <div class="au-lobby__stage">
+                    <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+                    <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+                    <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+                    <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
+                    <div class="au-lobby__banner">
+                    <div class="au-lobby__banner-tools" ng-click="$event.stopPropagation()">
+                        <button type="button" class="au-btn au-btn--ghost au-lobby__maps-btn"
+                                ng-click="openMapPicker($event)"
+                                ng-disabled="!isLobbyHost()">Maps</button>
+                        <button type="button" class="au-lobby__gear"
+                                title="Options"
+                                ng-click="openLobbyOptions($event)"
+                                ng-disabled="!isLobbyHost()"
+                                ng-class="{on: lobbyOptionsOpen}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                                <path fill="none" stroke="#c8d4e0" stroke-width="1.8" stroke-linejoin="round"
+                                      d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
+                                <path fill="none" stroke="#c8d4e0" stroke-width="1.8" stroke-linejoin="round"
+                                      d="M19.4 13l1.6.9-2 3.4-1.9-.5c-.5.4-1 .7-1.6.9L15 20h-6l-.5-2.3c-.6-.2-1.1-.5-1.6-.9l-1.9.5-2-3.4 1.6-.9c-.1-.6-.1-1.2 0-1.8L3 10.3l2-3.4 1.9.5c.5-.4 1-.7 1.6-.9L9 4h6l.5 2.3c.6.2 1.1.5 1.6.9l1.9-.5 2 3.4-1.6.9c.1.6.1 1.2 0 1.8z"/>
+                            </svg>
+                        </button>
+                        <div class="au-lobby__banner-mapname">
+                            <strong>{{ selectedMap.label }}</strong>
+                            <span>{{ mapModeLabel(selectedMap) }}</span>
+                        </div>
+                    </div>
+                    <div class="au-lobby__banner-preview">
+                        <div class="au-lobby__map-frame au-lobby__map-frame--look">
+                            <div class="au-lobby__map-crop">
+                                <img class="au-lobby__map-img" ng-src="{{ lobbyMinimapSrc(selectedMap) }}"
+                                     ng-style="minimapCropStyle(selectedMap)" alt="">
+                            </div>
+                            <span class="au-lobby__pip"
+                                  ng-repeat="sp in mapStartpoints()"
+                                  ng-style="startPipStyle(sp)"
+                                  ng-class="{taken: startpointOwner(sp.id), mine: startpointOwner(sp.id) && startpointOwner(sp.id).isLocal}"
+                                  title="Start {{ sp.id }}">{{ startPipLabel(sp) }}</span>
+                        </div>
+                    </div>
+                    </div>
+                    <div class="au-lobby__chat au-lobby__chat--bar">
+                    <div class="au-lobby__chat-log">
+                        <div class="au-lobby__chat-line" ng-repeat="msg in lobbyChat">
+                            <span class="au-lobby__chat-user">{{ msg.user }}</span>{{ msg.text }}
+                        </div>
+                        <div class="au-lobby__chat-empty" ng-show="!lobbyChat.length">
+                            Messages are not logged. Do not share sensitive information.
+                        </div>
+                    </div>
+                    <form class="au-lobby__chat-form" action="javascript:void(0)"
+                          ng-submit="sendLobbyChat($event)" ng-click="$event.stopPropagation()">
+                        <input type="text" class="au-lobby__chat-input"
+                               ng-model="lobbyChatDraft"
+                               maxlength="200"
+                               autocomplete="off"
+                               placeholder="Message the lobby">
+                    </form>
+                    </div>
                 </div>
-                <div class="au-lobby__tabs">
-                    <button type="button"
-                            ng-class="{'au-lobby__tab--on': lobbyOptionsOpen}"
-                            ng-click="openLobbyOptions($event)"
-                            ng-disabled="!isLobbyHost()">Options</button>
-                </div>
-            </div>
-
+            <div class="au-lobby__roster">
+                <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+                <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+                <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+                <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-lobby__teams">
                 <div class="au-lobby__team au-lobby__team--1">
                     <div class="au-lobby__team-head">Team 1</div>
@@ -111,7 +163,12 @@
                                  title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
                                 <span class="au-lobby__ready-tick" ng-show="slot.ready"></span>
                             </div>
-                            <button type="button" class="au-lobby__menu-btn" title="Faction / general / colour"
+                            <button type="button" class="au-lobby__start-badge"
+                                    ng-if="!slot.invitePending"
+                                    ng-click="openStartModal(slot, $event)"
+                                    ng-disabled="!canChangeStartpoint(slot)"
+                                    title="Start location">{{ startpointLabel(slot.startpoint) }}</button>
+                            <button type="button" class="au-lobby__menu-btn" title="Faction / house / colour"
                                     ng-if="!slot.invitePending"
                                     ng-click="toggleSlotMenu(1, $index, $event)"
                                     ng-class="{open: slotMenu == slotMenuKey(1, $index)}">
@@ -175,7 +232,12 @@
                                  title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
                                 <span class="au-lobby__ready-tick" ng-show="slot.ready"></span>
                             </div>
-                            <button type="button" class="au-lobby__menu-btn" title="Faction / general / colour"
+                            <button type="button" class="au-lobby__start-badge"
+                                    ng-if="!slot.invitePending"
+                                    ng-click="openStartModal(slot, $event)"
+                                    ng-disabled="!canChangeStartpoint(slot)"
+                                    title="Start location">{{ startpointLabel(slot.startpoint) }}</button>
+                            <button type="button" class="au-lobby__menu-btn" title="Faction / house / colour"
                                     ng-if="!slot.invitePending"
                                     ng-click="toggleSlotMenu(2, $index, $event)"
                                     ng-class="{open: slotMenu == slotMenuKey(2, $index)}">
@@ -209,6 +271,8 @@
                     </div>
                 </div>
             </div>
+            </div>
+            </div>
 
             <div class="au-lobby__actions">
                 <button type="button" class="au-btn au-btn--ghost" ng-click="leaveGameRoom()">Leave</button>
@@ -216,7 +280,7 @@
                         ng-click="toggleReady()"
                         ng-show="!isLobbyHost()"
                         ng-class="{'au-btn--ready': localReady}">{{ localReady ? 'Unready' : 'Ready' }}</button>
-                <button type="button" class="au-btn au-btn--primary au-lobby__start"
+                <button type="button" class="au-btn au-btn--primary au-lobby__start-battle"
                         ng-click="startBattle()"
                         ng-show="isLobbyHost()"
                         ng-disabled="!canStartBattle()">Start Battle</button>
@@ -230,9 +294,12 @@
                         <div class="au-lobby__options-section-label">Match password</div>
                         <div class="au-lobby__options-password">
                             <div class="au-lobby__options-password-row">
-                                <input type="password" class="au-lobby__password-input"
-                                       ng-model="roomPasswordDraft"
-                                       placeholder="Optional — leave blank for open">
+                                <div class="au-lobby__options-password-field">
+                                    <input type="password" class="au-lobby__password-input"
+                                           ng-model="roomPasswordDraft"
+                                           placeholder="Optional — leave blank for open">
+                                </div>
+                                <div class="au-lobby__options-password-actions">
                                 <button type="button" class="au-btn au-btn--ghost au-lobby__password-apply"
                                         ng-click="applyRoomPassword()">{{ passwordProtected ? 'Update' : 'Set' }}</button>
                                 <button type="button" class="au-btn au-btn--ghost au-lobby__password-clear"
@@ -244,6 +311,7 @@
                                               d="M4 7h16M9 7V5h6v2M6 7l1 14h10l1-14M10 11v6M14 11v6"/>
                                     </svg>
                                 </button>
+                                </div>
                             </div>
                             <span class="au-lobby__password-flag" ng-show="passwordProtected">Protected</span>
                         </div>
@@ -303,6 +371,58 @@
                     </div>
                 </div>
             </div>
+            <div class="au-lobby__modal au-lobby__modal--maps" ng-show="mapPickerOpen"
+                 ng-click="closeMapPicker()">
+                <div class="au-lobby__modal-box au-lobby__maps-modal" ng-click="$event.stopPropagation()">
+                    <h3 class="au-lobby__maps-modal-title">Maps</h3>
+                    <div class="au-lobby__maps-split">
+                        <div class="au-lobby__maps-list-cell">
+                            <div class="au-lobby__maps-list">
+                                <div class="au-lobby__maps-row"
+                                     ng-repeat="m in maps"
+                                     ng-class="{on: m.id == pickerMap().id}"
+                                     ng-click="previewMapInPicker(m)">
+                                    <span class="au-lobby__maps-row-name">{{ m.label }}</span>
+                                    <span class="au-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="au-lobby__maps-preview-cell">
+                            <div class="au-lobby__maps-preview-art">
+                                <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
+                                     ng-style="minimapCropStyle(pickerMap())" alt="">
+                            </div>
+                            <div class="au-lobby__maps-preview-meta">
+                                <strong>{{ pickerMap().label }}</strong>
+                                <span>{{ mapModeLabel(pickerMap()) }}</span>
+                                <span ng-show="pickerMap().slots">{{ mapPlayerLabel(pickerMap()) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="au-lobby__options-actions">
+                        <button type="button" class="au-btn au-btn--ghost" ng-click="closeMapPicker()">Cancel</button>
+                        <button type="button" class="au-btn au-btn--primary" ng-click="confirmMapPicker()">Select</button>
+                    </div>
+                </div>
+            </div>
+            <div class="au-lobby__modal au-lobby__modal--start" ng-show="startModalSlot"
+                 ng-click="closeStartModal()">
+                <div class="au-lobby__modal-box au-lobby__start-modal" ng-click="$event.stopPropagation()">
+                    <h3 class="au-lobby__start-modal-title">Start location</h3>
+                    <p class="au-lobby__start-modal-copy">Pick a spawn. ? is random.</p>
+                    <div class="au-lobby__start-grid">
+                        <button type="button"
+                                ng-repeat="opt in startChoices"
+                                class="au-lobby__start-cell"
+                                ng-class="{on: startModalSlot.startpoint == opt.id, taken: startTakenByOther(opt.id, startModalSlot)}"
+                                ng-click="pickStartFromModal(opt.id)"
+                                ng-disabled="!canChangeStartpoint(startModalSlot) || startTakenByOther(opt.id, startModalSlot)">{{ opt.label }}</button>
+                    </div>
+                    <div class="au-lobby__options-actions">
+                        <button type="button" class="au-btn au-btn--primary" ng-click="closeStartModal()">Done</button>
+                    </div>
+                </div>
+            </div>
             <div class="au-lobby__modal" ng-show="_starting || _startError">
                 <div class="au-lobby__modal-box">
                     <div ng-show="_starting && !_startError">Starting game..</div>
@@ -321,6 +441,10 @@
         </div>
 
         <aside class="au-lobby__side">
+            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
+            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-side__head">Social</div>
             <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
         </aside>

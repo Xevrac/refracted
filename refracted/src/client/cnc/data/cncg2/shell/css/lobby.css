@@ -65,7 +65,8 @@
     top: 0;
     left: 0;
     right: 0;
-    bottom: 46%;
+    height: 196px;
+    bottom: auto;
     z-index: 20;
     border: 1px solid #2c2c2c;
     -webkit-box-shadow: 0 0 0 5px #0a0a0a, 0 0 0 6px #3a3a3a;
@@ -81,11 +82,330 @@
     width: 100%;
     height: 100%;
     background-color: #1a1a1a;
-    background-image: url('../images/cnc_background.png');
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-size: cover;
     z-index: 0;
+}
+
+.cc-lobby__map-setup {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    right: 220px;
+    bottom: auto;
+    width: auto;
+    z-index: 6;
+}
+
+.cc-lobby__maps-btn {
+    display: inline-block;
+    vertical-align: top;
+    height: 32px;
+    margin: 0 8px 0 0;
+    padding: 0 16px;
+    border: 1px solid #4a90c8;
+    background: rgba(18, 28, 40, 0.95);
+    color: #ececec;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.cc-lobby__banner-mapname {
+    margin-top: 14px;
+    color: #8a8a8a;
+}
+
+.cc-lobby__banner-mapname strong {
+    display: block;
+    color: #ececec;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+}
+
+.cc-lobby__map-preview {
+    position: absolute;
+    right: 12px;
+    top: 8px;
+    width: 180px;
+    height: 180px;
+    margin-top: 0;
+    z-index: 4;
+}
+
+.cc-lobby__map-bar {
+    position: relative;
+    margin: 0 0 10px 0;
+}
+
+.cc-lobby__map-pick {
+    position: relative;
+    margin-right: 36px;
+}
+
+.cc-lobby__map-pick-kicker {
+    display: block;
+    margin: 0 0 4px 0;
+    color: #8a8a8a;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+}
+
+.cc-lobby__map-pick-btn {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 40px;
+    padding: 4px 22px 4px 8px;
+    border: 1px solid #4a90c8;
+    background: rgba(18, 28, 40, 0.95);
+    color: #ececec;
+    text-align: left;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__map-pick-btn span {
+    display: block;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.cc-lobby__map-pick-btn em {
+    display: block;
+    color: #7ab8e8;
+    font-style: normal;
+    font-size: 10px;
+}
+
+.cc-lobby__map-pick-btn .cc-lobby__chevron {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    margin-top: 4px;
+}
+
+.cc-lobby__gear {
+    display: inline-block;
+    vertical-align: top;
+    position: static;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid #4a90c8;
+    background: rgba(18, 28, 40, 0.95);
+    cursor: pointer;
+}
+
+.cc-lobby__gear.on {
+    background: rgba(40, 110, 180, 0.95);
+}
+
+.cc-lobby__gear svg {
+    display: block;
+    margin: 7px auto 0 auto;
+}
+
+.cc-lobby__chat {
+    border: 1px solid #2c2c2c;
+    background: rgba(8, 8, 8, 0.92);
+}
+
+.cc-lobby__chat--bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 208px;
+    height: 188px;
+    z-index: 15;
+    overflow: hidden;
+}
+
+.cc-lobby__chat--bar .cc-lobby__chat-log {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 32px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 6px 12px 6px 10px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__chat--bar .cc-lobby__chat-line {
+    display: block;
+    margin: 0;
+    min-height: 18px;
+    line-height: 18px;
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.cc-lobby__chat--bar .cc-lobby__chat-empty {
+    display: block;
+    line-height: 18px;
+}
+
+.cc-lobby__chat--bar .cc-lobby__chat-form {
+    position: absolute;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: 32px;
+    border-top: 1px solid #2c2c2c;
+    border-left: 0;
+}
+
+.cc-lobby__chat--bar .cc-lobby__chat-input {
+    display: block;
+    width: 100%;
+    height: 32px;
+}
+
+.cc-lobby__chat-log::-webkit-scrollbar {
+    width: 8px;
+}
+
+.cc-lobby__chat-log::-webkit-scrollbar-track {
+    background: #0a0a0a;
+    border-left: 1px solid #2c2c2c;
+}
+
+.cc-lobby__chat-log::-webkit-scrollbar-thumb {
+    background: #3a5a78;
+    border: 1px solid #2c2c2c;
+}
+
+.cc-lobby__chat-head {
+    height: 24px;
+    padding: 0 8px;
+    border-bottom: 1px solid #2c2c2c;
+    color: #8a8a8a;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    line-height: 24px;
+}
+
+.cc-lobby__chat-log {
+    position: absolute;
+    top: 24px;
+    right: 0;
+    bottom: 32px;
+    left: 0;
+    overflow: auto;
+    padding: 6px 8px;
+}
+
+.cc-lobby__chat-line {
+    margin: 0 0 5px 0;
+    color: #ccc;
+    font-size: 11px;
+}
+
+.cc-lobby__chat-user {
+    margin-right: 6px;
+    color: #7ab8e8;
+    font-weight: bold;
+}
+
+.cc-lobby__chat-empty {
+    color: #666;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.cc-lobby__chat-form {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    height: 32px;
+    border-top: 1px solid #2c2c2c;
+}
+
+.cc-lobby__chat-input {
+    display: block;
+    width: 100%;
+    height: 31px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: #ececec;
+    font-size: 12px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__map-frame {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    z-index: 2;
+    background: #000;
+    border: 1px solid #3a3a3a;
+}
+
+.cc-lobby__map-crop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.cc-lobby__preview-meta {
+    margin-top: 6px;
+    color: #8a8a8a;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-align: center;
+}
+
+.cc-lobby__map-img {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.cc-lobby__pip {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    margin-top: -7px;
+    padding: 0;
+    border: 1px solid #d8e8f8;
+    background: rgba(10, 14, 20, 0.9);
+    color: #ececec;
+    font-size: 9px;
+    font-weight: bold;
+    line-height: 12px;
+    text-align: center;
+    cursor: default;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.cc-lobby__pip.taken {
+    color: #0a0a0a;
+}
+
+.cc-lobby__pip.mine {
+    -webkit-box-shadow: 0 0 0 2px #fff;
+    box-shadow: 0 0 0 2px #fff;
 }
 
 .cc-lobby__map-veil {
@@ -94,7 +414,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.28);
+    background: rgba(0, 0, 0, 0.12);
     z-index: 1;
     pointer-events: none;
 }
@@ -106,6 +426,13 @@
     width: 100%;
     height: 100%;
     z-index: 5;
+    pointer-events: none;
+}
+
+.cc-lobby__map-ui button,
+.cc-lobby__map-ui ul,
+.cc-lobby__map-ui a {
+    pointer-events: auto;
 }
 
 .cc-lobby__tabs {
@@ -183,11 +510,15 @@
 
 .cc-lobby__map-list {
     list-style: none;
-    margin: 0;
+    margin: 6px 0 0 0;
     padding: 0;
+    position: absolute;
+    left: 0;
+    right: 36px;
+    z-index: 30;
     border: 1px solid rgba(80, 150, 210, 0.55);
     background: rgba(8, 28, 48, 0.97);
-    max-height: 220px;
+    max-height: 180px;
     overflow: auto;
     -webkit-box-shadow: 0 10px 24px rgba(0, 0, 0, 0.85);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.85);
@@ -211,7 +542,7 @@
 /* ---- Teams: fill remaining space above bottom actions ---- */
 .cc-lobby__teams {
     position: absolute;
-    top: 56%;
+    top: 408px;
     left: 0;
     right: 0;
     bottom: 58px;
@@ -353,7 +684,7 @@
 
 .cc-lobby__tools {
     margin-top: 5px;
-    height: 16px;
+    height: auto;
     overflow: visible;
     position: relative;
     z-index: 6;
@@ -420,6 +751,30 @@
 .cc-lobby__arrow.open {
     background: rgba(40, 110, 180, 0.95);
     border-color: #7ab8e8;
+}
+
+.cc-lobby__start-badge {
+    display: inline-block;
+    vertical-align: top;
+    width: 54px;
+    height: 16px;
+    margin: 0 4px 0 0;
+    padding: 0;
+    border: 1px solid #3a3a3a;
+    background: rgba(12, 12, 12, 0.95);
+    color: #ececec;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 14px;
+    text-align: center;
+    cursor: pointer;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__start-badge:disabled {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .cc-lobby__menu {
@@ -512,6 +867,29 @@
     color: #b0b0b0;
     font-size: 12px;
     margin-top: 3px;
+}
+
+.cc-lobby__start {
+    display: block;
+    margin-top: 4px;
+    color: #8a8a8a;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__start span {
+    margin-right: 6px;
+}
+
+.cc-lobby__start select {
+    min-width: 44px;
+    padding: 1px 4px;
+    border: 1px solid #3a3a3a;
+    background: #121212;
+    color: #ececec;
+    font-size: 11px;
 }
 
 .cc-lobby__ai {
@@ -669,16 +1047,26 @@
     border-spacing: 8px 0;
 }
 
-.cc-lobby__options .cc-lobby__password-input {
+.cc-lobby__options-password-field,
+.cc-lobby__options-password-actions {
     display: table-cell;
-    float: none;
-    width: auto;
-    height: 37px;
-    margin: 0;
-    padding: 0 12px;
-    font-size: 14px;
-    line-height: 35px;
     vertical-align: middle;
+}
+
+.cc-lobby__options-password-actions {
+    width: 148px;
+    white-space: nowrap;
+}
+
+.cc-lobby__options .cc-lobby__password-input {
+    display: block;
+    float: none;
+    width: 100%;
+    height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    font-size: 13px;
+    line-height: 30px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
 }
@@ -691,14 +1079,16 @@
     line-height: 1.3;
 }
 
+.cc-lobby__modal-box.cc-lobby__options .cc-lobby__options-password-row .cc-lobby__btn,
 .cc-lobby__options-password-row .cc-lobby__btn {
-    display: table-cell;
+    display: inline-block;
     float: none;
-    height: 37px;
-    margin: 0;
-    padding: 0;
+    min-width: 0;
+    height: 32px;
+    margin: 0 6px 0 0 !important;
+    padding: 0 10px;
     font-size: 12px;
-    line-height: 35px;
+    line-height: 30px;
     vertical-align: middle;
     text-align: center;
     -webkit-box-sizing: border-box;
@@ -848,6 +1238,178 @@
     font-size: 11px;
     line-height: 1.45;
     letter-spacing: 0.03em;
+}
+
+.cc-lobby__modal-box.cc-lobby__maps-modal {
+    top: 10%;
+    left: 50%;
+    width: 720px;
+    max-width: 92%;
+    max-height: 84%;
+    margin: 0 0 0 -360px;
+    padding: 16px 18px 12px;
+    overflow: hidden;
+    text-align: left;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__maps-modal-title {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    letter-spacing: 0.12em;
+    text-align: center;
+}
+
+.cc-lobby__maps-split {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    height: 420px;
+}
+
+.cc-lobby__maps-list-cell,
+.cc-lobby__maps-preview-cell {
+    display: table-cell;
+    vertical-align: top;
+    height: 420px;
+}
+
+.cc-lobby__maps-list-cell {
+    width: 42%;
+    padding-right: 14px;
+}
+
+.cc-lobby__maps-list {
+    height: 420px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 1px solid #3a3a3a;
+    background: #121212;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__maps-row {
+    padding: 10px 12px;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.cc-lobby__maps-row.on {
+    background: rgba(74, 144, 200, 0.22);
+    -webkit-box-shadow: inset 3px 0 0 #4a90c8;
+    box-shadow: inset 3px 0 0 #4a90c8;
+}
+
+.cc-lobby__maps-row-name {
+    display: block;
+    color: #ececec;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__maps-row-mode {
+    display: block;
+    margin-top: 2px;
+    color: #7ab8e8;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__maps-preview-art {
+    position: relative;
+    width: 100%;
+    height: 340px;
+    overflow: hidden;
+    border: 1px solid #3a3a3a;
+    background: #000;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.cc-lobby__maps-preview-art img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.cc-lobby__maps-preview-meta {
+    margin-top: 10px;
+}
+
+.cc-lobby__maps-preview-meta strong {
+    display: block;
+    color: #ececec;
+    font-size: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__maps-preview-meta span {
+    display: inline-block;
+    margin: 4px 12px 0 0;
+    color: #8a8a8a;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__start-modal {
+    width: 360px;
+    max-width: 92%;
+    padding: 22px 24px 18px;
+    text-align: left;
+}
+
+.cc-lobby__start-modal-title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    letter-spacing: 0.12em;
+    text-align: center;
+}
+
+.cc-lobby__start-modal-copy {
+    margin: 0 0 14px 0;
+    color: #8a8a8a;
+    font-size: 12px;
+    text-align: center;
+}
+
+.cc-lobby__start-grid {
+    overflow: hidden;
+    margin: 0 -4px 8px -4px;
+}
+
+.cc-lobby__start-cell {
+    float: left;
+    width: 48px;
+    height: 36px;
+    margin: 4px;
+    padding: 0;
+    border: 1px solid #3a3a3a;
+    background: #121212;
+    color: #ececec;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.cc-lobby__start-cell.on {
+    border-color: #7ab8e8;
+    background: rgba(40, 110, 180, 0.85);
+}
+
+.cc-lobby__start-cell.taken,
+.cc-lobby__start-cell[disabled] {
+    opacity: 0.45;
+    cursor: default;
 }
 
 .cc-lobby__options-actions {
@@ -1238,10 +1800,12 @@
     position: relative;
     height: 140px;
     background-color: #0a0a0a;
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-size: cover;
     border-bottom: 1px solid #2a2a2a;
+}
+
+.cc-lobby-browser__art--ph {
+    background-image: -webkit-linear-gradient(160deg, #1a1a1a 0%, #0a0a0a 55%, #222 100%);
+    background-image: linear-gradient(160deg, #1a1a1a 0%, #0a0a0a 55%, #222 100%);
 }
 
 .cc-lobby-browser__art-fade {
@@ -1391,10 +1955,7 @@
     margin: 0 1% 12px 1%;
     padding: 0;
     border: 1px solid #3a3a3a;
-    background-color: #121212;
-    background-position: center center;
-    background-repeat: no-repeat;
-    background-size: cover;
+    background: #121212;
     cursor: pointer;
     overflow: hidden;
     text-align: left;

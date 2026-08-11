@@ -248,6 +248,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/lobby-roster" && is_get {
         return Some(handle_cnc_lobby_roster(query));
     }
+    if base == "cnc/lobby-chat" {
+        return Some(handle_cnc_lobby_chat(is_post, query, body));
+    }
     if base == "cnc/dedicated-pool" && is_get {
         let _ = body;
         return Some(HttpResponse::new(
@@ -255,6 +258,11 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
             "application/json",
             dedicated_pool::lobby_pool_status_json().into_bytes(),
         ));
+    }
+    // GET /cnc/utfwin/images/MiniMap/*.png — retail UTFWinAssets from the game bin.
+    if is_get && base.starts_with("cnc/utfwin/") {
+        let _ = body;
+        return Some(handle_cnc_utfwin(base));
     }
     if !is_post {
         return None;
@@ -366,6 +374,53 @@ fn resolve_prism_version() -> Option<String> {
         }
     }
     None
+}
+
+/// Retail `UTFWinAssets` root (MiniMap PNGs live under `images/MiniMap/`).
+fn utfwin_asset_roots() -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = Vec::new();
+    let push_utf = |roots: &mut Vec<PathBuf>, game: &Path| {
+        let candidates = [
+            game.join("UTFWinAssets"),
+            game.join("..").join("UTFWinAssets"),
+        ];
+        for c in candidates {
+            if let Ok(canon) = c.canonicalize() {
+                if canon.is_dir() && !roots.iter().any(|d| d == &canon) {
+                    roots.push(canon);
+                }
+            } else if c.is_dir() && !roots.iter().any(|d| d == &c) {
+                roots.push(c);
+            }
+        }
+    };
+    for dir in prism_version_search_dirs() {
+        push_utf(&mut roots, &dir);
+    }
+    push_utf(
+        &mut roots,
+        Path::new(r"D:\_DATA\Projects\RE\Command and Conquer\Bin\Command & Conquer"),
+    );
+    roots
+}
+
+/// Serve `UTFWinAssets/images/MiniMap/*.png` for the Refracted lobby preview.
+fn handle_cnc_utfwin(base: &str) -> HttpResponse {
+    let rest = base.trim_start_matches("cnc/utfwin/");
+    let Some(rel) = sanitize_relative_request_path(rest) else {
+        return HttpResponse::new(400, "text/plain", b"Bad path".to_vec());
+    };
+    let norm = rel.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    if !norm.starts_with("images/minimap/") || !norm.ends_with(".png") {
+        return HttpResponse::new(404, "text/plain", b"Not Found".to_vec());
+    }
+    for root in utfwin_asset_roots() {
+        let full = root.join(&rel);
+        if let Ok(bytes) = std::fs::read(&full) {
+            return HttpResponse::new(200, "image/png", bytes);
+        }
+    }
+    HttpResponse::new(404, "text/plain", b"Not Found".to_vec())
 }
 
 fn prism_version_search_dirs() -> Vec<PathBuf> {
@@ -964,6 +1019,50 @@ fn handle_cnc_player_ready(query: Option<&str>) -> HttpResponse {
         "admin": game_state::host_persona_for_gid(gid),
     });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> HttpResponse {
+    let mut gid: i64 = 1;
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                if k == "gid" {
+                    gid = percent_decode_plus(v).parse().unwrap_or(1);
+                }
+            }
+        }
+    }
+    if !is_post {
+        let json = game_state::lobby_chat_json(gid);
+        return HttpResponse::new(200, "application/json", json.to_string().into_bytes());
+    }
+    let mut user = String::new();
+    let mut text = String::new();
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
+        if let Some(g) = v.get("gid").and_then(|g| {
+            g.as_i64()
+                .or_else(|| g.as_u64().map(|n| n as i64))
+                .or_else(|| g.as_str().and_then(|s| s.parse().ok()))
+        }) {
+            gid = g;
+        }
+        if let Some(u) = v.get("user").and_then(|u| u.as_str()) {
+            user = u.to_string();
+        }
+        if let Some(t) = v.get("text").and_then(|t| t.as_str()) {
+            text = t.to_string();
+        }
+    }
+    if user.is_empty() {
+        let session = crate::session::get_user_session();
+        user = if session.display_name.is_empty() {
+            "Player".to_string()
+        } else {
+            session.display_name.clone()
+        };
+    }
+    let json = game_state::lobby_chat_push(gid, &user, &text);
+    HttpResponse::new(200, "application/json", json.to_string().into_bytes())
 }
 
 fn handle_cnc_lobby_roster(query: Option<&str>) -> HttpResponse {
@@ -3009,11 +3108,17 @@ pub fn build_game_manager_notify_platform_host_initialized(gid: i64) -> BlazeRes
     Ok(Bytes::from(response))
 }
 
-/// `GameManager.NotifyPlayerJoinCompleted` (`0x0004` / `0x001E`) -- host join finished on dedicated reset.
+/// `GameManager.NotifyPlayerJoinCompleted` (`0x0004` / `0x001E`).
+/// Blaze SDK (`sub_1281A00` / `sub_1280D30`) decodes `{ GID, PID }` and looks the player up on
+/// the Game mesh list -- a full PROS row is the wrong TDF, and sending this before the client
+/// has created the mesh null-derefs `player+0x58` (Prism then mislabels the AV as backend loss).
 pub fn build_game_manager_notify_player_join_completed(gid: i64) -> BlazeResult<Bytes> {
     game_state::mark_host_join_completed(gid);
     let player = game_state::host_player_for_gid(gid);
-    Ok(Bytes::from(game_state::build_replicated_player(&player, gid)))
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
+    out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));
+    Ok(Bytes::from(out))
 }
 
 /// `GameManager.NotifyPlayerJoining` (`0x0004` / `0x0015`, cmd 21).

@@ -36,6 +36,52 @@ const SERVER_LOST_TTL_SECS: u64 = 300;
 static JOIN_PASSWORD_AUTH: OnceLock<Mutex<HashMap<(i64, i64), Instant>>> = OnceLock::new();
 const JOIN_PASSWORD_AUTH_TTL: Duration = Duration::from_secs(120);
 
+#[derive(Clone)]
+struct LobbyChatLine {
+    user: String,
+    text: String,
+}
+
+static LOBBY_CHAT: OnceLock<Mutex<HashMap<i64, Vec<LobbyChatLine>>>> = OnceLock::new();
+
+fn lobby_chat() -> &'static Mutex<HashMap<i64, Vec<LobbyChatLine>>> {
+    LOBBY_CHAT.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub fn lobby_chat_json(gid: i64) -> serde_json::Value {
+    let lines = lobby_chat()
+        .lock()
+        .get(&gid)
+        .cloned()
+        .unwrap_or_default();
+    serde_json::json!({
+        "ok": true,
+        "gid": gid,
+        "messages": lines.iter().map(|l| serde_json::json!({
+            "user": l.user,
+            "text": l.text,
+        })).collect::<Vec<_>>(),
+    })
+}
+
+pub fn lobby_chat_push(gid: i64, user: &str, text: &str) -> serde_json::Value {
+    let user: String = user.chars().take(32).collect();
+    let text: String = text.chars().take(200).collect();
+    if text.trim().is_empty() {
+        return lobby_chat_json(gid);
+    }
+    {
+        let mut m = lobby_chat().lock();
+        let list = m.entry(gid).or_default();
+        list.push(LobbyChatLine { user, text });
+        if list.len() > 80 {
+            let extra = list.len() - 80;
+            list.drain(0..extra);
+        }
+    }
+    lobby_chat_json(gid)
+}
+
 fn server_lost_gids() -> &'static Mutex<HashMap<i64, u64>> {
     SERVER_LOST_GIDS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -116,7 +162,8 @@ fn game_ready_and_state_advance_pushes(
         if try_mark_blaze_pregame_pushed(gid) {
             out.extend(super::fireframe::pushes_advance_game_to_ingame(gid).ok()?);
             let _ = try_mark_blaze_ingame_pushed(gid);
-            set_phase(gid, GamePhase::InGame);
+            // Blaze GSTA IN_GAME is the session notify, not RTS/match start.
+            // Keep CncGame phase PreGame (browser "Lobby") until Start Battle.
         }
     }
     Some(out)
@@ -380,9 +427,20 @@ pub fn on_client_mesh_update(gid: i64, pid: i64) -> MeshUpdateResult {
     }
     entry.mesh_active_connected = true;
     drop(m);
-    MeshUpdateResult::Push(
-        mesh_active_connected_and_game_ready_pushes(gid, pid).unwrap_or_default(),
-    )
+    let mut out = mesh_active_connected_and_game_ready_pushes(gid, pid).unwrap_or_default();
+    // JoinCompleted must not share a tick with InitiateConnections (empty mesh list → AV at +0x58).
+    if let Ok(join_done) = super::fireframe::pushes_player_join_completed(gid) {
+        if let Some(connected_at) = out
+            .iter()
+            .position(|p| p.component == 0x0004 && p.command == 116)
+        {
+            let insert_at = connected_at + 1;
+            out.splice(insert_at..insert_at, join_done);
+        } else {
+            out.extend(join_done);
+        }
+    }
+    MeshUpdateResult::Push(out)
 }
 
 pub fn on_cmd220_delivered_to_dedicated(gid: i64) {
@@ -500,7 +558,7 @@ impl GamePhase {
 
     pub fn label(self) -> &'static str {
         match self {
-            GamePhase::PreGame => "PreGame",
+            GamePhase::PreGame => "Lobby",
             GamePhase::InGame => "InGame",
             GamePhase::PostGame => "PostGame",
             GamePhase::Resetable => "Resetable",
@@ -986,7 +1044,7 @@ fn default_human_attribs(slot: i32, team: i32) -> IndexMap<String, String> {
 
 fn default_human_attribs_for_map(
     map_path: &str,
-    slot: i32,
+    _slot: i32,
     team: i32,
 ) -> IndexMap<String, String> {
     let (faction, general) = if is_alpha_tutorial_map(map_path) {
@@ -998,7 +1056,7 @@ fn default_human_attribs_for_map(
     attribs.insert("_faction".to_string(), faction.to_string());
     attribs.insert("_isai".to_string(), "0".to_string());
     attribs.insert("_team".to_string(), team.max(1).to_string());
-    attribs.insert("_startpoint".to_string(), (slot + 1).max(1).to_string());
+    attribs.insert("_startpoint".to_string(), "0".to_string());
     attribs.insert("_general".to_string(), general.to_string());
     attribs
 }
@@ -1017,7 +1075,10 @@ fn apply_attr_to_player(player: &mut CncPlayer, key: &str, value: &str) {
         }
         "_startpoint" => {
             if let Ok(s) = value.parse::<i32>() {
-                player.slot = (s - 1).max(0);
+                // 0 = lobby random (`?`); do not remap Blaze slot.
+                if s > 0 {
+                    player.slot = (s - 1).max(0);
+                }
             }
         }
         "_isai" => player.is_ai = value == "1" || value.eq_ignore_ascii_case("true"),
@@ -1025,14 +1086,49 @@ fn apply_attr_to_player(player: &mut CncPlayer, key: &str, value: &str) {
     }
 }
 
+fn attrs_mark_ai(attrs: &IndexMap<String, String>) -> bool {
+    attrs
+        .get("_isai")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn startpoint_from_attrs(attrs: &IndexMap<String, String>) -> i32 {
+    attrs
+        .get("_startpoint")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(0)
+}
+
+/// Lobby AI slots used to POST `pid=0`. Negative ids never collide with a Blaze persona.
+fn synthetic_ai_persona(startpoint: i32) -> i64 {
+    let sp = if startpoint > 0 { startpoint as i64 } else { 1 };
+    -(1000 + sp)
+}
+
+fn strip_poisoned_host_ai_pending(gid: i64) {
+    let mut pending = pending_player_attrs().lock();
+    if let Some(by_pid) = pending.get_mut(&gid) {
+        if let Some(slot) = by_pid.get_mut(&0) {
+            if attrs_mark_ai(slot) {
+                slot.shift_remove("_isai");
+            }
+        }
+    }
+}
+
 fn merge_pending_into_player(gid: i64, player: &mut CncPlayer) {
     // Merge pid=0 (pre-auth host) then exact persona so late persona sync wins keys.
+    // pid=0 must never carry `_isai=1` onto a human — that was the Start Battle
+    // "connectivity to the server was lost" false kick (AI slot overwrote the host).
     let overlays = {
         let pending = pending_player_attrs().lock();
         let mut layers = Vec::new();
         if let Some(by_pid) = pending.get(&gid) {
             if let Some(a) = by_pid.get(&0) {
-                layers.push(a.clone());
+                if !attrs_mark_ai(a) || player.is_ai {
+                    layers.push(a.clone());
+                }
             }
             if player.persona_id != 0 {
                 if let Some(a) = by_pid.get(&player.persona_id) {
@@ -1109,11 +1205,66 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
     let Some(game) = m.get_mut(&gid) else {
         return;
     };
+    if attrs_mark_ai(attrs) {
+        let startpoint = startpoint_from_attrs(attrs);
+        let mut pid = if persona_id < 0 {
+            persona_id
+        } else if persona_id > 0 && persona_id != game.host_persona {
+            persona_id
+        } else {
+            synthetic_ai_persona(startpoint)
+        };
+        if pid == game.host_persona || pid == 0 {
+            pid = synthetic_ai_persona(startpoint);
+        }
+        if let Some(idx) = game.players.iter().position(|p| p.persona_id == pid) {
+            if let Some(player) = game.players.get_mut(idx) {
+                if player.persona_id != game.host_persona || player.is_ai {
+                    for (k, v) in attrs {
+                        apply_attr_to_player(player, k, v);
+                    }
+                    return;
+                }
+            }
+        }
+        let team = attrs
+            .get("_team")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(2)
+            .max(1);
+        let slot = if startpoint > 0 {
+            startpoint - 1
+        } else {
+            game.players.len() as i32
+        };
+        let faction = attrs
+            .get("_faction")
+            .cloned()
+            .unwrap_or_else(|| "GLA".to_string());
+        let mut player = CncPlayer {
+            persona_id: pid,
+            display_name: "AI".to_string(),
+            slot,
+            team,
+            is_ai: true,
+            ready: true,
+            attribs: default_ai_attribs(slot, team, &faction),
+            custom_data: IndexMap::new(),
+            stat: PROS_STAT_ACTIVE_CONNECTING,
+        };
+        for (k, v) in attrs {
+            apply_attr_to_player(&mut player, k, v);
+        }
+        game.players.push(player);
+        return;
+    }
     let targets: Vec<usize> = if persona_id == 0 {
         game.players
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.persona_id == game.host_persona || !p.is_ai)
+            .filter(|(_, p)| {
+                !p.is_ai && (p.persona_id == game.host_persona || game.host_persona == 0)
+            })
             .map(|(i, _)| i)
             .take(1)
             .collect()
@@ -1121,24 +1272,46 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
         game.players
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.persona_id == persona_id)
+            .filter(|(_, p)| p.persona_id == persona_id && !p.is_ai)
             .map(|(i, _)| i)
             .collect()
     };
     for i in targets {
         if let Some(player) = game.players.get_mut(i) {
             for (k, v) in attrs {
+                if k == "_isai" {
+                    continue;
+                }
                 apply_attr_to_player(player, k, v);
             }
         }
     }
 }
 
+fn reapply_all_pending_attrs(gid: i64) {
+    let by_pid = pending_player_attrs()
+        .lock()
+        .get(&gid)
+        .cloned()
+        .unwrap_or_default();
+    for (pid, attrs) in by_pid {
+        apply_pending_attrs_to_live_game(gid, pid, &attrs);
+    }
+}
+
 /// Record lobby-selected player attrs for a gid/persona. Survives `seed_from_reset` and is
-/// applied into live roster rows when present. `persona_id == 0` targets the host placeholder.
-pub fn set_pending_player_attrs(gid: i64, persona_id: i64, attrs: IndexMap<String, String>) {
+/// applied into live roster rows when present. `persona_id == 0` targets the host placeholder
+/// unless `_isai=1` (then a synthetic AI row is upserted — never the host).
+pub fn set_pending_player_attrs(gid: i64, mut persona_id: i64, attrs: IndexMap<String, String>) {
     if attrs.is_empty() {
         return;
+    }
+    if attrs_mark_ai(&attrs) && persona_id == 0 {
+        persona_id = synthetic_ai_persona(startpoint_from_attrs(&attrs));
+        strip_poisoned_host_ai_pending(gid);
+        if gid != DEDICATED_MATCH_GID {
+            strip_poisoned_host_ai_pending(DEDICATED_MATCH_GID);
+        }
     }
     write_pending_player_attrs(gid, persona_id, &attrs);
     apply_pending_attrs_to_live_game(gid, persona_id, &attrs);
@@ -1257,10 +1430,12 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
                 notes.push("team < 1");
                 issues.push(format!("player {} team={}", p.persona_id, team));
             }
-            if start < 1 {
+            if start < 0 {
                 ok = false;
-                notes.push("startpoint < 1");
+                notes.push("startpoint < 0");
                 issues.push(format!("player {} startpoint={}", p.persona_id, start));
+            } else if start == 0 {
+                notes.push("startpoint random");
             }
             players_json.push(serde_json::json!({
                 "persona_id": p.persona_id,
@@ -1383,6 +1558,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         pros_wire: None,
     };
     games().lock().insert(gid, game);
+    reapply_all_pending_attrs(gid);
     destroy_orphan_host_lobbies(Some(gid));
 }
 
@@ -1912,11 +2088,17 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         .iter()
         .map(|p| {
             let is_host = p.persona_id == host && host != 0;
+            let startpoint = p
+                .attribs
+                .get("_startpoint")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(0);
             serde_json::json!({
                 "pid": p.persona_id,
                 "name": p.display_name,
                 "slot": p.slot,
                 "team": p.team,
+                "startpoint": startpoint,
                 "isAi": p.is_ai,
                 "ready": p.ready || p.is_ai || is_host,
                 "isHost": is_host,
