@@ -1,22 +1,9 @@
-﻿//! **Nexus** -- Refracted's identity/account backend (personas, accounts, future login/logout).
+﻿//! **Nexus** — Refracted identity (personas, accounts, login).
 //!
-//! A Refracted account is powered by this Nexus layer. It is **not** EA Nucleus and is **not**
-//! a second protocol stack.
+//! Not EA Nucleus and not a second protocol stack. Blaze still uses wire name
+//! `NucleusIdentityComponent` (1002). This module holds emulator policy and state.
 //!
-//! ## Relationship to Blaze
-//! - [`crate::blaze::components`] stays the registry for **Blaze wire** names (including EA
-//!   component **1002** `NucleusIdentityComponent` RPC labels). Those names stay on the wire.
-//! - This module holds emulator-side **policy and state** used when building Blaze responses
-//!   (persona/account fields sourced from [`crate::common::user_profile`] / [`crate::session`]).
-//!
-//! ## Wire reality
-//! Titles that call **NucleusIdentity** over Blaze send **1002** packets on the **same Blaze
-//! connection** as everything else. What stays internal here is *our* choice of when we
-//! **synthesize** or **map** those responses from Nexus vs. pass-through.
-//!
-//! ## UI
-//! **Settings → Accounts** is the desktop surface for this layer (JSON personas for local
-//! development). Headless production uses MySQL identity; game clients authenticate.
+//! Desktop: Settings → Accounts (JSON). Headless production: MySQL; clients authenticate.
 
 pub mod backend;
 pub mod identity;

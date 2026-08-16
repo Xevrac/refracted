@@ -531,7 +531,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (2051, 5) => Some(format!("{}.drainConsumeable", component_name)),
         (2051, 6) => Some(format!("{}.getTemplate", component_name)), // 0x06
         
-        // NucleusIdentityComponent (1002) -- EA Blaze wire; identity data comes from Nexus
+        // NucleusIdentityComponent (1002) -- Blaze wire name; identity data comes from Nexus
         (1002, 1) => Some(format!("{}.updateEntitlement", component_name)),
         (1002, 2) => Some(format!("{}.updatePersona", component_name)),
         (1002, 3) => Some(format!("{}.deletePersona", component_name)),

@@ -13,7 +13,7 @@ use crate::blaze::tdf::TdfEncoder;
 static POOL: OnceLock<Mutex<HashMap<u64, DedicatedServerEntry>>> = OnceLock::new();
 static ASSIGNMENTS: OnceLock<Mutex<HashMap<i64, GameAssignment>>> = OnceLock::new();
 static IDENTITIES: OnceLock<Mutex<HashMap<u64, DedicatedIdentity>>> = OnceLock::new();
-/// Prism posts EnginePeerInit before Blaze register — stash until a pool entry can claim it.
+/// EnginePeer reports that arrive before the dedicated is in the pool.
 static PENDING_ENGINE_PEER: OnceLock<Mutex<Vec<PendingEnginePeer>>> = OnceLock::new();
 static LAST_NO_DEDICATED_UNIX: AtomicU64 = AtomicU64::new(0);
 
@@ -102,7 +102,7 @@ pub enum DedicatedPoolState {
     Connected,
     CreatorRegistered,
     Idle,
-    /// Native level unload in progress (RESETABLE reclaim); not assignable until stabilization elapses.
+    /// Level unload in progress; not assignable until the wait elapses.
     Recycling,
     InUse,
 }
@@ -119,21 +119,20 @@ impl DedicatedPoolState {
     }
 }
 
-/// Fallback wall time when the dedicated never sends `returnDedicatedServerToPool` after RESETABLE.
-/// Prefer the native RPC (Blaze cmd `0x14`) — it clears `unload_requested_at` immediately.
+/// Wait after RESETABLE if `returnDedicatedServerToPool` never arrives.
 const RECYCLE_CMD220_STABILIZATION_SECS: u64 = 60;
 
-/// Suppress duplicate RESETABLE+Removed pushes (quit fires leave-game then removePlayer).
+/// Coalesce duplicate RESETABLE + Removed notifies on quit.
 const RECLAIM_NOTIFY_COALESCE_SECS: u64 = 60;
 
-/// Extra CreateGame deferral when the next assignment targets a different map on a recycled dedicated.
+/// Extra CreateGame delay when a recycled dedicated switches maps.
 const RECYCLE_MAP_SWITCH_CREATE_GAME_EXTRA_MS: u64 = 15_000;
 
 fn promote_recycling_if_ready(e: &mut DedicatedServerEntry) {
     if e.state != DedicatedPoolState::Recycling {
         return;
     }
-    // Native `returnDedicatedServerToPool` marks Idle + clears unload before we get here.
+    // Pool RPC already marked Idle and cleared unload.
     if e.unload_requested_at.is_none() {
         e.state = DedicatedPoolState::Idle;
         e.last_event_unix_secs = now_secs();
@@ -178,13 +177,13 @@ pub struct DedicatedServerEntry {
     pub last_event_unix_secs: u64,
     pub creator_registered: bool,
     pub current_map: Option<String>,
-    /// Map path served before the last RESETABLE unload (for rematch / map-switch detection).
+    /// Map before the last RESETABLE unload.
     #[serde(default)]
     pub previous_map: Option<String>,
-    /// Unix seconds when RESETABLE reclaim unload was last requested for this session.
+    /// When RESETABLE unload was last requested.
     #[serde(default)]
     pub unload_requested_at: Option<u64>,
-    /// LAN/WAN IPs from this dedicated's `updateNetworkInfo` (addresses only — ports are QoS).
+    /// Dedicated `updateNetworkInfo` addresses (ports are QoS).
     #[serde(default)]
     pub network_inip_ip: Option<i32>,
     #[serde(default)]
@@ -193,21 +192,21 @@ pub struct DedicatedServerEntry {
     pub network_exip_ip: Option<i32>,
     #[serde(default)]
     pub network_exip_port: Option<i32>,
-    /// Authoritative game-mesh UDP from Prism `EnginePeerInit` (per-host bind).
+    /// Game-mesh UDP from EnginePeerInit.
     #[serde(default)]
     pub engine_peer_udp_port: Option<i32>,
-    /// Prism managed ServerHost TCP (`-Prism.MsgSysPort`, default 18387).
+    /// ServerHost TCP (`-Prism.MsgSysPort`, default 18387).
     #[serde(default)]
     pub msg_sys_tcp_port: Option<u16>,
-    /// Prism SimuCloud host TCP (`-Prism.SimuCloudPort`, default 18388).
+    /// SimuCloud TCP (`-Prism.SimuCloudPort`, default 18388).
     #[serde(default)]
     pub simu_cloud_tcp_port: Option<u16>,
-    /// Prism-reported QoS (Refracted still binds emulator QoS globally).
+    /// Reported QoS port (emulator QoS still binds globally).
     #[serde(default)]
     pub qos_port: Option<u16>,
 }
 
-/// Seconds to wait before sending cmd 220 after a recent native unload on this dedicated.
+/// Seconds to wait after unload before sending cmd 220.
 pub fn recycle_cmd220_wait_secs(entry: &DedicatedServerEntry) -> u64 {
     entry
         .unload_requested_at
@@ -217,7 +216,7 @@ pub fn recycle_cmd220_wait_secs(entry: &DedicatedServerEntry) -> u64 {
         .unwrap_or(0)
 }
 
-/// Whether this pooled dedicated can be assigned to a new `resetDedicatedServer` right now.
+/// True when this dedicated can take a new `resetDedicatedServer`.
 pub fn is_assignable(entry: &DedicatedServerEntry) -> bool {
     entry.creator_registered
         && recycle_cmd220_wait_secs(entry) == 0
@@ -227,7 +226,7 @@ pub fn is_assignable(entry: &DedicatedServerEntry) -> bool {
         )
 }
 
-/// Extra CreateGame delay when rematching on a recycled dedicated with a different map.
+/// Extra CreateGame delay when rematch uses a different map.
 pub fn recycle_create_game_extra_delay_ms(dedicated_session_id: u64, wanted_map: &str) -> u64 {
     let Some(entry) = get_entry(dedicated_session_id) else {
         return 0;
@@ -334,7 +333,7 @@ fn peer_ip_addr(entry: &DedicatedServerEntry) -> IpAddr {
         .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
 }
 
-/// MsgSys ServerHost TCP for this dedicated (launcher `-Prism.MsgSysPort`).
+/// ServerHost TCP for this dedicated.
 pub fn msg_sys_port(entry: &DedicatedServerEntry) -> u16 {
     entry
         .msg_sys_tcp_port
@@ -342,7 +341,7 @@ pub fn msg_sys_port(entry: &DedicatedServerEntry) -> u16 {
         .unwrap_or(DEDICATED_PING_TCP_PORT)
 }
 
-/// SimuCloud host TCP for this dedicated (launcher `-Prism.SimuCloudPort`).
+/// SimuCloud TCP for this dedicated.
 pub fn simu_cloud_port(entry: &DedicatedServerEntry) -> u16 {
     entry
         .simu_cloud_tcp_port
@@ -372,7 +371,7 @@ fn parse_peer_ip(peer: &str) -> Option<IpAddr> {
         .or_else(|| peer.parse().ok())
 }
 
-/// Hub listen port that 1:1 forwards to this dedicated's ServerHost (`msg_sys - 1`).
+/// Pinned hub port (`msg_sys - 1`) that only splices to this ServerHost.
 pub fn msgsys_hub_listen_port(msg_sys: u16) -> u16 {
     msg_sys.saturating_sub(1).max(1024)
 }
@@ -391,8 +390,7 @@ fn upstream_for_route(route: &ClientMsgsysRoute) -> Option<SocketAddr> {
     msgsys_upstream_for_gid(route.gid)
 }
 
-/// Bind this Blaze client session to one match dedicated. Hub traffic for this persona
-/// splices only to that ServerHost — never another InUse instance.
+/// Bind this persona's hub traffic to the dedicated assigned to `gid`.
 pub fn note_client_msgsys_route(gid: i64, persona_id: i64, client_ip: Option<IpAddr>) {
     if gid <= 0 || persona_id <= 0 {
         return;
@@ -431,7 +429,7 @@ pub fn clear_client_msgsys_routes_for_gid(gid: i64) {
     client_msgsys_routes().lock().retain(|_, r| r.gid != gid);
 }
 
-/// Upstream Prism ServerHost for this match gid.
+/// ServerHost for this match gid.
 pub fn msgsys_upstream_for_gid(gid: i64) -> Option<SocketAddr> {
     let sid = bound_dedicated_for_gid(gid)?;
     upstream_for_dedicated_sid(sid)
@@ -444,8 +442,7 @@ pub fn msgsys_upstream_for_serverhost_port(msg_sys: u16) -> Option<SocketAddr> {
         .map(|e| SocketAddr::new(peer_ip_addr(&e), msg_sys))
 }
 
-/// Resolve ServerHost for a client accepted on the shared `:18386` hub.
-/// Identity only: ClientHello persona / join route. Never "newest InUse".
+/// ServerHost for a client on the shared hub. Uses ClientHello persona / join route.
 pub fn resolve_client_msgsys_upstream(
     peer: SocketAddr,
     persona: Option<u64>,
@@ -463,7 +460,7 @@ pub fn resolve_client_msgsys_upstream(
     }
 
     if peer.ip().is_loopback() {
-        // Loopback without ClientHello: only safe when a single match is unambiguous.
+        // Loopback without ClientHello: only when a single match is live.
         return resolve_unambiguous_msgsys_upstream();
     }
     let matches: Vec<ClientMsgsysRoute> = client_msgsys_routes()
@@ -478,9 +475,8 @@ pub fn resolve_client_msgsys_upstream(
     resolve_unambiguous_msgsys_upstream()
 }
 
-/// When exactly one dedicated ServerHost / join route is live, splice without waiting
-/// for ClientHello. Retail ClientHello is only sent *after* TCP ConnectSuccess — the
-/// shared hub used to peek Hello first and close on timeout → black-screen State 5.
+/// Splice immediately when only one ServerHost / join route is live.
+/// ClientHello arrives after ConnectSuccess, so do not wait for it here.
 pub fn resolve_unambiguous_msgsys_upstream() -> Option<SocketAddr> {
     sync_from_blaze_sessions();
 
@@ -507,7 +503,7 @@ pub fn resolve_unambiguous_msgsys_upstream() -> Option<SocketAddr> {
     None
 }
 
-/// Upstream SimuCloud host for `CreateGame` on this gid.
+/// SimuCloud host for `CreateGame` on this gid.
 pub fn simucloud_upstream_for_gid(gid: i64) -> SocketAddr {
     if let Some(sid) = bound_dedicated_for_gid(gid) {
         if let Some(e) = get_entry(sid) {
@@ -544,12 +540,12 @@ fn standby_gid_for_session(blaze_session_id: u64) -> i64 {
     10_000 + (blaze_session_id % 900_000) as i64
 }
 
-/// Pool namespace gids (10xxx): browser row, joinGame target, and resetDedicatedServer match id — one gid per session.
+/// Pool gids (10xxx): browser row, joinGame target, and resetDedicatedServer match id.
 pub fn is_pool_standby_gid(gid: i64) -> bool {
     gid >= 10_000
 }
 
-/// Registered pool row's browser/match gid (10xxx), if any.
+/// Registered pool row's browser/match gid (10xxx).
 pub fn registered_pool_gid() -> Option<i64> {
     sync_from_blaze_sessions();
     pool()
@@ -615,19 +611,18 @@ fn parse_peer_ipv4(peer: &str) -> i32 {
         .unwrap_or(0)
 }
 
-/// Fallback game UDP when EnginePeer bind port is not yet known.
-/// Prefer [`DedicatedServerEntry::engine_peer_udp_port`] (Prism EnginePeerInit).
+/// Fallback game UDP until EnginePeerInit reports a bind.
 pub const DEFAULT_DEDICATED_GAME_UDP_PORT: i32 = 25200;
 
-/// Deprecated alias — use [`DEFAULT_DEDICATED_GAME_UDP_PORT`] or discovered entry ports.
+/// Alias of [`DEFAULT_DEDICATED_GAME_UDP_PORT`].
 pub const DEDICATED_GAME_UDP_PORT: i32 = DEFAULT_DEDICATED_GAME_UDP_PORT;
 
-/// Windows dynamic/private range — Blaze QoS `updateNetworkInfo` PORTs live here; EnginePeer does not.
+/// Ephemeral UDP range used by Blaze QoS `updateNetworkInfo` PORTs.
 fn is_qos_ephemeral_udp_port(port: i32) -> bool {
     (49152..=65535).contains(&port)
 }
 
-/// Game-mesh listen port (EnginePeer / dedicated pool UDP), not a QoS reflection port.
+/// Game-mesh listen port, not a QoS reflection port.
 fn is_usable_dedicated_game_udp_port(port: i32) -> bool {
     port > 0 && port <= 65535 && !is_qos_ephemeral_udp_port(port)
 }
@@ -722,7 +717,7 @@ fn stash_pending_engine_peer(
         .filter(|s| !s.is_empty())
         .map(|s| peer_host_key(s));
     let mut q = pending_engine_peer().lock();
-    // Replace same-host, same-game-UDP, or orphan (no host) pending so we keep the latest bind.
+    // Keep the latest bind for the same host / UDP, or an orphan pending.
     q.retain(|p| {
         if p.port == port {
             return false;
@@ -750,7 +745,7 @@ fn stash_pending_engine_peer(
     );
 }
 
-/// Attach any stashed EnginePeer ports to matching / sole pool entries.
+/// Attach stashed EnginePeer ports to matching or sole pool entries.
 fn apply_pending_engine_peers_locked(m: &mut HashMap<u64, DedicatedServerEntry>) {
     let mut q = pending_engine_peer().lock();
     if q.is_empty() || m.is_empty() {
@@ -807,7 +802,7 @@ fn apply_pending_engine_peers_locked(m: &mut HashMap<u64, DedicatedServerEntry>)
             }
         }
         if !applied {
-            // Drop stale pending (>10 min) so multi-host queues do not grow forever.
+            // Drop pending older than 10 minutes.
             if now_secs().saturating_sub(pending.noted_at_unix) < 600 {
                 kept.push(pending);
             }
@@ -816,7 +811,7 @@ fn apply_pending_engine_peers_locked(m: &mut HashMap<u64, DedicatedServerEntry>)
     *q = kept;
 }
 
-/// Result of Prism `/cnc/dedicated-engine-peer` — Applied now, or Pending until pool registers.
+/// Result of `/cnc/dedicated-engine-peer`: applied now, or pending until the pool registers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnginePeerNote {
     Applied { session: u64 },
@@ -824,8 +819,8 @@ pub enum EnginePeerNote {
     Rejected,
 }
 
-/// Unified EnginePeer report from Prism (session and/or peer optional).
-/// `msg_sys` / `simu_cloud` / `qos` are Prism listen ports for this instance.
+/// EnginePeer report (session and/or peer optional).
+/// `msg_sys` / `simu_cloud` / `qos` are listen ports for this instance.
 pub fn note_dedicated_engine_peer_report(
     blaze_session_id: Option<u64>,
     peer_host: Option<&str>,
@@ -1093,9 +1088,8 @@ pub fn note_dedicated_map(blaze_session_id: u64, map_path: Option<&str>) {
     }
 }
 
-/// Store LAN/WAN IPs from a dedicated Blaze session's `updateNetworkInfo`.
-/// Ports from that RPC are almost always QoS ephemeral — ignored unless they look like a listen port.
-/// Never call this with the joining client's QoS snapshot.
+/// Store dedicated `updateNetworkInfo` addresses. Ignore QoS ephemeral ports.
+/// Do not call with the joining client's QoS snapshot.
 pub fn note_dedicated_network(
     blaze_session_id: u64,
     inip_ip: Option<i32>,
@@ -1117,8 +1111,7 @@ pub fn note_dedicated_network(
     if let Some(ip) = exip_ip.filter(|&v| v != 0) {
         e.network_exip_ip = Some(ip);
     }
-    // Prefer EnginePeerInit for game UDP. Only keep Blaze PORT values that are not QoS ephemeral
-    // (e.g. a future dedicated that puts EnginePeer in updateNetworkInfo).
+    // Keep EnginePeerInit for game UDP. Only keep Blaze PORTs that look like a listen port.
     let usable_inip = inip_port.filter(|&p| is_usable_dedicated_game_udp_port(p));
     let usable_exip = exip_port.filter(|&p| is_usable_dedicated_game_udp_port(p));
     if usable_inip.is_none() {
@@ -1155,7 +1148,7 @@ pub fn note_dedicated_network(
     );
 }
 
-/// Record Prism `EnginePeerInit` UDP bind for this dedicated (authoritative HNET game port).
+/// Record EnginePeerInit UDP bind (HNET game port).
 pub fn note_dedicated_engine_peer_udp(blaze_session_id: u64, port: i32) -> bool {
     if !is_usable_dedicated_game_udp_port(port) {
         return false;
@@ -1178,7 +1171,7 @@ pub fn note_dedicated_engine_peer_udp(blaze_session_id: u64, port: i32) -> bool 
     true
 }
 
-/// Match a dedicated by Blaze peer host (e.g. `10.0.0.230`) when Prism only knows the listen IP.
+/// Match a dedicated by Blaze peer host when the report only has a listen IP.
 pub fn note_dedicated_engine_peer_udp_by_peer_host(peer_host: &str, port: i32) -> Option<u64> {
     if !is_usable_dedicated_game_udp_port(port) {
         return None;
@@ -1215,8 +1208,7 @@ pub fn note_dedicated_engine_peer_udp_by_peer_host(peer_host: &str, port: i32) -
     Some(sid)
 }
 
-/// When Prism only posts `port=` (no peer/session), attach to the sole pool dedicated
-/// that still needs an EnginePeer port (or the only pool entry).
+/// When the report is `port=` only, attach to the sole pool dedicated that still needs it.
 pub fn note_dedicated_engine_peer_udp_sole(port: i32) -> Option<u64> {
     if !is_usable_dedicated_game_udp_port(port) {
         return None;
@@ -1249,7 +1241,7 @@ pub fn note_dedicated_engine_peer_udp_sole(port: i32) -> Option<u64> {
 }
 
 fn resolve_dedicated_game_ports(entry: &DedicatedServerEntry) -> (i32, i32) {
-    // Claim any pending report that matches this dedicated before reading ports.
+    // Claim any pending report for this dedicated before reading ports.
     {
         let mut m = pool().lock();
         apply_pending_engine_peers_locked(&mut m);
@@ -1301,7 +1293,7 @@ fn host_context_from_entry(entry: &DedicatedServerEntry) -> DedicatedHostContext
         .filter(|&ip| ip != 0)
         .unwrap_or(peer_ip);
     let (inip_port, exip_port) = resolve_dedicated_game_ports(entry);
-    // Prefer this dedicated's own reported EXIP/INIP addresses; never the joining client's QoS.
+    // Use this dedicated's EXIP/INIP; never the joining client's QoS.
     let exip_ip = entry
         .network_exip_ip
         .filter(|&ip| ip != 0)
@@ -1318,8 +1310,7 @@ fn host_context_from_entry(entry: &DedicatedServerEntry) -> DedicatedHostContext
 }
 
 pub fn host_for_gid(gid: i64) -> Option<DedicatedHostContext> {
-    // Always rebuild from the live entry so HNET ports pick up discovered game UDP.
-    // Never return a stale assignment.host snapshot that may still carry a client QoS port.
+    // Rebuild from the live entry so HNET uses discovered game UDP.
     if let Some(a) = assignments().lock().get(&gid).cloned() {
         if let Some(entry) = get_entry(a.dedicated_session_id) {
             return Some(host_context_from_entry(&entry));
@@ -1426,8 +1417,7 @@ pub fn orchestrate_client_reset(
         .map(|p| p as i64)
         .or_else(|| dedicated_identity_for_session(dedicated_sid).map(|(p, _)| p as i64))
         .unwrap_or(host.persona_id);
-    // Blaze GMGR only inserts into mGameMap from NotifyGameSetup → createLocalGame.
-    // NotifyGameReset / NotifyPlayerJoining look up by GID and log "unknown game" if Setup never ran.
+    // Setup before Reset/Joining so the dedicated has this GID.
     match super::build_dedicated_host_notify_game_setup(
         gid,
         host_persona,
@@ -1555,8 +1545,7 @@ fn enqueue_dedicated_match_pushes(
     ded_pushes: Vec<super::fireframe::OutgoingPush>,
 ) {
     super::fireframe::enqueue_pending_pushes(dedicated_sid, ded_pushes);
-    // Wake the dedicated's read loop right away -- its session task is usually blocked in
-    // stream.read() and would otherwise only flush these on its next ping (~15s).
+    // Wake the dedicated read loop; otherwise these wait until the next ping.
     let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
     super::msgsystem::log::log_orch_milestone(&format!(
         "Dedicated match pushes queued (game {gid}, session #{dedicated_sid})"
@@ -1739,9 +1728,7 @@ pub fn sync_from_blaze_sessions() {
             && (entry.creator_registered || is_pool_candidate(entry.clnt.as_deref()))
     });
     for s in sessions {
-        // A session that already completed registerDynamicDedicatedServerCreator stays in the pool
-        // blaze-main's preAuth CINF.CLNT, and evicting a registered creator here is what made
-        // host_for_gid/acquire_idle_creator return None right after orchestrate assigned it.
+        // Keep registered creators even if preAuth CLNT is missing.
         let already_registered = m.get(&s.id).map(|e| e.creator_registered).unwrap_or(false);
         if !already_registered && !is_pool_candidate(s.clnt.as_deref()) {
             m.remove(&s.id);

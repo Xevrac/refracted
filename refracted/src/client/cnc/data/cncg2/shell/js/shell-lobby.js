@@ -12,10 +12,7 @@
     var MINIMAP_DIR = '/cnc/utfwin/images/MiniMap/';
     var LOBBY_MINIMAP_DIR = '/cncg2/shell/view/image/lobby-minimaps/';
     var MAP_THUMB = MINIMAP_DIR + 'MissingMap.png';
-    // UTFWin MiniMaps are 512² heightfield shots; playable land is a small centre
-    // island. Lobby PNGs in lobby-minimaps/ are those islands cropped to fill.
-    // Pip UV uses map.world (that crop), not ±512 — otherwise pips sit in the
-    // black padding. In-game MiniMap still uses CAMEXT / WorldAABB.
+    // UTFWin MiniMaps are 512²; lobby PNGs crop the playable island. Pip UV uses map.world.
     var WORLD_XZ = { minX: -512, maxX: 512, minZ: -512, maxZ: 512 };
     var LOCAL_MINIMAPS = {
         'Alpha_Tutorial.png': 1,
@@ -53,7 +50,7 @@
             forceFaction: 'EU',
             texCrop: { u0: 0.086, v0: 0.210, u1: 0.914, v1: 0.790 },
             world: { minX: -423.9, maxX: 423.9, minZ: -297.0, maxZ: 297.0 },
-            // frostex ebx layer2_design RtsCameraEntityData.StartPoint (SP02 unused).
+            // StartPointID_01. SP02 unused.
             starts: [
                 { id: 1, x: 307.116, z: 197.373, u: 0.961, v: 0.927 }
             ]
@@ -70,9 +67,7 @@
             accent: '#c07828',
             texCrop: { u0: 0.217, v0: 0.084, u1: 0.799, v1: 0.910 },
             world: { minX: -289.8, maxX: 306.2, minZ: -419.8, maxZ: 426.0 },
-            // Hand u/v = pip locations (do not worldToUv — that moved the pips).
-            // Design id/x/z stay with StartPointID; only 1↔2 UVs swapped so labels
-            // match game (pick top-right was SP1 / bottom-left spawn).
+            // u/v = pip locations (not worldToUv).
             starts: [
                 { id: 1, x: -179.934, z: 315.258, u: 0.175, v: 0.859 },
                 { id: 2, x: 179.934, z: -309.879, u: 0.829, v: 0.131 }
@@ -90,9 +85,7 @@
             accent: '#2a7ab8',
             texCrop: { u0: 0.318, v0: 0.299, u1: 0.693, v1: 0.703 },
             world: { minX: -379.7, maxX: 379.7, minZ: -379.7, maxZ: 379.7 },
-            // Design id/x/z = RtsCamera StartPointID. Prior Excavation-style 1↔2 UV
-            // invert put label "2" bottom-left while SP2 spawns top-right (and vice
-            // versa). UVs follow the design corners on the lobby crop.
+            // id/x/z = StartPointID. u/v follow design corners on the lobby crop.
             starts: [
                 { id: 1, x: -276.257, z: 321.746, u: 0.126, v: 0.911 },
                 { id: 2, x: 276.257, z: -321.746, u: 0.841, v: 0.098 }
@@ -110,9 +103,7 @@
             accent: '#b83a3a',
             texCrop: { u0: 0.311, v0: 0.303, u1: 0.689, v1: 0.693 },
             world: { minX: -396.4, maxX: 394.4, minZ: -383.3, maxZ: 407.6 },
-            // Design RtsCamera XZ (frostex). UVs = worldToUv — prior 1↔4 hand swap put
-            // label "4" on the north plateau while id 4's camera is west (and YZX
-            // mis-detect parked freeCam mid-map). Pick 1 → (-113,347) north.
+            // id/x/z = camera. u/v = worldToUv.
             starts: [
                 { id: 1, x: -112.923, z: 347.257, u: 0.358, v: 0.076 },
                 { id: 2, x: 93.062, z: -322.937, u: 0.620, v: 0.892 },
@@ -132,8 +123,7 @@
             accent: '#6a5ab0',
             texCrop: { u0: 0.219, v0: 0.215, u1: 0.783, v1: 0.762 },
             world: { minX: -447.6, maxX: 452.9, minZ: -448.9, maxZ: 451.6 },
-            // Same team-line invert as Overpass: keep Design id/x/z, swap 1↔5 and
-            // 2↔6 UVs only (pick old "6" sat on Design SP6 which is the old "2" crater).
+            // id/x/z = StartPointID. u/v swapped on 1↔5 and 2↔6.
             starts: [
                 { id: 1, x: -313.067, z: 84.901, u: 0.21, v: 0.59 },
                 { id: 2, x: 97.692, z: -380.222, u: 0.61, v: 0.14 },
@@ -154,10 +144,7 @@
             image: minimapUrl('DM_Overpass_3v3_JKS.png'),
             accent: '#3a9a8a',
             world: { minX: -453.8, maxX: 448.8, minZ: -443.8, maxZ: 458.8 },
-            // Hand u/v = pip *locations* (do not replace with worldToUv — that rotates the
-            // cluster). id/x/z = Design StartPointID + camera. Numbering was inverted on
-            // the team lines vs Design (pick old "1" → Design SP1 sat on the old "5" spot):
-            // swap 1↔5 and 2↔6 UVs only; 3/4 stay.
+            // u/v = pip locations (not worldToUv). 1↔5 and 2↔6 UVs swapped.
             starts: [
                 { id: 1, x: -340, z: 180, u: 0.189, v: 0.670 },
                 { id: 2, x: 335, z: -155, u: 0.848, v: 0.334 },
@@ -168,9 +155,7 @@
             ]
         },
         {
-            // LevelDescriptionAsset 8f9625ea — MP/PVE FirstPlayable_MPHorde_Final.
-            // Internal name is Horde; player-facing mode is Onslaught (UI/SFX/ONSLAUGHT2P).
-            // EBX Description.Name is empty — "Canyon Basin" is a roster label from the cliff-ringed layout.
+            // FirstPlayable_MPHorde_Final — player-facing mode is Onslaught.
             id: 'onslaught-fp',
             label: 'Canyon Basin',
             path: 'Levels/MP/PVE/FirstPlayable_MPHorde_Final/FirstPlayable_MPHorde_Final',
@@ -181,7 +166,7 @@
             image: minimapUrl('FirstPlayable_MPHorde_Final.png'),
             accent: '#b84a2a',
             world: { minX: -512, maxX: 512, minZ: -512, maxZ: 512 },
-            // Human seats only (SP03–05 are AI_enemy / NeutralPlayer partitions).
+            // Human seats only.
             starts: [
                 { id: 1, x: -127.090, z: 236.141, u: 0.871, v: 0.139 },
                 { id: 2, x: -248.085, z: 118.928, u: 0.129, v: 0.857 }
@@ -421,9 +406,7 @@
         if (!sp) {
             return { u: 0.5, v: 0.5 };
         }
-        // Hand u/v are lobbied landmark positions (authoritative for local PNGs).
-        // World x/z drive wire `_startpoint` / Design camera only — do not relocate pips
-        // via worldToUv when u/v exist (that rotated Overpass ~90°).
+        // u/v are pip positions. x/z drive `_startpoint` only.
         if (sp.u != null && sp.v != null) {
             return { u: sp.u, v: sp.v };
         }
@@ -842,7 +825,7 @@
             });
         }
 
-        // Drop picks that are not on the current map (e.g. Overpass 5 → Alpha Tutorial).
+        // Drop picks that are not on the current map.
         function clampStartpointsToMap(syncInvalid) {
             eachOccupiedSlot(function (slot) {
                 var id = parseStartId(slot.startpoint);
@@ -947,8 +930,7 @@
                 return;
             }
             slot.startpoint = next;
-            // Hold off roster clobber until server confirms; stale init/join POSTs can
-            // arrive 5–10s later with startpoint=0 and must not win over this pick.
+            // Hold roster until the server confirms; stale init/join POSTs must not overwrite.
             $scope._startpointHoldUntil = Date.now() + 15000;
             syncPlayerAttrsToServer(slot, true);
         };
@@ -2389,8 +2371,7 @@
                 }
                 CncProbe._inBlazeGame = false;
                 $scope._starting = false;
-                // Backend unreachable ⇒ dedicated/session is gone; leave the room instead of
-                // leaving the player stuck in a dead lobby (soft errors like "no idle" stay).
+                // Backend unreachable: leave the room. Soft errors like "no idle" stay.
                 if (isBackendCommFail(msg) && $scope._joinedGameroom) {
                     $scope._startError = '';
                     forceServerLostKick(msg);

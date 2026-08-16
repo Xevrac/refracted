@@ -135,7 +135,7 @@ pub fn clear_blaze_push_flags(gid: i64) {
     clear_orchestration(gid);
 }
 
-/// Clears post-join one-shots (pregame/ingame/game-ready) but keeps join-setup until reset notify.
+/// Clears post-join one-shots; keeps join-setup until reset.
 pub fn clear_blaze_one_shot_flags(gid: i64) {
     blaze_pregame_pushed().lock().remove(&gid);
     blaze_ingame_pushed().lock().remove(&gid);
@@ -217,10 +217,7 @@ fn mesh_active_connected_and_game_ready_pushes(
     Some(out)
 }
 
-/// Push AuthToken (joining client) + GameReady attrib change to the pooled dedicated session.
-/// `onGameAttributeUpdated` Join path reads AuthToken from the Game's player object. On dedicated
-/// host-injection that player is the *joining client* (external roster entry), not the host
-/// persona — AuthToken aimed at the host is dropped as "unknown local player".
+/// Push AuthToken for the joining client, then GameReady, to the dedicated.
 fn enqueue_game_ready_to_dedicated(gid: i64) {
     if games().lock().get(&gid).map(|g| g.is_standby).unwrap_or(true) {
         crate::debug_println!(
@@ -354,10 +351,8 @@ fn finish_client_join_release(
             out.extend(pushes);
         }
     } else {
-        // Dedicated Blaze mesh is UDP CANA to the dedicated's discovered EnginePeer port.
-        // Match sim is MsgSys TCP;
-        // the client often never emits updateMeshConnection, so synthesize ACTIVE_CONNECTED
-        // after InitiateConnections has been delivered (not same-tick — empty mesh AV).
+        // Mesh is UDP CANA to EnginePeer. Sim is MsgSys TCP, so the client
+        // often never reports updateMeshConnection — send ACTIVE_CONNECTED after InitiateConnections.
         let pid = resolve_joining_client_pid(gid, client_sid);
         schedule_synthetic_client_mesh_if_needed(gid, client_sid, pid);
     }
@@ -382,12 +377,9 @@ fn resolve_joining_client_pid(gid: i64, client_sid: u64) -> i64 {
         .unwrap_or(1000)
 }
 
-/// CNC dedicated: forge `NotifyGamePlayerStateChange(ACTIVE_CONNECTED)` when the joining
-/// client never reports `updateMeshConnection`. Unblocks `createGameNetworkCb` / lobby
-/// "Starting game" without depending on Ghost/UDP mesh success.
+/// Send `NotifyGamePlayerStateChange(ACTIVE_CONNECTED)` if the client never reports mesh.
 fn schedule_synthetic_client_mesh_if_needed(gid: i64, client_sid: u64, pid: i64) {
     tokio::spawn(async move {
-        // Let InitiateConnections + mesh create + finalizeGameCreation settle first.
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         let already = orchestration()
             .lock()
@@ -525,7 +517,7 @@ pub fn on_client_mesh_update(gid: i64, pid: i64) -> MeshUpdateResult {
     entry.mesh_active_connected = true;
     drop(m);
     let mut out = mesh_active_connected_and_game_ready_pushes(gid, pid).unwrap_or_default();
-    // JoinCompleted must not share a tick with InitiateConnections (empty mesh list → AV at +0x58).
+    // JoinCompleted after InitiateConnections, not on the same tick.
     if let Ok(join_done) = super::fireframe::pushes_player_join_completed(gid) {
         if let Some(connected_at) = out
             .iter()
@@ -615,7 +607,7 @@ pub fn on_simucloud_match_ready(gid: i64) -> Option<(u64, Vec<super::fireframe::
         super::msgsystem::log::log_orch_debug(&format!(
             "SimuCloud ready; waiting for client mesh before GameReady (game {gid})"
         ));
-        // Safety net: if CANA never reports updateMeshConnection, forge it now.
+        // If the client never reports updateMeshConnection, send ACTIVE_CONNECTED now.
         let pid = resolve_joining_client_pid(gid, client_sid);
         schedule_synthetic_client_mesh_if_needed(gid, client_sid, pid);
         return Some((client_sid, Vec::new()));
@@ -645,7 +637,7 @@ pub fn blaze_pregame_already_pushed(gid: i64) -> bool {
     blaze_pregame_pushed().lock().contains(&gid)
 }
 
-/// Client received `NotifyGameSetup` from `joinGame` (browser/standby row).
+/// True after joinGame `NotifyGameSetup`.
 pub fn clear_blaze_join_setup_pushed(gid: i64) {
     blaze_join_setup_pushed().lock().remove(&gid);
 }
@@ -679,7 +671,7 @@ pub fn try_mark_game_ready_pushed(gid: i64) -> bool {
     game_ready_pushed().lock().insert(gid)
 }
 
-/// Retail default when the lobby has not chosen a map yet.
+/// Default map when the lobby has not chosen one.
 pub const DEFAULT_MAP_PATH: &str = "Levels/SP/Alpha_Tutorial/Alpha_Tutorial";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -757,7 +749,7 @@ pub struct CncGame {
     pub uuid: String,
     pub phase: GamePhase,
     pub map_path: String,
-    /// Design start slots for this map (from lobby `select-map`); 0 = infer from roster.
+    /// Start slots for this map (`select-map`); 0 = infer from roster.
     pub start_count: i32,
     pub dedicated_session_id: Option<u64>,
     pub is_standby: bool,
@@ -1243,7 +1235,7 @@ fn startpoint_from_attrs(attrs: &IndexMap<String, String>) -> i32 {
         .unwrap_or(0)
 }
 
-/// Live roster row plus pending lobby overlays (pid=0 host bucket, then exact persona).
+/// Live roster plus pending lobby overlays.
 pub fn effective_startpoint_for_player(gid: i64, player: &CncPlayer) -> i32 {
     let live = startpoint_from_attrs(&player.attribs);
     if live > 0 {
@@ -1313,7 +1305,7 @@ fn startpoint_capacity_for_game(
     infer_startpoint_capacity(pending, game)
 }
 
-/// Resolve lobby `?` (0) and duplicate picks to unique Design start ids before CreateGame.
+/// Resolve lobby `?` and duplicate picks to unique start ids before CreateGame.
 pub fn resolve_startpoints_before_create(gid: i64) {
     let pending_snapshot = pending_player_attrs().lock().get(&gid).cloned();
     let map_path = get_map_path(gid);
@@ -1425,7 +1417,7 @@ pub fn flush_lobby_startpoints(gid: i64) {
     );
 }
 
-/// Zero any lobby startpoint pick outside `1..=capacity` (map change / select-map).
+/// Clamp lobby startpoint picks to `1..=capacity`.
 pub fn clamp_lobby_startpoints(gid: i64, capacity: i32) {
     if capacity <= 0 {
         return;
@@ -1483,9 +1475,7 @@ fn strip_poisoned_host_ai_pending(gid: i64) {
 }
 
 fn merge_pending_into_player(gid: i64, player: &mut CncPlayer) {
-    // Merge pid=0 (pre-auth host) then exact persona so late persona sync wins keys.
-    // pid=0 must never carry `_isai=1` onto a human — that was the Start Battle
-    // "connectivity to the server was lost" false kick (AI slot overwrote the host).
+    // Overlay pid=0 (pre-auth host) then exact persona. Do not copy `_isai=1` onto a human.
     let overlays = {
         let pending = pending_player_attrs().lock();
         let mut layers = Vec::new();
@@ -1664,9 +1654,7 @@ fn reapply_all_pending_attrs(gid: i64) {
     }
 }
 
-/// Record lobby-selected player attrs for a gid/persona. Survives `seed_from_reset` and is
-/// applied into live roster rows when present. `persona_id == 0` targets the host placeholder
-/// unless `_isai=1` (then a synthetic AI row is upserted — never the host).
+/// Record lobby player attrs. `persona_id == 0` is the host unless `_isai=1`.
 pub fn set_pending_player_attrs(gid: i64, mut persona_id: i64, attrs: IndexMap<String, String>) {
     if attrs.is_empty() {
         return;
@@ -2477,7 +2465,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
     })
 }
 
-/// GID for resetDedicatedServer when the wire omits RGID — reuse the host pool lobby row (10xxx).
+/// GID for resetDedicatedServer when the wire omits RGID (pool lobby 10xxx).
 pub fn resolve_host_reset_gid() -> i64 {
     let host = host_persona();
     let best_pool_lobby: Option<i64> = {
@@ -2608,8 +2596,7 @@ pub fn get_map_path(gid: i64) -> String {
         .unwrap_or_default()
 }
 
-/// Map path for the active lobby session -- used when the MessageSystem client connects before we
-/// know which gid they belong to (retail skirmish uses gid 1).
+/// Map path for the active lobby session when gid is not known yet.
 pub fn active_map_path() -> String {
     let path = get_map_path(1);
     if !path.is_empty() {
@@ -2730,9 +2717,7 @@ pub fn take_last_add_queued() -> Option<(i64, CncPlayer)> {
         .take()
 }
 
-/// Add the joining **client** (non-AI) to the game roster if not already present, and return the
-/// roster entry. Mirrors [`add_queued_player`] but for a real player driving `NotifyPlayerJoining`
-/// -- the game is seeded with the host only, so without this the client is never in the roster.
+/// Add the joining client to the roster if missing.
 pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Option<CncPlayer> {
     let is_standby = games().lock().get(&gid).map(|g| g.is_standby).unwrap_or(false);
     if !is_standby {
@@ -2875,8 +2860,7 @@ pub fn build_notify_player_attrib_change(
     pid: i64,
     attribs: &IndexMap<String, String>,
 ) -> Vec<u8> {
-    // Packed-tag ascending order (ATTR < GID < PID) -- same visitation rule as CDAT.
-    // Emitting GID/PID first leaves ATTR unvisited → client logs ATTR=[] and AuthToken stays null.
+    // Packed-tag order ATTR, GID, PID so ATTR is visited.
     fn packed_tag(tag: &str) -> u32 {
         let t = TdfEncoder::make_tag(tag);
         ((t[0] as u32) << 16) | ((t[1] as u32) << 8) | (t[2] as u32)
@@ -3011,8 +2995,7 @@ pub fn build_notify_player_custom_data_change(
         }
     }
     ensure_auth_token_in_custom_data(&mut blobs);
-    // Encoding it as MAP (0x05) breaks visitation so GID/PID stay 0 → "unknown game(0)".
-    // Prefer AuthToken bytes as the blob body (CNC join uses player ATTR for the string).
+    // Encode AuthToken as a blob, not MAP, so GID/PID still visit.
     let cdat_bytes = blobs
         .get("AuthToken")
         .cloned()
@@ -3087,14 +3070,14 @@ fn append_pros_core_fields(out: &mut Vec<u8>, player: &CncPlayer, gid: i64, gfgd
     }
 }
 
-/// `NotifyGameSetup::PROS` -- minimal row (no `BLOB` / empty `PATT`; persona on `TIME` @ +208).
+/// `NotifyGameSetup::PROS` — minimal row.
 pub fn build_notify_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
     let mut out = Vec::new();
     append_pros_core_fields(&mut out, player, gid, false);
     out
 }
 
-/// `getFullGameData::PROS` -- extended retail row (`PNET` NetworkAddress union after `PID`).
+/// `getFullGameData::PROS` — extended row (`PNET` after `PID`).
 pub fn build_gfgd_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
     let mut out = Vec::new();
     append_pros_core_fields(&mut out, player, gid, true);
@@ -3410,7 +3393,7 @@ pub fn players_for_gid(gid: i64) -> Vec<CncPlayer> {
         .unwrap_or_default()
 }
 
-/// Live match gids where this human persona is on the roster (MsgSys hub routing).
+/// Live match gids for this human persona (MsgSys hub routing).
 pub fn gids_for_human_persona(persona_id: i64) -> Vec<i64> {
     if persona_id <= 0 {
         return Vec::new();

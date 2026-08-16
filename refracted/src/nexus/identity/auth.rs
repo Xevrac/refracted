@@ -1,8 +1,4 @@
-//! MySQL session credentials: account secret, opaque token, JWT `jti`.
-//!
-//! Identity on the wire is **whatever the `auth_sessions` row says**, not whatever the
-//! client claims. A forged JWT payload cannot switch `user_id` / `persona_id`.
-//! Login/logout will call [`IdentityStore::issue_session`] / [`IdentityStore::revoke_session_by_token`].
+//! Session credentials: secret, token, JWT `jti`. Identity comes from the `auth_sessions` row.
 
 use mysql::params;
 use mysql::prelude::Queryable;
@@ -12,7 +8,7 @@ use super::store::{BoundSession, IdentityStore};
 
 const SESSION_TTL_SECS: i64 = 259_200; // 3 days, matches issued JWT exp
 
-/// Credentials returned once at login. Store hashes only after this.
+/// Credentials returned once at login. Store hashes only.
 #[derive(Debug, Clone)]
 pub struct IssuedCredentials {
     pub user_id: i64,

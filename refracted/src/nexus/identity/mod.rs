@@ -1,9 +1,7 @@
-//! Nexus identity: accounts (`users`) and attached `personas`.
+//! Nexus identity: `users` and attached `personas`.
 //!
-//! - **Desktop:** JSON / manual personas in `{data}/settings.json` (Settings → Accounts).
-//! - **Headless `datasource=json`:** same JSON personas, **localized testing only**.
-//! - **Headless `datasource=mysql`:** no JSON/manual personas. Game clients must
-//!   authenticate before occupying a persona / joining a session (login/logout later).
+//! Desktop and headless `datasource=json` use JSON personas. Headless `datasource=mysql`
+//! requires client authentication (login/logout later).
 
 mod migrate;
 mod store;
@@ -15,7 +13,7 @@ pub use auth::{assert_bound_identity, IssuedCredentials};
 use crate::common::app_env::{AppEnv, Datasource};
 
 static IDENTITY: parking_lot::Mutex<Option<IdentityStore>> = parking_lot::Mutex::new(None);
-/// Fail closed: JSON personas stay off until boot explicitly enables them.
+/// JSON personas stay off until boot enables them.
 static JSON_PERSONAS_ALLOWED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 static POLICY_LOCKED: std::sync::atomic::AtomicBool =
@@ -32,33 +30,32 @@ fn set_json_personas(allowed: bool) {
     JSON_PERSONAS_ALLOWED.store(allowed, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// Desktop, or headless `datasource=json` (localized testing). No-op after [`lock_identity_policy`].
+/// Desktop, or headless `datasource=json`. No-op after [`lock_identity_policy`].
 pub(crate) fn enable_json_personas() {
     set_json_personas(true);
 }
 
-/// Headless production (`datasource=mysql`): JSON/manual personas are off.
+/// Headless `datasource=mysql`: JSON personas are off.
 pub(crate) fn disable_json_personas() {
     set_json_personas(false);
 }
 
-/// Freeze identity mode for process lifetime so a later call cannot flip mysql → json.
+/// Freeze identity mode for process lifetime.
 pub(crate) fn lock_identity_policy() {
     POLICY_LOCKED.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// `true` on desktop and on headless only when `datasource=json`.
+/// True on desktop and on headless `datasource=json`.
 pub fn json_personas_allowed() -> bool {
     JSON_PERSONAS_ALLOWED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
-/// Game client joining a session must be logged in. True on headless mysql.
-/// Login/logout is not implemented yet; this is the policy gate.
+/// Join requires login on headless mysql.
 pub fn client_join_requires_login() -> bool {
     !json_personas_allowed()
 }
 
-/// Connect to MySQL and run identity migrations. Does not import JSON profiles.
+/// Connect to MySQL and run identity migrations.
 pub fn init_mysql_identity(env: &AppEnv) -> Result<(), String> {
     let store = IdentityStore::open_mysql(&env.mysql)?;
     store.migrate()?;
@@ -76,8 +73,7 @@ pub fn current_identity_store() -> Option<IdentityStore> {
     IDENTITY.lock().clone()
 }
 
-/// Occupy a persona on mysql: the presented token/JWT must already be bound to that user+persona.
-/// JSON/desktop skips this (localized Xevrac profile). Login will issue the token later.
+/// Bind a mysql client to a user+persona using the presented token. JSON/desktop skips this.
 pub fn bind_mysql_client(
     presented: &str,
     claimed_user: i64,

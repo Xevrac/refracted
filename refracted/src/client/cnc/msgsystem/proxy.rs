@@ -1,7 +1,5 @@
-﻿//! Transparent TCP bridge between game `ClientHost` and the assigned dedicated Prism
-//! `ServerHost` (`-Prism.MsgSysPort`, default 18387). When that dedicated is not listening,
-//! the hub closes the client connection (Prism owns production ServerHost -- no Refracted
-//! join substitute).
+﻿//! Transparent TCP bridge between game `ClientHost` and the assigned dedicated
+//! `ServerHost` (`-Prism.MsgSysPort`, default 18387). Close if that dedicated is not listening.
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -25,8 +23,7 @@ pub const DEDICATED_SERVERHOST_PORT: u16 = 18387;
 
 const UPSTREAM_CONNECT_TIMEOUT: Duration = Duration::from_millis(200);
 const UPSTREAM_RETRY_INTERVAL: Duration = Duration::from_millis(100);
-/// Wait for Prism managed ServerHost (load-complete / cmd 220). Keep under client connect
-/// budget but long enough for CLR ExecuteInDefaultAppDomain on a cold dedicated.
+/// Wait for ServerHost (load-complete / cmd 220).
 const UPSTREAM_WAIT_BUDGET: Duration = Duration::from_secs(8);
 const RELAY_CHUNK: usize = 4096;
 
@@ -62,7 +59,7 @@ pub async fn try_connect_upstream_to(upstream: SocketAddr) -> Option<TcpStream> 
     None
 }
 
-/// Buffer client bytes until `ClientHello` so the hub can bind this TCP to one match session.
+/// Buffer until `ClientHello` so this TCP can bind to one match session.
 pub async fn peek_client_hello_persona(
     client: &mut TcpStream,
 ) -> std::io::Result<(Vec<u8>, Option<u64>)> {

@@ -44,8 +44,7 @@ pub fn init_log_line_sender(tx: std::sync::mpsc::Sender<LogLine>) {
     let _ = LOG_LINE_TX.set(tx);
 }
 
-/// True when the desktop GUI registered a Shell log drain (`init_log_line_sender`).
-/// Headless / `rfrcli` leave this unset so compact Blaze/RTS upserts can mirror to tracing.
+/// True when the desktop GUI registered a Shell log drain.
 pub fn has_log_line_consumer() -> bool {
     LOG_LINE_TX.get().is_some()
 }
@@ -268,8 +267,7 @@ pub fn enable_windows_vt() {
     }
 }
 
-/// gRPC compact: same endpoint updates one Shell row (`x1` → `x2` → …) instead of new lines.
-/// Headless (`rfrcli` / `-noGui`): mirrors with in-place `\r` updates instead of spammy `info!` lines.
+/// gRPC compact: update one Shell row. Headless uses in-place `\r` instead of `info!`.
 pub fn push_grpc_compact_upsert(key: String, ansi_text: &str) {
     let mut line = make_log_line(ansi_text);
     line.upsert_key = Some(key.clone());

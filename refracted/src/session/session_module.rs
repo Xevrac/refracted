@@ -120,10 +120,7 @@ thread_local! {
     static CURRENT_BLAZE_SESSION_ID: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
 }
 
-/// Record which Blaze session's request is being handled *synchronously* on this thread, so
-/// per-session responses (e.g. a pooled dedicated server's own auth identity) can avoid falling back
-/// to the shared client profile. Set immediately before a synchronous handler/builder call -- there
-/// must be no `.await` between the set and the read.
+/// Current Blaze session for this thread's synchronous handler. No `.await` between set and read.
 pub fn set_current_blaze_session_id(id: Option<u64>) {
     CURRENT_BLAZE_SESSION_ID.with(|c| c.set(id));
 }

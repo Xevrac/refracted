@@ -42,7 +42,7 @@ pub fn take_pending_pushes(blaze_session_id: u64) -> Vec<OutgoingPush> {
         .unwrap_or_default()
 }
 
-/// Drop queued Blaze notifications for a dedicated session (stale GameReady, duplicate reclaim, …).
+/// Drop queued Blaze notifications for a dedicated session.
 pub fn clear_pending_pushes(blaze_session_id: u64) {
     pending_pushes().lock().remove(&blaze_session_id);
 }
@@ -475,9 +475,7 @@ pub fn pushes_after_advance_game_state(gid: i64) -> BlazeResult<Vec<OutgoingPush
     }])
 }
 
-/// After the joining client reports its mesh connection (`updateMeshConnection`), flip its player to
-/// ACTIVE_CONNECTED via `NotifyGamePlayerStateChange` (id 116) so `createGameNetworkCb` fires and the
-/// game loop stops stalling (otherwise: 120s idle-starve → RPC timeout → disconnect).
+/// After `updateMeshConnection`: `NotifyGamePlayerStateChange(ACTIVE_CONNECTED)`.
 pub fn pushes_after_update_mesh_connection(gid: i64, pid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGamePlayerStateChange(ACTIVE_CONNECTED) after updateMeshConnection (gid={}, pid={})",
@@ -558,9 +556,8 @@ pub fn pushes_advance_game_to_ingame(gid: i64) -> BlazeResult<Vec<OutgoingPush>>
     Ok(out)
 }
 
-/// Round 64 / D38: `NotifyGameAttribChange` (comp 4, cmd 80) carrying `GameReady` (+ `CnCGameId`).
-///
-/// On the **dedicated**, the same notify is required so CNCLive publishes into
+/// `NotifyGameAttribChange` with GameReady (+ CnCGameId).
+/// The dedicated needs the same notify so CNCLive can publish.
 pub fn pushes_game_ready_attrib(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameAttribChange(GameReady) (gid={})",
@@ -692,8 +689,7 @@ pub fn request_client_local_game_teardown(gid: i64, pid: i64, reason: i32) {
 }
 
 pub fn pushes_dedicated_reclaim_idle(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    // NotifyGameRemoved MUST precede RESETABLE: SDK destroy of local game(1) only runs while
-    // GSTA is still INITIALIZING (or similar). RESETABLE-first leaves sticky local game → rematch AV.
+    // Removed before RESETABLE so the local game is destroyed first.
     let removed = super::build_game_manager_notify_game_removed(
         gid,
         super::GAME_REMOVAL_REASON_GAME_DESTROYED,

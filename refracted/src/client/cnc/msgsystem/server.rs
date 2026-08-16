@@ -1,15 +1,5 @@
-//!
-//! Production architecture (single server-side owner):
-//! - **Prism** `prism.cnc.network.dll` on the dedicated owns ServerHost join + post-StartGame
-//!   gameplay frames (co-located with the native sim).
-//!   orchestration toward `:18388`.
-//!
-//! Shared hub `:18386` (Prism client patch) multiplexes by ClientHello persona → join route.
-//! Each dedicated also gets a pinned hub (`MsgSysPort - 1`) that can only splice to that
-//! ServerHost, so two live matches never share a sim stream.
-//!
-//! Do not reintroduce an embedded ServerHost here for production joins -- that splits the
-//! session away from the dedicated sim and stalls at "Waiting for remaining players".
+//! Shared hub `:18386` multiplexes by ClientHello persona to the assigned ServerHost.
+//! Each dedicated also gets a pinned hub (`MsgSysPort - 1`) that only splices to that host.
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -39,7 +29,7 @@ pub fn spawn(port: u16) {
     spawn_hub(port, None);
 }
 
-/// 1:1 hub: every accept on `hub_port` splices only to this dedicated's ServerHost.
+/// Pinned hub: every accept on `hub_port` splices only to this ServerHost.
 pub fn spawn_pinned(hub_port: u16, serverhost_port: u16) {
     if hub_port == 0 || serverhost_port == 0 || hub_port == serverhost_port {
         return;
@@ -137,8 +127,7 @@ async fn handle_conn(
     } else if let Some(up) =
         crate::client::cnc::dedicated_pool::resolve_unambiguous_msgsys_upstream()
     {
-        // Single live match: splice immediately. ClientHello is sent only after
-        // ConnectSuccess — peeking first caused accept→timeout→close → State 5 black screen.
+        // One live match: splice immediately. ClientHello arrives after ConnectSuccess.
         log_rts_system(
             peer,
             &format!("client connected -- unambiguous ServerHost {up} (no ClientHello peek)"),

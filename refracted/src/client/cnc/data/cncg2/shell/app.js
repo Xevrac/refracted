@@ -206,8 +206,7 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
     $rootScope.openCredits = function () { $rootScope.creditsOpen = true; };
     $rootScope.closeCredits = function () { $rootScope.creditsOpen = false; };
 
-    // Patreon — open OS browser via Refracted (/cnc/open-url). In-game modal is a bad fit
-    // (login/payments + X-Frame-Options). Fallback to window.open for local shell preview.
+    // Support links open in the OS browser. Fallback to window.open for local preview.
     $rootScope.PATREON_URL = 'https://www.patreon.com/cw/refracted_';
     $rootScope.openSupportUs = function () {
         var url = $rootScope.PATREON_URL;
