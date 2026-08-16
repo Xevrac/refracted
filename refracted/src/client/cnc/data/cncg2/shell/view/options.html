@@ -44,6 +44,62 @@
                             <select class="opt-select" ng-model="settings.windowedResolution" ng-options="r for r in windowedResolutionOptions" ng-change="applyWindowedResolution()"></select>
                         </div>
                     </div>
+
+                    <div class="opt-group opt-group--tight">
+                        <label class="opt-label-main">Overall Graphics</label>
+                        <select class="opt-select" ng-model="settings.overallgraphicsquality" ng-options="o.value as o.label for o in overallQualityOptions" ng-change="onOverallGraphicsChange()"></select>
+                    </div>
+
+                    <div class="opt-row clearfix">
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Texture</label>
+                            <select class="opt-select" ng-model="settings.texturequality" ng-options="o.value as o.label for o in qualityOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Shadow</label>
+                            <select class="opt-select" ng-model="settings.shadowquality" ng-options="o.value as o.label for o in qualityOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                    </div>
+                    <div class="opt-row clearfix">
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Effects</label>
+                            <select class="opt-select" ng-model="settings.effectsquality" ng-options="o.value as o.label for o in qualityOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Mesh</label>
+                            <select class="opt-select" ng-model="settings.meshquality" ng-options="o.value as o.label for o in qualityOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                    </div>
+                    <div class="opt-row clearfix">
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Terrain</label>
+                            <select class="opt-select" ng-model="settings.terrainquality" ng-options="o.value as o.label for o in qualityOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Anti-Aliasing</label>
+                            <select class="opt-select" ng-model="settings.antialiasingpost" ng-options="o.value as o.label for o in aaPostOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                    </div>
+                    <div class="opt-row clearfix">
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Ambient Occlusion</label>
+                            <select class="opt-select" ng-model="settings.ambientocclusion" ng-options="o.value as o.label for o in aoOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                        <div class="opt-col-half">
+                            <label class="opt-label-main">Anisotropic Filter</label>
+                            <select class="opt-select" ng-model="settings.anisotropicfilter" ng-options="o.value as o.label for o in anisoOptions" ng-change="onGraphicsDetailChange()"></select>
+                        </div>
+                    </div>
+
+                    <div class="opt-group opt-group--tight">
+                        <label class="opt-checkbox"><input type="checkbox" ng-model="settings.vsyncenabled" ng-change="onGraphicsDetailChange()"> VSync</label>
+                        <label class="opt-checkbox"><input type="checkbox" ng-model="settings.motionblurenabled" ng-change="onGraphicsDetailChange()"> Motion Blur</label>
+                    </div>
+
+                    <div class="opt-group opt-group--tight">
+                        <label class="opt-label-main">Brightness <span class="opt-value">{{ settings.brightnessPercent }}%</span></label>
+                        <input type="range" class="opt-slider" min="0" max="100" ng-model="settings.brightnessPercent" ng-change="onBrightnessChange()">
+                    </div>
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'SOUND'">

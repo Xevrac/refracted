@@ -108,6 +108,72 @@ CCApp.controller('OptionsController', function($scope) {
     $scope.fullscreenResolutionOptions = dedupeResolutionList([asResolution(systemWidth, systemHeight)].concat(buildStandardResolutions(true)));
     $scope.windowedResolutionOptions = dedupeResolutionList(buildStandardResolutions(false).concat(['2560 X 1440', '3840 X 2160']));
 
+    // Child knobs use DefaultValues.lua Quality enum (Low=0..Ultra=3).
+    // OverallGraphicsQuality uses OA cascade indices (0=Autodetect..5=Custom) — see LuaOptionSetManager.
+    var QUALITY = { Low: 0, Medium: 1, High: 2, Ultra: 3 };
+    var OVERALL = { Autodetect: 0, Low: 1, Medium: 2, High: 3, Ultra: 4, Custom: 5 };
+    var GRAPHICS_PRESETS = {};
+    GRAPHICS_PRESETS[OVERALL.Low] = {
+        texturequality: QUALITY.Low, shadowquality: QUALITY.Low, effectsquality: QUALITY.Low,
+        meshquality: QUALITY.Low, terrainquality: QUALITY.Low,
+        antialiasingpost: 0, anisotropicfilter: 1, ambientocclusion: 0,
+        motionblurenabled: false
+    };
+    GRAPHICS_PRESETS[OVERALL.Medium] = {
+        texturequality: QUALITY.Medium, shadowquality: QUALITY.Medium, effectsquality: QUALITY.Medium,
+        meshquality: QUALITY.Medium, terrainquality: QUALITY.Medium,
+        antialiasingpost: 2, anisotropicfilter: 2, ambientocclusion: 1,
+        motionblurenabled: false
+    };
+    GRAPHICS_PRESETS[OVERALL.High] = {
+        texturequality: QUALITY.High, shadowquality: QUALITY.High, effectsquality: QUALITY.High,
+        meshquality: QUALITY.High, terrainquality: QUALITY.High,
+        antialiasingpost: 3, anisotropicfilter: 4, ambientocclusion: 2,
+        motionblurenabled: true
+    };
+    GRAPHICS_PRESETS[OVERALL.Ultra] = {
+        texturequality: QUALITY.Ultra, shadowquality: QUALITY.Ultra, effectsquality: QUALITY.Ultra,
+        meshquality: QUALITY.Ultra, terrainquality: QUALITY.Ultra,
+        antialiasingpost: 3, anisotropicfilter: 4, ambientocclusion: 2,
+        motionblurenabled: true
+    };
+
+    var applyingOverallPreset = false;
+
+    $scope.overallQualityOptions = [
+        { value: OVERALL.Autodetect, label: 'Autodetect' },
+        { value: OVERALL.Low, label: 'Low' },
+        { value: OVERALL.Medium, label: 'Medium' },
+        { value: OVERALL.High, label: 'High' },
+        { value: OVERALL.Ultra, label: 'Ultra' },
+        { value: OVERALL.Custom, label: 'Custom' }
+    ];
+    $scope.qualityOptions = [
+        { value: QUALITY.Low, label: 'Low' },
+        { value: QUALITY.Medium, label: 'Medium' },
+        { value: QUALITY.High, label: 'High' },
+        { value: QUALITY.Ultra, label: 'Ultra' }
+    ];
+    $scope.aaPostOptions = [
+        { value: 0, label: 'Off' },
+        { value: 1, label: 'Low (FXAA)' },
+        { value: 2, label: 'Medium (FXAA)' },
+        { value: 3, label: 'High (FXAA)' }
+    ];
+    $scope.aoOptions = [
+        { value: 0, label: 'Off' },
+        { value: 1, label: 'SSAO' },
+        { value: 2, label: 'HBAO' },
+        { value: 3, label: 'HBAO Full' }
+    ];
+    $scope.anisoOptions = [
+        { value: 0, label: '1x' },
+        { value: 1, label: '2x' },
+        { value: 2, label: '4x' },
+        { value: 3, label: '8x' },
+        { value: 4, label: '16x' }
+    ];
+
     $scope.settings = {
         shellfullscreen: true,
         gamefullscreen: false,
@@ -123,6 +189,19 @@ CCApp.controller('OptionsController', function($scope) {
         allowdeselect: true,
         fullscreenResolution: asResolution(systemWidth, systemHeight),
         windowedResolution: systemWindowedResolution,
+        overallgraphicsquality: OVERALL.Autodetect,
+        texturequality: QUALITY.Medium,
+        shadowquality: QUALITY.Medium,
+        effectsquality: QUALITY.Medium,
+        meshquality: QUALITY.Medium,
+        terrainquality: QUALITY.Medium,
+        antialiasingpost: 2,
+        ambientocclusion: 1,
+        anisotropicfilter: 2,
+        vsyncenabled: false,
+        motionblurenabled: false,
+        brightness: 0.5,
+        brightnessPercent: 50,
         shellUiTheme: (window.CncShellTheme && CncShellTheme.get) ? CncShellTheme.get() : 'aurora',
         shellUiThemeDefault: (window.CncShellTheme && CncShellTheme.getDefault)
             ? CncShellTheme.getDefault()
@@ -212,6 +291,54 @@ CCApp.controller('OptionsController', function($scope) {
         executeShell('/usersettings/apply', partial);
     }
 
+    function clampInt(value, min, max, fallback) {
+        var n = parseInt(value, 10);
+        if (isNaN(n)) {
+            return fallback;
+        }
+        return Math.max(min, Math.min(max, n));
+    }
+
+    function syncBrightnessPercent() {
+        var b = Number($scope.settings.brightness);
+        if (!isFinite(b)) {
+            b = 0.5;
+        }
+        if (b > 1) {
+            b = b / 100;
+        }
+        $scope.settings.brightness = Math.max(0, Math.min(1, b));
+        $scope.settings.brightnessPercent = Math.round($scope.settings.brightness * 100);
+    }
+
+    function applyPresetToSettings(presetId) {
+        var preset = GRAPHICS_PRESETS[presetId];
+        if (!preset) {
+            return;
+        }
+        applyingOverallPreset = true;
+        angular.extend($scope.settings, preset);
+        applyingOverallPreset = false;
+    }
+
+    function buildGraphicsPayload() {
+        return {
+            overallgraphicsquality: clampInt($scope.settings.overallgraphicsquality, 0, 5, OVERALL.Custom),
+            texturequality: clampInt($scope.settings.texturequality, 0, 3, QUALITY.Medium),
+            shadowquality: clampInt($scope.settings.shadowquality, 0, 3, QUALITY.Medium),
+            effectsquality: clampInt($scope.settings.effectsquality, 0, 3, QUALITY.Medium),
+            meshquality: clampInt($scope.settings.meshquality, 0, 3, QUALITY.Medium),
+            terrainquality: clampInt($scope.settings.terrainquality, 0, 3, QUALITY.Medium),
+            antialiasingpost: clampInt($scope.settings.antialiasingpost, 0, 3, 0),
+            ambientocclusion: clampInt($scope.settings.ambientocclusion, 0, 3, 0),
+            anisotropicfilter: clampInt($scope.settings.anisotropicfilter, 0, 4, 1),
+            // Engine Settings store these as 0/1 (DefaultValues / Graphics.lua).
+            vsyncenabled: $scope.settings.vsyncenabled ? 1 : 0,
+            motionblurenabled: $scope.settings.motionblurenabled ? 1 : 0,
+            brightness: Math.max(0, Math.min(1, Number($scope.settings.brightness) || 0.5))
+        };
+    }
+
     function buildApplyPayloadFromSettings() {
         var fullParsed = parseResolution($scope.settings.fullscreenResolution);
         var windowParsed = parseResolution($scope.settings.windowedResolution);
@@ -223,7 +350,7 @@ CCApp.controller('OptionsController', function($scope) {
             $scope.settings.windowedwidth = windowParsed.width;
             $scope.settings.windowedheight = windowParsed.height;
         }
-        return {
+        var payload = {
             shellfullscreen: !!$scope.settings.shellfullscreen,
             gamefullscreen: !!$scope.settings.gamefullscreen,
             fullscreenwidth: $scope.settings.fullscreenwidth,
@@ -237,6 +364,44 @@ CCApp.controller('OptionsController', function($scope) {
             movemodeattack: !!$scope.settings.movemodeattack,
             allowdeselect: !!$scope.settings.allowdeselect
         };
+        angular.extend(payload, buildGraphicsPayload());
+        return payload;
+    }
+
+    function readGraphicsFromResponse(res) {
+        if (!res || typeof res !== 'object') {
+            return;
+        }
+        var keys = [
+            'overallgraphicsquality', 'texturequality', 'shadowquality', 'effectsquality',
+            'meshquality', 'terrainquality', 'antialiasingpost', 'ambientocclusion',
+            'anisotropicfilter'
+        ];
+        for (var i = 0; i < keys.length; i++) {
+            var k = keys[i];
+            if (typeof res[k] === 'number') {
+                if (k === 'overallgraphicsquality') {
+                    // Legacy Quality.Autodetect (-1) → OA index 0.
+                    $scope.settings[k] = res[k] < 0 ? OVERALL.Autodetect : clampInt(res[k], 0, 5, OVERALL.Custom);
+                } else {
+                    $scope.settings[k] = res[k];
+                }
+            }
+        }
+        if (typeof res.vsyncenabled === 'boolean') {
+            $scope.settings.vsyncenabled = res.vsyncenabled;
+        } else if (typeof res.vsyncenabled === 'number') {
+            $scope.settings.vsyncenabled = res.vsyncenabled !== 0;
+        }
+        if (typeof res.motionblurenabled === 'boolean') {
+            $scope.settings.motionblurenabled = res.motionblurenabled;
+        } else if (typeof res.motionblurenabled === 'number') {
+            $scope.settings.motionblurenabled = res.motionblurenabled !== 0;
+        }
+        if (typeof res.brightness === 'number') {
+            $scope.settings.brightness = res.brightness;
+        }
+        syncBrightnessPercent();
     }
 
     function loadUserSettings() {
@@ -259,6 +424,7 @@ CCApp.controller('OptionsController', function($scope) {
             if (typeof res.middlemousecameradrag === 'boolean') { $scope.settings.middlemousecameradrag = res.middlemousecameradrag; }
             if (typeof res.movemodeattack === 'boolean') { $scope.settings.movemodeattack = res.movemodeattack; }
             if (typeof res.allowdeselect === 'boolean') { $scope.settings.allowdeselect = res.allowdeselect; }
+            readGraphicsFromResponse(res);
             syncResolutionModels();
             $scope.$applyAsync();
         });
@@ -356,6 +522,35 @@ CCApp.controller('OptionsController', function($scope) {
         });
     };
 
+    $scope.onOverallGraphicsChange = function() {
+        var overall = clampInt($scope.settings.overallgraphicsquality, 0, 5, OVERALL.Custom);
+        $scope.settings.overallgraphicsquality = overall;
+        if (overall === OVERALL.Custom || overall === OVERALL.Autodetect) {
+            // Autodetect: engine cascade fills children on commit. Custom: leave knobs as-is.
+            applyPartial(buildGraphicsPayload());
+            return;
+        }
+        applyPresetToSettings(overall);
+        applyPartial(buildGraphicsPayload());
+    };
+
+    $scope.onGraphicsDetailChange = function() {
+        if (!applyingOverallPreset && $scope.settings.overallgraphicsquality !== OVERALL.Custom) {
+            $scope.settings.overallgraphicsquality = OVERALL.Custom;
+        }
+        applyPartial(buildGraphicsPayload());
+    };
+
+    $scope.onBrightnessChange = function() {
+        var pct = clampInt($scope.settings.brightnessPercent, 0, 100, 50);
+        $scope.settings.brightnessPercent = pct;
+        $scope.settings.brightness = pct / 100;
+        if (!applyingOverallPreset && $scope.settings.overallgraphicsquality !== OVERALL.Custom) {
+            $scope.settings.overallgraphicsquality = OVERALL.Custom;
+        }
+        applyPartial(buildGraphicsPayload());
+    };
+
     $scope.applyVolume = function() {
         var volume = Math.max(0, Math.min(100, Math.round($scope.settings.mastervolume)));
         $scope.settings.mastervolume = volume;
@@ -412,6 +607,7 @@ CCApp.controller('OptionsController', function($scope) {
         if ($scope.allowShellThemeSelect && $scope.settings.shellUiThemeDefault) {
             $scope.settings.shellUiTheme = $scope.settings.shellUiThemeDefault;
         }
+        syncBrightnessPercent();
         syncResolutionModels();
         applyPartial(buildApplyPayloadFromSettings());
         executeShell('/usersettings/applyAudio');
