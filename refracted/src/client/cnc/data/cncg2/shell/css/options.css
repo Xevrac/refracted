@@ -12,9 +12,9 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 700px;
-    height: 500px;
-    margin: -250px 0 0 -350px;
+    width: 760px;
+    height: 560px;
+    margin: -280px 0 0 -380px;
     background: #000;
     border: 1px solid #2a2a2a;
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.95);
@@ -222,6 +222,11 @@ body.cc-theme--cnc-alpha .btn-options-close::after {
    ========================================================================= */
 .opt-pane { width: 100%; }
 .opt-group { margin-bottom: 26px; }
+.opt-group--tight { margin-bottom: 12px; }
+.opt-group--tight .opt-checkbox { margin-right: 18px; margin-bottom: 0; }
+.opt-pane .opt-row { margin-bottom: 10px; }
+.opt-pane .opt-row .opt-label-main { margin-bottom: 4px; font-size: 13px; }
+.opt-pane .opt-row .opt-select { height: 30px; font-size: 13px; }
 
 .opt-label-main {
     display: block;
