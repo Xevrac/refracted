@@ -258,12 +258,11 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
             dedicated_pool::lobby_pool_status_json().into_bytes(),
         ));
     }
-    // POST /cnc/dedicated-engine-peer?port=25200&peer=10.0.0.230  (or session=<blazeId>)
-    // Prism EnginePeerInit reports the real game UDP bind (not Blaze QoS).
+    // POST /cnc/dedicated-engine-peer — EnginePeerInit game UDP (not Blaze QoS).
     if base == "cnc/dedicated-engine-peer" && is_post {
         return Some(handle_cnc_dedicated_engine_peer(query, body));
     }
-    // GET /cnc/utfwin/images/MiniMap/*.png — retail UTFWinAssets from the game bin.
+    // GET /cnc/utfwin/images/MiniMap/*.png — UTFWinAssets from the game bin.
     if is_get && base.starts_with("cnc/utfwin/") {
         let _ = body;
         return Some(handle_cnc_utfwin(base));
@@ -328,7 +327,7 @@ fn percent_decode_plus(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Patreon / support pages only — never open arbitrary URLs from shell JS.
+/// Allowlisted support URLs only.
 const CNC_OPEN_URL_ALLOWLIST: &[&str] = &[
     "https://www.patreon.com/cw/refracted_",
     "https://patreon.com/cw/refracted_",
@@ -370,7 +369,7 @@ fn open_url_in_system_browser(url: &str) -> Result<(), String> {
     }
 }
 
-/// GET|POST `/cnc/open-url?url=` (or JSON `{"url":"..."}`) — OS browser for allowlisted links.
+/// GET|POST `/cnc/open-url` — OS browser for allowlisted links.
 fn handle_cnc_open_url(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let mut url = String::new();
     if let Some(q) = query {
@@ -477,7 +476,7 @@ fn resolve_prism_version() -> Option<String> {
     None
 }
 
-/// Retail `UTFWinAssets` root (MiniMap PNGs live under `images/MiniMap/`).
+/// `UTFWinAssets` root (MiniMap PNGs under `images/MiniMap/`).
 fn utfwin_asset_roots() -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
     let push_utf = |roots: &mut Vec<PathBuf>, game: &Path| {
@@ -1779,8 +1778,7 @@ pub fn handle_util_get_telemetry_server(_payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(response))
 }
 
-/// Identity for auth / user-session responses on the CURRENT Blaze session: a pooled dedicated
-/// server responds as its own `CNCO<N>` persona; every other session uses the shared client profile.
+/// Dedicated uses its CNCO persona; other sessions use the client profile.
 pub fn cnc_effective_identity() -> (u64, String) {
     if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
         if let Some((persona, name)) = dedicated_pool::dedicated_identity_for_session(sid) {
@@ -1803,9 +1801,7 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
         .unwrap_or(false);
     let mail = TdfEncoder::find_string_field(payload, "MAIL").filter(|m| !m.is_empty());
     if has_tokn && mail.is_none() {
-        // Token login with no email = a pooled dedicated server (cnc.server.exe). Give it its own
-        // CNCO<N> identity now, so this login response (and later user-session notifies) report the
-        // dedicated persona instead of the shared client profile.
+        // Token login with no email = pooled dedicated. Allocate CNCO identity now.
         if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
             let (name, persona) = dedicated_pool::allocate_dedicated_identity(sid);
             crate::session::blaze_sessions::set_dedicated_identity(sid, &name, persona);
@@ -2121,15 +2117,14 @@ fn cnc_join_game_response(gid: i64) -> Bytes {
     Bytes::from(response)
 }
 
-/// matches **`handle_game_manager_command_16`** (GID + JGS + **`OCAL`**) and now also emits **`NTOP`**
-/// so the client picks up the intended network topology (PEER vs DEDICATED).
+/// JoinGameResponse with GID, JGS, OCAL, and NTOP.
 fn cnc_join_game_response_with_ocal(gid: i64, gsid: Option<i64>) -> Bytes {
     let mut response = Vec::new();
     let server_label = gsid
         .filter(|&id| id > 0)
         .map(|id| id.to_string())
         .unwrap_or_default();
-    // Blaze `JoinGameResponse` must lead with `GID`/`JGS` -- a leading `SRVR` string breaks the RTS
+    // JoinGameResponse leads with GID/JGS.
     response.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     response.extend_from_slice(&TdfEncoder::encode_int("JGS ", JGS_JOINED_GAME));
     response.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_DEFAULT));
@@ -2234,9 +2229,7 @@ pub fn handle_game_manager_reset_dedicated_server(payload: &[u8]) -> BlazeResult
         );
     }
     game_state::seed_from_reset(payload, gid);
-    // Resolve the dedicated session id the reset will land on even if the pool assignment hasn't
-    // been created yet (the encrypted-Fire2 path builds this reply before orchestrate runs), so the
-    // reply carries GSID/SRVR and the shell `serverID` isn't "unknown".
+    // Include GSID/SRVR even if pool assignment has not run yet.
     let gsid = dedicated_pool::host_for_gid(gid)
         .map(|d| d.blaze_session_id as i64)
         .or_else(|| dedicated_pool::peek_dedicated_for_gid(gid).map(|s| s as i64));
@@ -2320,10 +2313,7 @@ pub fn handle_game_manager_mesh_endpoints_connected(payload: &[u8]) -> BlazeResu
     Ok(Bytes::from(Vec::new()))
 }
 
-/// `GameManager.updateMeshConnection` (**`0x0004::0x001D`**, RPC id 29) -- the joining client reports it
-/// has connected to the dedicated's endpoint. Reply is an empty ack; the important part is the follow-up
-/// `NotifyGamePlayerStateChange(ACTIVE_CONNECTED)` (sent by the dispatcher) which fires the client's
-/// `createGameNetworkCb` and lets the game loop proceed instead of stalling until the RPC times out.
+/// `GameManager.updateMeshConnection` (`0x0004::0x001D`). Empty ack; dispatcher sends ACTIVE_CONNECTED.
 pub fn handle_game_manager_update_mesh_connection(payload: &[u8]) -> BlazeResult<Bytes> {
     let gid = TdfEncoder::find_long_field(payload, "GID ")
         .or_else(|| TdfEncoder::find_long_field(payload, "GID"))
@@ -2899,15 +2889,14 @@ pub fn build_notify_create_dynamic_dedicated_server_game(
     let greq = inject_greq_rgid(gid, &greq);
 
     let mut out = Vec::new();
-    // Prism CaptureCmd220Wire / LooksLikeCmd220TdfPayload requires a root GID tag or the
-    // whole notify is treated as missing wire → config-default Alpha + gid=0 (stuck start).
+    // Cmd 220 needs a root GID tag.
     out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     out.extend_from_slice(&TdfEncoder::encode_struct("GREQ", &greq));
     out.extend_from_slice(&TdfEncoder::encode_string("MID ", ""));
     Ok(Bytes::from(out))
 }
 
-/// Ensure CreateGameRequest.RGID matches the assigned lobby/match gid (wire often sends 0).
+/// Set CreateGameRequest.RGID to the assigned gid when the wire sends 0.
 fn inject_greq_rgid(gid: i64, create_request: &[u8]) -> Vec<u8> {
     let rgid_field = TdfEncoder::scan_root_level_fields(create_request)
         .into_iter()
@@ -2951,7 +2940,7 @@ fn inject_level_attr(gid: i64, create_request: &[u8]) -> Option<Vec<u8>> {
         .find(|(tag, ty, _, _)| tag == "ATTR" && *ty == 0x05);
 
     let Some((_, _, start, total_len)) = attr_field else {
-        // resetDedicated payload sometimes has no ATTR map — append one with _level only.
+        // resetDedicated payload sometimes has no ATTR map — append `_level` only.
         tracing::info!(
             target: "cnc",
             "[CNC] inject _level gid={} append ATTR \"{}\" (no ATTR on wire)",
@@ -3106,8 +3095,7 @@ fn build_client_replicated_game_data(
         .or_else(|| req_exip_ip.ne(&0).then_some(req_exip_ip))
         .unwrap_or(0);
 
-    // Dedicated HNET must advertise *that* server's discovered game UDP on EXIP+INIP.
-    // Never borrow the joining client's QoS port; fall back only if discovery has not run yet.
+    // Dedicated HNET advertises this server's discovered game UDP.
     let (host_inip_port, host_exip_port) = if let Some(d) = dedicated {
         let inip = if d.inip_port > 0 {
             d.inip_port
@@ -3402,8 +3390,7 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
         .filter(|&ip| ip != 0)
         .or_else(|| session.network_exip_ip.map(|u| u as i32))
         .unwrap_or(0);
-    // Same dedicated HNET rule as build_client_replicated_game_data: advertise
-    // discovered dedicated game UDP, never client QoS ports.
+    // Dedicated HNET uses discovered game UDP, not client QoS ports.
     let (host_inip_port, host_exip_port) = if let Some(d) = dedicated {
         let inip = if d.inip_port > 0 {
             d.inip_port

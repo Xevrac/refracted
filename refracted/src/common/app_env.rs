@@ -1,7 +1,6 @@
-//! Headless launch env (`refracted.env`) — production/staging config for `rfrcli` only.
+//! Headless launch env (`refracted.env`) for `rfrcli`.
 //!
-//! Desktop uses JSON under `{exe}/data` (settings, profiles, games). Default env path is
-//! next to the executable and is created on first headless run if missing.
+//! Desktop uses JSON under `{exe}/data`. Default env path is next to the executable.
 
 use std::collections::HashMap;
 use std::fs;

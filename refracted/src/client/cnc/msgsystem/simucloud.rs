@@ -1,4 +1,4 @@
-﻿//! Refracted as the retail SimuCloud orchestrator (`PublicSimuCloudChannel` → `CreateGame`).
+﻿//! SimuCloud orchestrator (`PublicSimuCloudChannel` → `CreateGame`).
 
 use std::time::Duration;
 
@@ -38,10 +38,10 @@ pub const CREATE_GAME_OPTIONS_ALLOW_RECONNECT: u32 = 1;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
 const CONNECT_BUDGET: Duration = Duration::from_secs(12);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
-/// Alpha_Tutorial first dedicated load (entity spawn + registry) can exceed 45s on a cold server.
+/// Cold dedicated load can exceed 45s; wait up to this for GameReady.
 const GAME_READY_WAIT: Duration = Duration::from_secs(120);
 
-/// Split a retail map path into `(MapName, DirPath)` for `SimuCloud.CreateGame`.
+/// Split a map path into `(MapName, DirPath)` for `SimuCloud.CreateGame`.
 pub fn split_map_path(full: &str) -> (String, String) {
     let normalized = full.replace('\\', "/");
     if let Some((dir, leaf)) = normalized.rsplit_once('/') {
@@ -152,7 +152,7 @@ fn simucloud_name_matches_suffix(name: &str, suffix: &str) -> bool {
     }
 }
 
-/// Retail `ProtocolTypeIdMapping` embeds each type as `01 {id} 00 01 {ref} 01` before the qualified name.
+/// `ProtocolTypeIdMapping` embeds each type as `01 {id} 00 01 {ref} 01` before the name.
 fn scan_retail_ptm_type_id(ptm_payload: &[u8], suffix: &str) -> Option<u16> {
     for prefix in ["Rts.CnC.Messages.SimuCloud.", "SimuCloud."] {
         let marker = format!("{prefix}{suffix}");
@@ -204,8 +204,7 @@ fn uuid_to_guid_bytes(uuid: &str) -> [u8; 16] {
     [0u8; 16]
 }
 
-/// Native faction enum (`sub_A52D00` / GameConfigs `Faction`):
-/// None=0, USA=1, APA=2, ESC=3, GLA=4.
+/// Faction codes: None=0, USA=1, APA=2, ESC=3, GLA=4.
 pub fn parse_faction_code(raw: &str) -> Option<i32> {
     let s = raw.trim();
     if s.is_empty() {
@@ -269,8 +268,7 @@ mod general_id_parse_tests {
     }
 }
 
-/// Allegiance[17]: index 0 = 0; for i in 1..17, +1.0 if i == team else -1.0
-/// (matches native GameConfigs rebuild in `sub_A715F0` / Prism CreateGame).
+/// Allegiance[17]: 0 at index 0; +1.0 if i == team else -1.0.
 fn allegiance_for_team(team: i32) -> Vec<f32> {
     let mut levels = vec![0.0_f32; 17];
     for i in 1..17 {
@@ -445,8 +443,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         log_sim_debug(&format!("Empty roster for gid={gid}; skipping CreateGame"));
         return Ok(());
     }
-    // CreateGame payload already has resolved picks; wipe lobby attrs so post-match
-    // return to the same GID does not resurrect an invalid start POS for the next map.
+    // CreateGame already has resolved picks; clear lobby attrs so rematch does not reuse them.
     super::super::game_state::flush_lobby_startpoints(gid);
 
     let game_id = uuid_to_guid_bytes(&game.uuid);
@@ -512,9 +509,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         "Protocol map: CreateGame={create_type_id} GameReady={game_ready_type_id} Failure={failure_type_id}"
     ));
 
-    // The SimuCloud channel is ClientSerializationProtocol (forced host-side via
-    // DedicatedSimuCloudChannelDescriptor), so messages are plain SimpleFrames -- same framing as the
-    // ProtocolVersion/PTM negotiation above, NOT routing Envelopes.
+    // SimuCloud uses SimpleFrames (same as ProtocolVersion/PTM), not routing Envelopes.
     let create_frame = SimpleFrame {
         type_id: create_type_id,
         payload: encode_create_game_payload(
@@ -527,9 +522,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
     write_simple_frame(&mut stream, &create_frame).await?;
 
-    // Dedicated defers CreateGame until ServerLevel load completes (Alpha_Tutorial cold
-    // load can take 60–90s). Keep polling reads until GAME_READY_WAIT — do not fail on
-    // the first idle 15s chunk.
+    // Dedicated waits for ServerLevel load before CreateGame. Keep polling until GAME_READY_WAIT.
     const REPLY_READ_TIMEOUT: Duration = Duration::from_secs(15);
     let reply_deadline = Instant::now() + GAME_READY_WAIT;
     let mut idle_log_at = Instant::now();

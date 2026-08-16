@@ -1,7 +1,6 @@
-﻿//! Expandable **Nexus backend** handle: entitlement/opt-in/persona orchestration that feeds Blaze stubs.
-//! Wire structs live beside Blaze handlers; this type is the stable anchor for future RPC-facing helpers.
+﻿//! Nexus backend handle for persona/account data used by Blaze stubs.
 
-/// Game-agnostic Nexus façade (singleton usage optional -- hook from Accounts / session bridges later).
+/// Game-agnostic Nexus façade.
 #[derive(Debug, Default, Clone)]
 pub struct NexusBackend;
 

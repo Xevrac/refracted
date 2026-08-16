@@ -1,8 +1,7 @@
 //! Shared startup for desktop and headless binaries.
 //!
-//! Desktop always uses JSON under `{exe}/data` (settings, manual personas, games).
-//! Headless (`rfrcli`) uses JSON/manual personas **only** when `datasource=json`
-//! (localized testing). `datasource=mysql` is production identity; clients authenticate.
+//! Desktop uses JSON under `{exe}/data`. Headless uses JSON only when `datasource=json`;
+//! `datasource=mysql` is production identity.
 
 use std::path::PathBuf;
 
@@ -14,14 +13,14 @@ use crate::common::user_profile;
 use crate::nexus::identity;
 use crate::session::blaze_sessions;
 
-/// Options for emulator boot (settings dir, optional game override, optional headless env).
+/// Options for emulator boot.
 #[derive(Debug, Clone, Default)]
 pub struct BootOptions {
-    /// Override `{exe}/data` (also settable via `REFRACTED_DATA_DIR` or env `data_dir=`).
+    /// Override `{exe}/data`.
     pub data_dir: Option<PathBuf>,
-    /// Game id from `games.json` (e.g. `cnc`, `bf-labs`). Overrides env `game=` when set.
+    /// Game id from `games.json`. Overrides env `game=` when set.
     pub game_id: Option<String>,
-    /// Headless only. Desktop leaves this `None` and uses JSON settings in `/data`.
+    /// Headless only. Desktop leaves this `None`.
     pub env: Option<AppEnv>,
 }
 

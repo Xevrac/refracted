@@ -4,7 +4,7 @@
 //! - [`core`] -- Server lifecycle, console/logging, the **toolkit** (inspectors, research proxies).
 //! - [`blaze`], [`http`], [`web`], [`lsx`], [`qos`], [`rtm`] -- Service layers (listeners and handlers).
 //! - [`grpc`], [`jwt`], [`session`], [`crypto`] -- Shared building blocks for auth and wire formats.
-//! - [`nexus`] -- Refracted identity/account backend (Settings → Accounts); feeds Blaze handler inputs.
+//! - [`nexus`] -- identity/account backend; feeds Blaze handler inputs.
 //! - [`client`] -- Title-specific logic (`labs`, `cnc`, …), selected by [`common::game`] from `games.json`.
 //!
 

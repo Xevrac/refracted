@@ -297,7 +297,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
 
 
 
-    /** Quit to desktop: give Refracted time for removePlayer + logout before ExitProcess. */
+    /** Quit to desktop after removePlayer + logout. */
 
     function quitToDesktopAfterBlazeCleanup() {
 
@@ -407,8 +407,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         $scope.optionsOpen = false;
         $scope.quittingOpen = true;
 
-        // Do not EndGame / scheduleReturnFromMatch (that loads FrontEndTest).
-        // Blaze removePlayer + logout must finish on Refracted before quit true.
+        // removePlayer + logout must finish before quit true.
         quitToDesktopAfterBlazeCleanup();
     };
 

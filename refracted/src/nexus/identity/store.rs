@@ -19,7 +19,7 @@ pub struct PersonaRecord {
     pub display_name: String,
 }
 
-/// Session row after token/JWT lookup. Identity comes from this, not client claims.
+/// Session row after token/JWT lookup.
 #[derive(Debug, Clone)]
 pub struct BoundSession {
     pub user_id: i64,
