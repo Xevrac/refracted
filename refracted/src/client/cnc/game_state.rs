@@ -25,10 +25,17 @@ static LAST_CUSTOM_DATA_CHANGE: OnceLock<Mutex<Option<(i64, i64, IndexMap<String
     OnceLock::new();
 static NEXT_BROWSER_LIST_ID: AtomicI64 = AtomicI64::new(1);
 static LAST_GAME_LIST_SNAPSHOT: OnceLock<Mutex<Option<(i64, Vec<i64>)>>> = OnceLock::new();
-static PENDING_MAPS: OnceLock<Mutex<HashMap<i64, String>>> = OnceLock::new();
+#[derive(Clone, Debug, Default)]
+struct PendingMapInfo {
+    path: String,
+    start_count: i32,
+}
+
+static PENDING_MAPS: OnceLock<Mutex<HashMap<i64, PendingMapInfo>>> = OnceLock::new();
 static PENDING_PLAYER_ATTRS: OnceLock<Mutex<HashMap<i64, HashMap<i64, IndexMap<String, String>>>>> =
     OnceLock::new();
 static BLAZE_PREGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
+static BLAZE_JOIN_SETUP_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static BLAZE_INGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static GAME_READY_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static SERVER_LOST_GIDS: OnceLock<Mutex<HashMap<i64, u64>>> = OnceLock::new();
@@ -111,6 +118,10 @@ fn blaze_pregame_pushed() -> &'static Mutex<HashSet<i64>> {
     BLAZE_PREGAME_PUSHED.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+fn blaze_join_setup_pushed() -> &'static Mutex<HashSet<i64>> {
+    BLAZE_JOIN_SETUP_PUSHED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
 fn blaze_ingame_pushed() -> &'static Mutex<HashSet<i64>> {
     BLAZE_INGAME_PUSHED.get_or_init(|| Mutex::new(HashSet::new()))
 }
@@ -120,14 +131,20 @@ fn game_ready_pushed() -> &'static Mutex<HashSet<i64>> {
 }
 
 pub fn clear_blaze_push_flags(gid: i64) {
-    clear_blaze_one_shot_flags(gid);
+    clear_blaze_join_and_push_flags(gid);
     clear_orchestration(gid);
 }
 
+/// Clears post-join one-shots (pregame/ingame/game-ready) but keeps join-setup until reset notify.
 pub fn clear_blaze_one_shot_flags(gid: i64) {
     blaze_pregame_pushed().lock().remove(&gid);
     blaze_ingame_pushed().lock().remove(&gid);
     game_ready_pushed().lock().remove(&gid);
+}
+
+pub fn clear_blaze_join_and_push_flags(gid: i64) {
+    clear_blaze_one_shot_flags(gid);
+    blaze_join_setup_pushed().lock().remove(&gid);
 }
 
 #[derive(Debug, Clone)]
@@ -155,6 +172,9 @@ fn mesh_active_connected_pushes(gid: i64, pid: i64) -> Option<Vec<super::firefra
 fn game_ready_and_state_advance_pushes(
     gid: i64,
 ) -> Option<Vec<super::fireframe::OutgoingPush>> {
+    if games().lock().get(&gid).map(|g| g.is_standby).unwrap_or(true) {
+        return Some(Vec::new());
+    }
     let mut out = Vec::new();
     if try_mark_game_ready_pushed(gid) {
         out.extend(super::fireframe::pushes_game_ready_attrib(gid).ok()?);
@@ -202,6 +222,13 @@ fn mesh_active_connected_and_game_ready_pushes(
 /// host-injection that player is the *joining client* (external roster entry), not the host
 /// persona — AuthToken aimed at the host is dropped as "unknown local player".
 fn enqueue_game_ready_to_dedicated(gid: i64) {
+    if games().lock().get(&gid).map(|g| g.is_standby).unwrap_or(true) {
+        crate::debug_println!(
+            "\x1b[38;2;255;180;100m[CNC]\x1b[0m GameReady mirror skipped: game standby/reclaimed (gid={})",
+            gid
+        );
+        return;
+    }
     let dedicated_sid = orchestration()
         .lock()
         .get(&gid)
@@ -283,6 +310,14 @@ pub fn has_orchestration(gid: i64) -> bool {
     orchestration().lock().contains_key(&gid)
 }
 
+pub fn has_deferred_join_pushes(gid: i64) -> bool {
+    orchestration()
+        .lock()
+        .get(&gid)
+        .and_then(|o| o.deferred_join_pushes.as_ref())
+        .is_some()
+}
+
 /// Called from `orchestrate_client_reset` when a pooled dedicated is assigned.
 pub fn begin_reset_orchestration(gid: i64, client_session_id: u64, dedicated_session_id: u64) {
     clear_blaze_one_shot_flags(gid);
@@ -318,8 +353,67 @@ fn finish_client_join_release(
         if let Some(pushes) = mesh_active_connected_and_game_ready_pushes(gid, pid) {
             out.extend(pushes);
         }
+    } else {
+        // Dedicated Blaze mesh is UDP CANA to the dedicated's discovered EnginePeer port.
+        // Match sim is MsgSys TCP;
+        // the client often never emits updateMeshConnection, so synthesize ACTIVE_CONNECTED
+        // after InitiateConnections has been delivered (not same-tick — empty mesh AV).
+        let pid = resolve_joining_client_pid(gid, client_sid);
+        schedule_synthetic_client_mesh_if_needed(gid, client_sid, pid);
     }
     (client_sid, out)
+}
+
+fn resolve_joining_client_pid(gid: i64, client_sid: u64) -> i64 {
+    crate::session::blaze_sessions::get_session(client_sid)
+        .and_then(|s| s.persona_id)
+        .map(|p| p as i64)
+        .filter(|p| *p != 0)
+        .or_else(|| {
+            let s = crate::session::get_user_session();
+            (s.persona_id != 0).then_some(s.persona_id as i64)
+        })
+        .or_else(|| {
+            players_for_gid(gid)
+                .into_iter()
+                .map(|p| p.persona_id)
+                .find(|p| *p != 0)
+        })
+        .unwrap_or(1000)
+}
+
+/// CNC dedicated: forge `NotifyGamePlayerStateChange(ACTIVE_CONNECTED)` when the joining
+/// client never reports `updateMeshConnection`. Unblocks `createGameNetworkCb` / lobby
+/// "Starting game" without depending on Ghost/UDP mesh success.
+fn schedule_synthetic_client_mesh_if_needed(gid: i64, client_sid: u64, pid: i64) {
+    tokio::spawn(async move {
+        // Let InitiateConnections + mesh create + finalizeGameCreation settle first.
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let already = orchestration()
+            .lock()
+            .get(&gid)
+            .map(|o| o.mesh_active_connected)
+            .unwrap_or(true);
+        if already {
+            return;
+        }
+        super::msgsystem::log::log_orch_milestone(&format!(
+            "Synthesizing ACTIVE_CONNECTED (no client updateMeshConnection; MsgSys TCP sim) game {gid} pid={pid}"
+        ));
+        match on_client_mesh_update(gid, pid) {
+            MeshUpdateResult::DeferredUntilHostReady => {
+                super::msgsystem::log::log_orch_debug(&format!(
+                    "Synthetic mesh held until host ready (game {gid})"
+                ));
+            }
+            MeshUpdateResult::Push(pushes) => {
+                if !pushes.is_empty() {
+                    super::fireframe::enqueue_pending_pushes(client_sid, pushes);
+                    let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+                }
+            }
+        }
+    });
 }
 
 /// Store client join notifies until the dedicated host completes setup (finalize + advance).
@@ -342,6 +436,9 @@ pub fn defer_client_join_pushes(
     });
     entry.client_session_id = client_session_id;
     if entry.join_pushes_released {
+        return None;
+    }
+    if entry.deferred_join_pushes.is_some() {
         return None;
     }
     if entry.dedicated_host_ready {
@@ -461,8 +558,18 @@ pub fn on_cmd220_delivered_to_dedicated(gid: i64) {
 
     let gid_spawn = gid;
     tokio::spawn(async move {
-        // Brief delay so dedicated MsgSysHost + SimuCloud listener can come up after cmd 220.
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let dedicated_sid = super::dedicated_pool::peek_dedicated_for_gid(gid_spawn);
+        let map_path = super::game_state::get_map_path(gid_spawn);
+        let mut delay_ms = 500u64;
+        if let Some(sid) = dedicated_sid {
+            delay_ms += super::dedicated_pool::recycle_create_game_extra_delay_ms(sid, &map_path);
+        }
+        if delay_ms > 500 {
+            super::msgsystem::log::log_orch_debug(&format!(
+                "CreateGame deferred {delay_ms}ms (recycled dedicated map switch, game {gid_spawn})"
+            ));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
         match super::msgsystem::simucloud::orchestrate_create_game(gid_spawn).await {
             Ok(()) => {
                 super::msgsystem::log::log_orch_milestone(&format!(
@@ -483,6 +590,15 @@ pub fn on_cmd220_delivered_to_dedicated(gid: i64) {
     });
 }
 
+pub fn simucloud_ready_gids() -> Vec<i64> {
+    orchestration()
+        .lock()
+        .iter()
+        .filter(|(_, o)| o.simucloud_match_ready)
+        .map(|(&gid, _)| gid)
+        .collect()
+}
+
 pub fn on_simucloud_match_ready(gid: i64) -> Option<(u64, Vec<super::fireframe::OutgoingPush>)> {
     let mut m = orchestration().lock();
     let entry = m.get_mut(&gid)?;
@@ -499,6 +615,9 @@ pub fn on_simucloud_match_ready(gid: i64) -> Option<(u64, Vec<super::fireframe::
         super::msgsystem::log::log_orch_debug(&format!(
             "SimuCloud ready; waiting for client mesh before GameReady (game {gid})"
         ));
+        // Safety net: if CANA never reports updateMeshConnection, forge it now.
+        let pid = resolve_joining_client_pid(gid, client_sid);
+        schedule_synthetic_client_mesh_if_needed(gid, client_sid, pid);
         return Some((client_sid, Vec::new()));
     }
 
@@ -524,6 +643,26 @@ pub fn try_mark_blaze_pregame_pushed(gid: i64) -> bool {
 
 pub fn blaze_pregame_already_pushed(gid: i64) -> bool {
     blaze_pregame_pushed().lock().contains(&gid)
+}
+
+/// Client received `NotifyGameSetup` from `joinGame` (browser/standby row).
+pub fn clear_blaze_join_setup_pushed(gid: i64) {
+    blaze_join_setup_pushed().lock().remove(&gid);
+}
+
+pub fn try_mark_blaze_join_setup_pushed(gid: i64) -> bool {
+    blaze_join_setup_pushed().lock().insert(gid)
+}
+
+pub fn blaze_join_setup_already_pushed(gid: i64) -> bool {
+    blaze_join_setup_pushed().lock().contains(&gid)
+}
+
+pub fn client_local_game_active(gid: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .is_some_and(|g| !g.is_standby)
 }
 
 /// Returns `true` the first time we push IN_GAME for this gid.
@@ -618,6 +757,8 @@ pub struct CncGame {
     pub uuid: String,
     pub phase: GamePhase,
     pub map_path: String,
+    /// Design start slots for this map (from lobby `select-map`); 0 = infer from roster.
+    pub start_count: i32,
     pub dedicated_session_id: Option<u64>,
     pub is_standby: bool,
     pub password: String,
@@ -899,6 +1040,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             uuid: new_uuid_v4_string(),
             phase: GamePhase::PreGame,
             map_path: String::new(),
+            start_count: 0,
             dedicated_session_id: Some(dedicated_session_id),
             is_standby: true,
             password: String::new(),
@@ -929,6 +1071,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.host_persona = 0;
     game.phase = GamePhase::PreGame;
     game.map_path.clear();
+    game.start_count = 0;
     game.password.clear();
     game.replicated_wire = None;
     game.pros_wire = None;
@@ -1100,6 +1243,228 @@ fn startpoint_from_attrs(attrs: &IndexMap<String, String>) -> i32 {
         .unwrap_or(0)
 }
 
+/// Live roster row plus pending lobby overlays (pid=0 host bucket, then exact persona).
+pub fn effective_startpoint_for_player(gid: i64, player: &CncPlayer) -> i32 {
+    let live = startpoint_from_attrs(&player.attribs);
+    if live > 0 {
+        return live;
+    }
+    let pending = pending_player_attrs().lock();
+    let Some(by_pid) = pending.get(&gid) else {
+        return live;
+    };
+    for pid in [0i64, player.persona_id] {
+        if pid == 0 && player.is_ai {
+            continue;
+        }
+        if let Some(attrs) = by_pid.get(&pid) {
+            let sp = startpoint_from_attrs(attrs);
+            if sp > 0 {
+                return sp;
+            }
+        }
+    }
+    live
+}
+
+fn infer_startpoint_capacity(
+    pending: Option<&HashMap<i64, IndexMap<String, String>>>,
+    game: &CncGame,
+) -> i32 {
+    let mut max_id = 0i32;
+    for player in &game.players {
+        let sp = startpoint_from_attrs(&player.attribs);
+        if sp > 0 {
+            max_id = max_id.max(sp);
+        }
+    }
+    if let Some(by_pid) = pending {
+        for attrs in by_pid.values() {
+            let sp = startpoint_from_attrs(attrs);
+            if sp > 0 {
+                max_id = max_id.max(sp);
+            }
+        }
+    }
+    max_id.max(game.players.len() as i32).max(1)
+}
+
+fn pending_start_count(gid: i64) -> i32 {
+    PENDING_MAPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .get(&gid)
+        .map(|info| info.start_count)
+        .unwrap_or(0)
+}
+
+fn startpoint_capacity_for_game(
+    gid: i64,
+    pending: Option<&HashMap<i64, IndexMap<String, String>>>,
+    game: &CncGame,
+) -> i32 {
+    if game.start_count > 0 {
+        return game.start_count;
+    }
+    let pending_count = pending_start_count(gid);
+    if pending_count > 0 {
+        return pending_count;
+    }
+    infer_startpoint_capacity(pending, game)
+}
+
+/// Resolve lobby `?` (0) and duplicate picks to unique Design start ids before CreateGame.
+pub fn resolve_startpoints_before_create(gid: i64) {
+    let pending_snapshot = pending_player_attrs().lock().get(&gid).cloned();
+    let map_path = get_map_path(gid);
+
+    let mut games_guard = games().lock();
+    let Some(game) = games_guard.get_mut(&gid) else {
+        return;
+    };
+    let capacity = startpoint_capacity_for_game(
+        gid,
+        pending_snapshot.as_ref(),
+        game,
+    );
+
+    let mut effective: Vec<i32> = Vec::with_capacity(game.players.len());
+    for player in &game.players {
+        let mut sp = startpoint_from_attrs(&player.attribs);
+        if sp <= 0 {
+            if let Some(ref pending) = pending_snapshot {
+                for pid in [0i64, player.persona_id] {
+                    if pid == 0 && player.is_ai {
+                        continue;
+                    }
+                    if let Some(attrs) = pending.get(&pid) {
+                        let psp = startpoint_from_attrs(attrs);
+                        if psp > 0 {
+                            sp = psp;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        effective.push(sp);
+    }
+
+    let mut used: HashSet<i32> = HashSet::new();
+    let mut needs_pick: Vec<usize> = Vec::new();
+    for (idx, sp) in effective.iter().enumerate() {
+        if *sp > 0 && used.insert(*sp) {
+            continue;
+        }
+        needs_pick.push(idx);
+    }
+
+    let mut rng = rand::thread_rng();
+    let mut free: Vec<i32> = (1..=capacity).filter(|id| !used.contains(id)).collect();
+    for i in (1..free.len()).rev() {
+        let j = rng.gen_range(0..=i);
+        free.swap(i, j);
+    }
+
+    for (pick_idx, player_idx) in needs_pick.iter().enumerate() {
+        let sp = free
+            .get(pick_idx)
+            .copied()
+            .or_else(|| (1..=capacity).find(|id| !used.contains(id)))
+            .unwrap_or(1);
+        used.insert(sp);
+        effective[*player_idx] = sp;
+    }
+
+    let picks: Vec<i32> = effective.clone();
+    for (idx, sp) in effective.into_iter().enumerate() {
+        if let Some(player) = game.players.get_mut(idx) {
+            let sp = if sp > 0 {
+                sp
+            } else {
+                effective_startpoint_for_player(gid, player).max(1)
+            };
+            player
+                .attribs
+                .insert("_startpoint".to_string(), sp.to_string());
+            player.slot = (sp - 1).max(0);
+        }
+    }
+
+    tracing::info!(
+        target: "cnc",
+        "[CNC] startpoints resolved gid={gid} map=\"{map_path}\" capacity={capacity} picks={picks:?}"
+    );
+}
+
+/// Clear lobby `_startpoint` picks after CreateGame has snapshotted the roster.
+pub fn flush_lobby_startpoints(gid: i64) {
+    {
+        let mut m = games().lock();
+        if let Some(game) = m.get_mut(&gid) {
+            for player in &mut game.players {
+                player
+                    .attribs
+                    .insert("_startpoint".to_string(), "0".to_string());
+            }
+        }
+    }
+    {
+        let mut pending = pending_player_attrs().lock();
+        if let Some(by_pid) = pending.get_mut(&gid) {
+            for attrs in by_pid.values_mut() {
+                if attrs.contains_key("_startpoint") {
+                    attrs.insert("_startpoint".to_string(), "0".to_string());
+                }
+            }
+        }
+    }
+    tracing::info!(
+        target: "cnc",
+        "[CNC] flushed lobby startpoints gid={gid}"
+    );
+}
+
+/// Zero any lobby startpoint pick outside `1..=capacity` (map change / select-map).
+pub fn clamp_lobby_startpoints(gid: i64, capacity: i32) {
+    if capacity <= 0 {
+        return;
+    }
+    let mut changed = false;
+    {
+        let mut m = games().lock();
+        if let Some(game) = m.get_mut(&gid) {
+            for player in &mut game.players {
+                let sp = startpoint_from_attrs(&player.attribs);
+                if sp > capacity {
+                    player
+                        .attribs
+                        .insert("_startpoint".to_string(), "0".to_string());
+                    changed = true;
+                }
+            }
+        }
+    }
+    {
+        let mut pending = pending_player_attrs().lock();
+        if let Some(by_pid) = pending.get_mut(&gid) {
+            for attrs in by_pid.values_mut() {
+                let sp = startpoint_from_attrs(attrs);
+                if sp > capacity {
+                    attrs.insert("_startpoint".to_string(), "0".to_string());
+                    changed = true;
+                }
+            }
+        }
+    }
+    if changed {
+        tracing::info!(
+            target: "cnc",
+            "[CNC] clamped lobby startpoints gid={gid} capacity={capacity}"
+        );
+    }
+}
+
 /// Lobby AI slots used to POST `pid=0`. Negative ids never collide with a Blaze persona.
 fn synthetic_ai_persona(startpoint: i32) -> i64 {
     let sp = if startpoint > 0 { startpoint as i64 } else { 1 };
@@ -1173,7 +1538,7 @@ fn ensure_general_attr(player: &mut CncPlayer) {
         faction.trim().to_ascii_uppercase().as_str(),
         "USA" | "NONE" | "" | "0"
     ) {
-        let map = get_map_path(DEDICATED_MATCH_GID);
+        let map = get_map_path(resolve_host_reset_gid());
         let map = if map.is_empty() {
             DEFAULT_MAP_PATH.to_string()
         } else {
@@ -1309,25 +1674,9 @@ pub fn set_pending_player_attrs(gid: i64, mut persona_id: i64, attrs: IndexMap<S
     if attrs_mark_ai(&attrs) && persona_id == 0 {
         persona_id = synthetic_ai_persona(startpoint_from_attrs(&attrs));
         strip_poisoned_host_ai_pending(gid);
-        if gid != DEDICATED_MATCH_GID {
-            strip_poisoned_host_ai_pending(DEDICATED_MATCH_GID);
-        }
     }
     write_pending_player_attrs(gid, persona_id, &attrs);
     apply_pending_attrs_to_live_game(gid, persona_id, &attrs);
-    if gid != DEDICATED_MATCH_GID {
-        write_pending_player_attrs(DEDICATED_MATCH_GID, persona_id, &attrs);
-        apply_pending_attrs_to_live_game(DEDICATED_MATCH_GID, persona_id, &attrs);
-        tracing::info!(
-            target: "cnc",
-            "[CNC] player-attrs mirrored lobby gid={} → dedicated gid={} pid={} faction={:?} general={:?}",
-            gid,
-            DEDICATED_MATCH_GID,
-            persona_id,
-            attrs.get("_faction"),
-            attrs.get("_general")
-        );
-    }
 }
 
 pub fn adopt_host_lobby_pending_attrs_into(dedicated_gid: i64) {
@@ -1482,7 +1831,7 @@ fn default_general_for_faction(faction: &str) -> &'static str {
         "ESC" | "EU" => DEFAULT_GENERAL_EU_CLASSIC,
         "GLA" => DEFAULT_GENERAL_GLA_CLASSIC,
         _ => {
-            let map = get_map_path(DEDICATED_MATCH_GID);
+            let map = get_map_path(resolve_host_reset_gid());
             if is_alpha_tutorial_map(&map) || (map.is_empty() && is_alpha_tutorial_map(DEFAULT_MAP_PATH))
             {
                 DEFAULT_GENERAL_EU_TUTORIAL
@@ -1537,11 +1886,11 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player);
-    let (dedicated_session_id, is_standby, password) = games()
+    let (dedicated_session_id, password) = games()
         .lock()
         .get(&gid)
-        .map(|g| (g.dedicated_session_id, g.is_standby, g.password.clone()))
-        .unwrap_or((None, false, String::new()));
+        .map(|g| (g.dedicated_session_id, g.password.clone()))
+        .unwrap_or((None, String::new()));
     let game = CncGame {
         gid,
         name: gnam,
@@ -1551,8 +1900,9 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         uuid,
         phase: GamePhase::Resetable,
         map_path,
+        start_count: pending_start_count(gid),
         dedicated_session_id,
-        is_standby,
+        is_standby: false,
         password,
         replicated_wire: None,
         pros_wire: None,
@@ -1601,6 +1951,7 @@ pub fn seed_from_join(gid: i64) {
             uuid: new_uuid_v4_string(),
             phase: GamePhase::Resetable,
             map_path,
+            start_count: pending_start_count(gid),
             dedicated_session_id: None,
             is_standby: false,
             password: String::new(),
@@ -1790,6 +2141,19 @@ pub fn dedicated_session_id_for_gid(gid: i64) -> Option<u64> {
 }
 
 pub fn reclaim_after_empty_humans(gid: i64) -> serde_json::Value {
+    if crate::client::cnc::dedicated_pool::reclaim_notify_recent_for_gid(gid) {
+        crate::debug_println!(
+            "\x1b[38;2;100;200;255m[CNC]\x1b[0m reclaim after empty humans skipped — notify already sent (gid={})",
+            gid
+        );
+        return serde_json::json!({
+            "ok": true,
+            "gid": gid,
+            "humans": 0,
+            "standbyReset": true,
+            "reclaimCoalesced": true,
+        });
+    }
     let dedicated_sid = crate::client::cnc::dedicated_pool::reclaim_gid_to_idle_pool(gid);
     {
         let mut m = games().lock();
@@ -1820,7 +2184,7 @@ pub fn reclaim_after_empty_humans(gid: i64) -> serde_json::Value {
     }
 
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m reclaim after empty humans gid={} dedicated={:?} → Idle + Standby",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m reclaim after empty humans gid={} dedicated={:?} → Recycling then Standby",
         gid,
         dedicated_sid
     );
@@ -2088,11 +2452,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         .iter()
         .map(|p| {
             let is_host = p.persona_id == host && host != 0;
-            let startpoint = p
-                .attribs
-                .get("_startpoint")
-                .and_then(|s| s.parse::<i32>().ok())
-                .unwrap_or(0);
+            let startpoint = effective_startpoint_for_player(gid, p);
             serde_json::json!({
                 "pid": p.persona_id,
                 "name": p.display_name,
@@ -2117,30 +2477,64 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
     })
 }
 
-const DEDICATED_MATCH_GID: i64 = 1;
+/// GID for resetDedicatedServer when the wire omits RGID — reuse the host pool lobby row (10xxx).
+pub fn resolve_host_reset_gid() -> i64 {
+    let host = host_persona();
+    let best_pool_lobby: Option<i64> = {
+        let m = games().lock();
+        let mut best: Option<(i64, u8)> = None;
+        for (gid, g) in m.iter() {
+            if *gid < 10_000 {
+                continue;
+            }
+            let owned = g.host_persona == host || (g.is_standby && g.host_persona == 0);
+            if !owned {
+                continue;
+            }
+            let score = u8::from(!g.map_path.is_empty()) * 4
+                + u8::from(!g.players.is_empty()) * 2
+                + u8::from(g.is_standby);
+            if best.map(|(_, s)| score > s).unwrap_or(true) {
+                best = Some((*gid, score));
+            }
+        }
+        best.map(|(gid, _)| gid)
+    };
+    if let Some(gid) = best_pool_lobby {
+        return gid;
+    }
+    if let Some(gid) = crate::client::cnc::dedicated_pool::registered_pool_gid() {
+        return gid;
+    }
+    1
+}
 
-fn write_pending_map(gid: i64, map_path: &str) {
+fn write_pending_map(gid: i64, map_path: &str, start_count: i32) {
     PENDING_MAPS
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
-        .insert(gid, map_path.to_string());
+        .insert(
+            gid,
+            PendingMapInfo {
+                path: map_path.to_string(),
+                start_count,
+            },
+        );
     if let Some(game) = games().lock().get_mut(&gid) {
         game.map_path = map_path.to_string();
+        if start_count > 0 {
+            game.start_count = start_count;
+        }
     }
 }
 
 pub fn set_map_path(gid: i64, map_path: &str) {
-    write_pending_map(gid, map_path);
-    if gid != DEDICATED_MATCH_GID {
-        write_pending_map(DEDICATED_MATCH_GID, map_path);
-        tracing::info!(
-            target: "cnc",
-            "[CNC] select-map mirrored lobby gid={} → dedicated gid={} path=\"{}\"",
-            gid,
-            DEDICATED_MATCH_GID,
-            map_path
-        );
-    }
+    set_map_selection(gid, map_path, 0);
+}
+
+pub fn set_map_selection(gid: i64, map_path: &str, start_count: i32) {
+    write_pending_map(gid, map_path, start_count);
+    clamp_lobby_startpoints(gid, start_count);
 }
 
 pub fn adopt_host_lobby_pending_into(dedicated_gid: i64) -> Option<String> {
@@ -2161,23 +2555,24 @@ pub fn adopt_host_lobby_pending_into(dedicated_gid: i64) -> Option<String> {
         lobby_gids.into_iter().find_map(|lobby_gid| {
             pending
                 .get(&lobby_gid)
-                .filter(|p| !p.is_empty())
+                .filter(|info| !info.path.is_empty())
                 .cloned()
-                .map(|p| (lobby_gid, p))
+                .map(|info| (lobby_gid, info))
         })
     };
-    let Some((lobby_gid, path)) = path else {
+    let Some((lobby_gid, info)) = path else {
         return None;
     };
-    write_pending_map(dedicated_gid, &path);
+    write_pending_map(dedicated_gid, &info.path, info.start_count);
     tracing::info!(
         target: "cnc",
-        "[CNC] adopted lobby PENDING gid={} → dedicated gid={} path=\"{}\"",
+        "[CNC] adopted lobby PENDING gid={} → dedicated gid={} path=\"{}\" start_count={}",
         lobby_gid,
         dedicated_gid,
-        path
+        info.path,
+        info.start_count
     );
-    Some(path)
+    Some(info.path)
 }
 
 pub fn clear_pending_map(gid: i64) {
@@ -2188,9 +2583,10 @@ pub fn clear_pending_map(gid: i64) {
     if let Some(prev) = removed {
         tracing::info!(
             target: "cnc",
-            "[CNC] clear pending map gid={} was=\"{}\"",
+            "[CNC] clear pending map gid={} was=\"{}\" start_count={}",
             gid,
-            prev
+            prev.path,
+            prev.start_count
         );
     }
 }
@@ -2200,7 +2596,7 @@ pub fn get_map_path(gid: i64) -> String {
         .get_or_init(|| Mutex::new(HashMap::new()))
         .lock()
         .get(&gid)
-        .cloned()
+        .map(|info| info.path.clone())
         .unwrap_or_default();
     if !pending.is_empty() {
         return pending;
@@ -2345,22 +2741,19 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
     let player = {
         let mut m = games().lock();
         let game = m.get_mut(&gid)?;
-        if let Some(existing) = game
+        if let Some(existing_idx) = game
             .players
             .iter()
-            .find(|p| p.persona_id == persona_id)
-            .cloned()
+            .position(|p| p.persona_id == persona_id)
         {
+            merge_pending_into_player(gid, &mut game.players[existing_idx]);
             if game.host_persona == 0 {
                 game.host_persona = persona_id;
             }
             if game.host_persona == persona_id {
-                if let Some(p) = game.players.iter_mut().find(|p| p.persona_id == persona_id) {
-                    p.ready = true;
-                    return Some(p.clone());
-                }
+                game.players[existing_idx].ready = true;
             }
-            return Some(existing);
+            return Some(game.players[existing_idx].clone());
         }
         if game.host_persona == 0 {
             game.host_persona = persona_id;
@@ -2888,6 +3281,20 @@ pub fn browser_game_list_json() -> serde_json::Value {
             .filter(|s| !s.is_empty())
             .unwrap_or(if game.is_standby { "Standby" } else { "Unknown" });
         let pool_entry = crate::client::cnc::dedicated_pool::get_entry(sid);
+        let assignable = pool_entry
+            .as_ref()
+            .map(|e| crate::client::cnc::dedicated_pool::is_assignable(e))
+            .unwrap_or(false);
+        let recycling = pool_entry
+            .as_ref()
+            .map(|e| {
+                e.creator_registered
+                    && (matches!(
+                        e.state,
+                        crate::client::cnc::dedicated_pool::DedicatedPoolState::Recycling
+                    ) || !crate::client::cnc::dedicated_pool::is_assignable(e))
+            })
+            .unwrap_or(false);
         let display_name = if game.is_standby || humans == 0 {
             pool_entry
                 .as_ref()
@@ -2896,7 +3303,21 @@ pub fn browser_game_list_json() -> serde_json::Value {
         } else {
             game.name.clone()
         };
-        let ping_host = pool_entry.map(|e| {
+        // Standby / reclaim rows must not report PreGame as browser "Lobby".
+        let (phase_label, joinable) = if recycling {
+            ("Recycling", false)
+        } else if game.is_standby || humans == 0 {
+            ("Standby", assignable)
+        } else {
+            (
+                game.phase.label(),
+                matches!(
+                    game.phase,
+                    GamePhase::PreGame | GamePhase::Resetable | GamePhase::InGame
+                ),
+            )
+        };
+        let ping_host = pool_entry.as_ref().map(|e| {
             e.peer
                 .parse::<std::net::SocketAddr>()
                 .map(|sa| sa.ip().to_string())
@@ -2911,17 +3332,17 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "humans": humans,
             "maxPlayers": game.max_players,
             "admin": game.host_persona,
-            "phase": game.phase.label(),
+            "phase": phase_label,
             "phaseCode": game.phase.as_gsta(),
             "kind": if game.is_standby { "standby" } else { "game" },
-            "joinable": matches!(
-                game.phase,
-                GamePhase::PreGame | GamePhase::Resetable | GamePhase::InGame
-            ),
+            "joinable": joinable,
             "dedicatedSessionId": dedicated_session_id,
             "pingMs": serde_json::Value::Null,
             "pingHost": ping_host,
-            "pingPort": crate::client::cnc::dedicated_pool::DEDICATED_PING_TCP_PORT,
+            "pingPort": pool_entry
+                .as_ref()
+                .map(|e| crate::client::cnc::dedicated_pool::msg_sys_port(e))
+                .unwrap_or(crate::client::cnc::dedicated_pool::DEDICATED_PING_TCP_PORT),
             "isStandby": game.is_standby,
             "passwordProtected": !game.password.is_empty(),
             "passwordAttr": "_password",
@@ -2934,29 +3355,22 @@ pub fn browser_game_list_json() -> serde_json::Value {
         if listed_standby_sessions.contains(&entry.blaze_session_id) {
             continue;
         }
-        let idle = entry.creator_registered
+        let show = entry.creator_registered
             && matches!(
                 entry.state,
                 crate::client::cnc::dedicated_pool::DedicatedPoolState::Idle
                     | crate::client::cnc::dedicated_pool::DedicatedPoolState::CreatorRegistered
+                    | crate::client::cnc::dedicated_pool::DedicatedPoolState::Recycling
             );
-        if !idle {
+        if !show {
             continue;
         }
-        let name = crate::client::cnc::dedicated_pool::browser_server_name(&entry);
-        let map_leaf = if matches!(
+        let recycling = matches!(
             entry.state,
-            crate::client::cnc::dedicated_pool::DedicatedPoolState::Idle
-                | crate::client::cnc::dedicated_pool::DedicatedPoolState::CreatorRegistered
-        ) {
-            "Standby"
-        } else {
-            entry
-                .current_map
-                .as_deref()
-                .and_then(|p| p.rsplit('/').next())
-                .unwrap_or("Standby")
-        };
+            crate::client::cnc::dedicated_pool::DedicatedPoolState::Recycling
+        ) || !crate::client::cnc::dedicated_pool::is_assignable(&entry);
+        let name = crate::client::cnc::dedicated_pool::browser_server_name(&entry);
+        let map_leaf = "Standby";
         let gid = entry.current_gid.unwrap_or(0);
         let ping_host = entry
             .peer
@@ -2972,14 +3386,14 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "humans": 0,
             "maxPlayers": 8,
             "admin": 0,
-            "phase": entry.state.label(),
+            "phase": if recycling { "Recycling" } else { "Standby" },
             "phaseCode": 0,
             "kind": "standby",
-            "joinable": gid > 0,
+            "joinable": !recycling && gid > 0,
             "dedicatedSessionId": entry.blaze_session_id,
             "pingMs": serde_json::Value::Null,
             "pingHost": ping_host,
-            "pingPort": crate::client::cnc::dedicated_pool::DEDICATED_PING_TCP_PORT,
+            "pingPort": crate::client::cnc::dedicated_pool::msg_sys_port(&entry),
             "isStandby": true,
             "passwordProtected": false,
         }));
@@ -2994,6 +3408,23 @@ pub fn players_for_gid(gid: i64) -> Vec<CncPlayer> {
         .get(&gid)
         .map(|g| g.players.clone())
         .unwrap_or_default()
+}
+
+/// Live match gids where this human persona is on the roster (MsgSys hub routing).
+pub fn gids_for_human_persona(persona_id: i64) -> Vec<i64> {
+    if persona_id <= 0 {
+        return Vec::new();
+    }
+    games()
+        .lock()
+        .iter()
+        .filter_map(|(&gid, g)| {
+            g.players
+                .iter()
+                .any(|p| !p.is_ai && p.persona_id == persona_id)
+                .then_some(gid)
+        })
+        .collect()
 }
 
 /// Dedicated reset host: move local player out of `ACTIVE_CONNECTING` after platform-host init.

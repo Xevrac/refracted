@@ -118,7 +118,7 @@ function refreshWindow() {
 }
 
 function quitClient() {
-    gameclient.execute('RTSClient.Quit');
+    gameclient.execute('quit true');
 }
 
 var drawScreenInfoEnabled = false;

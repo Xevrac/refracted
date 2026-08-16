@@ -276,6 +276,7 @@ fn dedicated_pool_state_badge(state: refracted::client::cnc::dedicated_pool::Ded
         DedicatedPoolState::Connected => ("Tracked", (140, 140, 140)),
         DedicatedPoolState::CreatorRegistered => ("Registered", (120, 180, 255)),
         DedicatedPoolState::Idle => ("Idle", COLOR_CLIENT_ACCENT),
+        DedicatedPoolState::Recycling => ("Recycling", (255, 200, 100)),
         DedicatedPoolState::InUse => ("In use", (255, 190, 90)),
     }
 }
@@ -377,6 +378,7 @@ impl RefractedApp {
         if let Err(e) = refracted::common::boot::boot_emulator(refracted::common::boot::BootOptions {
             data_dir: None,
             game_id: game_override,
+            env: None,
         }) {
             eprintln!("Failed to initialize settings: {}", e);
         } else {
@@ -2046,7 +2048,7 @@ fn accounts_window(ctx: &egui::Context, open: &mut bool) {
                 ui.heading("User Profiles");
                 ui.label(
                     egui::RichText::new(
-                        "Nucleus layer for profile data use when emulating Blaze.",
+                        "Nexus backend for Refracted accounts when emulating Blaze.",
                     )
                     .small()
                     .weak(),
@@ -2874,7 +2876,7 @@ fn options_window(ctx: &egui::Context, open: &mut bool) {
                         &mut app_settings.auto_start_emulator,
                         "Autostart Emulator on launch",
                     )
-                    .on_hover_text("Starts the emulator when Refracted opens (also: -autoEmu). Headless: -noGui -autoEmu or rfrcli --game <id>")
+                    .on_hover_text("Starts the emulator when Refracted opens (also: -autoEmu). Production headless: rfrcli")
                     .changed()
                 {
                     settings_changed = true;
@@ -3122,7 +3124,7 @@ struct CliLaunchFlags {
     no_gui: bool,
     /// Autostart emulator (`-autoEmu` / `--auto-emu`); with GUI also honors Options setting.
     auto_emu: bool,
-    /// Optional game id override (`-g` / `--game`), same as headless.
+    /// Optional game id override (`-g` / `--game`).
     game: Option<String>,
 }
 
@@ -3219,6 +3221,7 @@ async fn main() -> Result<()> {
         if let Err(e) = refracted::common::boot::boot_emulator(refracted::common::boot::BootOptions {
             data_dir: None,
             game_id: cli.game.clone(),
+            env: None,
         }) {
             eprintln!("Failed to initialize settings: {}", e);
             return Err(anyhow::anyhow!("boot failed: {e}"));
@@ -3228,7 +3231,7 @@ async fn main() -> Result<()> {
         if !(cli.auto_emu || settings_auto) {
             eprintln!("-noGui requires -autoEmu (or Options → Autostart Emulator).");
             eprintln!("Example: refracted.exe -noGui -autoEmu");
-            eprintln!("Or use: rfrcli --game <id>");
+            eprintln!("Production: rfrcli (uses refracted.env)");
             return Err(anyhow::anyhow!("-noGui without auto-start"));
         }
 
@@ -3236,8 +3239,10 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|_| EnvFilter::new("info"))
             .add_directive("rustls=warn".parse().unwrap())
             .add_directive("h2=warn".parse().unwrap());
+        refracted::core::console::enable_windows_vt();
         let _ = tracing_subscriber::fmt()
             .with_target(false)
+            .with_ansi(true)
             .with_env_filter(filter)
             .try_init();
 

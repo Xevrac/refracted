@@ -36,7 +36,8 @@
     position: absolute;
     top: 16px;
     left: 18px;
-    right: 354px;
+    /* 320px social rail + 18px gap (mirrors left inset) */
+    right: 338px;
     bottom: 16px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
@@ -44,13 +45,15 @@
     overflow: visible;
 }
 
+/* Match home .au-side: flush rail, no inset frame / HUD corners. */
 .au-lobby__side {
     position: absolute;
-    top: 16px;
-    right: 16px;
-    bottom: 16px;
+    top: 0;
+    right: 0;
+    bottom: 0;
     width: 320px;
-    border: 1px solid #1c2a32;
+    border: none;
+    border-left: 1px solid #1c2a32;
     background: rgba(12, 15, 13, 0.9);
     overflow: hidden;
 }
@@ -1198,12 +1201,27 @@
     box-sizing: border-box;
 }
 
+.au-lobby__maps-preview-art .au-lobby__map-crop {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
 .au-lobby__maps-preview-art img {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+}
+
+.au-lobby__pip--preview {
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.92;
 }
 
 .au-lobby__maps-preview-meta {
@@ -1227,17 +1245,6 @@
     text-transform: uppercase;
 }
 
-.au-lobby__start-modal {
-    width: 360px;
-    max-width: 92%;
-    padding: 22px 24px 18px;
-    text-align: left;
-    top: 42%;
-    left: 50%;
-    margin: 0;
-    -webkit-transform: translate(-50%, -50%);
-    transform: translate(-50%, -50%);
-}
 
 .au-lobby__start-modal-title {
     margin: 0 0 8px 0;
@@ -1877,7 +1884,7 @@
 
 /* Root-level accident: never cover the social rail (content column only). */
 .au-lobby > .au-lobby__modal {
-    right: 352px;
+    right: 320px;
 }
 
 .au-lobby__modal-box {
@@ -1900,4 +1907,16 @@
 .au-lobby__modal-box .au-btn {
     margin-top: 16px;
     min-width: 120px;
+}
+
+.au-lobby__modal-box.au-lobby__start-modal {
+    top: 50%;
+    left: 50%;
+    width: 360px;
+    max-width: 92%;
+    margin: 0;
+    padding: 22px 24px 18px;
+    text-align: left;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
 }

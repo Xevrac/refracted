@@ -4,7 +4,7 @@
 //! - [`core`] -- Server lifecycle, console/logging, the **toolkit** (inspectors, research proxies).
 //! - [`blaze`], [`http`], [`web`], [`lsx`], [`qos`], [`rtm`] -- Service layers (listeners and handlers).
 //! - [`grpc`], [`jwt`], [`session`], [`crypto`] -- Shared building blocks for auth and wire formats.
-//! - [`nucleus`] -- Game-agnostic identity/account layer (Settings → Accounts); feeds Blaze handler inputs.
+//! - [`nexus`] -- Refracted identity/account backend (Settings → Accounts); feeds Blaze handler inputs.
 //! - [`client`] -- Title-specific logic (`labs`, `cnc`, …), selected by [`common::game`] from `games.json`.
 //!
 
@@ -44,8 +44,8 @@ pub mod crypto;
 // Common utilities
 pub mod common;
 
-// Nucleus identity / account façade (game-agnostic)
-pub mod nucleus;
+// Nexus identity / account backend (Refracted accounts)
+pub mod nexus;
 
 // Per-game (client) configuration and title-specific logic
 pub mod client;

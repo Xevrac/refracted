@@ -14,8 +14,8 @@ use super::messages::{
     REQUEST_RANDOM_GENERAL_TAUNT_TYPE_ID, REQUEST_SPECIFIC_GENERAL_TAUNT_TYPE_ID,
     START_GAME_TYPE_ID,
 };
-use super::LOG_TAG;
 
+pub const RTS_TAG: &str = "\x1b[38;2;56;156;220m[RTS]\x1b[0m";
 const SIM_TAG: &str = "\x1b[38;2;140;180;140m[SIM]\x1b[0m";
 const ORCH_TAG: &str = "\x1b[38;2;140;180;220m[Orchestration]\x1b[0m";
 
@@ -56,10 +56,10 @@ fn is_handshake_milestone(type_id: u16) -> bool {
 
 fn relay_milestone_line(direction: RelayDirection, frame_name: &str) -> String {
     match direction {
-        RelayDirection::ClientToRts => format!("[{LOG_TAG}] Client → hub: {frame_name}"),
-        RelayDirection::RtsToClient => format!("[{LOG_TAG}] Hub → client: {frame_name}"),
-        RelayDirection::RtsToServer => format!("[{LOG_TAG}] Hub → dedicated: {frame_name}"),
-        RelayDirection::ServerToRts => format!("[{LOG_TAG}] Dedicated → hub: {frame_name}"),
+        RelayDirection::ClientToRts => format!("{RTS_TAG} Client → hub: {frame_name}"),
+        RelayDirection::RtsToClient => format!("{RTS_TAG} Hub → client: {frame_name}"),
+        RelayDirection::RtsToServer => format!("{RTS_TAG} Hub → dedicated: {frame_name}"),
+        RelayDirection::ServerToRts => format!("{RTS_TAG} Dedicated → hub: {frame_name}"),
     }
 }
 
@@ -78,16 +78,16 @@ fn relay_debug_line(
     };
     match direction {
         RelayDirection::ClientToRts => format!(
-            "[{LOG_TAG}] {peer} client→hub typeId={type_id} len={payload_len} ({name}){suffix}"
+            "{RTS_TAG} {peer} client→hub typeId={type_id} len={payload_len} ({name}){suffix}"
         ),
         RelayDirection::RtsToClient => format!(
-            "[{LOG_TAG}] {peer} hub→client typeId={type_id} len={payload_len} ({name}){suffix}"
+            "{RTS_TAG} {peer} hub→client typeId={type_id} len={payload_len} ({name}){suffix}"
         ),
         RelayDirection::RtsToServer => format!(
-            "[{LOG_TAG}] {peer} hub→dedicated typeId={type_id} len={payload_len} ({name}){suffix}"
+            "{RTS_TAG} {peer} hub→dedicated typeId={type_id} len={payload_len} ({name}){suffix}"
         ),
         RelayDirection::ServerToRts => format!(
-            "[{LOG_TAG}] {peer} dedicated→hub typeId={type_id} len={payload_len} ({name}){suffix}"
+            "{RTS_TAG} {peer} dedicated→hub typeId={type_id} len={payload_len} ({name}){suffix}"
         ),
     }
 }
@@ -109,8 +109,9 @@ fn emit_compact_upsert(upsert_key: String, text: &str, count: u32) {
     let ansi = if count <= 1 {
         text.to_string()
     } else {
-        format!("{text} x{count}")
+        format!("{text} \x1b[38;2;140;140;140mx{count}\x1b[0m")
     };
+    // GUI upsert / headless in-place CLI mirror (no per-count tracing spam).
     push_grpc_compact_upsert(upsert_key, &ansi);
 }
 
@@ -146,16 +147,16 @@ fn log_relay(
         flush_relay_log_compactor();
         info!("{}", relay_milestone_line(direction, frame_name));
         if type_id == ALLOW_INPUT_CHANGE_TYPE_ID && extra.starts_with("payload=") {
-            info!("[{LOG_TAG}] AllowInputChange wire {extra}");
+            info!("{RTS_TAG} AllowInputChange wire {extra}");
         }
     }
 }
 
 pub fn log_rts_system(peer: SocketAddr, detail: &str) {
     if detail.contains("connected") || detail.contains('↔') {
-        info!("[{LOG_TAG}] {peer} {detail}");
+        info!("{RTS_TAG} {peer} {detail}");
     } else {
-        debug!("[{LOG_TAG}] {peer} {detail}");
+        debug!("{RTS_TAG} {peer} {detail}");
     }
 }
 

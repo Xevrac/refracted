@@ -1,6 +1,7 @@
-﻿//! Transparent TCP bridge between game `ClientHost` and dedicated Prism `ServerHost` on
-//! [`DEDICATED_SERVERHOST_PORT`]. When dedicated is not listening, the hub closes the
-//! client connection (Prism owns production ServerHost -- no Refracted join substitute).
+﻿//! Transparent TCP bridge between game `ClientHost` and the assigned dedicated Prism
+//! `ServerHost` (`-Prism.MsgSysPort`, default 18387). When that dedicated is not listening,
+//! the hub closes the client connection (Prism owns production ServerHost -- no Refracted
+//! join substitute).
 
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -12,12 +13,13 @@ use tracing::warn;
 
 use super::log::{
     log_client_to_rts, log_rts_system, log_rts_to_client, log_rts_to_server, log_server_to_rts,
+    RTS_TAG,
 };
 use super::messages::{
-    decode_load_map_id, ALLOW_INPUT_CHANGE_TYPE_ID, LOAD_MAP_TYPE_ID,
+    decode_client_hello, decode_load_map_id, ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID,
+    LOAD_MAP_TYPE_ID,
 };
 use super::wire::SimpleFrame;
-use super::LOG_TAG;
 
 pub const DEDICATED_SERVERHOST_PORT: u16 = 18387;
 
@@ -28,8 +30,7 @@ const UPSTREAM_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 const UPSTREAM_WAIT_BUDGET: Duration = Duration::from_secs(8);
 const RELAY_CHUNK: usize = 4096;
 
-pub async fn try_connect_upstream() -> Option<TcpStream> {
-    let upstream = SocketAddr::from(([127, 0, 0, 1], DEDICATED_SERVERHOST_PORT));
+pub async fn try_connect_upstream_to(upstream: SocketAddr) -> Option<TcpStream> {
     let deadline = Instant::now() + UPSTREAM_WAIT_BUDGET;
     let mut attempts: u32 = 0;
     let mut last_err = String::new();
@@ -40,9 +41,7 @@ pub async fn try_connect_upstream() -> Option<TcpStream> {
             Ok(Ok(stream)) => {
                 log_rts_system(
                     upstream,
-                    &format!(
-                        "upstream server connected after {attempts} attempt(s)"
-                    ),
+                    &format!("upstream server connected after {attempts} attempt(s)"),
                 );
                 return Some(stream);
             }
@@ -58,10 +57,51 @@ pub async fn try_connect_upstream() -> Option<TcpStream> {
 
     log_rts_system(
         upstream,
-        &format!(
-            "no dedicated server on {upstream} after {attempts} attempt(s) ({last_err})"
-        ),
+        &format!("no dedicated server on {upstream} after {attempts} attempt(s) ({last_err})"),
     );
+    None
+}
+
+/// Buffer client bytes until `ClientHello` so the hub can bind this TCP to one match session.
+pub async fn peek_client_hello_persona(
+    client: &mut TcpStream,
+) -> std::io::Result<(Vec<u8>, Option<u64>)> {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; RELAY_CHUNK];
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        if let Some(pid) = persona_from_hello_buf(&buf) {
+            return Ok((buf, Some(pid)));
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            let persona = persona_from_hello_buf(&buf);
+            return Ok((buf, persona));
+        }
+        match timeout(remaining, client.read(&mut chunk)).await {
+            Ok(Ok(0)) => {
+                let persona = persona_from_hello_buf(&buf);
+                return Ok((buf, persona));
+            }
+            Ok(Ok(n)) => buf.extend_from_slice(&chunk[..n]),
+            Ok(Err(e)) => return Err(e),
+            Err(_) => {
+                let persona = persona_from_hello_buf(&buf);
+                return Ok((buf, persona));
+            }
+        }
+    }
+}
+
+fn persona_from_hello_buf(buf: &[u8]) -> Option<u64> {
+    let mut rest = buf;
+    while let Ok(Some((frame, consumed))) = SimpleFrame::try_read(rest) {
+        if frame.type_id == CLIENT_HELLO_TYPE_ID {
+            let pid = decode_client_hello(&frame.payload).filter(|&p| p != 0);
+            return pid;
+        }
+        rest = &rest[consumed..];
+    }
     None
 }
 
@@ -70,9 +110,7 @@ pub async fn relay_pair(
     server: TcpStream,
     client_peer: SocketAddr,
 ) -> std::io::Result<()> {
-    let upstream_peer = server
-        .peer_addr()
-        .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], DEDICATED_SERVERHOST_PORT)));
+    let upstream_peer = server.peer_addr().unwrap_or(client_peer);
     let (mut client_read, mut client_write) = client.into_split();
     let (mut server_read, mut server_write) = server.into_split();
 
@@ -164,8 +202,9 @@ where
     }
 }
 
-pub fn log_upstream_missing(peer: SocketAddr) {
-    warn!(
-        "[{LOG_TAG}] {peer} dedicated server not on 127.0.0.1:{DEDICATED_SERVERHOST_PORT}"
-    );
+pub fn log_upstream_missing(peer: SocketAddr, upstream: Option<SocketAddr>) {
+    match upstream {
+        Some(up) => warn!("{RTS_TAG} {peer} dedicated ServerHost not on {up}"),
+        None => warn!("{RTS_TAG} {peer} no MsgSys route for this client session"),
+    }
 }

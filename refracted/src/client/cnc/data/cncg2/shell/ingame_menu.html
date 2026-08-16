@@ -12,7 +12,7 @@
 </head>
 <body class="ingame-aurora" ng-controller="IngameMenuController" ng-cloak>
 
-    <div class="pause-menu" ng-hide="optionsOpen">
+    <div class="pause-menu" ng-hide="optionsOpen || quittingOpen">
         <button type="button" class="pause-menu-btn" ng-click="openOptions()">OPTIONS</button>
         <button type="button" class="pause-menu-btn" ng-click="openConfirmSurrender()">SURRENDER</button>
         <button type="button" class="pause-menu-btn" ng-click="openConfirmQuit()">QUIT GAME</button>
@@ -30,14 +30,20 @@
         </div>
     </div>
 
-    <div class="confirm-modal-overlay" ng-show="confirmQuitOpen && !optionsOpen">
+    <div class="confirm-modal-overlay" ng-show="confirmQuitOpen && !optionsOpen && !quittingOpen">
         <div class="confirm-modal-box">
             <h2 class="confirm-modal-title">Confirm Quit?</h2>
-            <p class="confirm-modal-msg">Are you sure you want to exit the game?</p>
+            <p class="confirm-modal-msg">Are you sure you want to quit to desktop?</p>
             <div class="confirm-modal-actions">
                 <button type="button" class="confirm-btn" ng-click="confirmQuitYes()">YES</button>
                 <button type="button" class="confirm-btn" ng-click="cancelConfirm()">NO</button>
             </div>
+        </div>
+    </div>
+
+    <div class="quit-progress-overlay" ng-show="quittingOpen">
+        <div class="quit-progress-box">
+            <p class="quit-progress-msg">Quitting game..</p>
         </div>
     </div>
 

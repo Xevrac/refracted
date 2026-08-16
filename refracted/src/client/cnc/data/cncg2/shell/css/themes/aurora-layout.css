@@ -196,7 +196,7 @@ body.cc-theme--aurora .cc-shell-root--aurora {
     left: 0;
     bottom: 36px;
     width: 140px;
-    padding: 16px 10px 62px 10px;
+    padding: 16px 10px 98px 10px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     background: rgba(12, 15, 13, 0.88);
@@ -231,6 +231,17 @@ body.cc-theme--aurora .cc-shell-root--aurora {
     margin-top: 4px;
 }
 .au-rail__grow { height: 24px; }
+
+.au-rail__item--support {
+    position: absolute;
+    left: 10px;
+    right: 8px;
+    bottom: 58px;
+    width: auto;
+    margin: 0;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
 
 .au-build--rail {
     display: block;

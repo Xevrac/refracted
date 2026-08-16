@@ -4,6 +4,7 @@ fn emit_compact(upsert_key: String, line: &str, count: u32) {
     } else {
         format!("{} \x1b[38;2;140;140;140mx{}\x1b[0m", line, count)
     };
+    // GUI: Shell upsert row. Headless: in-place CLI mirror inside push_grpc_compact_upsert.
     crate::core::console::push_grpc_compact_upsert(upsert_key, &ansi);
 }
 

@@ -42,6 +42,11 @@ pub fn take_pending_pushes(blaze_session_id: u64) -> Vec<OutgoingPush> {
         .unwrap_or_default()
 }
 
+/// Drop queued Blaze notifications for a dedicated session (stale GameReady, duplicate reclaim, …).
+pub fn clear_pending_pushes(blaze_session_id: u64) {
+    pending_pushes().lock().remove(&blaze_session_id);
+}
+
 pub fn enqueue_pending_pushes(blaze_session_id: u64, pushes: Vec<OutgoingPush>) {
     if pushes.is_empty() {
         return;
@@ -73,32 +78,83 @@ pub fn pushes_after_reset_dedicated_server(
 }
 
 pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    let Some(pid) = rematch_teardown_persona(gid) else {
+    if !super::game_state::blaze_pregame_already_pushed(gid) {
         return Ok(Vec::new());
-    };
+    }
     crate::debug_println!(
-        "\x1b[38;2;100;200;255m[CNC]\x1b[0m rematch teardown before JoinGameResponse gid={} pid={}",
-        gid,
-        pid
+        "\x1b[38;2;100;200;255m[CNC]\x1b[0m rematch teardown before resetDedicatedServer gid={}",
+        gid
     );
-    pushes_notify_player_removed(gid, pid, super::PLAYER_REMOVED_REASON_GAME_DESTROYED)
+    super::game_state::clear_blaze_join_and_push_flags(gid);
+
+    let removed = super::build_game_manager_notify_game_removed(
+        gid,
+        super::GAME_REMOVAL_REASON_GAME_DESTROYED,
+    )?;
+    let wire_removed = notification_envelope(0x0004, 0x0010, &removed);
+    let removed_pl = wire_removed.len();
+
+    Ok(vec![OutgoingPush {
+        wire: wire_removed,
+        component: 0x0004,
+        command: 0x0010,
+        tdf_body: removed.to_vec(),
+        blaze_send_label: "NotifyGameRemoved before resetDedicatedServer (rematch)",
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            removed_pl
+        ),
+    }])
 }
 
-/// Client-side join notifies after `resetDedicatedServer` (no dedicated orchestration).
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    let promote_reset = super::game_state::blaze_join_setup_already_pushed(gid)
+        || super::game_state::client_local_game_active(gid);
+    let setup_label = if promote_reset {
+        "NotifyGameReset after resetDedicatedServer"
+    } else {
+        "NotifyGameSetup after resetDedicatedServer"
+    };
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: {} + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
+        if promote_reset {
+            "NotifyGameReset"
+        } else {
+            "NotifyGameSetup"
+        },
         gid
     );
 
-    // Same order as `joinGame`: **NotifyGameSetup first** so `mGameMap` has the game before
-    // `NotifyGameStateChange` / platform-host notifies (avoids "unknown local game" GMGR warnings).
-    let setup = super::build_game_manager_notify_game_setup(request, gid)?;
-    let wire_setup = notification_envelope(0x0004, 0x0014, &setup);
-    let pl_setup = wire_setup.len();
+    let (setup, setup_cmd, setup_log) = if promote_reset {
+        let reset = super::build_game_manager_notify_game_reset(request, gid)?;
+        let wire = notification_envelope(0x0004, 0x0070, &reset);
+        let pl = wire.len();
+        (
+            reset,
+            0x0070,
+            format!(
+                "[Blaze→Client] GameManager.NotifyGameReset Component=4, Command=112, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                pl
+            ),
+        )
+    } else {
+        let setup = super::build_game_manager_notify_game_setup(request, gid)?;
+        let wire = notification_envelope(0x0004, 0x0014, &setup);
+        let pl = wire.len();
+        (
+            setup,
+            0x0014,
+            format!(
+                "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                pl
+            ),
+        )
+    };
+    let wire_setup = notification_envelope(0x0004, setup_cmd, &setup);
+    if promote_reset {
+        super::game_state::clear_blaze_join_setup_pushed(gid);
+    }
 
-    // Match the GAME.GSTA in NotifyGameSetup (INITIALIZING) -- the game is advanced to PRE_GAME only
-    // after the client completes finalizeGameCreation (network mesh ready).
     let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_INITIALIZING)?;
     let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
     let pl_gstate = wire_gstate.len();
@@ -111,20 +167,14 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
     let pl_initiate = wire_initiate.len();
 
-    // Do **not** send NotifyPlayerJoinCompleted here. Blaze `sub_1280D30` looks the player up on
-    // the Game mesh list; that list is empty until the client finishes `preInitGameNetwork` and
-    // reports `updateMeshConnection`. Same-tick JoinCompleted null-derefs `player+0x58`.
     Ok(vec![
         OutgoingPush {
             wire: wire_setup,
             component: 0x0004,
-            command: 0x0014,
+            command: setup_cmd,
             tdf_body: setup.to_vec(),
-            blaze_send_label: "NotifyGameSetup after resetDedicatedServer",
-            info_log_line: format!(
-                "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl_setup
-            ),
+            blaze_send_label: setup_label,
+            info_log_line: setup_log,
         },
         OutgoingPush {
             wire: wire_gstate,
@@ -162,24 +212,6 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     ])
 }
 
-fn rematch_teardown_persona(gid: i64) -> Option<i64> {
-    let host = super::game_state::host_player_for_gid(gid);
-    if host.persona_id > 0
-        && !host.is_ai
-        && !super::dedicated_pool::is_dedicated_synthetic_persona(host.persona_id)
-    {
-        return Some(host.persona_id);
-    }
-    super::game_state::players_for_gid(gid)
-        .into_iter()
-        .find(|p| {
-            p.persona_id > 0
-                && !p.is_ai
-                && !super::dedicated_pool::is_dedicated_synthetic_persona(p.persona_id)
-        })
-        .map(|p| p.persona_id)
-}
-
 pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> {
     pushes_after_join_game_lobby(request, false)
 }
@@ -189,6 +221,17 @@ pub fn pushes_after_join_game_lobby(
     defer_mesh: bool,
 ) -> BlazeResult<Vec<OutgoingPush>> {
     let gid = super::cnc_extract_join_game_id(request);
+    let _ = super::game_state::try_mark_blaze_join_setup_pushed(gid);
+    if let Some(sid) = crate::session::current_blaze_session_id() {
+        if let Some(sess) = crate::session::blaze_sessions::get_session(sid) {
+            if let Some(pid) = sess.persona_id.filter(|&p| p != 0) {
+                crate::client::cnc::dedicated_pool::note_client_msgsys_route_from_current_session(
+                    gid,
+                    pid as i64,
+                );
+            }
+        }
+    }
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized after joinGame (gid={}){}",
         gid,
@@ -408,10 +451,7 @@ pub fn pushes_after_set_player_custom_data(
     }])
 }
 
-/// After a real `advanceGameState` RPC -- only `NotifyGameStateChange(IN_GAME)`.
-///
-/// On CNC, Blaze `0x0070` is **`NotifyGameReset`**, not “Starting”. Emitting GID/STRT on
-/// that command decodes as empty `ReplicatedGameData` → client drops `unknown game(0)`.
+/// After `advanceGameState`: `NotifyGameStateChange(IN_GAME)`.
 pub fn pushes_after_advance_game_state(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameStateChange(InGame) after advanceGameState (gid={})",
@@ -464,7 +504,6 @@ pub fn pushes_after_update_mesh_connection(gid: i64, pid: i64) -> BlazeResult<Ve
     }])
 }
 
-/// After the joining client reports mesh, Blaze `sub_1280D30` can find the player on the Game mesh list.
 pub fn pushes_player_join_completed(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     let body = super::build_game_manager_notify_player_join_completed(gid)?;
     let wire = notification_envelope(0x0004, 0x001E, &body);
@@ -482,11 +521,6 @@ pub fn pushes_player_join_completed(gid: i64) -> BlazeResult<Vec<OutgoingPush>> 
     }])
 }
 
-/// Dedicated host finished setup -- do **not** force PRE_GAME/IN_GAME yet.
-///
-/// Working CNC path stays `INITIALIZING` through mesh + `GameReady` → engine connect /
-/// MessageSystem; Blaze state advances after that. Early PRE_GAME plus fake Reset (`0x70`)
-/// is the BF3-port regression that broke ClientConnect.
 pub fn pushes_host_state_advance_for_client(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: host finalizeGameCreation -- defer PRE_GAME/IN_GAME until after GameReady (gid={})",
@@ -496,12 +530,6 @@ pub fn pushes_host_state_advance_for_client(gid: i64) -> BlazeResult<Vec<Outgoin
     Ok(Vec::new())
 }
 
-/// TEST (round 47): once the joining client reaches ACTIVE_CONNECTED it sits waiting for the
-/// game HOST to advance the state. In production the dedicated drives finalizeGameCreation +
-/// advanceGameState(PRE_GAME) + advanceGameState(IN_GAME) itself (see BF3 dedicated dump). Our
-/// dedicated captures cmd 220 but never drives it, so the client stalls at ACTIVE_CONNECTED.
-/// As a diagnostic, synthesize the host's advance here (Refracted-driven) to prove the client's
-/// loading/IN_GAME path works. If it does, we move this to the real dedicated-driven path (fix A).
 pub fn pushes_advance_game_to_ingame(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: TEST advanceGameState PRE_GAME(130)->IN_GAME(131) after mesh connected (gid={})",
@@ -664,28 +692,46 @@ pub fn request_client_local_game_teardown(gid: i64, pid: i64, reason: i32) {
 }
 
 pub fn pushes_dedicated_reclaim_idle(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameStateChange(RESETABLE) reclaim → dedicated (gid={})",
-        gid
-    );
+    // NotifyGameRemoved MUST precede RESETABLE: SDK destroy of local game(1) only runs while
+    // GSTA is still INITIALIZING (or similar). RESETABLE-first leaves sticky local game → rematch AV.
+    let removed = super::build_game_manager_notify_game_removed(
+        gid,
+        super::GAME_REMOVAL_REASON_GAME_DESTROYED,
+    )?;
+    let wire_removed = notification_envelope(0x0004, 0x0010, &removed);
+    let removed_pl = wire_removed.len();
+
     let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_RESETABLE)?;
-    let wire = notification_envelope(0x0004, 0x0064, &gstate);
-    let pl = wire.len();
-    Ok(vec![OutgoingPush {
-        wire,
-        component: 0x0004,
-        command: 0x0064,
-        tdf_body: gstate.to_vec(),
-        blaze_send_label: "NotifyGameStateChange(RESETABLE) dedicated reclaim",
-        info_log_line: format!(
-            "[Blaze→Server] GameManager.NotifyGameStateChange Component=4, Command=100, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-            pl
-        ),
-    }])
+    let wire_resetable = notification_envelope(0x0004, 0x0064, &gstate);
+    let resetable_pl = wire_resetable.len();
+
+    Ok(vec![
+        OutgoingPush {
+            wire: wire_removed,
+            component: 0x0004,
+            command: 0x0010,
+            tdf_body: removed.to_vec(),
+            blaze_send_label: "NotifyGameRemoved dedicated reclaim",
+            info_log_line: format!(
+                "[Blaze→Server] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                removed_pl
+            ),
+        },
+        OutgoingPush {
+            wire: wire_resetable,
+            component: 0x0004,
+            command: 0x0064,
+            tdf_body: gstate.to_vec(),
+            blaze_send_label: "NotifyGameStateChange(RESETABLE) dedicated reclaim",
+            info_log_line: format!(
+                "[Blaze→Server] GameManager.NotifyGameStateChange Component=4, Command=100, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                resetable_pl
+            ),
+        },
+    ])
 }
 
-/// After the client completes `finalizeGameCreation` (network mesh ready) the game must leave
-/// INITIALIZING and enter PRE_GAME (130) -- otherwise it stays stuck in INITIALIZING and never starts.
+/// After mesh is ready: `NotifyGameStateChange(PRE_GAME)`.
 pub fn pushes_after_finalize_game_creation(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameStateChange(PRE_GAME) after finalizeGameCreation (gid={})",

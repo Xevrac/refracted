@@ -10,6 +10,7 @@ pub fn executable_dir() -> Option<PathBuf> {
 }
 
 pub fn set_app_data_dir(path: PathBuf) {
+    *APP_DATA_DIR_OVERRIDE.lock() = Some(path);
 }
 
 pub fn app_data_dir() -> PathBuf {

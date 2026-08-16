@@ -365,8 +365,14 @@
                     </div>
                     <div class="cc-lobby__maps-preview-cell">
                         <div class="cc-lobby__maps-preview-art">
-                            <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
-                                 ng-style="minimapCropStyle(pickerMap())" alt="">
+                            <div class="cc-lobby__map-crop">
+                                <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
+                                     ng-style="minimapCropStyle(pickerMap())" alt="">
+                            </div>
+                            <span class="cc-lobby__pip cc-lobby__pip--preview"
+                                  ng-repeat="sp in pickerMapStartpoints()"
+                                  ng-style="pickerStartPipStyle(sp)"
+                                  title="Start {{ sp.id }}">{{ sp.id }}</span>
                         </div>
                         <div class="cc-lobby__maps-preview-meta">
                             <strong>{{ pickerMap().label }}</strong>

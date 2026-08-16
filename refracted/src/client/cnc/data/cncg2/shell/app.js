@@ -206,6 +206,37 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
     $rootScope.openCredits = function () { $rootScope.creditsOpen = true; };
     $rootScope.closeCredits = function () { $rootScope.creditsOpen = false; };
 
+    // Patreon — open OS browser via Refracted (/cnc/open-url). In-game modal is a bad fit
+    // (login/payments + X-Frame-Options). Fallback to window.open for local shell preview.
+    $rootScope.PATREON_URL = 'https://www.patreon.com/cw/refracted_';
+    $rootScope.openSupportUs = function () {
+        var url = $rootScope.PATREON_URL;
+        var opened = false;
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/cnc/open-url?url=' + encodeURIComponent(url), true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) { return; }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    opened = true;
+                    return;
+                }
+                if (!opened) {
+                    try { window.open(url, '_blank'); } catch (e2) { /* ignore */ }
+                }
+            };
+            xhr.onerror = function () {
+                if (!opened) {
+                    try { window.open(url, '_blank'); } catch (e3) { /* ignore */ }
+                }
+            };
+            xhr.send(JSON.stringify({ url: url }));
+        } catch (e) {
+            try { window.open(url, '_blank'); } catch (e4) { /* ignore */ }
+        }
+    };
+
     $rootScope.alertPopupOpen = false;
     $rootScope.toggleAlertPopup = function () {
         $rootScope.alertPopupOpen = !$rootScope.alertPopupOpen;
