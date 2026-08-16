@@ -54,7 +54,6 @@ const NTOP_PEER_TO_PEER_FULL_MESH: i32 = 3;
 const NTOP_PEER_TO_PEER_PARTIAL_MESH: i32 = 4;
 
 const NTOP_DEFAULT: i32 = NTOP_CLIENT_SERVER_DEDICATED;
-const CNC_TEST_DEDICATED_PORT: i32 = 25200;
 
 fn cnc_blaze_conf_map() -> indexmap::IndexMap<String, String> {
     let mut conf_map = indexmap::IndexMap::new();
@@ -259,10 +258,19 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
             dedicated_pool::lobby_pool_status_json().into_bytes(),
         ));
     }
+    // POST /cnc/dedicated-engine-peer?port=25200&peer=10.0.0.230  (or session=<blazeId>)
+    // Prism EnginePeerInit reports the real game UDP bind (not Blaze QoS).
+    if base == "cnc/dedicated-engine-peer" && is_post {
+        return Some(handle_cnc_dedicated_engine_peer(query, body));
+    }
     // GET /cnc/utfwin/images/MiniMap/*.png — retail UTFWinAssets from the game bin.
     if is_get && base.starts_with("cnc/utfwin/") {
         let _ = body;
         return Some(handle_cnc_utfwin(base));
+    }
+    // GET|POST /cnc/open-url?url=… — open allowlisted support links in the OS browser.
+    if base == "cnc/open-url" {
+        return Some(handle_cnc_open_url(query, body));
     }
     if !is_post {
         return None;
@@ -318,6 +326,99 @@ fn percent_decode_plus(s: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Patreon / support pages only — never open arbitrary URLs from shell JS.
+const CNC_OPEN_URL_ALLOWLIST: &[&str] = &[
+    "https://www.patreon.com/cw/refracted_",
+    "https://patreon.com/cw/refracted_",
+    "https://www.patreon.com/refracted_",
+    "https://patreon.com/refracted_",
+];
+
+fn cnc_open_url_allowed(url: &str) -> bool {
+    let trimmed = url.trim();
+    CNC_OPEN_URL_ALLOWLIST
+        .iter()
+        .any(|allowed| trimmed.eq_ignore_ascii_case(allowed))
+}
+
+fn open_url_in_system_browser(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// GET|POST `/cnc/open-url?url=` (or JSON `{"url":"..."}`) — OS browser for allowlisted links.
+fn handle_cnc_open_url(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    let mut url = String::new();
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                if k == "url" {
+                    url = percent_decode_plus(v);
+                }
+            }
+        }
+    }
+    if url.is_empty() {
+        if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
+            if let Some(u) = v.get("url").and_then(|u| u.as_str()) {
+                url = u.to_string();
+            }
+        }
+    }
+    if url.is_empty() {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"missing url"}"#.to_vec(),
+        );
+    }
+    if !cnc_open_url_allowed(&url) {
+        tracing::warn!(target: "cnc", "[CNC] open-url rejected (not allowlisted): {}", url);
+        return HttpResponse::new(
+            403,
+            "application/json",
+            br#"{"ok":false,"error":"url not allowlisted"}"#.to_vec(),
+        );
+    }
+    match open_url_in_system_browser(url.trim()) {
+        Ok(()) => {
+            tracing::info!(target: "cnc", "[CNC] open-url ok: {}", url.trim());
+            HttpResponse::new(
+                200,
+                "application/json",
+                br#"{"ok":true}"#.to_vec(),
+            )
+        }
+        Err(e) => {
+            tracing::warn!(target: "cnc", "[CNC] open-url failed: {} ({})", url.trim(), e);
+            let body = serde_json::json!({ "ok": false, "error": e });
+            HttpResponse::new(500, "application/json", body.to_string().into_bytes())
+        }
+    }
 }
 
 /// Lobby HUD: authenticated Blaze presence (`GET /cnc/online-count`).
@@ -641,12 +742,16 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
     let mut gid: i64 = 1;
     let mut path = String::new();
+    let mut start_count: i32 = 0;
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
                 match k {
                     "gid" => gid = percent_decode_plus(v).parse().unwrap_or(1),
                     "path" | "level" => path = percent_decode_plus(v),
+                    "startCount" | "start_count" | "starts" => {
+                        start_count = percent_decode_plus(v).parse().unwrap_or(0).max(0);
+                    }
                     _ => {}
                 }
             }
@@ -664,6 +769,15 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
             {
                 path = p.to_string();
             }
+            if start_count <= 0 {
+                start_count = v
+                    .get("startCount")
+                    .or_else(|| v.get("start_count"))
+                    .or_else(|| v.get("starts"))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0)
+                    .max(0) as i32;
+            }
         }
     }
     if path.is_empty() {
@@ -673,14 +787,15 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
             br#"{"ok":false,"error":"missing path"}"#.to_vec(),
         );
     }
-    game_state::set_map_path(gid, &path);
+    game_state::set_map_selection(gid, &path, start_count);
     tracing::info!(
         target: "cnc",
-        "[CNC] select-map gid={} path=\"{}\"",
+        "[CNC] select-map gid={} path=\"{}\" start_count={}",
         gid,
-        path
+        path,
+        start_count
     );
-    let body = serde_json::json!({ "ok": true, "gid": gid, "path": path });
+    let body = serde_json::json!({ "ok": true, "gid": gid, "path": path, "startCount": start_count });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -910,6 +1025,170 @@ fn handle_cnc_verify_game_password(query: Option<&str>, body: &[u8]) -> HttpResp
         "application/json",
         resp.to_string().into_bytes(),
     )
+}
+
+fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    let mut session: u64 = 0;
+    let mut peer = String::new();
+    let mut port: i32 = 0;
+    let mut msg_sys: u16 = 0;
+    let mut simu_cloud: u16 = 0;
+    let mut qos: u16 = 0;
+    let parse_u16 = |v: &str| percent_decode_plus(v).parse().unwrap_or(0);
+    let parse_kv = |k: &str,
+                    v: &str,
+                    session: &mut u64,
+                    peer: &mut String,
+                    port: &mut i32,
+                    msg_sys: &mut u16,
+                    simu_cloud: &mut u16,
+                    qos: &mut u16| {
+        match k {
+            "session" | "sid" | "blazeSession" => {
+                *session = percent_decode_plus(v).parse().unwrap_or(0);
+            }
+            "peer" | "host" => *peer = percent_decode_plus(v),
+            "port" => {
+                *port = percent_decode_plus(v).parse().unwrap_or(0);
+            }
+            "msgsys" | "msgSys" | "msgSysPort" => *msg_sys = parse_u16(v),
+            "simucloud" | "simuCloud" | "simuCloudPort" => *simu_cloud = parse_u16(v),
+            "qos" | "qosPort" => *qos = parse_u16(v),
+            _ => {}
+        }
+    };
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                parse_kv(
+                    k,
+                    v,
+                    &mut session,
+                    &mut peer,
+                    &mut port,
+                    &mut msg_sys,
+                    &mut simu_cloud,
+                    &mut qos,
+                );
+            }
+        }
+    }
+    if let Ok(text) = std::str::from_utf8(body) {
+        let text = text.trim();
+        if text.starts_with('{') {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
+                if session == 0 {
+                    session = v
+                        .get("session")
+                        .or_else(|| v.get("sid"))
+                        .and_then(|x| x.as_u64())
+                        .unwrap_or(0);
+                }
+                if peer.is_empty() {
+                    peer = v
+                        .get("peer")
+                        .or_else(|| v.get("host"))
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                }
+                if port == 0 {
+                    port = v
+                        .get("port")
+                        .and_then(|x| x.as_i64().or_else(|| x.as_u64().map(|u| u as i64)))
+                        .unwrap_or(0) as i32;
+                }
+                if msg_sys == 0 {
+                    msg_sys = v
+                        .get("msgsys")
+                        .or_else(|| v.get("msgSys"))
+                        .and_then(|x| x.as_u64())
+                        .unwrap_or(0) as u16;
+                }
+                if simu_cloud == 0 {
+                    simu_cloud = v
+                        .get("simucloud")
+                        .or_else(|| v.get("simuCloud"))
+                        .and_then(|x| x.as_u64())
+                        .unwrap_or(0) as u16;
+                }
+                if qos == 0 {
+                    qos = v.get("qos").and_then(|x| x.as_u64()).unwrap_or(0) as u16;
+                }
+            }
+        } else if !text.is_empty() {
+            for pair in text.split('&') {
+                if let Some((k, v)) = pair.split_once('=') {
+                    parse_kv(
+                        k,
+                        v,
+                        &mut session,
+                        &mut peer,
+                        &mut port,
+                        &mut msg_sys,
+                        &mut simu_cloud,
+                        &mut qos,
+                    );
+                }
+            }
+        }
+    }
+    // peer may be "10.0.0.230:25200" — split host vs port.
+    if let Some((h, p)) = peer.rsplit_once(':') {
+        if port == 0 {
+            if let Ok(parsed) = p.parse::<i32>() {
+                port = parsed;
+                peer = h.to_string();
+            }
+        }
+    }
+    if port <= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"port required"}"#.to_vec(),
+        );
+    }
+    let note = dedicated_pool::note_dedicated_engine_peer_report(
+        (session != 0).then_some(session),
+        (!peer.is_empty()).then_some(peer.as_str()),
+        port,
+        (msg_sys != 0).then_some(msg_sys),
+        (simu_cloud != 0).then_some(simu_cloud),
+        (qos != 0).then_some(qos),
+    );
+    match note {
+        dedicated_pool::EnginePeerNote::Rejected => HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"port not usable (qos ephemeral or invalid)"}"#.to_vec(),
+        ),
+        dedicated_pool::EnginePeerNote::Pending => {
+            let body = serde_json::json!({
+                "ok": true,
+                "pending": true,
+                "port": port,
+                "msgsys": msg_sys,
+                "simucloud": simu_cloud,
+                "qos": qos,
+                "peer": peer,
+            });
+            HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+        }
+        dedicated_pool::EnginePeerNote::Applied { session: sid } => {
+            let body = serde_json::json!({
+                "ok": true,
+                "pending": false,
+                "session": sid,
+                "port": port,
+                "msgsys": msg_sys,
+                "simucloud": simu_cloud,
+                "qos": qos,
+                "peer": peer,
+            });
+            HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+        }
+    }
 }
 
 fn handle_cnc_server_ping(query: Option<&str>) -> HttpResponse {
@@ -1770,6 +2049,15 @@ pub fn handle_user_sessions_update_network_info(payload: &[u8]) -> BlazeResult<B
     }
     n.bps = bps;
     merge_network_snapshot(n);
+    if let Some(sid) = crate::session::current_blaze_session_id() {
+        dedicated_pool::note_dedicated_network(
+            sid,
+            ips.get(1).copied().map(|u| u as i32).or_else(|| ips.first().copied().map(|u| u as i32)),
+            ports.get(1).copied().or_else(|| ports.first().copied()),
+            ips.first().copied().map(|u| u as i32),
+            ports.first().copied(),
+        );
+    }
     Ok(Bytes::from(Vec::new()))
 }
 
@@ -1884,6 +2172,7 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
             pid,
             game_state::host_persona_for_gid(gid)
         );
+        dedicated_pool::note_client_msgsys_route_from_current_session(gid, pid);
         let _ = player;
     } else {
         crate::debug_println!(
@@ -1967,7 +2256,18 @@ pub fn cnc_extract_reset_game_id(payload: &[u8]) -> i64 {
                 .filter(|&u| u > 0)
                 .map(|u| u as i64)
         })
-        .unwrap_or(1)
+        .or_else(|| {
+            TdfEncoder::find_long_field(payload, "GID ")
+                .or_else(|| TdfEncoder::find_long_field(payload, "GID"))
+                .filter(|&g| g > 0)
+        })
+        .or_else(|| {
+            TdfEncoder::find_int_field(payload, "GID ")
+                .or_else(|| TdfEncoder::find_int_field(payload, "GID"))
+                .filter(|&g| g > 0)
+                .map(|g| g as i64)
+        })
+        .unwrap_or_else(game_state::resolve_host_reset_gid)
 }
 
 /// `GameManager.finalizeGameCreation` -- CNC wire id **`0x000F`** (`UpdateGameSessionRequest`: `GID` + `XNNC`/`XSES` blobs).
@@ -2516,9 +2816,6 @@ pub fn build_user_sessions_user_added_notification() -> BlazeResult<Bytes> {
     Ok(Bytes::from(response))
 }
 
-//   NEW_STATE=0, INITIALIZING=1, INACTIVE_VIRTUAL=2, PRE_GAME=130(0x82), IN_GAME=131(0x83),
-//   POST_GAME=4, RESETABLE=7. NOTE: PRE_GAME/IN_GAME are NOT 1/2 -- 1 is INITIALIZING, 2 is
-//   INACTIVE_VIRTUAL. Sending 1/2 leaves the game stuck in INITIALIZING and it never starts.
 #[allow(dead_code)]
 pub(crate) const GSTA_INITIALIZING: i32 = 1;
 #[allow(dead_code)]
@@ -2528,12 +2825,12 @@ pub(crate) const GSTA_IN_GAME: i32 = 131;
 const GSTA_POST_GAME: i32 = 4;
 pub(crate) const GSTA_RESETABLE: i32 = 7;
 
-/// `UUID` for `NotifyGameSetup`: use `CreateGameRequest` when present, else a fresh v4 string.
+/// `UUID` for notify payloads.
 fn cnc_resolve_notify_game_uuid(request_payload: &[u8]) -> String {
     game_state::resolve_game_uuid(request_payload)
 }
 
-/// GameManager `NotifyGameStateChange` (`0x0004` / `0x64`): root `GID\0` + `GSTA` (BFP4FToolsWV / CNC launcher).
+/// `NotifyGameStateChange` (cmd 100): GID + GSTA.
 pub fn build_game_manager_notify_game_state_change(gid: i64, gsta: i32) -> BlazeResult<Bytes> {
     let mut out = Vec::new();
     out.extend_from_slice(&TdfEncoder::encode_int("GID\0", gid as i32));
@@ -2544,6 +2841,8 @@ pub fn build_game_manager_notify_game_state_change(gid: i64, gsta: i32) -> Blaze
 pub const PLAYER_REMOVED_REASON_GAME_DESTROYED: i32 = 4;
 pub const PLAYER_REMOVED_REASON_PLAYER_LEFT: i32 = 6;
 pub const PLAYER_REMOVED_REASON_PLAYER_KICKED: i32 = 8;
+
+pub const GAME_REMOVAL_REASON_GAME_DESTROYED: i32 = 0;
 
 pub fn build_game_manager_notify_player_removed(
     gid: i64,
@@ -2557,7 +2856,15 @@ pub fn build_game_manager_notify_player_removed(
     Ok(Bytes::from(out))
 }
 
-/// GameManager `NotifyGameAttribChange` (`0x0004` / cmd **80** / `0x50`).
+/// `NotifyGameRemoved` (cmd 16): GID + REAS.
+pub fn build_game_manager_notify_game_removed(gid: i64, reason: i32) -> BlazeResult<Bytes> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
+    out.extend_from_slice(&TdfEncoder::encode_int("REAS", reason));
+    Ok(Bytes::from(out))
+}
+
+/// GameManager `NotifyGameAttribChange` (cmd 80).
 pub fn build_game_manager_notify_game_attrib_change(
     gid: i64,
     attrs: &indexmap::IndexMap<String, String>,
@@ -2568,12 +2875,9 @@ pub fn build_game_manager_notify_game_attrib_change(
     Ok(Bytes::from(out))
 }
 
-/// ACTIVE_CONNECTED=4. After the joining client reports its mesh connection (updateMeshConnection),
-/// the server must flip it to ACTIVE_CONNECTED so `createGameNetworkCb` fires and the game proceeds.
 pub const PLAYER_STATE_ACTIVE_CONNECTED: i32 = 4;
 
-/// `GameManager.NotifyGamePlayerStateChange` (notification id **116**): tells the client a player's
-/// connection state changed (`GID` + `PID` + `STAT`). Fields in alphabetical tag order.
+/// `NotifyGamePlayerStateChange` (cmd 116): GID + PID + STAT.
 pub fn build_game_manager_notify_game_player_state_change(
     gid: i64,
     pid: i64,
@@ -2586,28 +2890,82 @@ pub fn build_game_manager_notify_game_player_state_change(
     Ok(Bytes::from(out))
 }
 
-/// Notify pooled `cnc.server.exe` to run `resetDedicatedServer` (cmd 220 / `NotifyCreateDynamicDedicatedServerGame`).
+/// Notify pooled dedicated to run `resetDedicatedServer` (cmd 220).
 pub fn build_notify_create_dynamic_dedicated_server_game(
     gid: i64,
     create_request: &[u8],
 ) -> BlazeResult<Bytes> {
     let greq = inject_level_attr(gid, create_request).unwrap_or_else(|| create_request.to_vec());
+    let greq = inject_greq_rgid(gid, &greq);
 
     let mut out = Vec::new();
+    // Prism CaptureCmd220Wire / LooksLikeCmd220TdfPayload requires a root GID tag or the
+    // whole notify is treated as missing wire → config-default Alpha + gid=0 (stuck start).
     out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     out.extend_from_slice(&TdfEncoder::encode_struct("GREQ", &greq));
+    out.extend_from_slice(&TdfEncoder::encode_string("MID ", ""));
     Ok(Bytes::from(out))
+}
+
+/// Ensure CreateGameRequest.RGID matches the assigned lobby/match gid (wire often sends 0).
+fn inject_greq_rgid(gid: i64, create_request: &[u8]) -> Vec<u8> {
+    let rgid_field = TdfEncoder::scan_root_level_fields(create_request)
+        .into_iter()
+        .find(|(tag, _, _, _)| tag == "RGID" || tag.trim() == "RGID");
+
+    let encoded = TdfEncoder::encode_long("RGID", gid);
+    let Some((_, _, start, total_len)) = rgid_field else {
+        let mut out = Vec::with_capacity(create_request.len() + encoded.len());
+        out.extend_from_slice(create_request);
+        out.extend_from_slice(&encoded);
+        return out;
+    };
+    let end = match start.checked_add(total_len) {
+        Some(e) if e <= create_request.len() => e,
+        _ => {
+            let mut out = Vec::with_capacity(create_request.len() + encoded.len());
+            out.extend_from_slice(create_request);
+            out.extend_from_slice(&encoded);
+            return out;
+        }
+    };
+    let mut out = Vec::with_capacity(create_request.len() + encoded.len());
+    out.extend_from_slice(&create_request[..start]);
+    out.extend_from_slice(&encoded);
+    out.extend_from_slice(&create_request[end..]);
+    out
 }
 
 fn inject_level_attr(gid: i64, create_request: &[u8]) -> Option<Vec<u8>> {
     let map_path = game_state::get_map_path(gid);
     if map_path.is_empty() {
+        tracing::warn!(
+            target: "cnc",
+            "[CNC] inject _level skipped gid={gid} — no pending map (cmd 220 will use dedicated config-default)"
+        );
         return None;
     }
 
-    let (_, _, start, total_len) = TdfEncoder::scan_root_level_fields(create_request)
+    let attr_field = TdfEncoder::scan_root_level_fields(create_request)
         .into_iter()
-        .find(|(tag, ty, _, _)| tag == "ATTR" && *ty == 0x05)?;
+        .find(|(tag, ty, _, _)| tag == "ATTR" && *ty == 0x05);
+
+    let Some((_, _, start, total_len)) = attr_field else {
+        // resetDedicated payload sometimes has no ATTR map — append one with _level only.
+        tracing::info!(
+            target: "cnc",
+            "[CNC] inject _level gid={} append ATTR \"{}\" (no ATTR on wire)",
+            gid,
+            map_path
+        );
+        let mut pairs = indexmap::IndexMap::new();
+        pairs.insert("_level".to_string(), map_path);
+        let mut out = Vec::with_capacity(create_request.len() + 96);
+        out.extend_from_slice(create_request);
+        out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("ATTR", &pairs));
+        return Some(out);
+    };
+
     let end = start.checked_add(total_len)?;
     if total_len < 4 || end > create_request.len() {
         return None;
@@ -2616,7 +2974,7 @@ fn inject_level_attr(gid: i64, create_request: &[u8]) -> Option<Vec<u8>> {
     let mut pairs =
         TdfEncoder::decode_string_string_map_untagged(&create_request[start + 4..end]).ok()?;
     if pairs.get("_level").map(String::as_str) == Some(map_path.as_str()) {
-        return None; // already correct -- keep the echo verbatim
+        return None;
     }
     let prev = pairs
         .get("_level")
@@ -2651,7 +3009,6 @@ fn extract_attr_level(create_request: &[u8]) -> Option<String> {
     pairs.get("_level").filter(|s| !s.is_empty()).cloned()
 }
 
-/// Blaze persona id used as host in CNC GameManager notifies (`ADMN`, `PROS`, **`PHID`**, etc.).
 fn cnc_notify_host_persona_i32() -> i32 {
     let session = crate::session::get_user_session();
     let id = if session.persona_id == 0 {
@@ -2662,13 +3019,43 @@ fn cnc_notify_host_persona_i32() -> i32 {
     id.min(i32::MAX as u64) as i32
 }
 
-/// GameManager `NotifyGameSetup` (`0x0004` / `0x14`): pushed after successful reset/create so the client wires the game into `mGameMap`.
-/// **`GAME.HNET`**: copied from the request only when it is already a root **`LIST`** of **`STRUCT`** rows
-/// (`0x04` / item `0x03`); otherwise encoded like stock **`GameSetup`**: list of struct rows (**`EXIP`** / **`INIP`**).
+/// `NotifyGameReset` (cmd 112): DATA holds replicated game fields.
+pub fn build_game_manager_notify_game_reset(
+    request_payload: &[u8],
+    gid: i64,
+) -> BlazeResult<Bytes> {
+    let game = build_client_replicated_game_data(request_payload, gid)?;
+    game_state::set_replicated_wire_fields(gid, game.clone());
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_struct("DATA", &game));
+    Ok(Bytes::from(out))
+}
+
+/// `NotifyGameSetup` (cmd 20): GAME + PROS + QUEU + REAS.
 pub fn build_game_manager_notify_game_setup(
     request_payload: &[u8],
     gid: i64,
 ) -> BlazeResult<Bytes> {
+    let game = build_client_replicated_game_data(request_payload, gid)?;
+    game_state::set_replicated_wire_fields(gid, game.clone());
+
+    let pros = game_state::pros_entries_for_gid(gid);
+    game_state::set_pros_wire_fields(gid, pros.clone());
+
+    let reas = encode_reas_reset_dedicated();
+
+    let mut response = Vec::new();
+    response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
+    response.extend_from_slice(&encode_struct_list("PROS", &pros));
+    response.extend_from_slice(&encode_struct_list("QUEU", &[]));
+    response.extend_from_slice(&reas);
+    Ok(Bytes::from(response))
+}
+
+fn build_client_replicated_game_data(
+    request_payload: &[u8],
+    gid: i64,
+) -> BlazeResult<Vec<u8>> {
     let session = crate::session::get_user_session();
     let uid_i32 = cnc_notify_host_persona_i32();
     let uid = uid_i32 as i64;
@@ -2680,16 +3067,13 @@ pub fn build_game_manager_notify_game_setup(
         session.display_name.as_str()
     };
 
-    // Echo create-request **`GNAM` / ATTR / VOIP / UUID`; **`GAME`** skeleton matches **`notify_game_setup_join`**.
     let gnam = TdfEncoder::find_string_field(request_payload, "GNAM")
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Skirmish".to_string());
     let voip = TdfEncoder::find_int_field(request_payload, "VOIP").unwrap_or(0);
-    // CNC `GameBase` / `NotifyGameSetup` uses the same topology as `resetDedicatedServer`: dedicated, not peer-hosted.
     let ntop_game = NTOP_CLIENT_SERVER_DEDICATED;
     let game_uuid = cnc_resolve_notify_game_uuid(request_payload);
 
-    // HNET endpoints: pooled dedicated INIP when assigned; else `CreateGameRequest` / QoS / session EXIP.
     let ips = TdfEncoder::scan_all_int_fields(request_payload, "IP  ");
     let ports = TdfEncoder::scan_all_int_fields(request_payload, "PORT");
     let host_inip_ip = dedicated
@@ -2722,16 +3106,28 @@ pub fn build_game_manager_notify_game_setup(
         .or_else(|| req_exip_ip.ne(&0).then_some(req_exip_ip))
         .unwrap_or(0);
 
-    let host_inip_port = if host_inip_port_from_request != 0 {
-        host_inip_port_from_request
+    // Dedicated HNET must advertise *that* server's discovered game UDP on EXIP+INIP.
+    // Never borrow the joining client's QoS port; fall back only if discovery has not run yet.
+    let (host_inip_port, host_exip_port) = if let Some(d) = dedicated {
+        let inip = if d.inip_port > 0 {
+            d.inip_port
+        } else {
+            dedicated_pool::DEFAULT_DEDICATED_GAME_UDP_PORT
+        };
+        let exip = if d.exip_port > 0 { d.exip_port } else { inip };
+        (inip, exip)
     } else {
-        CNC_TEST_DEDICATED_PORT
+        let inip = if host_inip_port_from_request != 0 {
+            host_inip_port_from_request
+        } else {
+            dedicated_pool::DEFAULT_DEDICATED_GAME_UDP_PORT
+        };
+        let exip = req_exip_port
+            .ne(&0)
+            .then_some(req_exip_port)
+            .unwrap_or(inip);
+        (inip, exip)
     };
-    let host_exip_port = dedicated
-        .map(|d| d.exip_port)
-        .filter(|&p| p != 0)
-        .or_else(|| req_exip_port.ne(&0).then_some(req_exip_port))
-        .unwrap_or(host_inip_port);
 
     let gid_i32 = gid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     let _ = gid_i32;
@@ -2743,7 +3139,6 @@ pub fn build_game_manager_notify_game_setup(
         out
     };
 
-    // Derived from the dedicated address.
     let serverid = {
         let sid_ip = (if host_exip_ip != 0 { host_exip_ip } else { host_inip_ip }) as u32;
         if sid_ip != 0 {
@@ -2761,8 +3156,6 @@ pub fn build_game_manager_notify_game_setup(
     let mut attr_map =
         TdfEncoder::find_string_string_map_field(request_payload, "ATTR").unwrap_or_default();
     attr_map.insert("serverid".to_string(), serverid.clone());
-    // Carry the lobby's chosen level in game attributes (informational for the client, which loads it
-    // from local RtsSettings; authoritative for the dedicated spawn -- see build_dedicated_host_...).
     let map_path = crate::client::cnc::game_state::get_map_path(gid);
     if !map_path.is_empty() {
         attr_map.insert("_level".to_string(), map_path);
@@ -2774,7 +3167,6 @@ pub fn build_game_manager_notify_game_setup(
     let mut matr_map = indexmap::IndexMap::new();
     matr_map.insert("serverid".to_string(), serverid);
 
-    // HPID+HSLT host struct used by DHST / PHST / THST.
     let host_hpid = |persona: i64| -> Vec<u8> {
         let mut h = Vec::new();
         h.extend_from_slice(&TdfEncoder::encode_long("HPID", persona));
@@ -2782,9 +3174,6 @@ pub fn build_game_manager_notify_game_setup(
         h
     };
 
-    // CRITICAL: Blaze heat2 requires fields in ASCENDING packed-tag order; the decoder silently skips
-    // any field (and everything after it) that arrives out of order. Emit strictly in this order:
-    // ADMN ATTR CAP CRIT DHST DSTR GID GNAM GSET GSID GSTA HNET NTOP PHST THST UUID VOIP XNNC XSES.
     let mut game = Vec::new();
     game.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[uid]));
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("ATTR", &attr_map));
@@ -2811,8 +3200,6 @@ pub fn build_game_manager_notify_game_setup(
             gid
         );
     }
-    // Initial setup state = INITIALIZING (drives preInitGameNetwork -> mesh -> finalizeGameCreation,
-    // then PRE_GAME / IN_GAME via advanceGameState).
     game.extend_from_slice(&TdfEncoder::encode_int("GSTA", GSTA_INITIALIZING));
 
     let mut hnet_row = Vec::new();
@@ -2825,7 +3212,6 @@ pub fn build_game_manager_notify_game_setup(
         &build_endpoint(host_inip_ip, host_inip_port),
     ));
     game.extend_from_slice(&encode_union_list("HNET", HNET_UNION_MEMBER_VALU, &[hnet_row]));
-    // MATR (0xb61d32) sorts between HNET and NTOP.
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("MATR", &matr_map));
     game.extend_from_slice(&TdfEncoder::encode_int("NTOP", ntop_game));
     game.extend_from_slice(&TdfEncoder::encode_struct("PHST", &host_hpid(topology_persona)));
@@ -2835,22 +3221,37 @@ pub fn build_game_manager_notify_game_setup(
     game.extend_from_slice(&TdfEncoder::encode_binary("XNNC", &[]));
     game.extend_from_slice(&TdfEncoder::encode_binary("XSES", &[]));
 
-    game_state::set_replicated_wire_fields(gid, game.clone());
-
-    let pros = game_state::pros_entries_for_gid(gid);
-    game_state::set_pros_wire_fields(gid, pros.clone());
-
-    let reas = encode_reas_reset_dedicated();
-
-    let mut response = Vec::new();
-    response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
-    response.extend_from_slice(&encode_struct_list("PROS", &pros));
-    response.extend_from_slice(&encode_struct_list("QUEU", &[]));
-    response.extend_from_slice(&reas);
-    Ok(Bytes::from(response))
+    Ok(game)
 }
 
-/// Dedicated-host `NotifyGameSetup`: THST/PHST/ADMN = dedicated persona, HNET = dedicated bind, empty roster.
+/// Dedicated `NotifyGameReset` (cmd 112).
+#[allow(clippy::too_many_arguments)]
+pub fn build_dedicated_host_notify_game_reset(
+    gid: i64,
+    host_persona: i64,
+    inip_ip: i32,
+    inip_port: i32,
+    exip_ip: i32,
+    exip_port: i32,
+    ded_session_id: u64,
+    request_payload: &[u8],
+) -> BlazeResult<Bytes> {
+    let game = build_dedicated_host_replicated_game_data(
+        gid,
+        host_persona,
+        inip_ip,
+        inip_port,
+        exip_ip,
+        exip_port,
+        ded_session_id,
+        request_payload,
+    )?;
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_struct("DATA", &game));
+    Ok(Bytes::from(out))
+}
+
+/// Dedicated `NotifyGameSetup` (cmd 20).
 #[allow(clippy::too_many_arguments)]
 pub fn build_dedicated_host_notify_game_setup(
     gid: i64,
@@ -2862,6 +3263,38 @@ pub fn build_dedicated_host_notify_game_setup(
     ded_session_id: u64,
     request_payload: &[u8],
 ) -> BlazeResult<Bytes> {
+    let game = build_dedicated_host_replicated_game_data(
+        gid,
+        host_persona,
+        inip_ip,
+        inip_port,
+        exip_ip,
+        exip_port,
+        ded_session_id,
+        request_payload,
+    )?;
+
+    let reas = encode_reas_dataless(4);
+
+    let mut response = Vec::new();
+    response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
+    response.extend_from_slice(&encode_struct_list("PROS", &[]));
+    response.extend_from_slice(&encode_struct_list("QUEU", &[]));
+    response.extend_from_slice(&reas);
+    Ok(Bytes::from(response))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_dedicated_host_replicated_game_data(
+    gid: i64,
+    host_persona: i64,
+    inip_ip: i32,
+    inip_port: i32,
+    exip_ip: i32,
+    exip_port: i32,
+    ded_session_id: u64,
+    request_payload: &[u8],
+) -> BlazeResult<Vec<u8>> {
     let gnam = TdfEncoder::find_string_field(request_payload, "GNAM")
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "Skirmish".to_string());
@@ -2881,9 +3314,6 @@ pub fn build_dedicated_host_notify_game_setup(
         h.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
         h
     };
-    // Blaze packed-tag order: ADMN ATTR CAP DHST DSTR GID GNAM GSET GSID GSTA HNET MATR NTOP
-    // PHST THST UUID VOIP XNNC XSES.
-    //
     let serverid = {
         let sid_ip = (if exip_ip != 0 { exip_ip } else { inip_ip }) as u32;
         if sid_ip != 0 {
@@ -2900,7 +3330,6 @@ pub fn build_dedicated_host_notify_game_setup(
     };
     let mut game = Vec::new();
     game.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[host_persona]));
-    // ATTR `_level` carries the lobby map when Blaze createGame omits it on the wire.
     let mut ded_attr =
         TdfEncoder::find_string_string_map_field(request_payload, "ATTR").unwrap_or_default();
     let ded_map_path = crate::client::cnc::game_state::get_map_path(gid);
@@ -2950,19 +3379,9 @@ pub fn build_dedicated_host_notify_game_setup(
     game.extend_from_slice(&TdfEncoder::encode_binary("XNNC", &[]));
     game.extend_from_slice(&TdfEncoder::encode_binary("XSES", &[]));
 
-    // REAS member 0, DCTX=4 (HOST_INJECTION_SETUP_CONTEXT).
-    let reas = encode_reas_dataless(4);
-
-    let mut response = Vec::new();
-    response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
-    // Empty roster: dedicated is host, not a player.
-    response.extend_from_slice(&encode_struct_list("PROS", &[]));
-    response.extend_from_slice(&encode_struct_list("QUEU", &[]));
-    response.extend_from_slice(&reas);
-    Ok(Bytes::from(response))
+    Ok(game)
 }
 
-/// Flat `ReplicatedGameData` field blob (no `GAME` struct wrapper).
 fn build_replicated_game_data_fields(gid: i64) -> Vec<u8> {
     game_state::replicated_wire_fields(gid).unwrap_or_else(|| build_replicated_game_data_fields_fallback(gid))
 }
@@ -2978,21 +3397,34 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
         .filter(|&ip| ip != 0)
         .or_else(|| session.network_inip_ip.map(|u| u as i32))
         .unwrap_or(0);
-    let host_inip_port = dedicated
-        .map(|d| d.inip_port)
-        .filter(|&p| p != 0)
-        .or_else(|| session.network_inip_port.map(|u| u as i32).filter(|&p| p != 0))
-        .unwrap_or(CNC_TEST_DEDICATED_PORT);
     let host_exip_ip = dedicated
         .map(|d| d.exip_ip)
         .filter(|&ip| ip != 0)
         .or_else(|| session.network_exip_ip.map(|u| u as i32))
         .unwrap_or(0);
-    let host_exip_port = dedicated
-        .map(|d| d.exip_port)
-        .filter(|&p| p != 0)
-        .or_else(|| session.network_exip_port.map(|u| u as i32).filter(|&p| p != 0))
-        .unwrap_or(host_inip_port);
+    // Same dedicated HNET rule as build_client_replicated_game_data: advertise
+    // discovered dedicated game UDP, never client QoS ports.
+    let (host_inip_port, host_exip_port) = if let Some(d) = dedicated {
+        let inip = if d.inip_port > 0 {
+            d.inip_port
+        } else {
+            dedicated_pool::DEFAULT_DEDICATED_GAME_UDP_PORT
+        };
+        let exip = if d.exip_port > 0 { d.exip_port } else { inip };
+        (inip, exip)
+    } else {
+        let inip = session
+            .network_inip_port
+            .map(|u| u as i32)
+            .filter(|&p| p != 0)
+            .unwrap_or(dedicated_pool::DEFAULT_DEDICATED_GAME_UDP_PORT);
+        let exip = session
+            .network_exip_port
+            .map(|u| u as i32)
+            .filter(|&p| p != 0)
+            .unwrap_or(inip);
+        (inip, exip)
+    };
     let build_endpoint = |ip: i32, port: i32| -> Vec<u8> {
         let mut out = Vec::new();
         out.extend_from_slice(&TdfEncoder::encode_int("IP  ", ip));
@@ -3003,8 +3435,6 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     let gnam = game_state::game_name(gid);
     let game_uuid = game_state::game_uuid(gid);
 
-    // (and DSTR for dedicated-server attribs). Keep ATTR too for general game-attribute consumers.
-    // See build_game_manager_notify_game_setup / build_dedicated_host_notify_game_setup.
     let serverid = {
         let sid_ip = (if host_exip_ip != 0 { host_exip_ip } else { host_inip_ip }) as u32;
         if sid_ip != 0 {
@@ -3033,8 +3463,6 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
         h.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
         h
     };
-    // Ascending Blaze packed-tag order (heat2 decoder skips out-of-order fields):
-    // ADMN ATTR CAP DHST DSTR GID GNAM GSTA HNET NTOP PHST THST UUID VOIP.
     let mut game = Vec::new();
     game.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[uid]));
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("ATTR", &attr));
@@ -3063,7 +3491,7 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     game
 }
 
-/// One `ListGameData` row: nested `GAME` (`ReplicatedGameData`) + `PROS` roster.
+/// One list-game row: GAME + PROS.
 fn build_list_game_data_entry(gid: i64) -> BlazeResult<Vec<u8>> {
     let game = build_replicated_game_data_fields(gid);
     let pros = game_state::gfgd_roster_entries_for_gid(gid);
@@ -3073,7 +3501,7 @@ fn build_list_game_data_entry(gid: i64) -> BlazeResult<Vec<u8>> {
     Ok(out)
 }
 
-/// `NotifyGameSetup` body: nested `GAME` struct + `PROS` + `QUEU` (+ `REAS` added by caller).
+/// `NotifyGameSetup` body: GAME + PROS + QUEU.
 pub fn build_game_manager_game_payload(gid: i64) -> BlazeResult<Bytes> {
     let game = build_replicated_game_data_fields(gid);
     game_state::set_replicated_wire_fields(gid, game.clone());
@@ -3085,19 +3513,14 @@ pub fn build_game_manager_game_payload(gid: i64) -> BlazeResult<Bytes> {
     Ok(Bytes::from(response))
 }
 
-/// Join-specific `NotifyGameSetup`: synthesize a stable dedicated-server payload.
-/// We intentionally avoid copying arbitrary fields from `JoinGameRequest`/`JoinGameResponse`.
+/// Join-path `NotifyGameSetup`.
 pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes> {
     let mut response = build_game_manager_game_payload(gid)?.to_vec();
     response.extend_from_slice(&encode_reas_dataless_join());
     Ok(Bytes::from(response))
 }
 
-/// `Blaze::GameManager::NotifyPlatformHostInitialized` (component `0x0004`, command `0x47`).
-/// Sent immediately after `NotifyGameSetup` so `GameManagerAPI` flips the platform-host state and
-/// stops waiting for an injection notification on a peer-hosted game.
-/// Wire: **`GID `**, **`HPID`** (long persona id), **`PHST`** (platform host slot id = 0).
-/// Do not use **`PHID`** as INTEGER -- persona ids exceed single-byte varints and the client only consumes the first byte (`0`).
+/// `NotifyPlatformHostInitialized` (cmd 71): GID + HPID + PHST.
 pub fn build_game_manager_notify_platform_host_initialized(gid: i64) -> BlazeResult<Bytes> {
     let gid = gid.clamp(i64::MIN, i64::MAX);
     let host = cnc_notify_host_persona_i32() as i64;
@@ -3108,10 +3531,7 @@ pub fn build_game_manager_notify_platform_host_initialized(gid: i64) -> BlazeRes
     Ok(Bytes::from(response))
 }
 
-/// `GameManager.NotifyPlayerJoinCompleted` (`0x0004` / `0x001E`).
-/// Blaze SDK (`sub_1281A00` / `sub_1280D30`) decodes `{ GID, PID }` and looks the player up on
-/// the Game mesh list -- a full PROS row is the wrong TDF, and sending this before the client
-/// has created the mesh null-derefs `player+0x58` (Prism then mislabels the AV as backend loss).
+/// `NotifyPlayerJoinCompleted` (cmd 30): GID + PID.
 pub fn build_game_manager_notify_player_join_completed(gid: i64) -> BlazeResult<Bytes> {
     game_state::mark_host_join_completed(gid);
     let player = game_state::host_player_for_gid(gid);
@@ -3121,46 +3541,35 @@ pub fn build_game_manager_notify_player_join_completed(gid: i64) -> BlazeResult<
     Ok(Bytes::from(out))
 }
 
-/// `GameManager.NotifyPlayerJoining` (`0x0004` / `0x0015`, cmd 21).
-/// Sent to the dedicated HOST session so its GMGR adds the joining client to game `gid`'s roster.
-/// same row schema as `NotifyGameSetup::PROS`). Without this the dedicated hosts the game but keeps
-/// an EMPTY roster (`[GAME] dropping onNotifyPlayerCustomDataChanged for unknown local player`) and
+/// `NotifyPlayerJoining` (cmd 21): GID + PDAT.
 pub fn build_game_manager_notify_player_joining(
     player: &game_state::CncPlayer,
     gid: i64,
 ) -> BlazeResult<Bytes> {
     let mut out = Vec::new();
-    // TDF tag order: `GID ` (0x47..) before `PDAT` (0x50..).
     out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     let pdat = game_state::build_gfgd_pros_entry(player, gid);
     out.extend_from_slice(&TdfEncoder::encode_struct("PDAT", &pdat));
     Ok(Bytes::from(out))
 }
 
-/// `GameManager.NotifyJoiningPlayerInitiateConnections` (`0x0004` / `0x0016`).
-/// Sent after `NotifyPlatformHostInitialized` so the client's `onNotifyJoiningPlayerInitiateConnections`
-/// handler finds the game with its host address set and calls `preInitGameNetwork` / `fb_Blaze_connection_queue_incoming_fireframe`.
-/// Payload layout matches `NotifyGameSetup`: `GAME` struct + `PROS` + `QUEU` + `REAS`.
+/// `NotifyJoiningPlayerInitiateConnections` (cmd 22).
 pub fn build_game_manager_notify_joining_player_initiate_connections(gid: i64) -> BlazeResult<Bytes> {
     let mut response = build_game_manager_game_payload(gid)?.to_vec();
     response.extend_from_slice(&encode_reas_dataless_join());
     Ok(Bytes::from(response))
 }
 
-/// Emit `REAS = UNION{ DATALESS_CONTEXT(0): DCTX=JOIN }` for join-game notify path.
 fn encode_reas_dataless_join() -> Bytes {
     encode_reas_dataless(1)
 }
 
-/// Emit `REAS = UNION{ member 0 = DatalessSetupContext: VALU{ DCTX } }`
 fn encode_reas_dataless(dctx: i32) -> Bytes {
     encode_union_struct("REAS", 0, |body| {
         body.extend_from_slice(&TdfEncoder::encode_int("DCTX", dctx));
     })
 }
 
-/// Emit `REAS = UNION{ member 1 = ResetDedicatedServerSetupContext: VALU{ ERR=0 } }` (client reset path).
-/// Dedicated host notify uses [`encode_reas_dataless`] with DCTX=4 instead.
 fn encode_reas_reset_dedicated() -> Bytes {
     encode_union_struct("REAS", 1, |body| {
         body.extend_from_slice(&TdfEncoder::encode_int("ERR ", 0));
@@ -3182,7 +3591,6 @@ fn encode_union_struct(
 
     let mut value_struct = Vec::new();
     build_value_struct(&mut value_struct);
-    // Blaze union wire uses VALU for the active member payload.
     out.extend_from_slice(&TdfEncoder::encode_struct("VALU", &value_struct));
     Bytes::from(out)
 }
@@ -3222,8 +3630,6 @@ fn encode_union_list(tag: &str, member_byte: u8, structs: &[Vec<u8>]) -> Vec<u8>
 
 const HNET_UNION_MEMBER_VALU: u8 = 0x02;
 
-/// Legacy helper retained for tests only. CNC cmd `0x0070` is **`NotifyGameReset`**, not Starting --
-/// do not push this on the live CNC client path (see `pushes_after_advance_game_state`).
 #[cfg(test)]
 pub fn build_game_manager_notify_game_starting(gid: i64) -> BlazeResult<Bytes> {
     let mut out = Vec::new();
@@ -3232,8 +3638,7 @@ pub fn build_game_manager_notify_game_starting(gid: i64) -> BlazeResult<Bytes> {
     Ok(Bytes::from(out))
 }
 
-/// `GameManager.NotifyGameSettingsChange` (`0x0004` / `0x006E` / cmd 110) -- sent after setGameSettings
-/// to notify all players of updated game settings. Wire: GID (long) + GSET (int) + ATTR (map).
+/// `NotifyGameSettingsChange` (cmd 110): GID + GSET (+ optional HOST).
 pub fn build_game_manager_notify_game_settings_change(gid: i64, gset: i32) -> BlazeResult<Bytes> {
     let game = game_state::get_game(gid);
     let mut out = Vec::new();
@@ -3323,6 +3728,43 @@ mod notify_game_setup_tests {
         assert!(
             reas.value_display.contains("1"),
             "REAS reset body should be member 1 (ResetDedicatedServerSetupContext)"
+        );
+    }
+
+    #[test]
+    fn notify_game_reset_wraps_replicated_data_not_game() {
+        let reset = build_game_manager_notify_game_reset(&[], 10001).expect("encode");
+        let setup = build_game_manager_notify_game_setup(&[], 10001).expect("encode");
+        let reset_tree = TdfTreeParser::parse_packet(&reset).expect("parse reset");
+        let setup_tree = TdfTreeParser::parse_packet(&setup).expect("parse setup");
+        assert!(find_tag(&reset_tree, "GAME").is_none(), "reset root must not be GAME");
+        assert!(find_tag(&setup_tree, "GAME").is_some(), "setup root must be GAME");
+        assert!(find_tag(&reset_tree, "DATA").is_some(), "reset root must be DATA");
+        assert_eq!(TdfEncoder::find_long_field(&reset, "GID "), Some(10001));
+        assert_eq!(TdfEncoder::find_long_field(&setup, "GID "), Some(10001));
+    }
+
+    #[test]
+    fn dedicated_host_notify_reset_is_data_only() {
+        let payload = build_dedicated_host_notify_game_reset(
+            10001,
+            1000,
+            0x7f000001,
+            25200,
+            0x7f000001,
+            25200,
+            42,
+            &[],
+        )
+        .expect("encode");
+        let tree = TdfTreeParser::parse_packet(&payload).expect("parse");
+        assert!(find_tag(&tree, "GAME").is_none());
+        assert!(find_tag(&tree, "PROS").is_none());
+        assert!(find_tag(&tree, "DATA").is_some());
+        assert_eq!(TdfEncoder::find_long_field(&payload, "GID "), Some(10001));
+        assert!(
+            payload.windows(3).any(|w| w == TdfEncoder::make_tag("GSTA")),
+            "reset DATA must include GSTA"
         );
     }
 
@@ -3476,6 +3918,18 @@ mod notify_game_setup_tests {
     }
 
     #[test]
+    fn notify_game_removed_encodes_gid_reas() {
+        let payload = build_game_manager_notify_game_removed(1, GAME_REMOVAL_REASON_GAME_DESTROYED)
+            .expect("encode");
+        assert_eq!(TdfEncoder::find_long_field(&payload, "GID "), Some(1));
+        assert_eq!(
+            TdfEncoder::find_int_field(&payload, "REAS"),
+            Some(GAME_REMOVAL_REASON_GAME_DESTROYED)
+        );
+        TdfTreeParser::parse_packet(&payload).expect("parse tree");
+    }
+
+    #[test]
     fn notify_player_removed_encodes_gid_pid_reas() {
         let payload = build_game_manager_notify_player_removed(
             1,
@@ -3522,7 +3976,7 @@ mod notify_game_setup_tests {
             .expect("XNNC tag in notify");
         assert!(
             hnet_pos < xnnc_pos,
-            "retail ReplicatedGameData expects HNET@{hnet_pos} before XNNC@{xnnc_pos}"
+            "HNET@{hnet_pos} must precede XNNC@{xnnc_pos}"
         );
     }
 
@@ -3569,13 +4023,16 @@ mod notify_game_setup_tests {
         let mut req = Vec::new();
         req.extend_from_slice(&TdfEncoder::encode_string("GNAM", "Skirmish"));
         req.extend_from_slice(&TdfEncoder::encode_int("GSET", 271));
+        req.extend_from_slice(&TdfEncoder::encode_long("RGID", 0));
         req.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_CLIENT_SERVER_DEDICATED));
         let payload =
             build_notify_create_dynamic_dedicated_server_game(42, &req).expect("encode");
         assert_eq!(TdfEncoder::find_long_field(&payload, "GID "), Some(42));
+        assert_eq!(TdfEncoder::find_long_field(&payload, "RGID"), Some(42));
         assert!(TdfEncoder::find_string_field(&payload, "GNAM").as_deref() == Some("Skirmish"));
         let tree = TdfTreeParser::parse_packet(&payload).expect("parse");
         assert!(find_tag(&tree, "GREQ").is_some(), "cmd 220 must wrap request in GREQ");
+        assert!(find_tag(&tree, "MID ").is_some() || find_tag(&tree, "MID").is_some());
     }
 
     #[test]
@@ -3621,7 +4078,7 @@ mod notify_game_setup_tests {
         assert!(!hnet.children.is_empty(), "HNET list empty");
     }
 
-    /// serverid must ride in the INITIAL NotifyGameSetup (create/reset, join, and dedicated-host).
+    /// serverid must be present in initial NotifyGameSetup payloads.
     #[test]
     fn notify_setup_carries_serverid_in_initial_attr() {
         reset_test_games();
@@ -3681,8 +4138,6 @@ mod notify_game_setup_tests {
         assert!(game_has_matr(&dpayload), "MATR missing (dedicated host) - Join needs mesh attributes");
     }
 
-    /// AUDIT: recursively verify EVERY struct we emit (top-level + nested) lists its fields in
-    /// strictly ascending packed-tag order -- the invariant the Blaze heat2 decoder relies on.
     #[test]
     fn all_response_packets_ascending_tag_order() {
         fn pack(tag: &str) -> u32 {
@@ -3769,11 +4224,9 @@ mod notify_game_setup_tests {
         assert!(fails.is_empty(), "TDF field-order violations:\n{}", fails.join("\n"));
     }
 
-    /// Blaze heat2 decoders skip out-of-order fields -- every GAME struct we emit MUST list its
-    /// members in strictly ascending packed-tag order. Verify across all three GAME builders.
     #[test]
     fn game_struct_fields_ascending_tag_order() {
-        // Unique gids + no reset_test_games(): avoid racing the shared game_state used by other tests.
+        // Unique gids: avoid racing shared game_state used by other tests.
         let pack = |tag: &str| -> u32 {
             let t = TdfEncoder::make_tag(tag);
             ((t[0] as u32) << 16) | ((t[1] as u32) << 8) | (t[2] as u32)
@@ -3984,7 +4437,7 @@ mod notify_game_setup_tests {
             assert_eq!(TdfEncoder::find_long_field(row, "STAT"), Some(2), "{label} PROS STAT");
             assert!(
                 !row.windows(3).any(|w| w == TdfEncoder::make_tag("UID ")),
-                "{label} PROS must not emit UID -- not in retail ReplicatedGamePlayer schema"
+                "{label} PROS must not emit UID"
             );
         }
         assert!(

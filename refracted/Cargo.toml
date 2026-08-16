@@ -61,6 +61,9 @@ version = "0.24"
 features = ["serde"]
 version = "2.0"
 
+[dependencies.mysql]
+version = "25"
+
 [dependencies.resvg]
 optional = true
 version = "0.43"
@@ -119,7 +122,7 @@ desktop = [
 build = "build.rs"
 edition = "2021"
 name = "refracted"
-version = "0.4.1609"
+version = "0.4.1708"
 
 [target."cfg(windows)".build-dependencies]
 winres = "0.1"

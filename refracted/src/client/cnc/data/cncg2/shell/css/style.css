@@ -156,13 +156,11 @@ body.cc-theme {
     background-image: url('../view/image/btn_bg_01_over.png');
 }
 
-.btn-add-currency,
 .btn-options,
 .btn-play-dropdown {
     background-color: #176BC0;
     background-image: url('../view/image/btn_bg_02.png');
 }
-.btn-add-currency:hover, .btn-add-currency:focus,
 .btn-options:hover, .btn-options:focus,
 .btn-play-dropdown:hover, .btn-play-dropdown:focus {
     background-image: url('../view/image/btn_bg_02_over.png');
@@ -190,122 +188,58 @@ body.cc-theme {
    BLOCK-SPECIFIC FORMATION
    ========================================================================= */
 
-/* TOP BAR CURRENCY — patterned rail, glossy orbs, black value wells */
+/* TOP BAR — Support Us (replaces retail VP/CP pay rail) */
 .cc-top-bar { position: absolute; top: 16px; left: 20px; right: 20px; height: 56px; z-index: 100;}
-.cc-currency-block {
+.cc-support-us {
     position: absolute;
     left: 0;
     top: 0;
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 10px 3px 6px;
-    font-size: 12px;
-    font-weight: bold;
-    color: #fff;
-    line-height: 1;
-    white-space: nowrap;
-    background-color: #0a0a0c;
-    background-image:
-        url('../view/image/btn_bg_05.png'),
-        -webkit-repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(255, 255, 255, 0.04) 3px, rgba(255, 255, 255, 0.04) 4px),
-        -webkit-repeating-linear-gradient(-45deg, transparent 0, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 4px);
-    background-image:
-        url('../view/image/btn_bg_05.png'),
-        repeating-linear-gradient(45deg, transparent 0, transparent 3px, rgba(255, 255, 255, 0.04) 3px, rgba(255, 255, 255, 0.04) 4px),
-        repeating-linear-gradient(-45deg, transparent 0, transparent 3px, rgba(0, 0, 0, 0.18) 3px, rgba(0, 0, 0, 0.18) 4px);
-    background-size: 100% 100%, auto, auto;
-    background-repeat: no-repeat, repeat, repeat;
-    border: 1px solid rgba(90, 96, 110, 0.55);
-    border-radius: 6px;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-.cc-currency-segment {
-    display: -webkit-box;
-    display: flex;
-    -webkit-box-align: center;
-    align-items: center;
-    gap: 4px;
-}
-.cc-currency-value-box {
     display: -webkit-box;
     display: flex;
     -webkit-box-align: center;
     align-items: center;
     -webkit-box-pack: center;
     justify-content: center;
-    min-width: 44px;
-    min-height: 30px;
-    padding: 1px 8px 2px;
-    background: #000;
-    border-radius: 4px;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
-}
-.cc-currency-pill {
-    display: inline-block;
-    position: relative;
-    width: 32px;
-    height: 32px;
-    line-height: 32px;
-    border-radius: 16px;
-    text-align: center;
-    font-size: 12px;
-    font-weight: bold;
-    letter-spacing: 0.04em;
-    color: #fff;
-    font-family: 'EurostileLTStd-BoldEx2', 'EurostileLTStdBold', 'Eurostile-Hea', Arial, sans-serif;
-    vertical-align: middle;
-    text-shadow: 0 1px 1px rgba(0,0,0,0.55);
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
-    -webkit-flex-shrink: 0;
-    flex-shrink: 0;
-}
-.cc-currency-pill--vp {
-    background-color: #176BC0;
-    background-image: url('../view/image/btn_bg_02.png');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -2px 5px rgba(0,0,0,0.25);
-    border: 1px solid #0a4070;
-}
-.cc-currency-pill--cp {
-    background-color: #3f9e0f;
-    background-image: url('../view/image/btn_bg_03.png');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -2px 5px rgba(0,0,0,0.3);
-    border: 1px solid #0a4a18;
-}
-.cc-currency-pill--cp::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    border-radius: inherit;
-    background: -webkit-repeating-linear-gradient(left, transparent, transparent 4px, rgba(0,0,0,0.04) 4px, rgba(0,0,0,0.04) 5px);
-    background: repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,0,0,0.04) 4px, rgba(0,0,0,0.04) 5px);
-    pointer-events: none;
-    opacity: 0.45;
-}
-.currency-value {
+    width: auto;
+    min-width: 0;
+    height: 38px;
+    padding: 0 14px;
     margin: 0;
-    font-family: 'EurostileLTStdBold', 'Eurostile-Hea', 'Eurostile-Med', sans-serif;
+    border: 1px solid rgba(90, 96, 110, 0.55);
+    border-radius: 6px;
+    cursor: pointer;
     color: #fff;
-    font-style: italic;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 14px;
     font-weight: bold;
-    font-size: 13px;
-    line-height: 1.15;
-    letter-spacing: 0.02em;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.65), 0 0 1px rgba(0,0,0,0.4);
+    letter-spacing: 0.06em;
+    line-height: 1;
+    white-space: nowrap;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+    background-color: #176BC0;
+    background-image:
+        url('../view/image/btn_bg_02.png'),
+        url('../view/image/btn_bg_05.png');
+    background-size: 100% 100%, 100% 100%;
+    background-repeat: no-repeat, no-repeat;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 5px rgba(0, 0, 0, 0.25);
+}
+.cc-support-us:hover,
+.cc-support-us:focus {
+    background-image:
+        url('../view/image/btn_bg_02_over.png'),
+        url('../view/image/btn_bg_05.png');
+    outline: none;
+}
+.cc-support-us:active {
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.cc-support-us__label {
+    position: relative;
+    top: 1px;
 }
 
 /* Title: wide horizontal strip (retail wordmark is long and not tall) */
@@ -330,25 +264,6 @@ body.cc-theme {
     object-fit: contain;
     object-position: center center;
     -o-object-fit: contain;
-}
-
-.btn-add-currency {
-    display: inline-block;
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    padding: 0;
-    line-height: 30px;
-    border-radius: 4px;
-    font-size: 17px;
-    font-weight: bold;
-    font-family: 'Eurostile-Hea', Arial, Helvetica, sans-serif;
-    vertical-align: middle;
-    text-align: center;
-    border: 1px solid #0a4a7a;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.26), inset 0 -2px 4px rgba(0,0,0,0.2);
-    -webkit-flex-shrink: 0;
-    flex-shrink: 0;
 }
 
 /* Persona (Blaze / shellauth JSON) — used in options meta stack / aurora */

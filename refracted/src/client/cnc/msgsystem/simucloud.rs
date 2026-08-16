@@ -1,6 +1,5 @@
 ﻿//! Refracted as the retail SimuCloud orchestrator (`PublicSimuCloudChannel` → `CreateGame`).
 
-use std::net::SocketAddr;
 use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -39,6 +38,8 @@ pub const CREATE_GAME_OPTIONS_ALLOW_RECONNECT: u32 = 1;
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
 const CONNECT_BUDGET: Duration = Duration::from_secs(12);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
+/// Alpha_Tutorial first dedicated load (entity spawn + registry) can exceed 45s on a cold server.
+const GAME_READY_WAIT: Duration = Duration::from_secs(120);
 
 /// Split a retail map path into `(MapName, DirPath)` for `SimuCloud.CreateGame`.
 pub fn split_map_path(full: &str) -> (String, String) {
@@ -279,13 +280,20 @@ fn allegiance_for_team(team: i32) -> Vec<f32> {
 }
 
 fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo> {
+    let gid = game.gid;
     game.players
         .iter()
         .map(|p| {
             let team = i32_attr(&p.attribs, "_team").unwrap_or(p.team).max(1);
-            let start_point = i32_attr(&p.attribs, "_startpoint")
-                .filter(|&s| s > 0)
-                .unwrap_or(p.slot + 1);
+            let start_point = super::super::game_state::effective_startpoint_for_player(gid, p)
+                .max(0);
+            let start_point = if start_point > 0 {
+                start_point
+            } else {
+                i32_attr(&p.attribs, "_startpoint")
+                    .filter(|&s| s > 0)
+                    .unwrap_or(p.slot + 1)
+            };
             let difficulty = i32_attr(&p.attribs, "_difficulty").unwrap_or(0);
             let general_id = u32_attr(&p.attribs, "_general").unwrap_or(0);
             let general_id = if general_id != 0 {
@@ -414,6 +422,7 @@ async fn negotiate_type_ids(stream: &mut TcpStream) -> std::io::Result<(u16, u16
 /// Connect to the dedicated SimuCloud host, send `CreateGame`, read `GameReady`.
 pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     super::super::game_state::seed_from_join(gid);
+    super::super::game_state::resolve_startpoints_before_create(gid);
     let game = match super::super::game_state::get_game(gid) {
         Some(g) => g,
         None => {
@@ -436,9 +445,12 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         log_sim_debug(&format!("Empty roster for gid={gid}; skipping CreateGame"));
         return Ok(());
     }
+    // CreateGame payload already has resolved picks; wipe lobby attrs so post-match
+    // return to the same GID does not resurrect an invalid start POS for the next map.
+    super::super::game_state::flush_lobby_startpoints(gid);
 
     let game_id = uuid_to_guid_bytes(&game.uuid);
-    let upstream = SocketAddr::from(([127, 0, 0, 1], SIMUCLOUD_PORT));
+    let upstream = crate::client::cnc::dedicated_pool::simucloud_upstream_for_gid(gid);
     let deadline = Instant::now() + CONNECT_BUDGET;
     let mut stream = None;
     while Instant::now() < deadline {
@@ -475,6 +487,12 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         "Starting match setup -- map \"{map_name}\", {} player(s)",
         roster.len()
     ));
+    for p in &roster {
+        log_sim_debug(&format!(
+            "CreateGame roster pid={} faction={} team={} startPoint={} ai={}",
+            p.player_id, p.faction, p.team, p.start_point, p.is_ai
+        ));
+    }
     log_sim_debug(&format!("Connected to dedicated orchestrator at {upstream}"));
 
     let (create_type_id, game_ready_type_id, failure_type_id) =
@@ -509,35 +527,53 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
     write_simple_frame(&mut stream, &create_frame).await?;
 
-    // Native create may retry briefly (SpawnServer still coming up). Use a longer per-read
-    // budget than negotiate so a slow GameReady is not misreported as "frame header timeout".
+    // Dedicated defers CreateGame until ServerLevel load completes (Alpha_Tutorial cold
+    // load can take 60–90s). Keep polling reads until GAME_READY_WAIT — do not fail on
+    // the first idle 15s chunk.
     const REPLY_READ_TIMEOUT: Duration = Duration::from_secs(15);
-    let reply_deadline = Instant::now() + Duration::from_secs(45);
+    let reply_deadline = Instant::now() + GAME_READY_WAIT;
+    let mut idle_log_at = Instant::now();
     while Instant::now() < reply_deadline {
+        let remaining = reply_deadline.saturating_duration_since(Instant::now());
+        let chunk = REPLY_READ_TIMEOUT.min(remaining);
         let frame = {
             let mut header = [0u8; 6];
-            match timeout(REPLY_READ_TIMEOUT, stream.read_exact(&mut header)).await {
+            match timeout(chunk, stream.read_exact(&mut header)).await {
                 Ok(Ok(_)) => {}
-                Ok(Err(e)) => return Err(e),
-                Err(_) => {
+                Ok(Err(e)) => {
                     return Err(std::io::Error::new(
-                        std::io::ErrorKind::TimedOut,
-                        "timed out waiting for GameReady (no frame from SimuCloud host)",
+                        e.kind(),
+                        format!("SimuCloud closed while waiting for GameReady: {e}"),
                     ));
+                }
+                Err(_) => {
+                    if idle_log_at.elapsed() >= Duration::from_secs(15) {
+                        log_sim_debug(&format!(
+                            "Still waiting for GameReady from dedicated (~{}s left)...",
+                            remaining.as_secs()
+                        ));
+                        idle_log_at = Instant::now();
+                    }
+                    continue;
                 }
             }
             let payload_len =
                 u32::from_le_bytes([header[2], header[3], header[4], header[5]]) as usize;
             let mut payload = vec![0u8; payload_len];
             if payload_len > 0 {
-                timeout(REPLY_READ_TIMEOUT, stream.read_exact(&mut payload))
-                    .await
-                    .map_err(|_| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            "timed out reading GameReady payload",
-                        )
-                    })??;
+                let payload_wait = REPLY_READ_TIMEOUT.min(
+                    reply_deadline.saturating_duration_since(Instant::now()),
+                );
+                match timeout(payload_wait, stream.read_exact(&mut payload)).await {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(e)) => {
+                        return Err(std::io::Error::new(
+                            e.kind(),
+                            format!("SimuCloud closed while reading GameReady payload: {e}"),
+                        ));
+                    }
+                    Err(_) => continue,
+                }
             }
             SimpleFrame {
                 type_id: u16::from_le_bytes([header[0], header[1]]),

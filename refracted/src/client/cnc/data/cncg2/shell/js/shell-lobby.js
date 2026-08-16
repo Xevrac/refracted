@@ -55,7 +55,7 @@
             world: { minX: -423.9, maxX: 423.9, minZ: -297.0, maxZ: 297.0 },
             // frostex ebx layer2_design RtsCameraEntityData.StartPoint (SP02 unused).
             starts: [
-                { id: 1, x: 307.116, z: 197.373 }
+                { id: 1, x: 307.116, z: 197.373, u: 0.961, v: 0.927 }
             ]
         },
         {
@@ -70,9 +70,12 @@
             accent: '#c07828',
             texCrop: { u0: 0.217, v0: 0.084, u1: 0.799, v1: 0.910 },
             world: { minX: -289.8, maxX: 306.2, minZ: -419.8, maxZ: 426.0 },
+            // Hand u/v = pip locations (do not worldToUv — that moved the pips).
+            // Design id/x/z stay with StartPointID; only 1↔2 UVs swapped so labels
+            // match game (pick top-right was SP1 / bottom-left spawn).
             starts: [
-                { id: 1, x: -179.934, z: 315.258 },
-                { id: 2, x: 179.934, z: -309.879 }
+                { id: 1, x: -179.934, z: 315.258, u: 0.175, v: 0.859 },
+                { id: 2, x: 179.934, z: -309.879, u: 0.829, v: 0.131 }
             ]
         },
         {
@@ -87,9 +90,12 @@
             accent: '#2a7ab8',
             texCrop: { u0: 0.318, v0: 0.299, u1: 0.693, v1: 0.703 },
             world: { minX: -379.7, maxX: 379.7, minZ: -379.7, maxZ: 379.7 },
+            // Design id/x/z = RtsCamera StartPointID. Prior Excavation-style 1↔2 UV
+            // invert put label "2" bottom-left while SP2 spawns top-right (and vice
+            // versa). UVs follow the design corners on the lobby crop.
             starts: [
-                { id: 1, x: -276.257, z: 321.746 },
-                { id: 2, x: 276.257, z: -321.746 }
+                { id: 1, x: -276.257, z: 321.746, u: 0.126, v: 0.911 },
+                { id: 2, x: 276.257, z: -321.746, u: 0.841, v: 0.098 }
             ]
         },
         {
@@ -104,11 +110,14 @@
             accent: '#b83a3a',
             texCrop: { u0: 0.311, v0: 0.303, u1: 0.689, v1: 0.693 },
             world: { minX: -396.4, maxX: 394.4, minZ: -383.3, maxZ: 407.6 },
+            // Design RtsCamera XZ (frostex). UVs = worldToUv — prior 1↔4 hand swap put
+            // label "4" on the north plateau while id 4's camera is west (and YZX
+            // mis-detect parked freeCam mid-map). Pick 1 → (-113,347) north.
             starts: [
-                { id: 1, x: -112.923, z: 347.257 },
-                { id: 2, x: 93.062, z: -322.937 },
-                { id: 3, x: 315.061, z: -98.814 },
-                { id: 4, x: -317.105, z: 109.958 }
+                { id: 1, x: -112.923, z: 347.257, u: 0.358, v: 0.076 },
+                { id: 2, x: 93.062, z: -322.937, u: 0.620, v: 0.892 },
+                { id: 3, x: 315.061, z: -98.814, u: 0.900, v: 0.609 },
+                { id: 4, x: -317.105, z: 109.958, u: 0.100, v: 0.346 }
             ]
         },
         {
@@ -123,13 +132,15 @@
             accent: '#6a5ab0',
             texCrop: { u0: 0.219, v0: 0.215, u1: 0.783, v1: 0.762 },
             world: { minX: -447.6, maxX: 452.9, minZ: -448.9, maxZ: 451.6 },
+            // Same team-line invert as Overpass: keep Design id/x/z, swap 1↔5 and
+            // 2↔6 UVs only (pick old "6" sat on Design SP6 which is the old "2" crater).
             starts: [
-                { id: 1, x: -313.067, z: 84.901 },
-                { id: 2, x: 97.692, z: -380.222 },
-                { id: 3, x: -258.072, z: 217.144 },
-                { id: 4, x: 253.280, z: -224.941 },
-                { id: 5, x: -97.507, z: 382.894 },
-                { id: 6, x: 318.375, z: -79.735 }
+                { id: 1, x: -313.067, z: 84.901, u: 0.21, v: 0.59 },
+                { id: 2, x: 97.692, z: -380.222, u: 0.61, v: 0.14 },
+                { id: 3, x: -258.072, z: 217.144, u: 0.30, v: 0.74 },
+                { id: 4, x: 253.280, z: -224.941, u: 0.74, v: 0.32 },
+                { id: 5, x: -97.507, z: 382.894, u: 0.42, v: 0.86 },
+                { id: 6, x: 318.375, z: -79.735, u: 0.83, v: 0.49 }
             ]
         },
         {
@@ -142,16 +153,18 @@
             minimap: 'DM_Overpass_3v3_JKS.png',
             image: minimapUrl('DM_Overpass_3v3_JKS.png'),
             accent: '#3a9a8a',
-            texCrop: { u0: 0.254, v0: 0.236, u1: 0.744, v1: 0.766 },
             world: { minX: -453.8, maxX: 448.8, minZ: -443.8, maxZ: 458.8 },
-            // frostex ebx layer2_design — StartPointID, not harvest order.
+            // Hand u/v = pip *locations* (do not replace with worldToUv — that rotates the
+            // cluster). id/x/z = Design StartPointID + camera. Numbering was inverted on
+            // the team lines vs Design (pick old "1" → Design SP1 sat on the old "5" spot):
+            // swap 1↔5 and 2↔6 UVs only; 3/4 stay.
             starts: [
-                { id: 1, x: -340, z: 180 },
-                { id: 2, x: 335, z: -155 },
-                { id: 3, x: -260, z: 305 },
-                { id: 4, x: 260, z: -285 },
-                { id: 5, x: -135, z: 390 },
-                { id: 6, x: 130, z: -375 }
+                { id: 1, x: -340, z: 180, u: 0.189, v: 0.670 },
+                { id: 2, x: 335, z: -155, u: 0.848, v: 0.334 },
+                { id: 3, x: -260, z: 305, u: 0.270, v: 0.779 },
+                { id: 4, x: 260, z: -285, u: 0.761, v: 0.225 },
+                { id: 5, x: -135, z: 390, u: 0.391, v: 0.848 },
+                { id: 6, x: 130, z: -375, u: 0.634, v: 0.147 }
             ]
         },
         {
@@ -170,8 +183,8 @@
             world: { minX: -512, maxX: 512, minZ: -512, maxZ: 512 },
             // Human seats only (SP03–05 are AI_enemy / NeutralPlayer partitions).
             starts: [
-                { id: 1, x: -127.090, z: 236.141 },
-                { id: 2, x: -248.085, z: 118.928 }
+                { id: 1, x: -127.090, z: 236.141, u: 0.871, v: 0.139 },
+                { id: 2, x: -248.085, z: 118.928, u: 0.129, v: 0.857 }
             ]
         }
     ];
@@ -404,6 +417,22 @@
         };
     }
 
+    function lobbyUvForStart(sp, map) {
+        if (!sp) {
+            return { u: 0.5, v: 0.5 };
+        }
+        // Hand u/v are lobbied landmark positions (authoritative for local PNGs).
+        // World x/z drive wire `_startpoint` / Design camera only — do not relocate pips
+        // via worldToUv when u/v exist (that rotated Overpass ~90°).
+        if (sp.u != null && sp.v != null) {
+            return { u: sp.u, v: sp.v };
+        }
+        if (sp.x != null && sp.z != null) {
+            return worldToUv(sp.x, sp.z, mapWorld(map));
+        }
+        return { u: 0.5, v: 0.5 };
+    }
+
     function mapStartpoints(map) {
         var n = mapStartCount(map);
         var out;
@@ -572,6 +601,7 @@
         $scope.lobbyChat = [];
         $scope.lobbyChatDraft = '';
         $scope._startpointHoldUntil = 0;
+        $scope._startpointResyncAt = 0;
         $scope.lobbyOptions = {
             startingCash: 'standard',
             startingUnits: 'standard',
@@ -784,9 +814,44 @@
             return n;
         }
 
+        function isValidStartpointForMap(id) {
+            var n = parseStartId(id);
+            if (n <= 0) {
+                return true;
+            }
+            var ids = startpointIds($scope.selectedMap);
+            var i;
+            for (i = 0; i < ids.length; i++) {
+                if (ids[i] === n) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function clampStartIdToMap(id) {
+            var n = parseStartId(id);
+            return isValidStartpointForMap(n) ? n : 0;
+        }
+
         function assignDefaultStartpoints() {
             eachOccupiedSlot(function (slot) {
                 if (slot.startpoint == null) {
+                    slot.startpoint = 0;
+                }
+            });
+        }
+
+        // Drop picks that are not on the current map (e.g. Overpass 5 → Alpha Tutorial).
+        function clampStartpointsToMap(syncInvalid) {
+            eachOccupiedSlot(function (slot) {
+                var id = parseStartId(slot.startpoint);
+                if (id > 0 && !isValidStartpointForMap(id)) {
+                    slot.startpoint = 0;
+                    if (syncInvalid) {
+                        syncPlayerAttrsToServer(slot, true);
+                    }
+                } else if (slot.startpoint == null) {
                     slot.startpoint = 0;
                 }
             });
@@ -813,8 +878,20 @@
             }
         }
 
+        function assignRandomStartpoints() {
+            eachOccupiedSlot(function (slot) {
+                if (parseStartId(slot.startpoint) === 0) {
+                    slot.startpoint = unusedStartpoint(slot) || 1;
+                }
+            });
+        }
+
         $scope.mapStartpoints = function () {
             return mapStartpoints($scope.selectedMap);
+        };
+
+        $scope.pickerMapStartpoints = function () {
+            return mapStartpoints($scope.pickerMap());
         };
 
         $scope.startpointIds = function () {
@@ -870,8 +947,10 @@
                 return;
             }
             slot.startpoint = next;
-            $scope._startpointHoldUntil = Date.now() + 2500;
-            syncPlayerAttrsToServer(slot);
+            // Hold off roster clobber until server confirms; stale init/join POSTs can
+            // arrive 5–10s later with startpoint=0 and must not win over this pick.
+            $scope._startpointHoldUntil = Date.now() + 15000;
+            syncPlayerAttrsToServer(slot, true);
         };
 
         $scope.openStartModal = function (slot, $event) {
@@ -924,13 +1003,11 @@
             return found;
         };
 
-        $scope.startPipStyle = function (sp) {
+        $scope.startPipStyle = function (sp, map) {
             if (!sp) {
                 return {};
             }
-            var uv = (sp.u != null && sp.v != null)
-                ? { u: sp.u, v: sp.v }
-                : worldToUv(sp.x, sp.z, mapWorld($scope.selectedMap));
+            var uv = lobbyUvForStart(sp, map || $scope.selectedMap);
             var u = Math.max(0.04, Math.min(0.96, uv.u));
             var v = Math.max(0.04, Math.min(0.96, uv.v));
             var style = {
@@ -943,6 +1020,10 @@
                 style['border-color'] = '#fff';
             }
             return style;
+        };
+
+        $scope.pickerStartPipStyle = function (sp) {
+            return $scope.startPipStyle(sp, $scope.pickerMap());
         };
 
         $scope.startPipLabel = function (sp) {
@@ -1002,6 +1083,7 @@
             }
             rebuildStartChoices();
             assignDefaultStartpoints();
+            clampStartpointsToMap(true);
             syncMapToServer();
         };
 
@@ -1409,7 +1491,11 @@
                 return { label: '—', image: MAP_THUMB, mode: '' };
             }
             if (g.isStandby || g.kind === 'standby' || g.map === 'Standby') {
-                return { label: 'Standby', image: MAP_THUMB, mode: 'IDLE' };
+                var phase = (g.phase || '').toString();
+                if (/recycl/i.test(phase)) {
+                    return { label: 'Standby', image: MAP_THUMB, mode: 'RECYCLING' };
+                }
+                return { label: 'Standby', image: MAP_THUMB, mode: 'STANDBY' };
             }
             var path = g.mapPath || '';
             var leaf = g.map || (path ? path.split('/').pop() : '');
@@ -1687,6 +1773,26 @@
                 String(g.map).toLowerCase() === String(wantLeaf).toLowerCase());
         }
 
+        function poolAssignableCount(pool) {
+            if (!pool) {
+                return 0;
+            }
+            if (typeof pool.assignable === 'number') {
+                return pool.assignable;
+            }
+            if (typeof pool.idle === 'number') {
+                return pool.idle;
+            }
+            return 0;
+        }
+
+        function poolStabilizingHint(pool) {
+            if (!pool || typeof pool.assignableIn !== 'number') {
+                return 0;
+            }
+            return Math.max(0, pool.assignableIn);
+        }
+
         function pickMatchTarget(games) {
             if (!games || !games.length) {
                 return null;
@@ -1767,7 +1873,8 @@
                         if (!$scope._findingMatch) {
                             return;
                         }
-                        var idlePool = (pool && typeof pool.idle === 'number') ? pool.idle : 0;
+                        var idlePool = poolAssignableCount(pool);
+                        var stabilizingIn = poolStabilizingHint(pool);
                         var games = (data && data.games) ? data.games : [];
                         var target = pickMatchTarget(games);
                         var populated = !!(target && (Number(target.humans) || 0) > 0);
@@ -1783,7 +1890,11 @@
                         }
 
                         if (idlePool <= 0 || !target) {
-                            failFind('No idle servers found, check back later.');
+                            if (stabilizingIn > 0) {
+                                failFind('Server is still recycling — try again in a moment.');
+                            } else {
+                                failFind('No idle servers found, check back later.');
+                            }
                             return;
                         }
                         if (window.CncProbe && CncProbe.log) {
@@ -1898,7 +2009,7 @@
                     team[i].isHost = !!p.isHost;
                     team[i].displayName = p.name || team[i].displayName;
                     if (p.startpoint != null) {
-                        team[i].startpoint = parseStartId(p.startpoint);
+                        team[i].startpoint = clampStartIdToMap(p.startpoint);
                     }
                     return;
                 }
@@ -1919,7 +2030,7 @@
                     s.avatar = avatarForSlot(s);
                     s.teamNum = teamNum;
                     s.startpoint = (p.startpoint != null)
-                        ? parseStartId(p.startpoint)
+                        ? clampStartIdToMap(p.startpoint)
                         : 0;
                     team[i] = s;
                     return;
@@ -1991,7 +2102,17 @@
                         $scope.team1[0].ready = $scope.localReady;
                         $scope.team1[0].isHost = asHost || !!p.isHost;
                         if (p.startpoint != null && Date.now() >= ($scope._startpointHoldUntil || 0)) {
-                            $scope.team1[0].startpoint = parseStartId(p.startpoint);
+                            var serverSp = clampStartIdToMap(p.startpoint);
+                            var localSp = parseStartId($scope.team1[0].startpoint);
+                            if (!isValidStartpointForMap(localSp)) {
+                                localSp = 0;
+                                $scope.team1[0].startpoint = 0;
+                            }
+                            if (serverSp > 0 || localSp <= 0) {
+                                $scope.team1[0].startpoint = serverSp;
+                            } else if (localSp > 0 && serverSp === 0) {
+                                maybeResyncStartpoint($scope.team1[0]);
+                            }
                         }
                     }
                 } else {
@@ -2127,7 +2248,8 @@
                 return httpRequest('GET', '/cnc/online-count');
             }
             var url = '/cnc/select-map?gid=' + encodeURIComponent($scope.gameId) +
-                '&path=' + encodeURIComponent(level);
+                '&path=' + encodeURIComponent(level) +
+                '&startCount=' + encodeURIComponent(mapStartCount($scope.selectedMap));
             if (window.CncProbe && CncProbe.log) {
                 CncProbe.log('select-map → gid=' + $scope.gameId + ' path=' + level +
                     ' label=' + (($scope.selectedMap && $scope.selectedMap.label) || ''));
@@ -2153,7 +2275,19 @@
             return pid;
         }
 
-        function syncPlayerAttrsToServer(slot) {
+        function maybeResyncStartpoint(slot) {
+            if (!slot || parseStartId(slot.startpoint) <= 0) {
+                return;
+            }
+            var now = Date.now();
+            if (($scope._startpointResyncAt || 0) > now) {
+                return;
+            }
+            $scope._startpointResyncAt = now + 3000;
+            syncPlayerAttrsToServer(slot, true);
+        }
+
+        function syncPlayerAttrsToServer(slot, includeStartpoint) {
             if (!slot || !slot.occupied || slot.invitePending) {
                 return httpRequest('GET', '/cnc/online-count');
             }
@@ -2166,8 +2300,9 @@
             if (slot.teamNum != null) {
                 q += '&team=' + encodeURIComponent(slot.teamNum);
             }
-            if (slot.startpoint != null) {
-                q += '&startpoint=' + encodeURIComponent(slot.startpoint);
+            var sp = parseStartId(slot.startpoint);
+            if (includeStartpoint || sp > 0) {
+                q += '&startpoint=' + encodeURIComponent(sp);
             }
             if (slot.general != null && slot.general !== '') {
                 q += '&general=' + encodeURIComponent(slot.general);
@@ -2221,6 +2356,7 @@
             var startUnix = Math.floor(Date.now() / 1000);
             applyTutorialConstraints();
             resolveExclusiveStartpoints();
+            assignRandomStartpoints();
 
             var host = $scope.team1[0];
             var gname = (host && host.displayName) || 'Player1';
@@ -2241,6 +2377,10 @@
                 }
             }
 
+            function isBackendCommFail(msg) {
+                return !!(msg && String(msg).indexOf('Failed to communicate with the backend') >= 0);
+            }
+
             function failStart(msg) {
                 clearStartTimer();
                 CncProbe.onLobbyStartResult = null;
@@ -2249,6 +2389,13 @@
                 }
                 CncProbe._inBlazeGame = false;
                 $scope._starting = false;
+                // Backend unreachable ⇒ dedicated/session is gone; leave the room instead of
+                // leaving the player stuck in a dead lobby (soft errors like "no idle" stay).
+                if (isBackendCommFail(msg) && $scope._joinedGameroom) {
+                    $scope._startError = '';
+                    forceServerLostKick(msg);
+                    return;
+                }
                 $scope._startError = msg;
             }
 
@@ -2281,6 +2428,8 @@
                         return;
                     }
                     if (info && info.ok) {
+                        clearStartTimer();
+                        $scope._starting = false;
                         CncProbe._inBlazeGame = true;
                         $scope._joinedGameroom = false;
                         $scope._serverLostError = '';
@@ -2313,18 +2462,15 @@
                 if ($scope._starting && !$scope._startError) {
                     failStart('Failed to communicate with the backend, please try again.');
                 }
-            }, 90000);
+            }, 150000);
 
             if (CncProbe.markBlazeCreatePending) {
                 CncProbe.markBlazeCreatePending();
             }
 
             var pending = [syncMapToServer()];
-            if (host) {
-                pending.push(syncPlayerAttrsToServer(host));
-            }
-            ais.forEach(function (slot) {
-                pending.push(syncPlayerAttrsToServer(slot));
+            eachOccupiedSlot(function (slot) {
+                pending.push(syncPlayerAttrsToServer(slot, true));
             });
 
             whenAll(pending, beginCreate, function () {
@@ -2332,16 +2478,35 @@
             });
 
             function beginCreate() {
+                waitForAssignable(45, fireCreate);
+            }
+
+            function waitForAssignable(attemptsLeft, then) {
                 httpRequest('GET', '/cnc/dedicated-pool').then(function (pool) {
                     $timeout(function () {
                         if (!$scope._starting || $scope._startError) {
                             return;
                         }
-                        if (pool && typeof pool.idle === 'number' && pool.idle <= 0) {
-                            failStart('No idle servers found, check back later.');
+                        var assignable = poolAssignableCount(pool);
+                        if (assignable > 0) {
+                            then();
                             return;
                         }
-                        fireCreate();
+                        var waitHint = poolStabilizingHint(pool);
+                        if (attemptsLeft > 0) {
+                            var delayMs = waitHint > 0
+                                ? Math.min(3000, waitHint * 1000 + 400)
+                                : 1000;
+                            $scope._poolPollTimer = $timeout(function () {
+                                waitForAssignable(attemptsLeft - 1, then);
+                            }, delayMs);
+                            return;
+                        }
+                        if (waitHint > 0) {
+                            failStart('Server is still recycling — try again in a moment.');
+                        } else {
+                            failStart('No idle servers found, check back later.');
+                        }
                     });
                 });
             }

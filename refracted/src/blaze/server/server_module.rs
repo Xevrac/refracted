@@ -1072,8 +1072,12 @@ impl BlazeProtocolServer {
 
                 let packet_for_handler = packet.clone();
                 let inc_seq = incoming_seq;
+                let blaze_sid = state.blaze_session_id;
                 let handle_result = tokio::task::spawn_blocking(move || {
-                    handle_packet(&packet_for_handler, inc_seq)
+                    crate::session::session_module::set_current_blaze_session_id(blaze_sid);
+                    let result = handle_packet(&packet_for_handler, inc_seq);
+                    crate::session::session_module::set_current_blaze_session_id(None);
+                    result
                 })
                 .await;
 
@@ -1673,7 +1677,7 @@ impl BlazeProtocolServer {
                                                 gid
                                             );
                                             // Wake the dedicated's session handler so it flushes
-                                            // cmd 220 + NotifyGameSetup immediately instead of
+                                            // cmd 220 + NotifyGameSetup + Reset immediately instead of
                                             // waiting for the 15-second idle timeout or an
                                             // incoming Blaze message from the dedicated.
                                             let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
@@ -1700,32 +1704,34 @@ impl BlazeProtocolServer {
                             // completes cmd 220 + finalizeGameCreation (BF3 host-first ordering).
                             if !is_join {
                                 if let Some(client_sid) = state.blaze_session_id {
-                                    if let Ok(pushes) =
-                                        crate::client::cnc::fireframe::pushes_client_join_after_reset(
-                                            &packet.payload,
-                                            gid,
-                                        )
-                                    {
-                                        if let Some((flush_sid, flush_pushes)) =
-                                            crate::client::cnc::game_state::defer_client_join_pushes(
-                                                gid, client_sid, pushes,
+                                    if !crate::client::cnc::game_state::has_deferred_join_pushes(gid) {
+                                        if let Ok(pushes) =
+                                            crate::client::cnc::fireframe::pushes_client_join_after_reset(
+                                                &packet.payload,
+                                                gid,
                                             )
                                         {
-                                            crate::client::cnc::fireframe::enqueue_pending_pushes(
-                                                flush_sid,
-                                                flush_pushes,
-                                            );
-                                            tracing::info!(
-                                                target: "cnc",
-                                                "[CNC] flushed deferred client join (host already ready, gid={})",
-                                                gid
-                                            );
-                                        } else {
-                                            tracing::info!(
-                                                target: "cnc",
-                                                "[CNC] deferred client join notifies until dedicated host ready (gid={})",
-                                                gid
-                                            );
+                                            if let Some((flush_sid, flush_pushes)) =
+                                                crate::client::cnc::game_state::defer_client_join_pushes(
+                                                    gid, client_sid, pushes,
+                                                )
+                                            {
+                                                crate::client::cnc::fireframe::enqueue_pending_pushes(
+                                                    flush_sid,
+                                                    flush_pushes,
+                                                );
+                                                tracing::info!(
+                                                    target: "cnc",
+                                                    "[CNC] flushed deferred client join (host already ready, gid={})",
+                                                    gid
+                                                );
+                                            } else {
+                                                tracing::info!(
+                                                    target: "cnc",
+                                                    "[CNC] deferred client join notifies until dedicated host ready (gid={})",
+                                                    gid
+                                                );
+                                            }
                                         }
                                     }
                                     let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
@@ -1844,6 +1850,9 @@ impl BlazeProtocolServer {
                             .await?
                             {
                                 return Ok(());
+                            }
+                            if is_join {
+                                crate::client::cnc::game_state::try_mark_blaze_join_setup_pushed(gid);
                             }
 
                             // For join flow, create local game via setup before state-change notify.

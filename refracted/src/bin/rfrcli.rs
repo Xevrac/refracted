@@ -3,8 +3,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use refracted::common::app_env::{self, AppEnv};
 use refracted::common::boot::{boot_emulator, BootOptions};
-use refracted::core::console::push_formatted_log_line;
+use refracted::core::console::{
+    colorize_channel_tags, enable_windows_vt, flush_cli_compact_line, push_formatted_log_line,
+};
 use refracted::core::server::BlazeServer;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -15,24 +18,38 @@ use tracing_subscriber::registry::LookupSpan;
 #[derive(Parser, Debug)]
 #[command(
     name = "rfrcli",
-    about = "Refracted Blaze emulator CLI — game selection + terminal logs only"
+    about = "Refracted Blaze emulator (headless)",
+    after_help = "\
+Env file (created next to rfrcli on first run as refracted.env):
+  game=cnc
+  environment=dev
+  datasource=json
+  host=127.0.0.1
+  database=refracted
+  user=refracted
+  pass=
+
+datasource=json  localized testing only — JSON/manual personas from {exe}/data
+datasource=mysql production identity tables; game clients must authenticate (login later)
+
+Examples:
+  rfrcli
+  rfrcli -env D:\\prod\\refracted.env
+  rfrcli --game cnc --listen-host 0.0.0.0
+"
 )]
 struct Args {
-    /// Game id from games.json (e.g. cnc, bf-labs)
+    /// Path to env file (default: {exe}/refracted.env, created on first run)
+    #[arg(long, short = 'e', value_name = "PATH")]
+    env: Option<PathBuf>,
+
+    /// Game id override (else env `game=`)
     #[arg(long, short = 'g')]
-    game: String,
+    game: Option<String>,
 
-    /// Directory for settings.json / games.json (default: {exe}/data or REFRACTED_DATA_DIR)
+    /// Bind address override (else env `listen_host=`, default 0.0.0.0)
     #[arg(long)]
-    data_dir: Option<PathBuf>,
-
-    /// Bind address for service listeners
-    #[arg(long, default_value = "0.0.0.0")]
-    listen_host: String,
-
-    /// Tracing filter (overrides RUST_LOG when set)
-    #[arg(long)]
-    log_level: Option<String>,
+    listen_host: Option<String>,
 }
 
 struct LogWriter {
@@ -46,6 +63,7 @@ fn unescape_ansi_escapes(s: &str) -> String {
 
 impl Write for LogWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        flush_cli_compact_line();
         let text = String::from_utf8_lossy(buf);
         for line in text.lines() {
             if !line.trim().is_empty() {
@@ -90,6 +108,8 @@ where
         mut writer: tracing_subscriber::fmt::format::Writer<'_>,
         event: &tracing::Event<'_>,
     ) -> std::fmt::Result {
+        flush_cli_compact_line();
+
         let level = *event.metadata().level();
         let mut message_string = String::new();
         {
@@ -128,9 +148,9 @@ where
 
         if level == tracing::Level::INFO {
             if has_client_arrow || has_server_arrow || has_blaze_arrow || has_rts || has_sim {
-                write!(writer, "{}", message_string)?;
+                write!(writer, "{}", colorize_channel_tags(&message_string))?;
             } else if has_ansi {
-                write!(writer, "{}", message_string)?;
+                write!(writer, "{}", colorize_channel_tags(&message_string))?;
             } else if has_qos {
                 write!(
                     writer,
@@ -142,13 +162,13 @@ where
                 write!(
                     writer,
                     "\x1b[38;2;128;128;128m[Console]\x1b[0m {}",
-                    message_string
+                    colorize_channel_tags(&message_string)
                 )?;
             }
             writeln!(writer)
         } else if level == tracing::Level::ERROR {
             if has_ansi || has_rts || has_sim {
-                write!(writer, "{}", message_string)?;
+                write!(writer, "{}", colorize_channel_tags(&message_string))?;
             } else if has_qos {
                 write!(
                     writer,
@@ -162,7 +182,7 @@ where
             writeln!(writer)
         } else if level == tracing::Level::WARN {
             if has_ansi || has_rts || has_sim {
-                write!(writer, "{}", message_string)?;
+                write!(writer, "{}", colorize_channel_tags(&message_string))?;
             } else if has_qos {
                 write!(
                     writer,
@@ -188,11 +208,7 @@ where
 }
 
 fn init_tracing(log_level: Option<&str>) {
-    // Windows consoles need VT processing enabled or RGB escapes are ignored / look wrong.
-    #[cfg(windows)]
-    {
-        let _ = colored::control::set_virtual_terminal(true);
-    }
+    enable_windows_vt();
 
     let filter = if let Some(level) = log_level {
         EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"))
@@ -217,24 +233,47 @@ fn init_tracing(log_level: Option<&str>) {
         .try_init();
 }
 
+fn resolve_listen_host(args: &Args, env: &AppEnv) -> String {
+    args.listen_host
+        .clone()
+        .or_else(|| env.listen_host.clone())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "0.0.0.0".to_string())
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
-    let args = Args::parse();
+    let args = Args::parse_from(app_env::normalize_launch_args(std::env::args()));
 
-    init_tracing(args.log_level.as_deref());
+    let env = match app_env::load_or_create_app_env(args.env.as_deref()) {
+        Ok(env) => env,
+        Err(e) => {
+            eprintln!("env load failed: {e}");
+            return ExitCode::from(1);
+        }
+    };
+
+    init_tracing(env.log_level.as_deref());
 
     if let Err(e) = boot_emulator(BootOptions {
-        data_dir: args.data_dir.clone(),
-        game_id: Some(args.game.clone()),
+        data_dir: env.data_dir.clone(),
+        game_id: args.game.clone(),
+        env: Some(env.clone()),
     }) {
         eprintln!("boot failed: {e}");
         return ExitCode::from(1);
     }
 
+    let listen_host = resolve_listen_host(&args, &env);
     let game = refracted::common::game::get_current_game_id();
-    info!("rfrcli — game={game} listen={}", args.listen_host);
+    info!(
+        "rfrcli — game={game} env={} datasource={} listen={listen_host} file={}",
+        env.environment.as_str(),
+        env.datasource.as_str(),
+        env.path.display()
+    );
 
-    let ports_in_use = BlazeServer::check_all_ports(&args.listen_host);
+    let ports_in_use = BlazeServer::check_all_ports(&listen_host);
     if !ports_in_use.is_empty() {
         eprintln!("The following ports are already in use:");
         for (port, name) in &ports_in_use {
@@ -246,7 +285,7 @@ async fn main() -> ExitCode {
 
     info!("Starting Refracted Emulator...");
 
-    match BlazeServer::new(args.listen_host).await {
+    match BlazeServer::new(listen_host).await {
         Ok(mut emulator) => match emulator.start_emulator().await {
             Ok(()) => {
                 info!("Refracted Emulator has been shut down gracefully");

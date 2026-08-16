@@ -115,7 +115,7 @@ pub fn update_profiles(profiles: UserProfiles) -> Result<(), String> {
     settings::update_user_profiles(profiles)
 }
 
-/// Get current active profile
+/// Get current active profile (JSON / desktop default is Xevrac).
 pub fn get_current_profile() -> UserProfile {
     let profiles = get_profiles();
     profiles.profiles
@@ -195,11 +195,18 @@ pub fn create_new_profile() -> UserProfile {
     }
 }
 
-/// Update session state from current profile
+/// Push the JSON/manual profile into the Blaze session.
+/// No-op on headless mysql (clients authenticate; login/logout comes later).
 pub fn sync_profile_to_session() {
+    if !crate::nexus::identity::json_personas_allowed() {
+        crate::nexus::log_nexus_to_blaze(
+            "skipping JSON/manual persona sync (datasource=mysql — clients must authenticate)",
+        );
+        return;
+    }
     use crate::session::{set_user_session, UserSession};
     let profile = get_current_profile();
-    crate::nucleus::log_nucleus_to_blaze(format!(
+    crate::nexus::log_nexus_to_blaze(format!(
         "session fields from profile `{}` (persona_id={}, user_id={})",
         profile.display_name, profile.persona_id, profile.user_id
     ));

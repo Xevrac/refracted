@@ -53,10 +53,6 @@
             </div>
         </div>
         <aside class="au-lobby__side">
-            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-side__head">Social</div>
             <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
         </aside>
@@ -389,8 +385,14 @@
                         </div>
                         <div class="au-lobby__maps-preview-cell">
                             <div class="au-lobby__maps-preview-art">
-                                <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
-                                     ng-style="minimapCropStyle(pickerMap())" alt="">
+                                <div class="au-lobby__map-crop">
+                                    <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
+                                         ng-style="minimapCropStyle(pickerMap())" alt="">
+                                </div>
+                                <span class="au-lobby__pip au-lobby__pip--preview"
+                                      ng-repeat="sp in pickerMapStartpoints()"
+                                      ng-style="pickerStartPipStyle(sp)"
+                                      title="Start {{ sp.id }}">{{ sp.id }}</span>
                             </div>
                             <div class="au-lobby__maps-preview-meta">
                                 <strong>{{ pickerMap().label }}</strong>
@@ -441,10 +443,6 @@
         </div>
 
         <aside class="au-lobby__side">
-            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-side__head">Social</div>
             <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
         </aside>

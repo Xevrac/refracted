@@ -1,28 +1,36 @@
 //! Shared startup for desktop and headless binaries.
 //!
-//! Loads settings / games registry, selects a game, and syncs the local profile
-//! into the Blaze [`UserSession`](crate::session::session_module::UserSession).
+//! Desktop always uses JSON under `{exe}/data` (settings, manual personas, games).
+//! Headless (`rfrcli`) uses JSON/manual personas **only** when `datasource=json`
+//! (localized testing). `datasource=mysql` is production identity; clients authenticate.
 
 use std::path::PathBuf;
 
+use crate::common::app_env::{AppEnv, Datasource};
 use crate::common::game;
 use crate::common::paths;
 use crate::common::settings;
 use crate::common::user_profile;
+use crate::nexus::identity;
 use crate::session::blaze_sessions;
 
-/// Options for emulator boot (settings dir, optional game override).
+/// Options for emulator boot (settings dir, optional game override, optional headless env).
 #[derive(Debug, Clone, Default)]
 pub struct BootOptions {
-    /// Override `{exe}/data` (also settable via `REFRACTED_DATA_DIR`).
+    /// Override `{exe}/data` (also settable via `REFRACTED_DATA_DIR` or env `data_dir=`).
     pub data_dir: Option<PathBuf>,
-    /// Game id from `games.json` (e.g. `cnc`, `bf-labs`). When set, updates preference.
+    /// Game id from `games.json` (e.g. `cnc`, `bf-labs`). Overrides env `game=` when set.
     pub game_id: Option<String>,
+    /// Headless only. Desktop leaves this `None` and uses JSON settings in `/data`.
+    pub env: Option<AppEnv>,
 }
 
-/// Initialize app data, settings, games registry, profile→session, and persisted Blaze sessions.
+/// Initialize data, settings, games registry, and identity policy.
 pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
-    if let Some(dir) = opts.data_dir {
+    if let Some(dir) = opts
+        .data_dir
+        .or_else(|| opts.env.as_ref().and_then(|e| e.data_dir.clone()))
+    {
         paths::set_app_data_dir(dir);
     }
 
@@ -31,13 +39,44 @@ pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
     let settings_path = paths::settings_json_path();
     settings::init_settings(settings_path)?;
 
-    if let Some(game_id) = opts.game_id.as_deref() {
+    let game_id = opts
+        .game_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            opts.env.as_ref().and_then(|e| {
+                let g = e.game.trim();
+                (!g.is_empty()).then_some(g)
+            })
+        });
+    if let Some(game_id) = game_id {
         game::set_current_game(game_id)?;
     }
 
-    user_profile::sync_profile_to_session();
-    blaze_sessions::load_persisted_sessions();
+    match &opts.env {
+        None => {
+            identity::enable_json_personas();
+            user_profile::sync_profile_to_session();
+            blaze_sessions::load_persisted_sessions();
+        }
+        Some(env) => {
+            identity::log_headless_identity_policy(env);
+            match env.datasource {
+                Datasource::Json => {
+                    identity::enable_json_personas();
+                    user_profile::sync_profile_to_session();
+                    blaze_sessions::load_persisted_sessions();
+                }
+                Datasource::Mysql => {
+                    identity::disable_json_personas();
+                    identity::init_mysql_identity(env)?;
+                }
+            }
+        }
+    }
 
+    identity::lock_identity_policy();
     Ok(())
 }
 

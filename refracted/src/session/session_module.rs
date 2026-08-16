@@ -54,7 +54,7 @@ impl Default for UserSession {
             network_exip_port: None,
             network_inip_port: None,
             network_bps: None,
-            next_message_id: 1160000, // Start from a reasonable message ID
+            next_message_id: 1160000,
         }
     }
 }
@@ -110,7 +110,7 @@ pub fn clone_user_session_if_set() -> Option<UserSession> {
     GLOBAL_SESSION.lock().clone()
 }
 
-/// Get the current user session, or default if not set
+/// Get the current user session, or the Xevrac JSON/desktop default if not set.
 pub fn get_user_session() -> UserSession {
     let global = GLOBAL_SESSION.lock();
     global.clone().unwrap_or_default()

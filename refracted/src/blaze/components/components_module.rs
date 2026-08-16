@@ -42,7 +42,7 @@ pub fn get_component_name(component_id: u16) -> &'static str {
         69 => "DynamicMessagingComponent", // core/69
         70 => "WebofferSurveyComponent", // core/70
         71 => "TickerComponent", // core/71
-        1002 => "NucleusIdentityComponent", // core/1002
+        1002 => "NucleusIdentityComponent", // EA Blaze wire name (core/1002); served from Nexus
         _ => "UnknownComponent",
     }
 }
@@ -531,7 +531,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (2051, 5) => Some(format!("{}.drainConsumeable", component_name)),
         (2051, 6) => Some(format!("{}.getTemplate", component_name)), // 0x06
         
-        // NucleusIdentityComponent (1002) -- core/1002
+        // NucleusIdentityComponent (1002) -- EA Blaze wire; identity data comes from Nexus
         (1002, 1) => Some(format!("{}.updateEntitlement", component_name)),
         (1002, 2) => Some(format!("{}.updatePersona", component_name)),
         (1002, 3) => Some(format!("{}.deletePersona", component_name)),
@@ -596,6 +596,14 @@ pub fn enrich_capture_command_name(
         && crate::common::game::get_current_game_id() == "cnc"
     {
         return Some("GameManager.NotifyPlayerRemoved".to_string());
+    }
+
+    if component == 4
+        && command == 16
+        && is_notif
+        && crate::common::game::get_current_game_id() == "cnc"
+    {
+        return Some("GameManager.NotifyGameRemoved".to_string());
     }
 
     None

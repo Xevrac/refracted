@@ -1,5 +1,6 @@
 
 use parking_lot::Mutex;
+use std::io::{self, Write};
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -41,6 +42,12 @@ static LOG_LINE_TX: OnceLock<std::sync::mpsc::Sender<LogLine>> = OnceLock::new()
 
 pub fn init_log_line_sender(tx: std::sync::mpsc::Sender<LogLine>) {
     let _ = LOG_LINE_TX.set(tx);
+}
+
+/// True when the desktop GUI registered a Shell log drain (`init_log_line_sender`).
+/// Headless / `rfrcli` leave this unset so compact Blaze/RTS upserts can mirror to tracing.
+pub fn has_log_line_consumer() -> bool {
+    LOG_LINE_TX.get().is_some()
 }
 
 pub fn push_log_line(line: LogLine) {
@@ -146,11 +153,130 @@ fn make_log_line(text: &str) -> LogLine {
     }
 }
 
+/// Paint known channel tags. Safe when the line already has ANSI (e.g. gray `xN`).
+pub fn colorize_channel_tags(message: &str) -> String {
+    let mut out = message
+        .replace("\\x1b", "\x1b")
+        .replace("\\u{001b}", "\x1b");
+    const PAIRS: &[(&str, &str)] = &[
+        (
+            "[Client→Blaze]",
+            "\x1b[38;2;100;200;255m[Client→Blaze]\x1b[0m",
+        ),
+        (
+            "[Blaze→Client]",
+            "\x1b[38;2;100;200;255m[Blaze→Client]\x1b[0m",
+        ),
+        (
+            "[Server→Blaze]",
+            "\x1b[38;2;255;180;80m[Server→Blaze]\x1b[0m",
+        ),
+        (
+            "[Blaze→Server]",
+            "\x1b[38;2;255;180;80m[Blaze→Server]\x1b[0m",
+        ),
+        ("[RTS]", "\x1b[38;2;56;156;220m[RTS]\x1b[0m"),
+        ("[SIM]", "\x1b[38;2;140;180;140m[SIM]\x1b[0m"),
+        (
+            "[Orchestration]",
+            "\x1b[38;2;140;180;220m[Orchestration]\x1b[0m",
+        ),
+        ("[GOS]", "\x1b[38;2;150;150;255m[GOS]\x1b[0m"),
+        ("[CNC]", "\x1b[38;2;255;215;0m[CNC]\x1b[0m"),
+        ("[QoS]", "\x1b[38;2;80;200;120m[QoS]\x1b[0m"),
+        ("[Nexus → Blaze]", "\x1b[38;2;180;140;255m[Nexus → Blaze]\x1b[0m"),
+        ("[Blaze → Nexus]", "\x1b[38;2;180;140;255m[Blaze → Nexus]\x1b[0m"),
+    ];
+    for (plain, colored) in PAIRS {
+        if out.contains(colored) {
+            continue;
+        }
+        if out.contains(plain) {
+            out = out.replacen(plain, colored, 1);
+        }
+    }
+    out
+}
+
+struct CliCompactMirror {
+    open_key: Option<String>,
+    open: bool,
+}
+
+static CLI_COMPACT: Mutex<CliCompactMirror> = Mutex::new(CliCompactMirror {
+    open_key: None,
+    open: false,
+});
+
+/// Finish an in-progress compact CLI line before other stdout (tracing) writes.
+pub fn flush_cli_compact_line() {
+    let mut g = CLI_COMPACT.lock();
+    if !g.open {
+        return;
+    }
+    let _ = writeln!(io::stdout());
+    let _ = io::stdout().flush();
+    g.open = false;
+    g.open_key = None;
+}
+
+fn mirror_compact_to_cli(key: &str, ansi_text: &str) {
+    let display = colorize_channel_tags(ansi_text);
+    let mut g = CLI_COMPACT.lock();
+    let mut out = io::stdout();
+    if g.open {
+        if g.open_key.as_deref() == Some(key) {
+            // Same upsert key: rewrite one terminal row (GUI Shell behavior).
+            let _ = write!(out, "\r\x1b[2K{display}");
+            let _ = out.flush();
+            return;
+        }
+        let _ = writeln!(out);
+        g.open = false;
+        g.open_key = None;
+    }
+    let _ = write!(out, "{display}");
+    let _ = out.flush();
+    g.open_key = Some(key.to_string());
+    g.open = true;
+}
+
+/// Enable Windows console VT processing so RGB ANSI escapes render.
+pub fn enable_windows_vt() {
+    #[cfg(windows)]
+    {
+        type BOOL = i32;
+        type DWORD = u32;
+        type HANDLE = *mut std::ffi::c_void;
+        extern "system" {
+            fn GetStdHandle(n_std_handle: DWORD) -> HANDLE;
+            fn SetConsoleMode(h_console_handle: HANDLE, dw_mode: DWORD) -> BOOL;
+            fn GetConsoleMode(h_console_handle: HANDLE, lp_mode: *mut DWORD) -> BOOL;
+        }
+        const STD_OUTPUT_HANDLE: DWORD = 0xFFFFFFF5; // (DWORD)-11
+        const ENABLE_VIRTUAL_TERMINAL_PROCESSING: DWORD = 0x0004;
+        unsafe {
+            let hout = GetStdHandle(STD_OUTPUT_HANDLE);
+            if !hout.is_null() && hout != (-1isize as HANDLE) {
+                let mut mode: DWORD = 0;
+                if GetConsoleMode(hout, &mut mode) != 0 {
+                    let _ = SetConsoleMode(hout, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+                }
+            }
+        }
+        let _ = colored::control::set_virtual_terminal(true);
+    }
+}
+
 /// gRPC compact: same endpoint updates one Shell row (`x1` → `x2` → …) instead of new lines.
+/// Headless (`rfrcli` / `-noGui`): mirrors with in-place `\r` updates instead of spammy `info!` lines.
 pub fn push_grpc_compact_upsert(key: String, ansi_text: &str) {
     let mut line = make_log_line(ansi_text);
-    line.upsert_key = Some(key);
+    line.upsert_key = Some(key.clone());
     push_log_line(line);
+    if !has_log_line_consumer() {
+        mirror_compact_to_cli(&key, ansi_text);
+    }
 }
 
 pub fn capture_line(text: &str) {

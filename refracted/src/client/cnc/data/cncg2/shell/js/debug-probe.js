@@ -365,6 +365,7 @@
             creategame: '/blaze/createGame',
             joingame: '/blaze/joinGame',
             removeplayer: '/blaze/removePlayer',
+            logout: '/blaze/logout',
             attribute: '/blaze/attribute'
         };
         var base;
