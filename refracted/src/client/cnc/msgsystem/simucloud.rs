@@ -34,6 +34,16 @@ pub struct PlayerInfo {
 
 pub const CREATE_GAME_OPTIONS_NONE: u32 = 0;
 pub const CREATE_GAME_OPTIONS_ALLOW_RECONNECT: u32 = 1;
+/// Do not put this on `PlayerInfo` — native deserializer has `EnableSkillTree` only.
+pub const CREATE_GAME_OPTIONS_ENABLE_TECH_TREE: u32 = 0x20;
+
+fn create_game_options(enable_tech_tree: bool) -> u32 {
+    let mut options = CREATE_GAME_OPTIONS_ALLOW_RECONNECT;
+    if enable_tech_tree {
+        options |= CREATE_GAME_OPTIONS_ENABLE_TECH_TREE;
+    }
+    options
+}
 
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
 const CONNECT_BUDGET: Duration = Duration::from_secs(12);
@@ -73,7 +83,7 @@ pub fn encode_create_game_payload(
     w.write_string(Some(dir_path));
     write_player_info_array(&mut w, info);
     w.write_bytes(game_id);
-    w.write_u32(options);
+    w.write_rts_enum_i32(options as i32);
     w.into_bytes()
 }
 
@@ -324,7 +334,7 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
                 allegiance_levels: allegiance_for_team(team),
                 skill_tree_unlocks: Vec::new(),
                 consumable_player_power: consumable,
-                enable_skill_tree: false,
+                enable_skill_tree: game.enable_skill_tree,
             }
         })
         .collect()
@@ -481,8 +491,10 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s)",
-        roster.len()
+        "Starting match setup -- map \"{map_name}\", {} player(s), skillTree={} techTree={}",
+        roster.len(),
+        game.enable_skill_tree,
+        game.enable_tech_tree
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -517,7 +529,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
             &map_name,
             &dir_path,
             &roster,
-            CREATE_GAME_OPTIONS_ALLOW_RECONNECT,
+            create_game_options(game.enable_tech_tree),
         ),
     };
     write_simple_frame(&mut stream, &create_frame).await?;
@@ -660,6 +672,36 @@ mod tests {
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT,
         );
         assert!(payload.len() > 40);
+    }
+
+    #[test]
+    fn create_game_options_ors_unused_tech_tree_bit() {
+        assert_eq!(create_game_options(false), CREATE_GAME_OPTIONS_ALLOW_RECONNECT);
+        assert_eq!(
+            create_game_options(true),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
+        );
+    }
+
+    #[test]
+    fn create_game_options_enum_uses_rts_typecode() {
+        let gid = [0u8; 16];
+        let on = encode_create_game_payload(
+            &gid,
+            "Oasis",
+            "Levels/MP/",
+            &[sample_player(1201618778, 1, 0)],
+            create_game_options(true),
+        );
+        let off = encode_create_game_payload(
+            &gid,
+            "Oasis",
+            "Levels/MP/",
+            &[sample_player(1201618778, 1, 0)],
+            create_game_options(false),
+        );
+        assert_eq!(&on[on.len() - 5..], &[9, 0x21, 0, 0, 0]);
+        assert_eq!(&off[off.len() - 5..], &[9, 0x01, 0, 0, 0]);
     }
 
     #[test]

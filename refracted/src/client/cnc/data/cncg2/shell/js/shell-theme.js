@@ -223,8 +223,6 @@
     function set(id) {
         var prefs = readLocalPrefs();
         prefs.theme = apply(id);
-        // Keep defaultTheme in sync with last committed active theme so Classic/Aurora sticks.
-        prefs.defaultTheme = prefs.theme;
         writeLocalPrefs(prefs);
         persistRemote(prefs);
         return prefs.theme;
@@ -280,7 +278,8 @@
 
     function boot(done) {
         fetchRemote(function (prefs) {
-            var bootId = normalize(prefs.theme || prefs.defaultTheme);
+            // Default theme is what survives restarts; active theme follows it on boot.
+            var bootId = normalize(prefs.defaultTheme || prefs.theme);
             prefs.theme = bootId;
             prefs.defaultTheme = normalize(prefs.defaultTheme || bootId);
             writeLocalPrefs(prefs);

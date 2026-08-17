@@ -328,11 +328,23 @@ body.cc-theme.cc-theme--aurora .btn-opt-restore:hover {
     border-color: #6a7a88;
 }
 
-body.cc-theme.cc-theme--aurora .opt-select,
-body.cc-theme.cc-theme--aurora .opt-slider {
+body.cc-theme.cc-theme--aurora .opt-select {
     background: #101412;
     border: 1px solid #1c2a32;
     color: #e6edf5;
+}
+body.cc-theme.cc-theme--aurora .opt-slider {
+    background: transparent;
+    border: 0;
+    color: #e6edf5;
+}
+body.cc-theme.cc-theme--aurora .opt-slider::-webkit-slider-runnable-track {
+    background: #101412;
+    border: 1px solid #1c2a32;
+}
+body.cc-theme.cc-theme--aurora .opt-slider::-webkit-slider-thumb {
+    background: #d0d6dc;
+    border-color: #0a1014;
 }
 
 /* Pre-landing */

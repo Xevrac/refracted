@@ -3882,7 +3882,7 @@ dependencies = [
 
 [[package]]
 name = "refracted"
-version = "0.4.1707"
+version = "0.4.1744"
 dependencies = [
  "aes",
  "anyhow",
@@ -3929,6 +3929,7 @@ dependencies = [
  "usvg",
  "winapi",
  "winres",
+ "xmltree",
 ]
 
 [[package]]
@@ -6192,10 +6193,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
+name = "xml"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f45bb2c13fec6a6cb4c0f76a7e94839e110a14ec803ec2940777a94c347bc52"
+
+[[package]]
 name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
+
+[[package]]
+name = "xmltree"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbc04313cab124e498ab1724e739720807b6dc405b9ed0edc5860164d2e4ff70"
+dependencies = [
+ "indexmap",
+ "xml",
+]
 
 [[package]]
 name = "xmlwriter"

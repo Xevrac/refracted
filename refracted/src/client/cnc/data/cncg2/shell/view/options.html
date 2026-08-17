@@ -16,11 +16,12 @@
                     <li ng-show="allowShellThemeSelect" ng-class="{'active': optionsTab == 'INTERFACE'}"><a href="" ng-click="setOptionsTab('INTERFACE')">INTERFACE</a></li>
                 </ul>
                 <div class="options-restore-wrap">
-                    <button class="btn-opt-restore" ng-click="restoreDefaults()">RESTORE DEFAULTS</button>
+                    <button class="btn-opt-restore" ng-click="restoreDefaults()" ng-disabled="!settingsReady">RESTORE DEFAULTS</button>
                 </div>
             </div>
 
-            <div class="options-content">
+            <div class="options-content" ng-class="{'opt-content--waiting': !settingsReady}">
+                <fieldset class="opt-fieldset" ng-disabled="!settingsReady">
                 <div class="opt-pane" ng-show="optionsTab == 'GRAPHICS'">
                     <div class="opt-group">
                         <label class="opt-label-main">Shell Display Mode</label>
@@ -98,7 +99,7 @@
 
                     <div class="opt-group opt-group--tight">
                         <label class="opt-label-main">Brightness <span class="opt-value">{{ settings.brightnessPercent }}%</span></label>
-                        <input type="range" class="opt-slider" min="0" max="100" ng-model="settings.brightnessPercent" ng-change="onBrightnessChange()">
+                        <input type="range" class="opt-slider" min="1" max="100" ng-model="settings.brightnessPercent" ng-change="onBrightnessChange()">
                     </div>
                 </div>
 
@@ -122,6 +123,14 @@
                         <label class="opt-radio"><input type="radio" name="dragScroll" ng-value="true" ng-model="settings.middlemousecameradrag" ng-change="applyControls()"> Middle Mouse Button</label>
                         <label class="opt-radio"><input type="radio" name="dragScroll" ng-value="false" ng-model="settings.middlemousecameradrag" ng-change="applyControls()"> Right Mouse Button</label>
                     </div>
+                    <div class="opt-group">
+                        <label class="opt-checkbox" ng-class="{'opt-checkbox--disabled': cameraRotationLocked}">
+                            <input type="checkbox"
+                                   ng-model="settings.allowcamerarotation"
+                                   ng-change="applyControls()"
+                                   ng-disabled="cameraRotationLocked"> Allow Camera Rotation</label>
+                        <p class="opt-hint" ng-show="cameraRotationLocked">Unavailable while Middle Mouse Button is used for camera drag scroll.</p>
+                    </div>
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'GAMEPLAY'">
@@ -137,31 +146,23 @@
 
                 <div class="opt-pane" ng-show="optionsTab == 'INTERFACE' && allowShellThemeSelect">
                     <div class="opt-group">
-                        <label class="opt-label-main">Shell UI Theme</label>
-                        <select class="opt-select"
-                                ng-model="settings.shellUiTheme"
-                                ng-options="theme.id as theme.label for theme in shellThemeOptions"
-                                ng-change="onShellThemeDraftChange()"></select>
-                        <p class="opt-hint">{{ shellThemeHint }}</p>
-                    </div>
-                    <div class="opt-group opt-group--disabled">
                         <label class="opt-label-main">Default Theme</label>
                         <select class="opt-select"
                                 ng-model="settings.shellUiThemeDefault"
                                 ng-options="theme.id as theme.label for theme in shellThemeOptions"
-                                ng-disabled="true"
-                                disabled="disabled"></select>
-                        <div class="cc-info-tip">
-                            <strong>Coming soon</strong>
-                            Account defaults are not yet implemented, check back later.
-                        </div>
+                                ng-change="onDefaultThemeChange()"
+                                ng-disabled="!settingsReady"></select>
+                        <p class="opt-hint">{{ shellThemeHint }} Applies now and on the next shell start.</p>
                     </div>
                 </div>
+                </fieldset>
             </div>
         </div>
 
         <div class="options-footer">
-            <button class="btn-opt-action btn-opt-green" ng-click="actionSave()">OK</button>
+            <p class="opt-footer-status" ng-show="!settingsReady && !settingsLoadError">Loading saved settings…</p>
+            <p class="opt-footer-status opt-footer-status--error" ng-show="settingsLoadError">Could not load saved settings. Cancel and reopen, or fix the shell bridge.</p>
+            <button class="btn-opt-action btn-opt-green" ng-click="actionSave()" ng-disabled="!settingsReady || settingsSaving">OK</button>
             <button class="btn-opt-action btn-opt-yellow" ng-click="actionCancel()">CANCEL</button>
         </div>
     </div>

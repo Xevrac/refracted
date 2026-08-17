@@ -675,6 +675,10 @@
     letter-spacing: 0.03em;
 }
 
+.au-lobby__options-cell .au-lobby__options-note {
+    margin-top: 10px;
+}
+
 .au-lobby__options-actions {
     margin-top: 16px;
     padding-top: 14px;

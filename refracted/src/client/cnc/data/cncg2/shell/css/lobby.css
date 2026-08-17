@@ -1240,6 +1240,10 @@
     letter-spacing: 0.03em;
 }
 
+.cc-lobby__options-cell .cc-lobby__options-note {
+    margin-top: 10px;
+}
+
 .cc-lobby__modal-box.cc-lobby__maps-modal {
     top: 10%;
     left: 50%;

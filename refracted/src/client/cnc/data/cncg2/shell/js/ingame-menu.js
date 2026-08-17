@@ -16,9 +16,36 @@ var CCApp = angular.module('CCApp', []);
 
 CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
 
-    /* Main-shell Aurora theme must never style pause / in-game options. */
-
+    /* Options UI mirrors shell theme; pause chrome stays Aurora-styled via CSS. */
     $rootScope.allowShellThemeSelect = false;
+
+    (function syncIngameOptionsTheme() {
+        var id = 'aurora';
+        try {
+            if (window.CncShellTheme && typeof CncShellTheme.get === 'function') {
+                id = CncShellTheme.get() || 'aurora';
+            }
+        } catch (e) { /* ignore */ }
+        if (id !== 'classic' && id !== 'aurora') {
+            id = 'aurora';
+        }
+        var body = document.body;
+        if (!body) {
+            return;
+        }
+        body.className = String(body.className || '')
+            .replace(/\bcc-theme--classic\b/g, '')
+            .replace(/\bcc-theme--cnc-alpha\b/g, '')
+            .replace(/\bcc-theme--aurora\b/g, '')
+            .replace(/\bingame-aurora\b/g, '')
+            .replace(/\bingame-classic\b/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if ((' ' + body.className + ' ').indexOf(' cc-theme ') === -1) {
+            body.className = (body.className ? body.className + ' ' : '') + 'cc-theme';
+        }
+        body.className += ' cc-theme--' + id + ' ingame-' + id;
+    })();
 
     $scope.optionsOpen = false;
     $scope.confirmQuitOpen = false;

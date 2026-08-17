@@ -754,6 +754,10 @@ pub struct CncGame {
     pub dedicated_session_id: Option<u64>,
     pub is_standby: bool,
     pub password: String,
+    /// Customize/CP skill tree for this match (`PlayerInfo.EnableSkillTree`). Default on.
+    pub enable_skill_tree: bool,
+    /// In-match building TechTree (`TechTreeActivated`). Default on; sim emits the S2C later.
+    pub enable_tech_tree: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
     /// `PROS` roster rows last sent in `NotifyGameSetup` (reused for `getFullGameData`).
@@ -818,6 +822,66 @@ pub fn set_game_password(gid: i64, persona_id: i64, password: &str) -> serde_jso
         "passwordProtected": protected,
         "attr": ATTR_PASSWORD_FLAG,
     })
+}
+
+/// Host match-progression flags. Defaults on when the game row is created.
+pub fn set_match_options(
+    gid: i64,
+    persona_id: i64,
+    enable_skill_tree: Option<bool>,
+    enable_tech_tree: Option<bool>,
+) -> serde_json::Value {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return serde_json::json!({ "ok": false, "error": "game not found", "gid": gid });
+    };
+    if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+        return serde_json::json!({
+            "ok": false,
+            "error": "host only",
+            "gid": gid,
+            "admin": game.host_persona,
+        });
+    }
+    if let Some(v) = enable_skill_tree {
+        game.enable_skill_tree = v;
+    }
+    if let Some(v) = enable_tech_tree {
+        game.enable_tech_tree = v;
+    }
+    serde_json::json!({
+        "ok": true,
+        "gid": gid,
+        "enableSkillTree": game.enable_skill_tree,
+        "enableTechTree": game.enable_tech_tree,
+    })
+}
+
+/// `(skill_tree, tech_tree)` for this gid. Missing game → both on.
+pub fn match_options(gid: i64) -> (bool, bool) {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| (g.enable_skill_tree, g.enable_tech_tree))
+        .unwrap_or((true, true))
+}
+
+/// Copy host lobby progression flags onto a dedicated gid (same pattern as pending map).
+pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
+    let host = host_persona();
+    let source = {
+        let m = games().lock();
+        m.iter()
+            .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+            .map(|(_, game)| (game.enable_skill_tree, game.enable_tech_tree))
+    };
+    let Some((skill, tech)) = source else {
+        return;
+    };
+    if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+        game.enable_skill_tree = skill;
+        game.enable_tech_tree = tech;
+    }
 }
 
 pub fn verify_game_password(gid: i64, persona_id: i64, password: &str) -> serde_json::Value {
@@ -1036,6 +1100,8 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             dedicated_session_id: Some(dedicated_session_id),
             is_standby: true,
             password: String::new(),
+            enable_skill_tree: true,
+            enable_tech_tree: true,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -1065,6 +1131,8 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.map_path.clear();
     game.start_count = 0;
     game.password.clear();
+    game.enable_skill_tree = true;
+    game.enable_tech_tree = true;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -1801,11 +1869,17 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
             })
         })
         .collect();
+    let (enable_skill_tree, enable_tech_tree) = game
+        .as_ref()
+        .map(|g| (g.enable_skill_tree, g.enable_tech_tree))
+        .unwrap_or((true, true));
     serde_json::json!({
         "ok": issues.is_empty() && game.is_some(),
         "gid": gid,
         "map_path": map,
         "phase": format!("{:?}", get_phase(gid)),
+        "enableSkillTree": enable_skill_tree,
+        "enableTechTree": enable_tech_tree,
         "player_count": players_json.len(),
         "players": players_json,
         "pending_attrs": pending_json,
@@ -1874,11 +1948,18 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player);
-    let (dedicated_session_id, password) = games()
+    let (dedicated_session_id, password, enable_skill_tree, enable_tech_tree) = games()
         .lock()
         .get(&gid)
-        .map(|g| (g.dedicated_session_id, g.password.clone()))
-        .unwrap_or((None, String::new()));
+        .map(|g| {
+            (
+                g.dedicated_session_id,
+                g.password.clone(),
+                g.enable_skill_tree,
+                g.enable_tech_tree,
+            )
+        })
+        .unwrap_or((None, String::new(), true, true));
     let game = CncGame {
         gid,
         name: gnam,
@@ -1892,6 +1973,8 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         dedicated_session_id,
         is_standby: false,
         password,
+        enable_skill_tree,
+        enable_tech_tree,
         replicated_wire: None,
         pros_wire: None,
     };
@@ -1943,6 +2026,8 @@ pub fn seed_from_join(gid: i64) {
             dedicated_session_id: None,
             is_standby: false,
             password: String::new(),
+            enable_skill_tree: true,
+            enable_tech_tree: true,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -2459,6 +2544,8 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "admin": game.host_persona,
         "isStandby": game.is_standby,
         "passwordProtected": !game.password.is_empty(),
+        "enableSkillTree": game.enable_skill_tree,
+        "enableTechTree": game.enable_tech_tree,
         "allReady": all_ready,
         "players": players,
         "serverLost": false,
@@ -3268,14 +3355,15 @@ pub fn browser_game_list_json() -> serde_json::Value {
             .as_ref()
             .map(|e| crate::client::cnc::dedicated_pool::is_assignable(e))
             .unwrap_or(false);
+        // Only true unload. InUse is !assignable but the match is live — do not label Recycling.
         let recycling = pool_entry
             .as_ref()
             .map(|e| {
                 e.creator_registered
-                    && (matches!(
+                    && matches!(
                         e.state,
                         crate::client::cnc::dedicated_pool::DedicatedPoolState::Recycling
-                    ) || !crate::client::cnc::dedicated_pool::is_assignable(e))
+                    )
             })
             .unwrap_or(false);
         let display_name = if game.is_standby || humans == 0 {
@@ -3351,7 +3439,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
         let recycling = matches!(
             entry.state,
             crate::client::cnc::dedicated_pool::DedicatedPoolState::Recycling
-        ) || !crate::client::cnc::dedicated_pool::is_assignable(&entry);
+        );
         let name = crate::client::cnc::dedicated_pool::browser_server_name(&entry);
         let map_leaf = "Standby";
         let gid = entry.current_gid.unwrap_or(0);
