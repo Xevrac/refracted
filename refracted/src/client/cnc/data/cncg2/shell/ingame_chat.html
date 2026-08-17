@@ -17,7 +17,7 @@
                 <button type="button" class="chat-channel-btn" ng-class="{active: channel=='all'}" ng-click="setChannel('all')">All</button>
                 <button type="button" class="chat-channel-btn" ng-class="{active: channel=='team'}" ng-click="setChannel('team')">Team</button>
             </span>
-            <button type="button" class="chat-close-btn" ng-click="closeChat()" title="Close">X</button>
+            <button type="button" class="chat-close-btn" ng-click="closeChat()">X</button>
         </div>
 
         <div id="chat-history" class="chat-history">
@@ -32,7 +32,11 @@
             <input id="chat-input" type="text" class="chat-input" ng-model="draft"
                    maxlength="180" autocomplete="off" spellcheck="false"
                    placeholder="Enter message">
-            <button type="submit" class="chat-send-btn">Send</button>
+            <button type="submit" class="chat-send-btn" aria-label="Send">
+                <svg class="chat-send-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M3.4 20.6L21 12 3.4 3.4l-.1 6.6L14 12 3.3 14z"/>
+                </svg>
+            </button>
         </form>
     </div>
 

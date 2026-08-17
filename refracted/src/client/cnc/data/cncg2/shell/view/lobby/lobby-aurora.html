@@ -353,9 +353,24 @@
                                     No Fog Of War
                                 </label>
                             </div>
-                            <div class="au-lobby__options-cell au-lobby__options-cell--note">
+                            <div class="au-lobby__options-cell">
+                                <div class="au-lobby__options-cell-head">
+                                    <span>Progression</span>
+                                </div>
+                                <label class="au-lobby__options-check">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableSkillTree"
+                                           ng-change="applyLobbyMatchOptions()">
+                                    Skill Tree
+                                </label>
+                                <label class="au-lobby__options-check">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableTechTree"
+                                           ng-change="applyLobbyMatchOptions()">
+                                    Tech Tree
+                                </label>
                                 <div class="au-lobby__options-note">
-                                    Match rules are placeholders until the dedicated path wires them through.
+                                    On by default. Uncheck to disable the Customize/CP tree or building unlock gates.
                                 </div>
                             </div>
                         </div>

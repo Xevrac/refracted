@@ -1,6 +1,10 @@
 //! Toolkit UI: protocol listeners, message builders, and optional research proxies.
 
 use crate::core::frostex::{render_frostex, FrostExState};
+use crate::core::initfs::{render_initfs, InitfsState};
+use crate::core::layout_editor::{
+    cnc_layout_editor_available, render_layout_editor, LayoutEditorState,
+};
 use crate::core::inspector::blaze_inspector::*;
 use crate::core::inspector::grpc_inspector::*;
 use crate::core::inspector::http_inspector::*;
@@ -41,6 +45,8 @@ pub struct InspectorUiState {
     pub blaze_make: toolkit_make_blaze::BlazeMakeWorkbenchState,
     pub grpc_make: toolkit_make_grpc::GrpcMakeWorkbenchState,
     pub frostex: FrostExState,
+    pub initfs: InitfsState,
+    pub layout_editor: LayoutEditorState,
 }
 
 impl InspectorUiState {
@@ -78,6 +84,8 @@ impl InspectorUiState {
             blaze_make: toolkit_make_blaze::BlazeMakeWorkbenchState::default(),
             grpc_make: toolkit_make_grpc::GrpcMakeWorkbenchState::default(),
             frostex: FrostExState::default(),
+            initfs: InitfsState::default(),
+            layout_editor: LayoutEditorState::default(),
         }
     }
 }
@@ -106,6 +114,13 @@ pub fn render_toolkit(
         {
             state.toolkit_workbench = ToolkitWorkbenchMode::FrostEx;
         }
+        if ui
+            .selectable_label(state.toolkit_workbench == ToolkitWorkbenchMode::Initfs, "Initfs")
+            .on_hover_text("Initfs editor, extractor, and syntax-aware viewer")
+            .clicked()
+        {
+            state.toolkit_workbench = ToolkitWorkbenchMode::Initfs;
+        }
         ui.label(egui::RichText::new("|").weak());
         if ui
             .selectable_label(state.toolkit_workbench == ToolkitWorkbenchMode::Listen, "Listen")
@@ -119,12 +134,29 @@ pub fn render_toolkit(
         {
             state.toolkit_workbench = ToolkitWorkbenchMode::Make;
         }
+        if cnc_layout_editor_available() {
+            if ui
+                .selectable_label(state.toolkit_workbench == ToolkitWorkbenchMode::Layout, "Layout")
+                .on_hover_text("CNC Frostbite .layout UI editor (tree + visual canvas)")
+                .clicked()
+            {
+                state.toolkit_workbench = ToolkitWorkbenchMode::Layout;
+            }
+        } else if state.toolkit_workbench == ToolkitWorkbenchMode::Layout {
+            state.toolkit_workbench = ToolkitWorkbenchMode::Listen;
+        }
     });
     ui.separator();
 
     match state.toolkit_workbench {
         ToolkitWorkbenchMode::FrostEx => {
             render_frostex(ui, &mut state.frostex);
+        }
+        ToolkitWorkbenchMode::Initfs => {
+            render_initfs(ui, &mut state.initfs);
+        }
+        ToolkitWorkbenchMode::Layout => {
+            render_layout_editor(ui, &mut state.layout_editor);
         }
         ToolkitWorkbenchMode::Listen => {
             ui.horizontal(|ui| {

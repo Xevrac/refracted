@@ -232,6 +232,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/game-password" && is_post {
         return Some(handle_cnc_game_password(query, body));
     }
+    if base == "cnc/lobby-options" && is_post {
+        return Some(handle_cnc_lobby_options(query, body));
+    }
     if base == "cnc/verify-game-password" && is_post {
         return Some(handle_cnc_verify_game_password(query, body));
     }
@@ -1000,6 +1003,109 @@ fn handle_cnc_game_password(query: Option<&str>, body: &[u8]) -> HttpResponse {
         resp.get("passwordProtected").and_then(|v| v.as_bool()).unwrap_or(false)
     );
     HttpResponse::new(200, "application/json", resp.to_string().into_bytes())
+}
+
+fn parse_opt_bool_str(s: &str) -> Option<bool> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+fn json_opt_bool(v: &serde_json::Value) -> Option<bool> {
+    v.as_bool()
+        .or_else(|| v.as_i64().map(|n| n != 0))
+        .or_else(|| v.as_u64().map(|n| n != 0))
+        .or_else(|| v.as_str().and_then(parse_opt_bool_str))
+}
+
+fn parse_gid_pid_match_options(
+    query: Option<&str>,
+    body: &[u8],
+) -> (i64, i64, Option<bool>, Option<bool>) {
+    let mut gid: i64 = 0;
+    let mut pid: i64 = 0;
+    let mut skill: Option<bool> = None;
+    let mut tech: Option<bool> = None;
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some((k, v)) = pair.split_once('=') {
+                let decoded = percent_decode_plus(v);
+                match k {
+                    "gid" => gid = decoded.parse().unwrap_or(0),
+                    "pid" | "persona" | "player" => pid = decoded.parse().unwrap_or(0),
+                    "skillTree" | "enableSkillTree" => skill = parse_opt_bool_str(&decoded),
+                    "techTree" | "enableTechTree" => tech = parse_opt_bool_str(&decoded),
+                    _ => {}
+                }
+            }
+        }
+    }
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
+        if let Some(g) = v.get("gid").and_then(|g| g.as_i64()) {
+            gid = g;
+        }
+        if let Some(p) = v
+            .get("pid")
+            .or_else(|| v.get("persona"))
+            .and_then(|p| p.as_i64().or_else(|| p.as_u64().map(|u| u as i64)))
+        {
+            pid = p;
+        }
+        for key in ["skillTree", "enableSkillTree"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                skill = Some(b);
+                break;
+            }
+        }
+        for key in ["techTree", "enableTechTree"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                tech = Some(b);
+                break;
+            }
+        }
+    }
+    if pid <= 0 {
+        let session = crate::session::get_user_session();
+        if session.persona_id != 0 {
+            pid = session.persona_id as i64;
+        }
+    }
+    (gid, pid, skill, tech)
+}
+
+fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    let (gid, pid, skill, tech) = parse_gid_pid_match_options(query, body);
+    if gid <= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"gid required"}"#.to_vec(),
+        );
+    }
+    if skill.is_none() && tech.is_none() {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"skillTree or techTree required"}"#.to_vec(),
+        );
+    }
+    let resp = game_state::set_match_options(gid, pid, skill, tech);
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} skillTree={:?} techTree={:?} ok={}",
+        gid,
+        pid,
+        skill,
+        tech,
+        resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
+    );
+    let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    HttpResponse::new(
+        if ok { 200 } else { 403 },
+        "application/json",
+        resp.to_string().into_bytes(),
+    )
 }
 
 fn handle_cnc_verify_game_password(query: Option<&str>, body: &[u8]) -> HttpResponse {
@@ -2197,6 +2303,7 @@ pub fn handle_game_manager_reset_dedicated_server(payload: &[u8]) -> BlazeResult
     let gid = cnc_extract_reset_game_id(payload);
     let _ = game_state::adopt_host_lobby_pending_into(gid);
     game_state::adopt_host_lobby_pending_attrs_into(gid);
+    game_state::adopt_host_lobby_match_options_into(gid);
     if let Some(attr_level) = extract_attr_level(payload) {
         let pending = game_state::get_map_path(gid);
         if pending.is_empty() {

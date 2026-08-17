@@ -30,7 +30,7 @@
 
     function lobbyMinimapUrl(file) {
         if (file && LOCAL_MINIMAPS[file]) {
-            return LOBBY_MINIMAP_DIR + file + '?v=2';
+            return LOBBY_MINIMAP_DIR + file + '?v=3';
         }
         return minimapUrl(file);
     }
@@ -589,7 +589,9 @@
             startingCash: 'standard',
             startingUnits: 'standard',
             noBaseBuilding: false,
-            noFogOfWar: false
+            noFogOfWar: false,
+            enableSkillTree: true,
+            enableTechTree: true
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -1255,6 +1257,7 @@
         };
 
         $scope.closeLobbyOptions = function () {
+            $scope.applyLobbyMatchOptions();
             $scope.lobbyOptionsOpen = false;
             if ($scope.lobbySubTab === 'OPTIONS') {
                 $scope.lobbySubTab = 'GENERALS';
@@ -1944,6 +1947,8 @@
             $scope.localReady = false;
             $scope.passwordProtected = false;
             $scope.roomPasswordDraft = '';
+            $scope.lobbyOptions.enableSkillTree = true;
+            $scope.lobbyOptions.enableTechTree = true;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -2055,6 +2060,14 @@
             }
             if (data.passwordProtected != null) {
                 $scope.passwordProtected = !!data.passwordProtected;
+            }
+            if (!$scope.lobbyOptionsOpen) {
+                if (data.enableSkillTree != null) {
+                    $scope.lobbyOptions.enableSkillTree = !!data.enableSkillTree;
+                }
+                if (data.enableTechTree != null) {
+                    $scope.lobbyOptions.enableTechTree = !!data.enableTechTree;
+                }
             }
             $scope.allHumansReady = !!data.allReady;
             var localPid = localPersonaId();
@@ -2818,6 +2831,36 @@
                     $scope.passwordProtected = !!data.passwordProtected;
                     if (!$scope.passwordProtected) {
                         $scope.roomPasswordDraft = '';
+                    }
+                });
+            });
+        };
+
+        $scope.applyLobbyMatchOptions = function () {
+            if (!$scope.isLobbyHost || !$scope.isLobbyHost()) {
+                return;
+            }
+            if (!$scope._joinedGameroom) {
+                return;
+            }
+            var gid = $scope.gameId || '1';
+            var localPid = localPersonaId();
+            var skill = $scope.lobbyOptions.enableSkillTree !== false;
+            var tech = $scope.lobbyOptions.enableTechTree !== false;
+            httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
+                '&pid=' + encodeURIComponent(localPid || 0), {
+                skillTree: skill,
+                techTree: tech
+            }).then(function (data) {
+                $timeout(function () {
+                    if (!data || data.ok === false) {
+                        return;
+                    }
+                    if (data.enableSkillTree != null) {
+                        $scope.lobbyOptions.enableSkillTree = !!data.enableSkillTree;
+                    }
+                    if (data.enableTechTree != null) {
+                        $scope.lobbyOptions.enableTechTree = !!data.enableTechTree;
                     }
                 });
             });

@@ -190,6 +190,15 @@ impl WireWriter {
         self.write_u32(v as u32);
     }
 
+    /// `Rts.Serialization` `WriteEnum` for a default (Int32) `[Flags]` enum:
+    /// `TypeCode.Int32` (9) + little-endian i32. A raw u32 is read as TypeCode=first
+    /// byte and falls through to `default(None)` — unused bits such as Tech Tree 0x20
+    /// never reach Prism.
+    pub fn write_rts_enum_i32(&mut self, value: i32) {
+        self.write_u8(9);
+        self.write_i32(value);
+    }
+
     pub fn write_u64(&mut self, v: u64) {
         self.buf.extend_from_slice(&v.to_le_bytes());
     }

@@ -24,6 +24,29 @@ html, body {
     user-select: none;
 }
 
+/* In-game WebView must stay transparent — do not paint shell Aurora/Classic body art. */
+body.ingame-aurora.cc-theme,
+body.ingame-aurora.cc-theme--aurora,
+body.ingame-classic.cc-theme,
+body.ingame-classic.cc-theme--classic,
+body.ingame-classic.cc-theme--cnc-alpha {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+body.ingame-aurora.cc-theme--aurora:before,
+body.ingame-classic.cc-theme--classic:before,
+body.ingame-classic.cc-theme--cnc-alpha:before {
+    content: none !important;
+    display: none !important;
+}
+
+/* Options / confirms: see the match behind the chrome */
+body.ingame-aurora .options-modal-overlay,
+body.ingame-classic .options-modal-overlay {
+    background: transparent;
+}
+
 [ng\:cloak], [ng-cloak], .ng-cloak { display: none !important; }
 
 /* Pause menu — centered stack in Aurora visual language */
@@ -135,12 +158,45 @@ body.ingame-aurora .options-tabs > li > a {
 
 body.ingame-aurora .options-tabs > li.active > a {
     color: #fff;
+    background-color: #1d5f99 !important;
+    background-image: none !important;
+    border-color: #06325f;
+}
+
+body.ingame-aurora .opt-select {
+    background: #101412;
+    border: 1px solid #1c2a32;
+    color: #e6edf5;
+}
+body.ingame-aurora .opt-slider {
+    background: transparent;
+    border: 0;
+    color: #e6edf5;
+}
+body.ingame-aurora .opt-slider::-webkit-slider-runnable-track {
+    background: #101412;
+    border: 1px solid #1c2a32;
+}
+body.ingame-aurora .opt-slider::-webkit-slider-thumb {
+    background: #d0d6dc;
+    border-color: #0a1014;
+}
+
+body.ingame-classic .options-modal-box {
+    background: #000;
+    border: 1px solid #2a2a2a;
+    -webkit-box-shadow: 0 0 40px rgba(0, 0, 0, 0.95);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.95);
 }
 
 body.ingame-aurora .opt-label-main,
 body.ingame-aurora .opt-radio,
 body.ingame-aurora .opt-checkbox {
     color: #e6edf5;
+}
+
+body.ingame-aurora .opt-checkbox--disabled {
+    color: #7a8490;
 }
 
 body.ingame-aurora .btn-opt-action,
@@ -205,6 +261,14 @@ body.ingame-aurora .btn-options-close::after {
     height: 12px;
     background: #8b9aab;
     display: block;
+}
+body.ingame-aurora .btn-options-close::before {
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+}
+body.ingame-aurora .btn-options-close::after {
+    -webkit-transform: rotate(-45deg);
+    transform: rotate(-45deg);
 }
 
 body.ingame-aurora .btn-options-close:hover::before,
@@ -318,31 +382,19 @@ body.ingame-aurora .btn-options-close:hover::after {
 }
 
 /* Options sits above pause + confirms.
-   Pause body uses Eurostile-Hea with no base font-size; frontend options inherit
-   body.cc-theme (Med @ 12px). Scope overrides so in-game options match shell. */
+   Match frontend shell options typography (options.css Arial), not pause Eurostile. */
 .options-modal-overlay {
     z-index: 9999;
-    font-family: 'Eurostile-Med', Arial, sans-serif;
-    font-size: 12px;
-    color: #fff;
 }
-.options-modal-overlay .options-header h2 {
-    font-family: 'Eurostile-Med', 'EurostileLTStd', Arial, sans-serif;
-    font-size: 18px;
-    font-weight: normal;
-}
-.options-modal-overlay .options-tabs > li > a {
-    font-family: 'Eurostile-Med', 'EurostileLTStd', Arial, sans-serif;
-    font-size: 12px;
-    font-weight: normal;
-}
-.options-modal-overlay .options-row-label,
-.options-modal-overlay .options-hint,
-.options-modal-overlay .options-select,
-.options-modal-overlay .options-footer-btn,
-.options-modal-overlay label,
-.options-modal-overlay select,
-.options-modal-overlay input,
-.options-modal-overlay button {
-    font-family: 'Eurostile-Med', Arial, sans-serif;
+.options-modal-overlay .options-header h2,
+.options-modal-overlay .options-tabs > li > a,
+.options-modal-overlay .opt-label-main,
+.options-modal-overlay .opt-radio,
+.options-modal-overlay .opt-checkbox,
+.options-modal-overlay .opt-select,
+.options-modal-overlay .opt-hint,
+.options-modal-overlay .opt-footer-status,
+.options-modal-overlay .btn-opt-action,
+.options-modal-overlay .btn-opt-restore {
+    font-family: Arial, Helvetica, sans-serif;
 }

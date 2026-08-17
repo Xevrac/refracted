@@ -1,0 +1,5 @@
+leCommands = qualityMap[quality]
+	if consoleCommands == nil then
+		log:error("Could not find console settings for '" .. name .. "' with quality " .. quality)
+	else
+		log:info("setting '" .. name .

@@ -52,8 +52,15 @@
     height: 12px;
     background: #8b9aab;
 }
-.btn-options-close::before { transform: rotate(45deg); }
-.btn-options-close::after { transform: rotate(-45deg); }
+/* Old CEF/WebKit needs -webkit-transform or both bars stay upright (= one line). */
+.btn-options-close::before {
+    -webkit-transform: rotate(45deg);
+    transform: rotate(45deg);
+}
+.btn-options-close::after {
+    -webkit-transform: rotate(-45deg);
+    transform: rotate(-45deg);
+}
 .btn-options-close:hover::before,
 .btn-options-close:hover::after {
     background: #fff;
@@ -222,11 +229,13 @@ body.cc-theme--cnc-alpha .btn-options-close::after {
    ========================================================================= */
 .opt-pane { width: 100%; }
 .opt-group { margin-bottom: 26px; }
-.opt-group--tight { margin-bottom: 12px; }
+.opt-group--tight { margin-bottom: 20px; }
 .opt-group--tight .opt-checkbox { margin-right: 18px; margin-bottom: 0; }
-.opt-pane .opt-row { margin-bottom: 10px; }
-.opt-pane .opt-row .opt-label-main { margin-bottom: 4px; font-size: 13px; }
+/* Two-column graphics rows: extra space between a select and the next row's label */
+.opt-pane .opt-row { margin-bottom: 28px; }
+.opt-pane .opt-row .opt-label-main { margin-bottom: 8px; font-size: 13px; }
 .opt-pane .opt-row .opt-select { height: 30px; font-size: 13px; }
+.opt-pane > .opt-row.clearfix { margin-bottom: 28px; }
 
 .opt-label-main {
     display: block;
@@ -244,17 +253,33 @@ body.cc-theme--cnc-alpha .btn-options-close::after {
     max-width: 420px;
     font-family: Arial, Helvetica, sans-serif;
 }
-.opt-group--disabled {
-    opacity: 0.55;
+.opt-footer-status {
+    float: left;
+    margin: 10px 0 0 0;
+    color: #b0b0b0;
+    font-size: 12px;
+    font-family: Arial, Helvetica, sans-serif;
+    max-width: 55%;
+    text-align: left;
 }
-.opt-group--disabled .opt-label-main {
-    color: #888;
+.opt-footer-status--error {
+    color: #e08080;
 }
-.opt-group--disabled .opt-select {
-    color: #777;
-    border-color: #333;
+.btn-opt-action[disabled],
+.btn-opt-action:disabled,
+.btn-opt-restore[disabled],
+.btn-opt-restore:disabled {
+    opacity: 0.45;
     cursor: not-allowed;
-    background-color: #0a0a0a;
+}
+.opt-fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+}
+.opt-content--waiting {
+    opacity: 0.55;
 }
 .opt-radio {
     display: inline-block;
@@ -277,6 +302,13 @@ body.cc-theme--cnc-alpha .btn-options-close::after {
     margin-bottom: 8px;
 }
 .opt-checkbox input { margin: -2px 8px 0 0; vertical-align: middle; }
+.opt-checkbox--disabled {
+    color: #888;
+    cursor: not-allowed;
+}
+.opt-checkbox--disabled input {
+    cursor: not-allowed;
+}
 
 .opt-row { width: 100%; }
 .opt-col-half { float: left; width: 48%; margin-right: 4%; }
@@ -299,31 +331,103 @@ body.cc-theme--cnc-alpha .btn-options-close::after {
     background-repeat: no-repeat;
 }
 
+/* Range: paint track only on ::*-track — styling the <input> itself doubles a
+   right-edge "notch" in Shell WebKit when both have border/background. */
 .opt-slider {
+    display: block;
     width: 100%;
+    max-width: 100%;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
     -webkit-appearance: none;
     appearance: none;
-    background: #0074cf;
-    height: 9px;
-    border: 1px solid #002f55;
+    background: transparent;
+    border: 0;
     outline: none;
+    vertical-align: middle;
+}
+.opt-slider::-webkit-slider-runnable-track {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 8px;
+    background: #101412;
+    border: 1px solid #1c2a32;
+    border-radius: 0;
+    box-sizing: border-box;
 }
 .opt-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
+    appearance: none;
     width: 10px;
-    height: 24px;
-    background: #d3d3d3;
+    height: 20px;
+    /* Center thumb on 8px track (+1px borders ≈ 10px): (10 - 20) / 2 = -5 */
+    margin-top: -5px;
+    background: #c8c8c8;
     border: 1px solid #080808;
     border-radius: 1px;
+    box-sizing: border-box;
     cursor: pointer;
+}
+.opt-slider::-moz-range-track {
+    width: 100%;
+    height: 8px;
+    background: #101412;
+    border: 1px solid #1c2a32;
+    border-radius: 0;
 }
 .opt-slider::-moz-range-thumb {
     width: 10px;
-    height: 24px;
-    background: #d3d3d3;
+    height: 20px;
+    background: #c8c8c8;
     border: 1px solid #080808;
     border-radius: 1px;
+    box-sizing: border-box;
     cursor: pointer;
+}
+.opt-slider::-moz-focus-outer {
+    border: 0;
+}
+
+/* Graphics pane scrollbars — Classic + Aurora */
+.options-content::-webkit-scrollbar {
+    width: 8px;
+}
+.options-content::-webkit-scrollbar-track {
+    background: #0a0a0a;
+    border-left: 1px solid #2c2c2c;
+}
+.options-content::-webkit-scrollbar-thumb {
+    background: #3a5a78;
+    border: 1px solid #2c2c2c;
+}
+.options-content::-webkit-scrollbar-thumb:hover {
+    background: #4a6a88;
+}
+body.cc-theme--aurora .options-content::-webkit-scrollbar-track,
+body.ingame-aurora .options-content::-webkit-scrollbar-track {
+    background: rgba(12, 15, 13, 0.9);
+    border-left: 1px solid #1c2a32;
+}
+body.cc-theme--aurora .options-content::-webkit-scrollbar-thumb,
+body.ingame-aurora .options-content::-webkit-scrollbar-thumb {
+    background: #2a4a62;
+    border: 1px solid #1c2a32;
+}
+body.cc-theme--aurora .options-content::-webkit-scrollbar-thumb:hover,
+body.ingame-aurora .options-content::-webkit-scrollbar-thumb:hover {
+    background: #3a6a8a;
+}
+body.cc-theme--classic .options-content::-webkit-scrollbar-track,
+body.cc-theme--cnc-alpha .options-content::-webkit-scrollbar-track {
+    background: #0a0a0a;
+    border-left: 1px solid #2c2c2c;
+}
+body.cc-theme--classic .options-content::-webkit-scrollbar-thumb,
+body.cc-theme--cnc-alpha .options-content::-webkit-scrollbar-thumb {
+    background: #3a5a78;
+    border: 1px solid #2c2c2c;
 }
 .opt-value {
     float: right;

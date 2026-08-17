@@ -6,11 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="lib/angular/angular.min.js"></script>
     <link rel="stylesheet" href="css/options.css">
+    <link rel="stylesheet" href="css/themes/aurora.css">
     <link rel="stylesheet" href="css/ingame-menu.css">
+    <script src="js/shell-theme.js"></script>
     <script src="js/ingame-menu.js"></script>
     <script src="options.js"></script>
 </head>
-<body class="ingame-aurora" ng-controller="IngameMenuController" ng-cloak>
+<body class="cc-theme cc-theme--aurora ingame-aurora" ng-controller="IngameMenuController" ng-cloak>
 
     <div class="pause-menu" ng-hide="optionsOpen || quittingOpen">
         <button type="button" class="pause-menu-btn" ng-click="openOptions()">OPTIONS</button>

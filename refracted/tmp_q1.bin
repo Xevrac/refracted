@@ -1,0 +1,6 @@
+			TerrainQuality = Quality.Low,
+			UndergrowthQuality = Quality.Low,
+			
+			AntiAliasingDeferred = AntiAliasingDeferred.Off,
+			AntiAliasingPost = AntiAliasingPost.Off,
+			AnisotropicFilter = An

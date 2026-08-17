@@ -81,9 +81,13 @@ impl InspectorType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ToolkitWorkbenchMode {
     FrostEx,
+    /// Initfs editor / extractor / syntax viewer.
+    Initfs,
     #[default]
     Listen,
     Make,
+    /// CNC-only: Frostbite `.layout` UI editor.
+    Layout,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
