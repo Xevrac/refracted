@@ -52,7 +52,7 @@
         <div class="cc-pre-landing__inner">
             <div class="cc-pre-landing__brand">
                 <div class="cc-pre-landing__spinner" role="status" aria-label="Loading"></div>
-                <h1 class="cc-pre-landing__title">COMMAND &amp; CONQUER</h1>
+                <h1 class="cc-pre-landing__title">PROJECT AURORA</h1>
             </div>
             <div class="cc-pre-landing__statusBox">
                 <p class="cc-pre-landing__status">{{ preLandingStatus }}</p>
@@ -64,6 +64,13 @@
         <div ng-include="shellRootTemplate"></div>
         <div ng-include="'view/options.html'"></div>
         <div ng-include="'view/credits.html'"></div>
+        <div class="cc-shell-lost-modal" ng-show="serverLostError && !lobbyOpen">
+            <div class="cc-shell-lost-modal__box">
+                <div>{{ serverLostError }}</div>
+                <button type="button" class="cc-shell-lost-modal__ok"
+                        ng-click="dismissServerLostError()">OK</button>
+            </div>
+        </div>
     </div>
 
 </body>

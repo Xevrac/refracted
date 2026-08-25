@@ -4,6 +4,8 @@
 
  *   SetPauseMenuVisibility false  — close pause UI
 
+ *   SetPauseMenuVisibility true   — show pause UI
+
  *   RtsClient.surrenderGame       — surrender → return to menu
 
  *   quit true                     — Quit Game → close process (desktop)
@@ -52,13 +54,8 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
     $scope.confirmSurrenderOpen = false;
     $scope.quittingOpen = false;
 
-
-
     var QUIT_BLAZE_STEP_MS = 2500;
-
     var QUIT_POST_BLAZE_BUFFER_MS = 350;
-
-
 
     function runGame(line) {
 
@@ -115,6 +112,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         if (window.CncProbe) {
 
             CncProbe._inBlazeGame = false;
+            CncProbe._matchWatchArmed = false;
 
         }
 

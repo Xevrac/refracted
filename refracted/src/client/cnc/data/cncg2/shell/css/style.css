@@ -884,3 +884,63 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
     bottom: 0;
     z-index: 20;
 }
+/* Classic palette mirrors .cc-lobby__modal-box; aurora.css overrides for the Aurora theme. */
+.cc-shell-lost-modal {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 4000;
+    background: rgba(0, 0, 0, 0.58);
+}
+.cc-shell-lost-modal__box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 320px;
+    max-width: 92%;
+    margin: 0;
+    padding: 22px 16px 18px;
+    border: 1px solid #4a90c8;
+    background: rgba(10, 20, 32, 0.96);
+    color: #fff;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    text-align: center;
+    line-height: 1.35;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    -webkit-box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+}
+.cc-shell-lost-modal__ok {
+    display: inline-block;
+    min-width: 140px;
+    height: 42px;
+    margin: 18px 0 0;
+    padding: 0 16px;
+    border: 1px solid #111;
+    border-radius: 4px;
+    background-color: #37a414;
+    background-image: -webkit-linear-gradient(top, #47c41d, #2e8c10);
+    background-image: linear-gradient(to bottom, #47c41d, #2e8c10);
+    color: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+    vertical-align: middle;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+.cc-shell-lost-modal__ok:hover {
+    -webkit-filter: brightness(1.08);
+    filter: brightness(1.08);
+}

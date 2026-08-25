@@ -241,6 +241,89 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
         $rootScope.alertPopupOpen = !$rootScope.alertPopupOpen;
     };
 
+    $rootScope.serverLostError = '';
+    $rootScope.showServerLostModal = function (message) {
+        $rootScope.serverLostError = message || 'Server connection lost.';
+        try {
+            sessionStorage.setItem('cnc_connection_lost', '1');
+        } catch (e) { /* ignore */ }
+    };
+    function localShellPersonaId() {
+        var pid = 0;
+        try {
+            pid = Number(sessionStorage.getItem('cnc_match_pid')) || 0;
+        } catch (e) { /* ignore */ }
+        if (!pid && window.CncBlazeState && CncBlazeState.getPersonaId) {
+            pid = CncBlazeState.getPersonaId() || 0;
+        }
+        if (!pid && $rootScope.blazePersonaId) {
+            pid = Number($rootScope.blazePersonaId) || 0;
+        }
+        return pid || 0;
+    }
+
+    $rootScope.dismissServerLostError = function () {
+        $rootScope.serverLostError = '';
+        try {
+            sessionStorage.removeItem('cnc_connection_lost');
+        } catch (e) { /* ignore */ }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/cnc/dismiss-match-lost?pid=' +
+                encodeURIComponent(String(localShellPersonaId())), true);
+            xhr.send(null);
+        } catch (e2) { /* ignore */ }
+    };
+
+    function restoreLostModalIfNeeded() {
+        var delays = [0, 400, 1500, 4000, 10000];
+        var i = 0;
+        function tick() {
+            if ($rootScope.serverLostError) {
+                return;
+            }
+            var pid = localShellPersonaId();
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/cnc/match-connection-status?gid=0&pid=' +
+                    encodeURIComponent(String(pid)), true);
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) {
+                        return;
+                    }
+                    var data = null;
+                    try {
+                        data = JSON.parse(xhr.responseText);
+                    } catch (pe) { /* ignore */ }
+                    var apply = function () {
+                        if (data && (data.lost || data.serverLost || data.shellLost || data.clientLost)) {
+                            $rootScope.showServerLostModal();
+                            return;
+                        }
+                        if (pid > 0) {
+                            try {
+                                sessionStorage.removeItem('cnc_connection_lost');
+                            } catch (ce) { /* ignore */ }
+                            return;
+                        }
+                        i += 1;
+                        if (i < delays.length) {
+                            $timeout(tick, delays[i]);
+                        }
+                    };
+                    if ($rootScope.$$phase) {
+                        apply();
+                    } else {
+                        $rootScope.$apply(apply);
+                    }
+                };
+                xhr.send(null);
+            } catch (e3) { /* ignore */ }
+        }
+        $timeout(tick, delays[0]);
+    }
+    restoreLostModalIfNeeded();
+
     // Global Context Menu Logic (Mouse Tracking)
     $scope.friendContextMenu = { open: false, x: 0, y: 0, friend: null };
 

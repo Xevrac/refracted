@@ -56,8 +56,8 @@
             ]
         },
         {
-            id: 'excavation',
-            label: 'Excavation',
+            id: 'smalltown',
+            label: 'Smalltown',
             path: 'Levels/MP/PVP/DM_Smalltown_1v1_CR/DM_Smalltown_1v1_CR',
             slots: 2,
             startCount: 2,
@@ -74,8 +74,8 @@
             ]
         },
         {
-            id: 'nile-1v1',
-            label: 'Nile Delta',
+            id: 'kapukai-1v1',
+            label: 'Kapu Kai',
             path: 'Levels/MP/PVP/DM_KapuKai_1v1_JKS/DM_KapuKai_1v1_JKS',
             slots: 2,
             startCount: 2,
@@ -155,9 +155,9 @@
             ]
         },
         {
-            // FirstPlayable_MPHorde_Final — player-facing mode is Onslaught.
+            // FirstPlayable_MPHorde_Final — player-facing map name is Dreadzone (mode Onslaught).
             id: 'onslaught-fp',
-            label: 'Canyon Basin',
+            label: 'Dreadzone',
             path: 'Levels/MP/PVE/FirstPlayable_MPHorde_Final/FirstPlayable_MPHorde_Final',
             slots: 2,
             startCount: 2,
@@ -590,8 +590,10 @@
             startingUnits: 'standard',
             noBaseBuilding: false,
             noFogOfWar: false,
-            enableSkillTree: true,
-            enableTechTree: true
+            enableSpecialAbilities: true,
+            enableTechTree: true,
+            enableOilEconomy: false,
+            enableInfiniteResourceCenters: false
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -618,7 +620,6 @@
         $scope.localReady = false;
         $scope._findingMatch = false;
         $scope._matchError = '';
-        $scope._serverLostError = '';
         $scope.matchmakeMinPlayers = 2;
         $scope.matchmakeMaxPlayers = 8;
         $scope.team1 = makeTeam(3, 1);
@@ -780,15 +781,41 @@
         }
 
         function unusedStartpoint(exceptSlot) {
+            var free = freeStartpointIds(exceptSlot);
+            return free.length ? free[0] : 0;
+        }
+
+        function freeStartpointIds(exceptSlot) {
             var used = takenStartpoints(exceptSlot);
             var ids = startpointIds($scope.selectedMap);
+            var free = [];
             var i;
             for (i = 0; i < ids.length; i++) {
                 if (!used[ids[i]]) {
-                    return ids[i];
+                    free.push(ids[i]);
                 }
             }
-            return 0;
+            return free;
+        }
+
+        function shuffleStartIds(ids) {
+            var i;
+            for (i = ids.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1));
+                var tmp = ids[i];
+                ids[i] = ids[j];
+                ids[j] = tmp;
+            }
+            return ids;
+        }
+
+        function randomUnusedStartpoint(exceptSlot) {
+            var free = freeStartpointIds(exceptSlot);
+            if (!free.length) {
+                return 0;
+            }
+            shuffleStartIds(free);
+            return free[0];
         }
 
         function parseStartId(v) {
@@ -864,9 +891,13 @@
         }
 
         function assignRandomStartpoints() {
+            var free = shuffleStartIds(freeStartpointIds(null));
+            var next = 0;
             eachOccupiedSlot(function (slot) {
                 if (parseStartId(slot.startpoint) === 0) {
-                    slot.startpoint = unusedStartpoint(slot) || 1;
+                    slot.startpoint = (next < free.length)
+                        ? free[next++]
+                        : (unusedStartpoint(slot) || 1);
                 }
             });
         }
@@ -1686,8 +1717,73 @@
         };
 
         $scope.dismissServerLostError = function () {
-            $scope._serverLostError = '';
+            if ($rootScope.dismissServerLostError) {
+                $rootScope.dismissServerLostError();
+            }
         };
+
+        function showPostMatchLostModal() {
+            if ($rootScope.showServerLostModal) {
+                $rootScope.showServerLostModal();
+            }
+            $scope._starting = false;
+            $scope._startError = '';
+            $scope._findingMatch = false;
+            $scope._matchError = '';
+            $scope._joinedGameroom = false;
+            stopMatchLostPoll();
+            stopRosterPoll();
+            try {
+                sessionStorage.setItem('cnc_connection_lost', '1');
+                sessionStorage.removeItem('cnc_match_gid');
+                sessionStorage.removeItem('cnc_match_pid');
+            } catch (e) { /* ignore */ }
+            if (window.CncProbe) {
+                CncProbe._inBlazeGame = false;
+                CncProbe._matchWatchArmed = false;
+            }
+            if ($rootScope.openLobby) {
+                $rootScope.openLobby();
+            } else {
+                $rootScope.lobbyOpen = true;
+                $rootScope.lobbyView = 'matchmake';
+            }
+        }
+
+        function stopMatchLostPoll() {
+            if ($scope._matchLostPoll) {
+                $timeout.cancel($scope._matchLostPoll);
+                $scope._matchLostPoll = null;
+            }
+        }
+
+        function startMatchLostPoll() {
+            stopMatchLostPoll();
+            function tick() {
+                if (!window.CncProbe || !CncProbe._matchWatchArmed) {
+                    return;
+                }
+                var gid = '0';
+                var pid = localPersonaId() || 0;
+                try {
+                    gid = sessionStorage.getItem('cnc_match_gid') || '0';
+                    if (!pid) {
+                        pid = Number(sessionStorage.getItem('cnc_match_pid')) || 0;
+                    }
+                } catch (e) { /* ignore */ }
+                httpRequest('GET', '/cnc/match-connection-status?gid=' +
+                    encodeURIComponent(gid) + '&pid=' + encodeURIComponent(pid)).then(function (data) {
+                    if (data && (data.lost || data.serverLost || data.shellLost)) {
+                        showPostMatchLostModal();
+                        return;
+                    }
+                    if (window.CncProbe && CncProbe._matchWatchArmed) {
+                        $scope._matchLostPoll = $timeout(tick, 800);
+                    }
+                });
+            }
+            tick();
+        }
 
         function forceServerLostKick(message) {
             var inLobby = !!$scope._joinedGameroom;
@@ -1696,20 +1792,22 @@
                 stopRosterPoll();
                 if (window.CncProbe && CncProbe.log) {
                     CncProbe.log('Lobby SERVER LOST ignored (starting match): ' +
-                        (message || 'The connectivity to the server was lost.'));
+                        (message || 'Server connection lost.'));
                 }
                 return;
             }
             if (!inLobby && !inBlaze) {
                 return;
             }
-            $scope._serverLostError = message || 'The connectivity to the server was lost.';
+            if ($rootScope.showServerLostModal) {
+                $rootScope.showServerLostModal(message);
+            }
             $scope._starting = false;
             $scope._startError = '';
             $scope._findingMatch = false;
             $scope._matchError = '';
             if (window.CncProbe && CncProbe.log) {
-                CncProbe.log('Lobby SERVER LOST: ' + $scope._serverLostError);
+                CncProbe.log('Lobby SERVER LOST: ' + ($rootScope.serverLostError || message));
             }
             if (inLobby) {
                 if ($rootScope.leaveGameRoom) {
@@ -1719,6 +1817,7 @@
                 }
             } else if (window.CncProbe) {
                 CncProbe._inBlazeGame = false;
+                CncProbe._matchWatchArmed = false;
                 try {
                     if (CncProbe.clientDisconnect) {
                         CncProbe.clientDisconnect();
@@ -1947,8 +2046,10 @@
             $scope.localReady = false;
             $scope.passwordProtected = false;
             $scope.roomPasswordDraft = '';
-            $scope.lobbyOptions.enableSkillTree = true;
+            $scope.lobbyOptions.enableSpecialAbilities = true;
             $scope.lobbyOptions.enableTechTree = true;
+            $scope.lobbyOptions.enableOilEconomy = false;
+            $scope.lobbyOptions.enableInfiniteResourceCenters = false;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -1961,6 +2062,7 @@
             clearRemoteHumanSlots();
             if (window.CncProbe) {
                 CncProbe._inBlazeGame = false;
+                CncProbe._matchWatchArmed = false;
             }
         }
 
@@ -2062,11 +2164,17 @@
                 $scope.passwordProtected = !!data.passwordProtected;
             }
             if (!$scope.lobbyOptionsOpen) {
-                if (data.enableSkillTree != null) {
-                    $scope.lobbyOptions.enableSkillTree = !!data.enableSkillTree;
+                if (data.enableSpecialAbilities != null) {
+                    $scope.lobbyOptions.enableSpecialAbilities = !!data.enableSpecialAbilities;
                 }
                 if (data.enableTechTree != null) {
                     $scope.lobbyOptions.enableTechTree = !!data.enableTechTree;
+                }
+                if (data.enableOilEconomy != null) {
+                    $scope.lobbyOptions.enableOilEconomy = false;
+                }
+                if (data.enableInfiniteResourceCenters != null) {
+                    $scope.lobbyOptions.enableInfiniteResourceCenters = false;
                 }
             }
             $scope.allHumansReady = !!data.allReady;
@@ -2117,7 +2225,7 @@
             if ($scope._rosterSawSelf && !localStillIn && $scope._joinedGameroom) {
                 $scope._rosterMissSelf = ($scope._rosterMissSelf || 0) + 1;
                 if ($scope._rosterMissSelf >= 3) {
-                    forceServerLostKick('The connectivity to the server was lost.');
+                    forceServerLostKick('Server connection lost.');
                     return;
                 }
             } else if (localStillIn) {
@@ -2168,7 +2276,7 @@
                 $timeout(function () {
                     if (data && data.serverLost) {
                         forceServerLostKick(data.message ||
-                            'The connectivity to the server was lost.');
+                            'Server connection lost.');
                         return;
                     }
                     if (data && data.ok === false) {
@@ -2345,7 +2453,12 @@
             $scope.closeLobbyOptions();
             $scope._starting = true;
             $scope._startError = '';
-            $scope._serverLostError = '';
+            if ($rootScope.serverLostError) {
+                $rootScope.serverLostError = '';
+            }
+            try {
+                sessionStorage.removeItem('cnc_connection_lost');
+            } catch (e) { /* ignore */ }
             stopRosterPoll();
             $scope._rosterMissSelf = 0;
             var startUnix = Math.floor(Date.now() / 1000);
@@ -2356,7 +2469,9 @@
             var host = $scope.team1[0];
             var gname = (host && host.displayName) || 'Player1';
             var ais = aiSlots();
-            var capacity = $scope.isSoloMap() ? 1 : Math.max(2, 1 + ais.length);
+            var occupied = 0;
+            eachOccupiedSlot(function () { occupied += 1; });
+            var capacity = Math.max(1, occupied);
             var level = ($scope.selectedMap && $scope.selectedMap.path) ||
                 $scope.mapPath || MAPS[0].path;
             $scope.mapPath = level;
@@ -2383,6 +2498,7 @@
                     CncProbe._pendingBlazeCreate = false;
                 }
                 CncProbe._inBlazeGame = false;
+                CncProbe._matchWatchArmed = false;
                 $scope._starting = false;
                 // Backend unreachable: leave the room. Soft errors like "no idle" stay.
                 if (isBackendCommFail(msg) && $scope._joinedGameroom) {
@@ -2425,8 +2541,10 @@
                         clearStartTimer();
                         $scope._starting = false;
                         CncProbe._inBlazeGame = true;
+                        CncProbe._matchWatchArmed = true;
+                        startMatchLostPoll();
                         $scope._joinedGameroom = false;
-                        $scope._serverLostError = '';
+                        $rootScope.serverLostError = '';
                         stopRosterPoll();
                         try {
                             sessionStorage.setItem('cnc_match_gid', String($scope.gameId || '1'));
@@ -2533,7 +2651,7 @@
                         $timeout(function () {
                             var sp = Number(slot.startpoint);
                             if (!(sp > 0)) {
-                                sp = unusedStartpoint(slot) || 2;
+                                sp = randomUnusedStartpoint(slot) || unusedStartpoint(slot) || 2;
                                 slot.startpoint = sp;
                             }
                             if (CncProbe.runAddRemotePlayer) {
@@ -2629,6 +2747,7 @@
         $scope.$on('$destroy', function () {
             stopBrowserPoll();
             stopRosterPoll();
+            stopMatchLostPoll();
             if (unloadBound) {
                 try {
                     if (window.removeEventListener) {
@@ -2676,6 +2795,28 @@
             } catch (e3) { /* ignore */ }
         }
         bindLeaveOnUnload();
+
+        function restoreLostModalIfNeeded() {
+            if ($rootScope.serverLostError) {
+                return;
+            }
+            var pid = localPersonaId() || 0;
+            httpRequest('GET', '/cnc/match-connection-status?gid=0&pid=' +
+                encodeURIComponent(pid)).then(function (data) {
+                if (data && (data.lost || data.serverLost || data.shellLost || data.clientLost)) {
+                    if ($rootScope.showServerLostModal) {
+                        $rootScope.showServerLostModal();
+                    }
+                    return;
+                }
+                if (pid > 0) {
+                    try {
+                        sessionStorage.removeItem('cnc_connection_lost');
+                    } catch (e) { /* ignore */ }
+                }
+            });
+        }
+        restoreLostModalIfNeeded();
 
         function doJoinBrowserGame(g) {
             if (!g || g.joinable === false) {
@@ -2845,22 +2986,32 @@
             }
             var gid = $scope.gameId || '1';
             var localPid = localPersonaId();
-            var skill = $scope.lobbyOptions.enableSkillTree !== false;
+            var special = $scope.lobbyOptions.enableSpecialAbilities !== false;
             var tech = $scope.lobbyOptions.enableTechTree !== false;
+            var oil = false;
+            var infinite = false;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
-                skillTree: skill,
-                techTree: tech
+                specialAbilities: special,
+                techTree: tech,
+                oilEconomy: oil,
+                infiniteResourceCenters: infinite
             }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
                         return;
                     }
-                    if (data.enableSkillTree != null) {
-                        $scope.lobbyOptions.enableSkillTree = !!data.enableSkillTree;
+                    if (data.enableSpecialAbilities != null) {
+                        $scope.lobbyOptions.enableSpecialAbilities = !!data.enableSpecialAbilities;
                     }
                     if (data.enableTechTree != null) {
                         $scope.lobbyOptions.enableTechTree = !!data.enableTechTree;
+                    }
+                    if (data.enableOilEconomy != null) {
+                        $scope.lobbyOptions.enableOilEconomy = false;
+                    }
+                    if (data.enableInfiniteResourceCenters != null) {
+                        $scope.lobbyOptions.enableInfiniteResourceCenters = false;
                     }
                 });
             });

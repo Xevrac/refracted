@@ -97,11 +97,9 @@
         } catch (e) { /* empty */ }
     }
 
-    /** Call when a match ends so the next frontend load shows the login splash again. */
+    /** Keep session done so return-from-match skips intro / pre-landing splash. */
     function scheduleReturnFromMatch() {
-        try {
-            sessionStorage.removeItem(SESSION_DONE_KEY);
-        } catch (e) { /* empty */ }
+        markSessionDone();
     }
 
     /** True when the full login splash + authenticate chain should run. */

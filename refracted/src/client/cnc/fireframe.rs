@@ -110,17 +110,26 @@ pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<O
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     let promote_reset = super::game_state::blaze_join_setup_already_pushed(gid)
         || super::game_state::client_local_game_active(gid);
+    // joinGame NotifyGameSetup already ran preInitGameNetwork + updateMeshConnection.
+    // A second InitiateConnections re-adds the same Blaze Fiber (duplicate dispatchee).
+    // Rematch NotifyGameRemoved clears mesh-live so InitiateConnections still runs.
+    let skip_initiate = super::game_state::client_mesh_already_connected(gid);
     let setup_label = if promote_reset {
         "NotifyGameReset after resetDedicatedServer"
     } else {
         "NotifyGameSetup after resetDedicatedServer"
     };
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: {} + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: {} + NotifyGameStateChange + NotifyPlatformHostInitialized + {} after resetDedicatedServer (gid={})",
         if promote_reset {
             "NotifyGameReset"
         } else {
             "NotifyGameSetup"
+        },
+        if skip_initiate {
+            "NotifyPlayerJoinCompleted (mesh already live; skip InitiateConnections)"
+        } else {
+            "NotifyJoiningPlayerInitiateConnections"
         },
         gid
     );
@@ -163,11 +172,7 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     let wire_phost = notification_envelope(0x0004, 0x0047, &phost);
     let pl_phost = wire_phost.len();
 
-    let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;
-    let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
-    let pl_initiate = wire_initiate.len();
-
-    Ok(vec![
+    let mut out = vec![
         OutgoingPush {
             wire: wire_setup,
             component: 0x0004,
@@ -198,7 +203,20 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
                 pl_phost
             ),
         },
-        OutgoingPush {
+    ];
+
+    if skip_initiate {
+        super::game_state::mark_orch_mesh_already_connected(gid);
+        let mut join_done = pushes_player_join_completed(gid)?;
+        for p in &mut join_done {
+            p.blaze_send_label = "NotifyPlayerJoinCompleted after resetDedicatedServer (mesh already live)";
+        }
+        out.extend(join_done);
+    } else {
+        let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;
+        let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
+        let pl_initiate = wire_initiate.len();
+        out.push(OutgoingPush {
             wire: wire_initiate,
             component: 0x0004,
             command: 0x0016,
@@ -208,8 +226,10 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
                 "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl_initiate
             ),
-        },
-    ])
+        });
+    }
+
+    Ok(out)
 }
 
 pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> {
@@ -233,7 +253,12 @@ pub fn pushes_after_join_game_lobby(
         }
     }
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized after joinGame (gid={}){}",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup + NotifyGameStateChange{} after joinGame (gid={}){}",
+        if defer_mesh {
+            " (no platform host yet)"
+        } else {
+            " + NotifyPlatformHostInitialized"
+        },
         gid,
         if defer_mesh {
             " [lobby — mesh deferred]"
@@ -254,10 +279,6 @@ pub fn pushes_after_join_game_lobby(
     let gstate = super::build_game_manager_notify_game_state_change(gid, gsta)?;
     let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
     let pl1 = wire_gstate.len();
-
-    let phost = super::build_game_manager_notify_platform_host_initialized(gid)?;
-    let wire_phost = notification_envelope(0x0004, 0x0047, &phost);
-    let pl2 = wire_phost.len();
 
     let mut out = vec![
         OutgoingPush {
@@ -282,7 +303,14 @@ pub fn pushes_after_join_game_lobby(
                 pl1
             ),
         },
-        OutgoingPush {
+    ];
+
+    // Lobby join defers mesh until Start Battle — do not tell the client it is platform host yet.
+    if !defer_mesh {
+        let phost = super::build_game_manager_notify_platform_host_initialized(gid)?;
+        let wire_phost = notification_envelope(0x0004, 0x0047, &phost);
+        let pl2 = wire_phost.len();
+        out.push(OutgoingPush {
             wire: wire_phost,
             component: 0x0004,
             command: 0x0047,
@@ -292,8 +320,8 @@ pub fn pushes_after_join_game_lobby(
                 "[Blaze→Client] GameManager.NotifyPlatformHostInitialized Component=4, Command=71, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl2
             ),
-        },
-    ];
+        });
+    }
 
     if !defer_mesh {
         let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;

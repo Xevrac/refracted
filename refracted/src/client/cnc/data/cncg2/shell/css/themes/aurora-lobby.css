@@ -631,6 +631,12 @@
     border-color: rgba(58, 160, 255, 0.55);
 }
 
+.au-lobby__options-cell select:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: #6a7a8a;
+}
+
 .au-lobby__options-cell select option {
     background: #101412;
     color: #e8f0f8;
@@ -659,8 +665,14 @@
     vertical-align: middle;
 }
 
+.au-lobby__options-check--disabled,
+.au-lobby__options-check--disabled input {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .au-lobby__options-row--stub {
-    opacity: 0.88;
+    opacity: 0.55;
 }
 
 .au-lobby__options-cell--note {

@@ -137,6 +137,45 @@ local function refractedInstallUsersettingsGraphics()
 
   mod.userSettings.allowcamerarotation = cameraRotationBinding()
 
+  -- CNC has no retail WindowedBorderless option — Prism strips Win32 chrome.
+  local function borderlessBinding()
+    return {
+      function()
+        if type(getWindowedBorderless) == "function" then
+          local ok, value = pcall(getWindowedBorderless)
+          if ok and value ~= nil then
+            return value
+          end
+        end
+        return 0
+      end,
+      function(nextValue)
+        local on = toProfileBool(nextValue)
+        if type(setWindowedBorderless) == "function" then
+          pcall(setWindowedBorderless, on and 1 or 0)
+        end
+      end,
+    }
+  end
+  mod.userSettings.windowedborderless = borderlessBinding()
+  mod.userSettings.windowbordersenable = {
+    function()
+      if type(getWindowedBorderless) == "function" then
+        local ok, value = pcall(getWindowedBorderless)
+        if ok and value ~= nil then
+          return toProfileBool(value) and 0 or 1
+        end
+      end
+      return 1
+    end,
+    function(nextValue)
+      local bordersOn = toProfileBool(nextValue)
+      if type(setWindowedBorderless) == "function" then
+        pcall(setWindowedBorderless, bordersOn and 0 or 1)
+      end
+    end,
+  }
+
   -- Push saved profile camera flags to live console vars (launch + after applyProfileSettings).
   function mod.syncProfileCameraConsole()
     if type(executeConsoleCommand) ~= "function" then
@@ -194,6 +233,8 @@ local function refractedInstallUsersettingsGraphics()
   local profileBoolKeys = {
     shellfullscreen = true,
     gamefullscreen = true,
+    windowedborderless = true,
+    windowbordersenable = true,
     edgepan = true,
     middlemousecameradrag = true,
     allowcamerarotation = true,
@@ -206,8 +247,16 @@ local function refractedInstallUsersettingsGraphics()
     if payload.middlemousecameradrag ~= nil and toProfileBool(payload.middlemousecameradrag) then
       payload.allowcamerarotation = 0
     end
+    if payload.windowedborderless ~= nil and toProfileBool(payload.windowedborderless) then
+      payload.shellfullscreen = 0
+      payload.gamefullscreen = 0
+    elseif payload.windowbordersenable ~= nil and not toProfileBool(payload.windowbordersenable) then
+      payload.shellfullscreen = 0
+      payload.gamefullscreen = 0
+    end
     local touchedProfile = false
     local touchedGraphics = false
+    local touchedBorderless = false
     for key, binding in pairs(mod.userSettings) do
       local value = payload[key]
       if value ~= nil then
@@ -215,6 +264,9 @@ local function refractedInstallUsersettingsGraphics()
           value = toProfileBool(value)
         end
         pcall(binding[2], value)
+        if key == "windowedborderless" or key == "windowbordersenable" then
+          touchedBorderless = true
+        end
         if graphicsKeys[key] then
           touchedGraphics = true
         else
@@ -234,6 +286,9 @@ local function refractedInstallUsersettingsGraphics()
       pcall(applyProfileSettings)
     end
     mod.syncProfileCameraConsole()
+    if touchedBorderless and type(applyWindowedBorderless) == "function" then
+      pcall(applyWindowedBorderless)
+    end
   end
 
   function mod.executeUserSettingsApplyRequest(payload)

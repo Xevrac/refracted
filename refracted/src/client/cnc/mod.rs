@@ -244,6 +244,15 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/leave-game" && is_post {
         return Some(handle_cnc_leave_game(query));
     }
+    if base == "cnc/match-connection-status" && is_get {
+        return Some(handle_cnc_match_connection_status(query));
+    }
+    if base == "cnc/lost-game-server" && is_post {
+        return Some(handle_cnc_lost_game_server(query));
+    }
+    if base == "cnc/dismiss-match-lost" && is_post {
+        return Some(handle_cnc_dismiss_match_lost(query));
+    }
     if base == "cnc/player-ready" && is_post {
         return Some(handle_cnc_player_ready(query));
     }
@@ -1023,11 +1032,13 @@ fn json_opt_bool(v: &serde_json::Value) -> Option<bool> {
 fn parse_gid_pid_match_options(
     query: Option<&str>,
     body: &[u8],
-) -> (i64, i64, Option<bool>, Option<bool>) {
+) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
     let mut gid: i64 = 0;
     let mut pid: i64 = 0;
-    let mut skill: Option<bool> = None;
+    let mut special: Option<bool> = None;
     let mut tech: Option<bool> = None;
+    let mut oil: Option<bool> = None;
+    let mut infinite: Option<bool> = None;
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
@@ -1035,8 +1046,14 @@ fn parse_gid_pid_match_options(
                 match k {
                     "gid" => gid = decoded.parse().unwrap_or(0),
                     "pid" | "persona" | "player" => pid = decoded.parse().unwrap_or(0),
-                    "skillTree" | "enableSkillTree" => skill = parse_opt_bool_str(&decoded),
+                    "specialAbilities" | "enableSpecialAbilities" => {
+                        special = parse_opt_bool_str(&decoded)
+                    }
                     "techTree" | "enableTechTree" => tech = parse_opt_bool_str(&decoded),
+                    "oilEconomy" | "enableOilEconomy" => oil = parse_opt_bool_str(&decoded),
+                    "infiniteResourceCenters" | "enableInfiniteResourceCenters" => {
+                        infinite = parse_opt_bool_str(&decoded)
+                    }
                     _ => {}
                 }
             }
@@ -1053,15 +1070,27 @@ fn parse_gid_pid_match_options(
         {
             pid = p;
         }
-        for key in ["skillTree", "enableSkillTree"] {
+        for key in ["specialAbilities", "enableSpecialAbilities"] {
             if let Some(b) = v.get(key).and_then(json_opt_bool) {
-                skill = Some(b);
+                special = Some(b);
                 break;
             }
         }
         for key in ["techTree", "enableTechTree"] {
             if let Some(b) = v.get(key).and_then(json_opt_bool) {
                 tech = Some(b);
+                break;
+            }
+        }
+        for key in ["oilEconomy", "enableOilEconomy"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                oil = Some(b);
+                break;
+            }
+        }
+        for key in ["infiniteResourceCenters", "enableInfiniteResourceCenters"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                infinite = Some(b);
                 break;
             }
         }
@@ -1072,11 +1101,11 @@ fn parse_gid_pid_match_options(
             pid = session.persona_id as i64;
         }
     }
-    (gid, pid, skill, tech)
+    (gid, pid, special, tech, oil, infinite)
 }
 
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
-    let (gid, pid, skill, tech) = parse_gid_pid_match_options(query, body);
+    let (gid, pid, special, tech, oil, infinite) = parse_gid_pid_match_options(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1084,20 +1113,22 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             br#"{"ok":false,"error":"gid required"}"#.to_vec(),
         );
     }
-    if skill.is_none() && tech.is_none() {
+    if special.is_none() && tech.is_none() && oil.is_none() && infinite.is_none() {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"skillTree or techTree required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, or infiniteResourceCenters required"}"#.to_vec(),
         );
     }
-    let resp = game_state::set_match_options(gid, pid, skill, tech);
+    let resp = game_state::set_match_options(gid, pid, special, tech, oil, infinite);
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} skillTree={:?} techTree={:?} ok={}",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} ok={}",
         gid,
         pid,
-        skill,
+        special,
         tech,
+        oil,
+        infinite,
         resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
     );
     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1364,6 +1395,52 @@ fn handle_cnc_leave_game(query: Option<&str>) -> HttpResponse {
         body
     );
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn query_i64(query: Option<&str>, key: &str) -> i64 {
+    let Some(q) = query else {
+        return 0;
+    };
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == key {
+                return percent_decode_plus(v).parse().unwrap_or(0);
+            }
+        }
+    }
+    0
+}
+
+fn handle_cnc_match_connection_status(query: Option<&str>) -> HttpResponse {
+    let gid = query_i64(query, "gid");
+    let pid = query_i64(query, "pid");
+    let body = game_state::match_connection_status_json(gid, pid);
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn handle_cnc_lost_game_server(query: Option<&str>) -> HttpResponse {
+    let gid = query_i64(query, "gid");
+    let pid = query_i64(query, "pid");
+    game_state::notify_shell_match_lost(gid, pid);
+    let resolved = game_state::match_connection_status_json(gid, pid);
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lost-game-server shell-notify gid={} pid={}",
+        gid,
+        pid
+    );
+    let body = serde_json::json!({
+        "ok": true,
+        "gid": gid,
+        "pid": pid,
+        "lost": resolved.get("lost").and_then(|v| v.as_bool()).unwrap_or(false),
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn handle_cnc_dismiss_match_lost(query: Option<&str>) -> HttpResponse {
+    let pid = query_i64(query, "pid");
+    game_state::clear_persona_match_lost(pid);
+    HttpResponse::new(200, "application/json", b"{\"ok\":true}".to_vec())
 }
 
 fn handle_cnc_player_ready(query: Option<&str>) -> HttpResponse {
@@ -2267,6 +2344,7 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
         return Err(crate::common::error::BlazeError::AuthorizationRequired);
     }
     if let Some(player) = game_state::ensure_client_player(gid, pid, &name) {
+        game_state::clear_match_connection_lost(gid);
         crate::debug_println!(
             "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame gid={} pid={} host={} (GameRoom lobby)",
             gid,
@@ -3115,6 +3193,15 @@ fn cnc_notify_host_persona_i32() -> i32 {
     id.min(i32::MAX as u64) as i32
 }
 
+/// Platform/dedicated host persona for replicated GAME topology (PHST/THST/DHST).
+/// Joining clients must not be advertised as PHST on `NTOP_CLIENT_SERVER_DEDICATED` games.
+fn replicated_topology_persona(gid: i64) -> i64 {
+    let uid = cnc_notify_host_persona_i32() as i64;
+    dedicated_pool::host_for_gid(gid)
+        .map(|d| d.persona_id)
+        .unwrap_or(uid)
+}
+
 /// `NotifyGameReset` (cmd 112): DATA holds replicated game fields.
 pub fn build_game_manager_notify_game_reset(
     request_payload: &[u8],
@@ -3486,6 +3573,7 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     let uid_i32 = cnc_notify_host_persona_i32();
     let uid = uid_i32 as i64;
     let dedicated = dedicated_pool::host_for_gid(gid);
+    let topology_persona = replicated_topology_persona(gid);
 
     let host_inip_ip = dedicated
         .map(|d| d.inip_ip)
@@ -3561,10 +3649,13 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     game.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[uid]));
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("ATTR", &attr));
     game.extend_from_slice(&TdfEncoder::encode_long_list("CAP ", &[0x20, 0]));
-    game.extend_from_slice(&TdfEncoder::encode_struct("DHST", &host_hpid(uid)));
+    game.extend_from_slice(&TdfEncoder::encode_struct("DHST", &host_hpid(topology_persona)));
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("DSTR", &dstr));
     game.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     game.extend_from_slice(&TdfEncoder::encode_string("GNAM", &gnam));
+    if let Some(d) = dedicated {
+        game.extend_from_slice(&TdfEncoder::encode_long("GSID", d.blaze_session_id as i64));
+    }
     game.extend_from_slice(&TdfEncoder::encode_int("GSTA", GSTA_RESETABLE));
     let mut hnet_row = Vec::new();
     hnet_row.extend_from_slice(&TdfEncoder::encode_struct(
@@ -3578,8 +3669,8 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     game.extend_from_slice(&encode_union_list("HNET", HNET_UNION_MEMBER_VALU, &[hnet_row]));
     game.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered("MATR", &matr));
     game.extend_from_slice(&TdfEncoder::encode_int("NTOP", NTOP_CLIENT_SERVER_DEDICATED));
-    game.extend_from_slice(&TdfEncoder::encode_struct("PHST", &host_hpid(uid)));
-    game.extend_from_slice(&TdfEncoder::encode_struct("THST", &host_hpid(uid)));
+    game.extend_from_slice(&TdfEncoder::encode_struct("PHST", &host_hpid(topology_persona)));
+    game.extend_from_slice(&TdfEncoder::encode_struct("THST", &host_hpid(topology_persona)));
     game.extend_from_slice(&TdfEncoder::encode_string("UUID", &game_uuid));
     game.extend_from_slice(&TdfEncoder::encode_int("VOIP", 0));
     game
@@ -3609,7 +3700,14 @@ pub fn build_game_manager_game_payload(gid: i64) -> BlazeResult<Bytes> {
 
 /// Join-path `NotifyGameSetup`.
 pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes> {
-    let mut response = build_game_manager_game_payload(gid)?.to_vec();
+    // Always rebuild GAME fields for join — stale cached PHST (client-as-host) breaks lobby join.
+    let game = build_replicated_game_data_fields_fallback(gid);
+    game_state::set_replicated_wire_fields(gid, game.clone());
+    let pros = game_state::pros_entries_for_gid(gid);
+    let mut response = Vec::new();
+    response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));
+    response.extend_from_slice(&encode_struct_list("PROS", &pros));
+    response.extend_from_slice(&encode_struct_list("QUEU", &[]));
     response.extend_from_slice(&encode_reas_dataless_join());
     Ok(Bytes::from(response))
 }
@@ -3617,7 +3715,7 @@ pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes>
 /// `NotifyPlatformHostInitialized` (cmd 71): GID + HPID + PHST.
 pub fn build_game_manager_notify_platform_host_initialized(gid: i64) -> BlazeResult<Bytes> {
     let gid = gid.clamp(i64::MIN, i64::MAX);
-    let host = cnc_notify_host_persona_i32() as i64;
+    let host = replicated_topology_persona(gid);
     let mut response = Vec::new();
     response.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     response.extend_from_slice(&TdfEncoder::encode_long("HPID", host));

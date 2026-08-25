@@ -116,14 +116,17 @@ async fn handle_conn(
     peer: SocketAddr,
     pinned_serverhost: Option<u16>,
 ) -> std::io::Result<()> {
-    let (upstream, prefix) = if let Some(serverhost) = pinned_serverhost {
+    let (upstream, prefix, match_gid) = if let Some(serverhost) = pinned_serverhost {
         log_rts_system(
             peer,
             &format!("client connected -- pinned hub → ServerHost :{serverhost}"),
         );
-        let up = crate::client::cnc::dedicated_pool::msgsys_upstream_for_serverhost_port(serverhost)
-            .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], serverhost)));
-        (Some(up), Vec::new())
+        let up = crate::client::cnc::dedicated_pool::msgsys_upstream_for_serverhost_port(
+            serverhost,
+        )
+        .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], serverhost)));
+        let gid = crate::client::cnc::dedicated_pool::gid_for_msgsys_upstream(up);
+        (Some(up), Vec::new(), gid)
     } else if let Some(up) =
         crate::client::cnc::dedicated_pool::resolve_unambiguous_msgsys_upstream()
     {
@@ -132,7 +135,8 @@ async fn handle_conn(
             peer,
             &format!("client connected -- unambiguous ServerHost {up} (no ClientHello peek)"),
         );
-        (Some(up), Vec::new())
+        let gid = crate::client::cnc::dedicated_pool::gid_for_msgsys_upstream(up);
+        (Some(up), Vec::new(), gid)
     } else {
         log_rts_system(peer, "client connected -- identifying match session");
         let (prefix, persona) = peek_client_hello_persona(&mut client).await?;
@@ -147,7 +151,17 @@ async fn handle_conn(
                 "no session route (need joinGame for this persona / dedicated bind)",
             ),
         }
-        (up, prefix)
+        let gid = persona
+            .and_then(|pid| {
+                let gids = super::super::game_state::gids_for_human_persona(pid as i64);
+                if gids.len() == 1 {
+                    Some(gids[0])
+                } else {
+                    None
+                }
+            })
+            .or_else(|| up.and_then(crate::client::cnc::dedicated_pool::gid_for_msgsys_upstream));
+        (up, prefix, gid)
     };
 
     let Some(upstream) = upstream else {
@@ -164,9 +178,9 @@ async fn handle_conn(
             let mut server = server;
             server.write_all(&prefix).await?;
             server.flush().await?;
-            return relay_pair(client, server, peer).await;
+            return relay_pair(client, server, peer, match_gid).await;
         }
-        return relay_pair(client, server, peer).await;
+        return relay_pair(client, server, peer, match_gid).await;
     }
 
     log_upstream_missing(peer, Some(upstream));
