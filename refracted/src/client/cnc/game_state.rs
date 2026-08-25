@@ -38,8 +38,13 @@ static BLAZE_PREGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static BLAZE_JOIN_SETUP_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static BLAZE_INGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static GAME_READY_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
+/// Client already ran `updateMeshConnection` for this gid (joinGame NotifyGameSetup).
+static CLIENT_MESH_LIVE: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static SERVER_LOST_GIDS: OnceLock<Mutex<HashMap<i64, u64>>> = OnceLock::new();
-const SERVER_LOST_TTL_SECS: u64 = 300;
+/// Personas that should see the lost-connection modal: pid → (gid, blaze session).
+/// Bound to the session that was live when the loss was noted so a later login
+/// after the client quit does not restore the modal.
+static LOST_PERSONAS: OnceLock<Mutex<HashMap<i64, (i64, u64)>>> = OnceLock::new();
 static JOIN_PASSWORD_AUTH: OnceLock<Mutex<HashMap<(i64, i64), Instant>>> = OnceLock::new();
 const JOIN_PASSWORD_AUTH_TTL: Duration = Duration::from_secs(120);
 
@@ -93,6 +98,57 @@ fn server_lost_gids() -> &'static Mutex<HashMap<i64, u64>> {
     SERVER_LOST_GIDS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn lost_personas() -> &'static Mutex<HashMap<i64, (i64, u64)>> {
+    LOST_PERSONAS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn note_persona_lost(pid: i64, gid: i64) {
+    if pid <= 0 {
+        return;
+    }
+    let sid = blaze_session_for_persona(pid).unwrap_or(0);
+    lost_personas().lock().insert(pid, (gid.max(0), sid));
+}
+
+fn mark_humans_lost(gid: i64) {
+    if gid <= 0 {
+        return;
+    }
+    let pids: Vec<i64> = games()
+        .lock()
+        .get(&gid)
+        .map(|g| {
+            g.players
+                .iter()
+                .filter(|p| !p.is_ai && p.persona_id > 0)
+                .map(|p| p.persona_id)
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut m = lost_personas().lock();
+    for pid in pids {
+        let sid = blaze_session_for_persona(pid).unwrap_or(0);
+        m.insert(pid, (gid, sid));
+    }
+}
+
+fn persona_is_lost(pid: i64, gid: i64) -> bool {
+    if pid <= 0 {
+        return false;
+    }
+    let mut m = lost_personas().lock();
+    match m.get(&pid).copied() {
+        Some((lost_gid, sid)) => {
+            if sid == 0 || !sessions_for_persona(pid).contains(&sid) {
+                m.remove(&pid);
+                return false;
+            }
+            gid <= 0 || lost_gid <= 0 || lost_gid == gid
+        }
+        None => false,
+    }
+}
+
 fn now_unix_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -107,11 +163,137 @@ pub fn note_server_lost(gid: i64) {
     server_lost_gids().lock().insert(gid, now_unix_secs());
 }
 
-fn prune_and_check_server_lost(gid: i64) -> bool {
-    let now = now_unix_secs();
-    let mut m = server_lost_gids().lock();
-    m.retain(|_, t| now.saturating_sub(*t) <= SERVER_LOST_TTL_SECS);
-    m.contains_key(&gid)
+pub fn signal_lost_game_server(gid: i64) {
+    let gid = resolve_active_match_gid(gid);
+    if gid > 0 {
+        note_server_lost(gid);
+        mark_humans_lost(gid);
+    }
+    kick_clients_on_match_lost(
+        gid,
+        crate::client::cnc::PLAYER_REMOVED_REASON_GAME_DESTROYED,
+    );
+}
+
+/// Native client POST `/cnc/lost-game-server`. Marks only that persona (or that match's humans).
+/// Does not pick a "current" gid when both ids are 0 — that would hit the wrong match.
+pub fn notify_shell_match_lost(gid: i64, pid: i64) {
+    if pid > 0 {
+        note_persona_lost(pid, gid);
+        if gid > 0 {
+            note_server_lost(gid);
+        }
+        return;
+    }
+    if gid > 0 {
+        note_server_lost(gid);
+        mark_humans_lost(gid);
+    }
+}
+
+/// Best-effort gid when native watchdog posts gid=0.
+fn resolve_active_match_gid(hint: i64) -> i64 {
+    if hint > 0 {
+        return hint;
+    }
+    if let Some(gid) = orchestration()
+        .lock()
+        .iter()
+        .filter(|(_, o)| o.client_session_id > 0)
+        .map(|(gid, _)| *gid)
+        .max()
+    {
+        return gid;
+    }
+    games()
+        .lock()
+        .iter()
+        .filter(|(_, g)| !g.is_standby && g.phase == GamePhase::InGame)
+        .map(|(gid, _)| *gid)
+        .max()
+        .unwrap_or(0)
+}
+
+/// Push `NotifyPlayerRemoved` so the retail game manager tears down without native
+/// `ReturnToFrontend` (Prism SEH when MsgSys/message bus is corrupt after crash).
+fn kick_clients_on_match_lost(gid: i64, reason: i32) {
+    let gid = resolve_active_match_gid(gid);
+    let humans: Vec<i64> = if gid > 0 {
+        games()
+            .lock()
+            .get(&gid)
+            .map(|g| {
+                g.players
+                    .iter()
+                    .filter(|p| !p.is_ai)
+                    .map(|p| p.persona_id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let fallback_pid = {
+        let s = crate::session::get_user_session();
+        if s.persona_id == 0 {
+            0
+        } else {
+            s.persona_id as i64
+        }
+    };
+    if gid <= 0 {
+        return;
+    }
+    let targets: Vec<i64> = if humans.is_empty() {
+        if fallback_pid > 0 {
+            vec![fallback_pid]
+        } else {
+            Vec::new()
+        }
+    } else {
+        humans
+    };
+    for pid in targets {
+        crate::client::cnc::fireframe::request_client_local_game_teardown(gid, pid, reason);
+    }
+}
+
+/// Clear disconnect flags for one match (new CreateGame / join). Other games stay.
+pub fn clear_match_connection_lost(gid: i64) {
+    if gid <= 0 {
+        return;
+    }
+    server_lost_gids().lock().remove(&gid);
+    lost_personas()
+        .lock()
+        .retain(|_, (lost_gid, _)| *lost_gid != gid);
+}
+
+pub fn clear_persona_match_lost(pid: i64) {
+    if pid <= 0 {
+        return;
+    }
+    lost_personas().lock().remove(&pid);
+}
+
+/// `pid` required for gid=0. Without a persona, never report a backend-wide loss.
+pub fn match_connection_status_json(gid: i64, pid: i64) -> serde_json::Value {
+    let persona_lost = persona_is_lost(pid, gid);
+    let match_lost = gid > 0 && server_lost_gids().lock().contains_key(&gid);
+    let server_lost = if pid > 0 {
+        persona_lost
+    } else {
+        match_lost
+    };
+    let lost = server_lost;
+    serde_json::json!({
+        "lost": lost,
+        "gid": gid,
+        "pid": pid,
+        "serverLost": server_lost,
+        "clientLost": persona_lost,
+        "shellLost": persona_lost,
+    })
 }
 
 fn blaze_pregame_pushed() -> &'static Mutex<HashSet<i64>> {
@@ -130,6 +312,10 @@ fn game_ready_pushed() -> &'static Mutex<HashSet<i64>> {
     GAME_READY_PUSHED.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+fn client_mesh_live() -> &'static Mutex<HashSet<i64>> {
+    CLIENT_MESH_LIVE.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
 pub fn clear_blaze_push_flags(gid: i64) {
     clear_blaze_join_and_push_flags(gid);
     clear_orchestration(gid);
@@ -145,6 +331,24 @@ pub fn clear_blaze_one_shot_flags(gid: i64) {
 pub fn clear_blaze_join_and_push_flags(gid: i64) {
     clear_blaze_one_shot_flags(gid);
     blaze_join_setup_pushed().lock().remove(&gid);
+    client_mesh_live().lock().remove(&gid);
+}
+
+/// True after the client reported `updateMeshConnection` for this gid.
+pub fn client_mesh_already_connected(gid: i64) -> bool {
+    client_mesh_live().lock().contains(&gid)
+}
+
+pub fn note_client_mesh_connected(gid: i64) {
+    client_mesh_live().lock().insert(gid);
+}
+
+/// Reset orch wipes `mesh_active_connected`; keep GameReady unblocked when we skip
+/// a second InitiateConnections (joinGame already meshed).
+pub fn mark_orch_mesh_already_connected(gid: i64) {
+    orchestration().lock().entry(gid).and_modify(|e| {
+        e.mesh_active_connected = true;
+    });
 }
 
 #[derive(Debug, Clone)]
@@ -500,6 +704,7 @@ pub fn complete_dedicated_host_setup(
 
 /// Client reported mesh via `updateMeshConnection`. Defer until host setup when orchestrating reset.
 pub fn on_client_mesh_update(gid: i64, pid: i64) -> MeshUpdateResult {
+    note_client_mesh_connected(gid);
     let mut m = orchestration().lock();
     let Some(entry) = m.get_mut(&gid) else {
         drop(m);
@@ -704,17 +909,9 @@ const AI_PERSONA_MIN: i64 = 9_000_000_000;
 const AI_PERSONA_MAX: i64 = 9_800_000_000;
 
 fn next_ai_persona_id() -> i64 {
-    let mut rng = rand::thread_rng();
-    loop {
-        let id = rng.gen_range(AI_PERSONA_MIN..AI_PERSONA_MAX);
-        let in_use = games()
-            .lock()
-            .values()
-            .any(|g| g.players.iter().any(|p| p.persona_id == id));
-        if !in_use {
-            return id;
-        }
-    }
+    // Do not lock `games()` here — callers already hold it (CreateGame AI seat,
+    // leave-to-AI, add_queued_player). Re-lock deadlocks the Blaze runtime.
+    rand::thread_rng().gen_range(AI_PERSONA_MIN..AI_PERSONA_MAX)
 }
 
 fn games() -> &'static Mutex<HashMap<i64, CncGame>> {
@@ -754,10 +951,16 @@ pub struct CncGame {
     pub dedicated_session_id: Option<u64>,
     pub is_standby: bool,
     pub password: String,
-    /// Customize/CP skill tree for this match (`PlayerInfo.EnableSkillTree`). Default on.
-    pub enable_skill_tree: bool,
+    /// Generals special abilities / rank XP (`PlayerExperienceChange`). Default on.
+    /// Off → rank 0 and no kill XP. Customize/CP (`EnableSkillTree`) stays on the wire.
+    pub enable_special_abilities: bool,
     /// In-match building TechTree (`TechTreeActivated`). Default on; sim emits the S2C later.
     pub enable_tech_tree: bool,
+    /// Oil as a second currency (HUD clusters). Default off until spend exists.
+    /// Off → Power|Gold or GLA Gold-only; player derricks tick gold like Generals.
+    pub enable_oil_economy: bool,
+    /// NS Resource Centers stay at remaining (no subtract). Default off.
+    pub enable_infinite_resource_centers: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
     /// `PROS` roster rows last sent in `NotifyGameSetup` (reused for `getFullGameData`).
@@ -828,8 +1031,10 @@ pub fn set_game_password(gid: i64, persona_id: i64, password: &str) -> serde_jso
 pub fn set_match_options(
     gid: i64,
     persona_id: i64,
-    enable_skill_tree: Option<bool>,
+    enable_special_abilities: Option<bool>,
     enable_tech_tree: Option<bool>,
+    enable_oil_economy: Option<bool>,
+    enable_infinite_resource_centers: Option<bool>,
 ) -> serde_json::Value {
     let mut m = games().lock();
     let Some(game) = m.get_mut(&gid) else {
@@ -843,27 +1048,42 @@ pub fn set_match_options(
             "admin": game.host_persona,
         });
     }
-    if let Some(v) = enable_skill_tree {
-        game.enable_skill_tree = v;
+    if let Some(v) = enable_special_abilities {
+        game.enable_special_abilities = v;
     }
     if let Some(v) = enable_tech_tree {
         game.enable_tech_tree = v;
     }
+    let _ = enable_oil_economy;
+    game.enable_oil_economy = false;
+    if let Some(v) = enable_infinite_resource_centers {
+        game.enable_infinite_resource_centers = v;
+    }
     serde_json::json!({
         "ok": true,
         "gid": gid,
-        "enableSkillTree": game.enable_skill_tree,
+        "enableSpecialAbilities": game.enable_special_abilities,
         "enableTechTree": game.enable_tech_tree,
+        "enableOilEconomy": game.enable_oil_economy,
+        "enableInfiniteResourceCenters": game.enable_infinite_resource_centers,
     })
 }
 
-/// `(skill_tree, tech_tree)` for this gid. Missing game → both on.
-pub fn match_options(gid: i64) -> (bool, bool) {
+/// `(special_abilities, tech_tree, oil_economy, infinite_resource_centers)` for this gid.
+/// Missing game → abilities/tree on, oil off, infinite off.
+pub fn match_options(gid: i64) -> (bool, bool, bool, bool) {
     games()
         .lock()
         .get(&gid)
-        .map(|g| (g.enable_skill_tree, g.enable_tech_tree))
-        .unwrap_or((true, true))
+        .map(|g| {
+            (
+                g.enable_special_abilities,
+                g.enable_tech_tree,
+                g.enable_oil_economy,
+                g.enable_infinite_resource_centers,
+            )
+        })
+        .unwrap_or((true, true, false, false))
 }
 
 /// Copy host lobby progression flags onto a dedicated gid (same pattern as pending map).
@@ -873,14 +1093,24 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
         let m = games().lock();
         m.iter()
             .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
-            .map(|(_, game)| (game.enable_skill_tree, game.enable_tech_tree))
+            .map(|(_, game)| {
+                (
+                    game.enable_special_abilities,
+                    game.enable_tech_tree,
+                    game.enable_oil_economy,
+                    game.enable_infinite_resource_centers,
+                )
+            })
     };
-    let Some((skill, tech)) = source else {
+    let Some((special, tech, oil, infinite)) = source else {
         return;
     };
     if let Some(game) = games().lock().get_mut(&dedicated_gid) {
-        game.enable_skill_tree = skill;
+        game.enable_special_abilities = special;
         game.enable_tech_tree = tech;
+        game.enable_oil_economy = false;
+        game.enable_infinite_resource_centers = infinite;
+        let _ = oil;
     }
 }
 
@@ -1100,8 +1330,10 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             dedicated_session_id: Some(dedicated_session_id),
             is_standby: true,
             password: String::new(),
-            enable_skill_tree: true,
+            enable_special_abilities: true,
             enable_tech_tree: true,
+            enable_oil_economy: false,
+            enable_infinite_resource_centers: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -1131,8 +1363,10 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.map_path.clear();
     game.start_count = 0;
     game.password.clear();
-    game.enable_skill_tree = true;
+    game.enable_special_abilities = true;
     game.enable_tech_tree = true;
+    game.enable_oil_economy = false;
+    game.enable_infinite_resource_centers = false;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -1869,17 +2103,26 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
             })
         })
         .collect();
-    let (enable_skill_tree, enable_tech_tree) = game
+    let (enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers) = game
         .as_ref()
-        .map(|g| (g.enable_skill_tree, g.enable_tech_tree))
-        .unwrap_or((true, true));
+        .map(|g| {
+            (
+                g.enable_special_abilities,
+                g.enable_tech_tree,
+                g.enable_oil_economy,
+                g.enable_infinite_resource_centers,
+            )
+        })
+        .unwrap_or((true, true, false, false));
     serde_json::json!({
         "ok": issues.is_empty() && game.is_some(),
         "gid": gid,
         "map_path": map,
         "phase": format!("{:?}", get_phase(gid)),
-        "enableSkillTree": enable_skill_tree,
+        "enableSpecialAbilities": enable_special_abilities,
         "enableTechTree": enable_tech_tree,
+        "enableOilEconomy": enable_oil_economy,
+        "enableInfiniteResourceCenters": enable_infinite_resource_centers,
         "player_count": players_json.len(),
         "players": players_json,
         "pending_attrs": pending_json,
@@ -1948,18 +2191,20 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player);
-    let (dedicated_session_id, password, enable_skill_tree, enable_tech_tree) = games()
+    let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers) = games()
         .lock()
         .get(&gid)
         .map(|g| {
             (
                 g.dedicated_session_id,
                 g.password.clone(),
-                g.enable_skill_tree,
+                g.enable_special_abilities,
                 g.enable_tech_tree,
+                g.enable_oil_economy,
+                g.enable_infinite_resource_centers,
             )
         })
-        .unwrap_or((None, String::new(), true, true));
+        .unwrap_or((None, String::new(), true, true, true, false));
     let game = CncGame {
         gid,
         name: gnam,
@@ -1973,8 +2218,10 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         dedicated_session_id,
         is_standby: false,
         password,
-        enable_skill_tree,
+        enable_special_abilities,
         enable_tech_tree,
+        enable_oil_economy,
+        enable_infinite_resource_centers,
         replicated_wire: None,
         pros_wire: None,
     };
@@ -2026,8 +2273,10 @@ pub fn seed_from_join(gid: i64) {
             dedicated_session_id: None,
             is_standby: false,
             password: String::new(),
-            enable_skill_tree: true,
+            enable_special_abilities: true,
             enable_tech_tree: true,
+            enable_oil_economy: false,
+            enable_infinite_resource_centers: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -2067,7 +2316,7 @@ pub fn destroy_games_for_dedicated(dedicated_session_id: u64) {
             .collect()
     };
     for gid in gids {
-        note_server_lost(gid);
+        signal_lost_game_server(gid);
         destroy_game(gid);
         crate::debug_println!(
             "\x1b[38;2;255;215;0m[CNC]\x1b[0m destroyed game gid={} (dedicated session #{} gone; clients should kick)",
@@ -2487,14 +2736,14 @@ pub fn all_humans_ready(gid: i64) -> bool {
 pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
     let m = games().lock();
     let Some(game) = m.get(&gid) else {
-        let server_lost = prune_and_check_server_lost(gid);
+        let server_lost = server_lost_gids().lock().contains_key(&gid);
         return serde_json::json!({
             "ok": false,
             "gid": gid,
             "players": [],
             "serverLost": server_lost,
             "message": if server_lost {
-                "The connectivity to the server was lost."
+                "Server connection lost."
             } else {
                 ""
             },
@@ -2510,7 +2759,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
                 "gid": gid,
                 "players": [],
                 "serverLost": true,
-                "message": "The connectivity to the server was lost.",
+                "message": "Server connection lost.",
             });
         }
     }
@@ -2544,8 +2793,10 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "admin": game.host_persona,
         "isStandby": game.is_standby,
         "passwordProtected": !game.password.is_empty(),
-        "enableSkillTree": game.enable_skill_tree,
+        "enableSpecialAbilities": game.enable_special_abilities,
         "enableTechTree": game.enable_tech_tree,
+        "enableOilEconomy": game.enable_oil_economy,
+        "enableInfiniteResourceCenters": game.enable_infinite_resource_centers,
         "allReady": all_ready,
         "players": players,
         "serverLost": false,

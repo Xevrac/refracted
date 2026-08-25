@@ -29,6 +29,7 @@ pub struct PlayerInfo {
     pub allegiance_levels: Vec<f32>,
     pub skill_tree_unlocks: Vec<u32>,
     pub consumable_player_power: u32,
+    /// Native skill-tree enable
     pub enable_skill_tree: bool,
 }
 
@@ -36,11 +37,31 @@ pub const CREATE_GAME_OPTIONS_NONE: u32 = 0;
 pub const CREATE_GAME_OPTIONS_ALLOW_RECONNECT: u32 = 1;
 /// Do not put this on `PlayerInfo` — native deserializer has `EnableSkillTree` only.
 pub const CREATE_GAME_OPTIONS_ENABLE_TECH_TREE: u32 = 0x20;
+/// Generals rank / kill XP (`PlayerExperienceChange`).
+pub const CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES: u32 = 0x40;
+/// Oil as a second currency. Default off; derricks pay gold like Generals.
+pub const CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY: u32 = 0x80;
+/// NS Resource Centers do not deplete (remaining stays). Default off.
+pub const CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS: u32 = 0x100;
 
-fn create_game_options(enable_tech_tree: bool) -> u32 {
+fn create_game_options(
+    enable_tech_tree: bool,
+    enable_special_abilities: bool,
+    enable_oil_economy: bool,
+    infinite_resource_centers: bool,
+) -> u32 {
     let mut options = CREATE_GAME_OPTIONS_ALLOW_RECONNECT;
     if enable_tech_tree {
         options |= CREATE_GAME_OPTIONS_ENABLE_TECH_TREE;
+    }
+    if enable_special_abilities {
+        options |= CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES;
+    }
+    if enable_oil_economy {
+        options |= CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY;
+    }
+    if infinite_resource_centers {
+        options |= CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS;
     }
     options
 }
@@ -334,7 +355,7 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
                 allegiance_levels: allegiance_for_team(team),
                 skill_tree_unlocks: Vec::new(),
                 consumable_player_power: consumable,
-                enable_skill_tree: game.enable_skill_tree,
+                enable_skill_tree: true,
             }
         })
         .collect()
@@ -429,8 +450,10 @@ async fn negotiate_type_ids(stream: &mut TcpStream) -> std::io::Result<(u16, u16
 
 /// Connect to the dedicated SimuCloud host, send `CreateGame`, read `GameReady`.
 pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
+    super::super::game_state::clear_match_connection_lost(gid);
     super::super::game_state::seed_from_join(gid);
     super::super::game_state::resolve_startpoints_before_create(gid);
+    log_sim_debug(&format!("CreateGame roster ready gid={gid}"));
     let game = match super::super::game_state::get_game(gid) {
         Some(g) => g,
         None => {
@@ -491,10 +514,12 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s), skillTree={} techTree={}",
+        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={}",
         roster.len(),
-        game.enable_skill_tree,
-        game.enable_tech_tree
+        game.enable_special_abilities,
+        game.enable_tech_tree,
+        game.enable_oil_economy,
+        game.enable_infinite_resource_centers
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -529,7 +554,12 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
             &map_name,
             &dir_path,
             &roster,
-            create_game_options(game.enable_tech_tree),
+            create_game_options(
+                game.enable_tech_tree,
+                game.enable_special_abilities,
+                game.enable_oil_economy,
+                game.enable_infinite_resource_centers,
+            ),
         ),
     };
     write_simple_frame(&mut stream, &create_frame).await?;
@@ -675,32 +705,55 @@ mod tests {
     }
 
     #[test]
-    fn create_game_options_ors_unused_tech_tree_bit() {
-        assert_eq!(create_game_options(false), CREATE_GAME_OPTIONS_ALLOW_RECONNECT);
+    fn create_game_options_ors_unused_lobby_bits() {
         assert_eq!(
-            create_game_options(true),
+            create_game_options(false, false, false, false),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT
+        );
+        assert_eq!(
+            create_game_options(true, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
+        );
+        assert_eq!(
+            create_game_options(false, true, false, false),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES
+        );
+        assert_eq!(
+            create_game_options(false, false, true, false),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY
+        );
+        assert_eq!(
+            create_game_options(true, true, true, false),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT
+                | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
+                | CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES
+                | CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY
+        );
+        assert_eq!(
+            create_game_options(false, false, false, true),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT
+                | CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS
         );
     }
 
     #[test]
     fn create_game_options_enum_uses_rts_typecode() {
         let gid = [0u8; 16];
-        let on = encode_create_game_payload(
+        let both = encode_create_game_payload(
             &gid,
             "Oasis",
             "Levels/MP/",
             &[sample_player(1201618778, 1, 0)],
-            create_game_options(true),
+            create_game_options(true, true, true, false),
         );
         let off = encode_create_game_payload(
             &gid,
             "Oasis",
             "Levels/MP/",
             &[sample_player(1201618778, 1, 0)],
-            create_game_options(false),
+            create_game_options(false, false, false, false),
         );
-        assert_eq!(&on[on.len() - 5..], &[9, 0x21, 0, 0, 0]);
+        assert_eq!(&both[both.len() - 5..], &[9, 0xE1, 0, 0, 0]);
         assert_eq!(&off[off.len() - 5..], &[9, 0x01, 0, 0, 0]);
     }
 

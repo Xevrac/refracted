@@ -442,6 +442,21 @@ pub fn msgsys_upstream_for_serverhost_port(msg_sys: u16) -> Option<SocketAddr> {
         .map(|e| SocketAddr::new(peer_ip_addr(&e), msg_sys))
 }
 
+/// Reverse lookup: which match gid owns this ServerHost upstream.
+pub fn gid_for_msgsys_upstream(upstream: SocketAddr) -> Option<i64> {
+    sync_from_blaze_sessions();
+    for route in client_msgsys_routes().lock().values() {
+        if upstream_for_route(route) == Some(upstream) {
+            return Some(route.gid);
+        }
+    }
+    let port = upstream.port();
+    list_entries()
+        .into_iter()
+        .find(|e| msg_sys_port(e) == port)
+        .and_then(|e| e.current_gid)
+}
+
 /// ServerHost for a client on the shared hub. Uses ClientHello persona / join route.
 pub fn resolve_client_msgsys_upstream(
     peer: SocketAddr,
@@ -1884,8 +1899,12 @@ pub fn on_session_gone(blaze_session_id: u64) {
     free_dedicated_identity(blaze_session_id);
     super::game_state::destroy_games_for_dedicated(blaze_session_id);
     if let Some(gid) = owned_gid {
-        super::game_state::note_server_lost(gid);
-        super::game_state::destroy_game(gid);
+        if super::game_state::get_game(gid).is_some() {
+            super::game_state::signal_lost_game_server(gid);
+            super::game_state::destroy_game(gid);
+        } else {
+            super::game_state::note_server_lost(gid);
+        }
     }
 }
 

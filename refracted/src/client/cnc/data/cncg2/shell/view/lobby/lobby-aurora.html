@@ -44,9 +44,9 @@
                             ng-click="dismissMatchError()">OK</button>
                 </div>
             </div>
-            <div class="au-lobby__modal" ng-show="_serverLostError">
+            <div class="au-lobby__modal" ng-show="serverLostError">
                 <div class="au-lobby__modal-box">
-                    <div>{{ _serverLostError }}</div>
+                    <div>{{ serverLostError }}</div>
                     <button type="button" class="au-btn au-btn--primary"
                             ng-click="dismissServerLostError()">OK</button>
                 </div>
@@ -320,7 +320,8 @@
                                     <span>Starting Cash</span>
                                     <em class="au-lobby__options-stub">Soon</em>
                                 </div>
-                                <select ng-model="lobbyOptions.startingCash">
+                                <select ng-model="lobbyOptions.startingCash"
+                                        ng-disabled="true">
                                     <option value="low">Low</option>
                                     <option value="standard">Standard</option>
                                     <option value="high">High</option>
@@ -331,7 +332,8 @@
                                     <span>Starting Units</span>
                                     <em class="au-lobby__options-stub">Soon</em>
                                 </div>
-                                <select ng-model="lobbyOptions.startingUnits">
+                                <select ng-model="lobbyOptions.startingUnits"
+                                        ng-disabled="true">
                                     <option value="none">None</option>
                                     <option value="standard">Standard</option>
                                     <option value="many">Many</option>
@@ -344,34 +346,51 @@
                                     <span>Modes</span>
                                     <em class="au-lobby__options-stub">Soon</em>
                                 </div>
-                                <label class="au-lobby__options-check">
-                                    <input type="checkbox" ng-model="lobbyOptions.noBaseBuilding">
+                                <label class="au-lobby__options-check au-lobby__options-check--disabled"
+                                       title="Coming soon">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.noBaseBuilding"
+                                           ng-disabled="true">
                                     No Base Building
                                 </label>
-                                <label class="au-lobby__options-check">
-                                    <input type="checkbox" ng-model="lobbyOptions.noFogOfWar">
+                                <label class="au-lobby__options-check au-lobby__options-check--disabled"
+                                       title="Coming soon">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.noFogOfWar"
+                                           ng-disabled="true">
                                     No Fog Of War
                                 </label>
                             </div>
                             <div class="au-lobby__options-cell">
                                 <div class="au-lobby__options-cell-head">
-                                    <span>Progression</span>
+                                    <span>Tweaks</span>
                                 </div>
                                 <label class="au-lobby__options-check">
                                     <input type="checkbox"
-                                           ng-model="lobbyOptions.enableSkillTree"
+                                           ng-model="lobbyOptions.enableSpecialAbilities"
                                            ng-change="applyLobbyMatchOptions()">
-                                    Skill Tree
+                                    Special Abilities
                                 </label>
-                                <label class="au-lobby__options-check">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableTechTree"
-                                           ng-change="applyLobbyMatchOptions()">
-                                    Tech Tree
-                                </label>
-                                <div class="au-lobby__options-note">
-                                    On by default. Uncheck to disable the Customize/CP tree or building unlock gates.
-                                </div>
+                                    <label class="au-lobby__options-check">
+                                        <input type="checkbox"
+                                               ng-model="lobbyOptions.enableTechTree"
+                                               ng-change="applyLobbyMatchOptions()">
+                                        Tech Tree
+                                    </label>
+                                    <label class="au-lobby__options-check au-lobby__options-check--disabled"
+                                           title="Coming soon">
+                                        <input type="checkbox"
+                                               ng-model="lobbyOptions.enableOilEconomy"
+                                               ng-disabled="true">
+                                        Oil Economy
+                                    </label>
+                                    <label class="au-lobby__options-check au-lobby__options-check--disabled"
+                                           title="Coming soon">
+                                        <input type="checkbox"
+                                               ng-model="lobbyOptions.enableInfiniteResourceCenters"
+                                               ng-disabled="true">
+                                        Infinite Resource Centers
+                                    </label>
                             </div>
                         </div>
                     </div>
@@ -448,9 +467,9 @@
                             ng-click="dismissStartError()">OK</button>
                 </div>
             </div>
-            <div class="au-lobby__modal" ng-show="_serverLostError">
+            <div class="au-lobby__modal" ng-show="serverLostError">
                 <div class="au-lobby__modal-box">
-                    <div>{{ _serverLostError }}</div>
+                    <div>{{ serverLostError }}</div>
                     <button type="button" class="au-btn au-btn--primary"
                             ng-click="dismissServerLostError()">OK</button>
                 </div>

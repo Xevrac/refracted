@@ -1874,7 +1874,8 @@ impl BlazeProtocolServer {
                                 return Ok(());
                             }
 
-                            // `Game` is inserted in `onNotifyGameSetup` (`createLocalGame`); defer platform host until then.
+                            // Lobby join: defer platform host until Start Battle (`resetDedicatedServer`).
+                            if !is_join {
                             sleep(Duration::from_millis(15)).await;
 
                             let phost_payload = match crate::client::cnc::build_game_manager_notify_platform_host_initialized(
@@ -1919,15 +1920,12 @@ impl BlazeProtocolServer {
                                 &phost_data,
                                 addr,
                                 name,
-                                if is_join {
-                                    "NotifyPlatformHostInitialized after joinGame"
-                                } else {
-                                    "NotifyPlatformHostInitialized after resetDedicatedServer"
-                                },
+                                "NotifyPlatformHostInitialized after resetDedicatedServer",
                             )
                             .await?
                             {
                                 return Ok(());
+                            }
                             }
 
                             if !is_join {

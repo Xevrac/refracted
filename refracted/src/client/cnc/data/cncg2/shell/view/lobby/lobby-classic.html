@@ -42,9 +42,9 @@
                         ng-click="dismissMatchError()">OK</button>
             </div>
         </div>
-        <div class="cc-lobby__modal" ng-show="_serverLostError">
+        <div class="cc-lobby__modal" ng-show="serverLostError">
             <div class="cc-lobby__modal-box">
-                <div>{{ _serverLostError }}</div>
+                <div>{{ serverLostError }}</div>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
                         ng-click="dismissServerLostError()">OK</button>
             </div>
@@ -300,7 +300,8 @@
                                 <span>STARTING CASH</span>
                                 <em class="cc-lobby__options-stub">SOON</em>
                             </div>
-                            <select ng-model="lobbyOptions.startingCash">
+                            <select ng-model="lobbyOptions.startingCash"
+                                    ng-disabled="true">
                                 <option value="low">LOW</option>
                                 <option value="standard">STANDARD</option>
                                 <option value="high">HIGH</option>
@@ -311,7 +312,8 @@
                                 <span>STARTING UNITS</span>
                                 <em class="cc-lobby__options-stub">SOON</em>
                             </div>
-                            <select ng-model="lobbyOptions.startingUnits">
+                            <select ng-model="lobbyOptions.startingUnits"
+                                    ng-disabled="true">
                                 <option value="none">NONE</option>
                                 <option value="standard">STANDARD</option>
                                 <option value="many">MANY</option>
@@ -324,34 +326,51 @@
                                 <span>MODES</span>
                                 <em class="cc-lobby__options-stub">SOON</em>
                             </div>
-                            <label class="cc-lobby__options-check">
-                                <input type="checkbox" ng-model="lobbyOptions.noBaseBuilding">
+                            <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
+                                   title="Coming soon">
+                                <input type="checkbox"
+                                       ng-model="lobbyOptions.noBaseBuilding"
+                                       ng-disabled="true">
                                 NO BASE BUILDING
                             </label>
-                            <label class="cc-lobby__options-check">
-                                <input type="checkbox" ng-model="lobbyOptions.noFogOfWar">
+                            <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
+                                   title="Coming soon">
+                                <input type="checkbox"
+                                       ng-model="lobbyOptions.noFogOfWar"
+                                       ng-disabled="true">
                                 NO FOG OF WAR
                             </label>
                         </div>
                         <div class="cc-lobby__options-cell">
                             <div class="cc-lobby__options-cell-head">
-                                <span>PROGRESSION</span>
+                                <span>TWEAKS</span>
                             </div>
                             <label class="cc-lobby__options-check">
                                 <input type="checkbox"
-                                       ng-model="lobbyOptions.enableSkillTree"
+                                       ng-model="lobbyOptions.enableSpecialAbilities"
                                        ng-change="applyLobbyMatchOptions()">
-                                SKILL TREE
+                                SPECIAL ABILITIES
                             </label>
-                            <label class="cc-lobby__options-check">
-                                <input type="checkbox"
-                                       ng-model="lobbyOptions.enableTechTree"
-                                       ng-change="applyLobbyMatchOptions()">
-                                TECH TREE
-                            </label>
-                            <div class="cc-lobby__options-note">
-                                On by default. Uncheck to disable the Customize/CP tree or building unlock gates.
-                            </div>
+                                <label class="cc-lobby__options-check">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableTechTree"
+                                           ng-change="applyLobbyMatchOptions()">
+                                    TECH TREE
+                                </label>
+                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
+                                       title="Coming soon">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableOilEconomy"
+                                           ng-disabled="true">
+                                    OIL ECONOMY
+                                </label>
+                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
+                                       title="Coming soon">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableInfiniteResourceCenters"
+                                           ng-disabled="true">
+                                    INFINITE RESOURCE CENTERS
+                                </label>
                         </div>
                     </div>
                 </div>
@@ -428,9 +447,9 @@
                         ng-click="dismissStartError()">OK</button>
             </div>
         </div>
-        <div class="cc-lobby__modal" ng-show="_serverLostError">
+        <div class="cc-lobby__modal" ng-show="serverLostError">
             <div class="cc-lobby__modal-box">
-                <div>{{ _serverLostError }}</div>
+                <div>{{ serverLostError }}</div>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
                         ng-click="dismissServerLostError()">OK</button>
             </div>

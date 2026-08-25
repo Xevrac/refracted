@@ -240,6 +240,41 @@ body.cc-theme.cc-theme--aurora .cc-center-cluster:after {
     border-bottom: 1px solid;
 }
 
+/* Connection-lost modal under aurora — palette from .au-lobby__modal-box / .au-btn--primary */
+body.cc-theme.cc-theme--aurora .cc-shell-lost-modal {
+    background: rgba(0, 0, 0, 0.55);
+}
+
+body.cc-theme.cc-theme--aurora .cc-shell-lost-modal__box {
+    border-color: rgba(58, 160, 255, 0.35);
+    background: rgba(16, 20, 18, 0.98);
+    color: #e6edf5;
+    letter-spacing: 0.05em;
+}
+
+body.cc-theme.cc-theme--aurora .cc-shell-lost-modal__ok {
+    min-width: 120px;
+    height: auto;
+    padding: 8px 16px;
+    border: 1px solid #0066cc;
+    border-radius: 0;
+    background-color: #0088ff;
+    background-image: -webkit-linear-gradient(top, #3aa0ff, #0088ff);
+    background-image: linear-gradient(to bottom, #3aa0ff, #0088ff);
+    color: #fff;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-shadow: none;
+    -webkit-box-shadow: 0 8px 22px rgba(0, 136, 255, 0.22);
+    box-shadow: 0 8px 22px rgba(0, 136, 255, 0.22);
+}
+
+body.cc-theme.cc-theme--aurora .cc-shell-lost-modal__ok:hover {
+    border-color: #3aa0ff;
+    color: #fff;
+}
+
 /* Options modal under aurora */
 body.cc-theme.cc-theme--aurora .options-modal-box {
     background: #0c0f0d;

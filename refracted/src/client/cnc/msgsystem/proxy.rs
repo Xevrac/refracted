@@ -102,10 +102,16 @@ fn persona_from_hello_buf(buf: &[u8]) -> Option<u64> {
     None
 }
 
+enum RelayClosedBy {
+    Client,
+    Server,
+}
+
 pub async fn relay_pair(
     client: TcpStream,
     server: TcpStream,
     client_peer: SocketAddr,
+    match_gid: Option<i64>,
 ) -> std::io::Result<()> {
     let upstream_peer = server.peer_addr().unwrap_or(client_peer);
     let (mut client_read, mut client_write) = client.into_split();
@@ -127,22 +133,43 @@ pub async fn relay_pair(
     };
 
     let server_to_client = async {
-        relay_direction(
+        let result = relay_direction(
             &mut server_read,
             &mut client_write,
             upstream_peer,
             RelayLog::ServerToClient,
         )
-        .await
+        .await;
+        // Upstream died — force client EOF so native MsgSys recv=0 surfaces.
+        let _ = client_write.shutdown().await;
+        result
     };
 
-    let result = tokio::select! {
-        r = client_to_server => r,
-        r = server_to_client => r,
+    let closed_by = tokio::select! {
+        r = client_to_server => {
+            r?;
+            RelayClosedBy::Client
+        }
+        r = server_to_client => {
+            r?;
+            RelayClosedBy::Server
+        }
     };
 
     super::log::flush_relay_log_compactor();
-    result
+
+    if matches!(closed_by, RelayClosedBy::Server) {
+        super::super::game_state::signal_lost_game_server(match_gid.unwrap_or(0));
+        log_rts_system(
+            client_peer,
+            &format!(
+                "upstream ServerHost closed — match lost signal gid={}",
+                match_gid.unwrap_or(0)
+            ),
+        );
+    }
+
+    Ok(())
 }
 
 enum RelayLog {

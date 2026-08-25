@@ -203,6 +203,7 @@ pub fn unregister(id: u64) {
             if let Some(pid) = persona_id {
                 if pid > 0 {
                     crate::client::cnc::game_state::purge_persona_from_lobbies(pid as i64);
+                    crate::client::cnc::game_state::clear_persona_match_lost(pid as i64);
                 }
             }
         }

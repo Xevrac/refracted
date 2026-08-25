@@ -1197,6 +1197,12 @@
     border-color: #8a7a50;
 }
 
+.cc-lobby__options-cell select:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: #8a8268;
+}
+
 .cc-lobby__options-cell select option {
     background: #0e0e0c;
     color: #e8e0c8;
@@ -1224,8 +1230,14 @@
     vertical-align: middle;
 }
 
+.cc-lobby__options-check--disabled,
+.cc-lobby__options-check--disabled input {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .cc-lobby__options-row--stub {
-    opacity: 0.88;
+    opacity: 0.55;
 }
 
 .cc-lobby__options-cell--note {

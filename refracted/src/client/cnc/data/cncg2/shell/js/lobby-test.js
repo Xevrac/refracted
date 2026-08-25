@@ -1078,7 +1078,7 @@
             var host = $scope.team1[0];
             var gname = (host && host.localName) || 'Player1';
             var ais = aiSlots();
-            var capacity = Math.max(2, 1 + ais.length);
+            var capacity = Math.max(1, 1 + ais.length);
             var level = $scope.mapPath || BENCHMARK_MAP.path;
 
             // 1. Create / claim the dedicated game via the ASYNC shell path (/blaze/createGame).
