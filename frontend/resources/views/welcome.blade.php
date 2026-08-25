@@ -65,7 +65,7 @@
                             disabled
                             style="cursor: not-allowed; border: 1px solid #2a3038; background: #121417; color: #9aa3ad; opacity: 0.5; padding: 0.625rem 1.25rem; font-family: 'Space Grotesk', sans-serif; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;"
                         >
-                            Get Launcher
+                            Refracted Launcher
                         </button>
                     </span>
 
