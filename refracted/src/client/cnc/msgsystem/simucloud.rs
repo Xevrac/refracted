@@ -29,19 +29,19 @@ pub struct PlayerInfo {
     pub allegiance_levels: Vec<f32>,
     pub skill_tree_unlocks: Vec<u32>,
     pub consumable_player_power: u32,
-    /// Native skill-tree enable
+    /// Skill-tree enable
     pub enable_skill_tree: bool,
 }
 
 pub const CREATE_GAME_OPTIONS_NONE: u32 = 0;
 pub const CREATE_GAME_OPTIONS_ALLOW_RECONNECT: u32 = 1;
-/// Do not put this on `PlayerInfo` — native deserializer has `EnableSkillTree` only.
+/// Game-level tech tree flag (not on PlayerInfo).
 pub const CREATE_GAME_OPTIONS_ENABLE_TECH_TREE: u32 = 0x20;
-/// Generals rank / kill XP (`PlayerExperienceChange`).
+/// Rank / kill XP.
 pub const CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES: u32 = 0x40;
-/// Oil as a second currency. Default off; derricks pay gold like Generals.
+/// Oil as a second currency. Default off.
 pub const CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY: u32 = 0x80;
-/// NS Resource Centers do not deplete (remaining stays). Default off.
+/// Resource centers do not deplete. Default off.
 pub const CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS: u32 = 0x100;
 
 fn create_game_options(

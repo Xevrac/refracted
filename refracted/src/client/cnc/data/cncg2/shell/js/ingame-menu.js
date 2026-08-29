@@ -1,15 +1,5 @@
 /**
-
- * In-game pause menu (WebPathIngameMenu).
-
- *   SetPauseMenuVisibility false  — close pause UI
-
- *   SetPauseMenuVisibility true   — show pause UI
-
- *   RtsClient.surrenderGame       — surrender → return to menu
-
- *   quit true                     — Quit Game → close process (desktop)
-
+ * In-game pause menu.
  */
 
 var CCApp = angular.module('CCApp', []);

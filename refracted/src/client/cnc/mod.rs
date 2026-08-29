@@ -3193,8 +3193,7 @@ fn cnc_notify_host_persona_i32() -> i32 {
     id.min(i32::MAX as u64) as i32
 }
 
-/// Platform/dedicated host persona for replicated GAME topology (PHST/THST/DHST).
-/// Joining clients must not be advertised as PHST on `NTOP_CLIENT_SERVER_DEDICATED` games.
+/// Dedicated host persona for GAME topology.
 fn replicated_topology_persona(gid: i64) -> i64 {
     let uid = cnc_notify_host_persona_i32() as i64;
     dedicated_pool::host_for_gid(gid)
@@ -3700,7 +3699,7 @@ pub fn build_game_manager_game_payload(gid: i64) -> BlazeResult<Bytes> {
 
 /// Join-path `NotifyGameSetup`.
 pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes> {
-    // Always rebuild GAME fields for join — stale cached PHST (client-as-host) breaks lobby join.
+    // Rebuild GAME fields so join does not reuse a stale host persona.
     let game = build_replicated_game_data_fields_fallback(gid);
     game_state::set_replicated_wire_fields(gid, game.clone());
     let pros = game_state::pros_entries_for_gid(gid);

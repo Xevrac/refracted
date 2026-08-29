@@ -97,7 +97,6 @@
         } catch (e) { /* empty */ }
     }
 
-    /** Keep session done so return-from-match skips intro / pre-landing splash. */
     function scheduleReturnFromMatch() {
         markSessionDone();
     }

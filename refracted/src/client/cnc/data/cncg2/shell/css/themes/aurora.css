@@ -240,7 +240,6 @@ body.cc-theme.cc-theme--aurora .cc-center-cluster:after {
     border-bottom: 1px solid;
 }
 
-/* Connection-lost modal under aurora — palette from .au-lobby__modal-box / .au-btn--primary */
 body.cc-theme.cc-theme--aurora .cc-shell-lost-modal {
     background: rgba(0, 0, 0, 0.55);
 }

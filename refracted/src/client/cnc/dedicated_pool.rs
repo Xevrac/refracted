@@ -442,7 +442,7 @@ pub fn msgsys_upstream_for_serverhost_port(msg_sys: u16) -> Option<SocketAddr> {
         .map(|e| SocketAddr::new(peer_ip_addr(&e), msg_sys))
 }
 
-/// Reverse lookup: which match gid owns this ServerHost upstream.
+/// Match gid for this ServerHost.
 pub fn gid_for_msgsys_upstream(upstream: SocketAddr) -> Option<i64> {
     sync_from_blaze_sessions();
     for route in client_msgsys_routes().lock().values() {

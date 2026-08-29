@@ -140,7 +140,7 @@ pub async fn relay_pair(
             RelayLog::ServerToClient,
         )
         .await;
-        // Upstream died — force client EOF so native MsgSys recv=0 surfaces.
+        // Upstream died — close the client side.
         let _ = client_write.shutdown().await;
         result
     };
