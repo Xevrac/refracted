@@ -884,7 +884,6 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
     bottom: 0;
     z-index: 20;
 }
-/* Classic palette mirrors .cc-lobby__modal-box; aurora.css overrides for the Aurora theme. */
 .cc-shell-lost-modal {
     position: fixed;
     top: 0;

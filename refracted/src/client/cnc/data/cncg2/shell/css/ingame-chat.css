@@ -25,7 +25,6 @@ html, body {
     user-select: none;
 }
 
-/* Keep shell Aurora body art from painting the ChatWinProc WebView. */
 body.ingame-aurora,
 body.ingame-aurora.cc-theme,
 body.ingame-aurora.cc-theme--aurora {
@@ -39,7 +38,6 @@ body.ingame-aurora.cc-theme--aurora:before {
 
 [ng\:cloak], [ng-cloak], .ng-cloak { display: none !important; }
 
-/* Fill ChatWinProc Web Browser host (bottomBarUI Area 630x245 design). */
 .chat-panel {
     position: absolute;
     left: 0;
@@ -59,12 +57,12 @@ body.ingame-aurora.cc-theme--aurora:before {
 }
 
 .chat-header {
-    height: 36px;
+    height: 40px;
     padding: 0 10px;
     border-bottom: 1px solid rgba(28, 42, 50, 0.55);
     background: rgba(8, 12, 14, 0.28);
-    line-height: 36px;
-    font-size: 13px;
+    line-height: 40px;
+    font-size: 16px;
     font-weight: bold;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -84,19 +82,19 @@ body.ingame-aurora.cc-theme--aurora:before {
 
 .chat-channel-btn {
     display: inline-block;
-    height: 24px;
-    margin: 6px 4px 0 0;
+    height: 26px;
+    margin: 7px 4px 0 0;
     padding: 0 10px;
     border: 1px solid #1c2a32;
     background: transparent;
     color: #8b9aab;
     font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: bold;
     letter-spacing: 0.04em;
     text-transform: uppercase;
     cursor: pointer;
-    line-height: 22px;
+    line-height: 24px;
     vertical-align: top;
 }
 .chat-channel-btn.active {
@@ -113,9 +111,9 @@ body.ingame-aurora.cc-theme--aurora:before {
 
 .chat-close-btn {
     float: right;
-    width: 22px;
-    height: 22px;
-    margin-top: 7px;
+    width: 24px;
+    height: 24px;
+    margin-top: 8px;
     padding: 0;
     border: 1px solid rgba(28, 42, 50, 0.75);
     background: rgba(18, 22, 24, 0.55);
@@ -133,10 +131,10 @@ body.ingame-aurora.cc-theme--aurora:before {
 .chat-close-btn:after {
     content: "";
     position: absolute;
-    left: 10px;
-    top: 4px;
+    left: 11px;
+    top: 5px;
     width: 1px;
-    height: 12px;
+    height: 13px;
     background: #8b9aab;
 }
 .chat-close-btn:before { -webkit-transform: rotate(45deg); transform: rotate(45deg); }
@@ -150,10 +148,10 @@ body.ingame-aurora.cc-theme--aurora:before {
 
 .chat-history {
     position: absolute;
-    top: 36px;
+    top: 40px;
     left: 0;
     right: 0;
-    bottom: 44px;
+    bottom: 52px;
     padding: 10px 12px;
     overflow-x: hidden;
     overflow-y: auto;
@@ -163,10 +161,10 @@ body.ingame-aurora.cc-theme--aurora:before {
 }
 
 .chat-line {
-    margin: 0 0 4px 0;
+    margin: 0 0 5px 0;
     font-family: 'Eurostile-Med', Arial, sans-serif;
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: 16px;
+    line-height: 1.4;
     word-wrap: break-word;
     text-shadow: 0 1px 2px #000;
 }
@@ -194,7 +192,7 @@ body.ingame-aurora.cc-theme--aurora:before {
     text-align: center;
     color: #666;
     font-family: 'Eurostile-Med', Arial, sans-serif;
-    font-size: 12px;
+    font-size: 15px;
 }
 
 .chat-input-row {
@@ -202,8 +200,9 @@ body.ingame-aurora.cc-theme--aurora:before {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 44px;
-    padding: 8px 8px;
+    height: 52px;
+    padding: 0;
+    overflow: hidden;
     border-top: 1px solid rgba(28, 42, 50, 0.55);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
@@ -211,17 +210,20 @@ body.ingame-aurora.cc-theme--aurora:before {
 }
 
 .chat-input {
-    float: left;
-    /* 630 host − padding − send (28) − gap */
-    width: 570px;
-    height: 28px;
+    position: absolute;
+    left: 8px;
+    right: 50px;
+    top: 8px;
+    width: auto;
+    height: 34px;
     margin: 0;
-    padding: 0 8px;
+    padding: 0 10px;
     border: 1px solid rgba(28, 42, 50, 0.75);
     background: rgba(16, 20, 18, 0.72);
     color: #e6edf5;
     font-family: 'Eurostile-Med', Arial, sans-serif;
-    font-size: 12px;
+    font-size: 15px;
+    line-height: 32px;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     -webkit-user-select: text;
@@ -233,9 +235,11 @@ body.ingame-aurora.cc-theme--aurora:before {
 }
 
 .chat-send-btn {
-    float: right;
-    width: 28px;
-    height: 28px;
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: 34px;
+    height: 34px;
     margin: 0;
     padding: 0;
     border: 1px solid rgba(74, 85, 96, 0.85);

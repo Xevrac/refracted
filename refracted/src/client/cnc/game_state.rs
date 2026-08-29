@@ -38,12 +38,10 @@ static BLAZE_PREGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static BLAZE_JOIN_SETUP_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static BLAZE_INGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static GAME_READY_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
-/// Client already ran `updateMeshConnection` for this gid (joinGame NotifyGameSetup).
+/// Gids whose mesh is already live.
 static CLIENT_MESH_LIVE: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static SERVER_LOST_GIDS: OnceLock<Mutex<HashMap<i64, u64>>> = OnceLock::new();
-/// Personas that should see the lost-connection modal: pid → (gid, blaze session).
-/// Bound to the session that was live when the loss was noted so a later login
-/// after the client quit does not restore the modal.
+/// pid → (gid, blaze session) for the lost-connection modal.
 static LOST_PERSONAS: OnceLock<Mutex<HashMap<i64, (i64, u64)>>> = OnceLock::new();
 static JOIN_PASSWORD_AUTH: OnceLock<Mutex<HashMap<(i64, i64), Instant>>> = OnceLock::new();
 const JOIN_PASSWORD_AUTH_TTL: Duration = Duration::from_secs(120);
@@ -175,8 +173,7 @@ pub fn signal_lost_game_server(gid: i64) {
     );
 }
 
-/// Native client POST `/cnc/lost-game-server`. Marks only that persona (or that match's humans).
-/// Does not pick a "current" gid when both ids are 0 — that would hit the wrong match.
+/// POST `/cnc/lost-game-server`. Marks that persona, or the match's humans if pid is 0.
 pub fn notify_shell_match_lost(gid: i64, pid: i64) {
     if pid > 0 {
         note_persona_lost(pid, gid);
@@ -191,7 +188,7 @@ pub fn notify_shell_match_lost(gid: i64, pid: i64) {
     }
 }
 
-/// Best-effort gid when native watchdog posts gid=0.
+/// Resolve gid when the request sent 0.
 fn resolve_active_match_gid(hint: i64) -> i64 {
     if hint > 0 {
         return hint;
@@ -214,8 +211,7 @@ fn resolve_active_match_gid(hint: i64) -> i64 {
         .unwrap_or(0)
 }
 
-/// Push `NotifyPlayerRemoved` so the retail game manager tears down without native
-/// `ReturnToFrontend` (Prism SEH when MsgSys/message bus is corrupt after crash).
+/// Notify players so they leave the match.
 fn kick_clients_on_match_lost(gid: i64, reason: i32) {
     let gid = resolve_active_match_gid(gid);
     let humans: Vec<i64> = if gid > 0 {
@@ -258,7 +254,7 @@ fn kick_clients_on_match_lost(gid: i64, reason: i32) {
     }
 }
 
-/// Clear disconnect flags for one match (new CreateGame / join). Other games stay.
+/// Clear disconnect flags for one match. Other games stay.
 pub fn clear_match_connection_lost(gid: i64) {
     if gid <= 0 {
         return;
@@ -276,7 +272,7 @@ pub fn clear_persona_match_lost(pid: i64) {
     lost_personas().lock().remove(&pid);
 }
 
-/// `pid` required for gid=0. Without a persona, never report a backend-wide loss.
+/// pid required when gid is 0.
 pub fn match_connection_status_json(gid: i64, pid: i64) -> serde_json::Value {
     let persona_lost = persona_is_lost(pid, gid);
     let match_lost = gid > 0 && server_lost_gids().lock().contains_key(&gid);
@@ -334,7 +330,7 @@ pub fn clear_blaze_join_and_push_flags(gid: i64) {
     client_mesh_live().lock().remove(&gid);
 }
 
-/// True after the client reported `updateMeshConnection` for this gid.
+/// True after updateMeshConnection for this gid.
 pub fn client_mesh_already_connected(gid: i64) -> bool {
     client_mesh_live().lock().contains(&gid)
 }
@@ -343,8 +339,7 @@ pub fn note_client_mesh_connected(gid: i64) {
     client_mesh_live().lock().insert(gid);
 }
 
-/// Reset orch wipes `mesh_active_connected`; keep GameReady unblocked when we skip
-/// a second InitiateConnections (joinGame already meshed).
+/// Keep GameReady unblocked when skipping a second InitiateConnections.
 pub fn mark_orch_mesh_already_connected(gid: i64) {
     orchestration().lock().entry(gid).and_modify(|e| {
         e.mesh_active_connected = true;
@@ -909,8 +904,7 @@ const AI_PERSONA_MIN: i64 = 9_000_000_000;
 const AI_PERSONA_MAX: i64 = 9_800_000_000;
 
 fn next_ai_persona_id() -> i64 {
-    // Do not lock `games()` here — callers already hold it (CreateGame AI seat,
-    // leave-to-AI, add_queued_player). Re-lock deadlocks the Blaze runtime.
+    // Callers already hold `games()`; locking here deadlocks.
     rand::thread_rng().gen_range(AI_PERSONA_MIN..AI_PERSONA_MAX)
 }
 
@@ -951,15 +945,13 @@ pub struct CncGame {
     pub dedicated_session_id: Option<u64>,
     pub is_standby: bool,
     pub password: String,
-    /// Generals special abilities / rank XP (`PlayerExperienceChange`). Default on.
-    /// Off → rank 0 and no kill XP. Customize/CP (`EnableSkillTree`) stays on the wire.
+    /// Special abilities / rank XP. Default on.
     pub enable_special_abilities: bool,
-    /// In-match building TechTree (`TechTreeActivated`). Default on; sim emits the S2C later.
+    /// In-match building TechTree. Default on.
     pub enable_tech_tree: bool,
-    /// Oil as a second currency (HUD clusters). Default off until spend exists.
-    /// Off → Power|Gold or GLA Gold-only; player derricks tick gold like Generals.
+    /// Oil as a second currency. Default off.
     pub enable_oil_economy: bool,
-    /// NS Resource Centers stay at remaining (no subtract). Default off.
+    /// Resource centers do not deplete. Default off.
     pub enable_infinite_resource_centers: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
@@ -1069,8 +1061,6 @@ pub fn set_match_options(
     })
 }
 
-/// `(special_abilities, tech_tree, oil_economy, infinite_resource_centers)` for this gid.
-/// Missing game → abilities/tree on, oil off, infinite off.
 pub fn match_options(gid: i64) -> (bool, bool, bool, bool) {
     games()
         .lock()

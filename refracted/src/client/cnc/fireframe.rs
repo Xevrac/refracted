@@ -110,9 +110,7 @@ pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<O
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     let promote_reset = super::game_state::blaze_join_setup_already_pushed(gid)
         || super::game_state::client_local_game_active(gid);
-    // joinGame NotifyGameSetup already ran preInitGameNetwork + updateMeshConnection.
-    // A second InitiateConnections re-adds the same Blaze Fiber (duplicate dispatchee).
-    // Rematch NotifyGameRemoved clears mesh-live so InitiateConnections still runs.
+    // Skip InitiateConnections when the mesh is already live.
     let skip_initiate = super::game_state::client_mesh_already_connected(gid);
     let setup_label = if promote_reset {
         "NotifyGameReset after resetDedicatedServer"
@@ -305,7 +303,7 @@ pub fn pushes_after_join_game_lobby(
         },
     ];
 
-    // Lobby join defers mesh until Start Battle — do not tell the client it is platform host yet.
+    // Join waits for Start Battle before platform-host / mesh.
     if !defer_mesh {
         let phost = super::build_game_manager_notify_platform_host_initialized(gid)?;
         let wire_phost = notification_envelope(0x0004, 0x0047, &phost);

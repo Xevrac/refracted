@@ -1,5 +1,4 @@
 -- Refracted-owned Shell patch.
--- Canonical source for the Lua string embedded in Prism
 
 local function refractedInstallUsersettingsGraphics()
   local mod = package.loaded["shellmodules.usersettings"]
@@ -137,7 +136,6 @@ local function refractedInstallUsersettingsGraphics()
 
   mod.userSettings.allowcamerarotation = cameraRotationBinding()
 
-  -- CNC has no retail WindowedBorderless option — Prism strips Win32 chrome.
   local function borderlessBinding()
     return {
       function()

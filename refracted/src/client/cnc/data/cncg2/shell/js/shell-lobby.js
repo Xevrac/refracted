@@ -155,7 +155,6 @@
             ]
         },
         {
-            // FirstPlayable_MPHorde_Final — player-facing map name is Dreadzone (mode Onslaught).
             id: 'onslaught-fp',
             label: 'Dreadzone',
             path: 'Levels/MP/PVE/FirstPlayable_MPHorde_Final/FirstPlayable_MPHorde_Final',
@@ -166,7 +165,6 @@
             image: minimapUrl('FirstPlayable_MPHorde_Final.png'),
             accent: '#b84a2a',
             world: { minX: -512, maxX: 512, minZ: -512, maxZ: 512 },
-            // Human seats only.
             starts: [
                 { id: 1, x: -127.090, z: 236.141, u: 0.871, v: 0.139 },
                 { id: 2, x: -248.085, z: 118.928, u: 0.129, v: 0.857 }
@@ -1593,6 +1591,11 @@
             syncBrowserSelection($scope.visibleBrowserGames());
         };
 
+        function isIdleOrStandbyPhase(g) {
+            var phase = ((g && g.phase) || '').toString().toLowerCase();
+            return phase === 'idle' || phase === 'standby';
+        }
+
         $scope.visibleBrowserGames = function () {
             var list = $scope.browserGames || [];
             var filter = $scope.browserListFilter || 'all';
@@ -1611,8 +1614,7 @@
                         out.push(g);
                     }
                 } else if (filter === 'idle') {
-                    if (g.isStandby || g.kind === 'standby' || g.map === 'Standby' ||
-                            !(Number(g.humans) > 0)) {
+                    if (isIdleOrStandbyPhase(g)) {
                         out.push(g);
                     }
                 }

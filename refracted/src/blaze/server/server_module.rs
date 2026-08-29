@@ -1874,7 +1874,7 @@ impl BlazeProtocolServer {
                                 return Ok(());
                             }
 
-                            // Lobby join: defer platform host until Start Battle (`resetDedicatedServer`).
+                            // Join: platform host is sent at Start Battle.
                             if !is_join {
                             sleep(Duration::from_millis(15)).await;
 
