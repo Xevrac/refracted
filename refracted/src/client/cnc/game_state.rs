@@ -1452,10 +1452,12 @@ pub fn ensure_game_stub(gid: i64) {
 
 /// APA_ClassicGeneral ServerId (StaticData/Generals + FactionAPA GeneralsToLoad).
 const DEFAULT_GENERAL_APA_CLASSIC: &str = "2914080600";
+const DEFAULT_GENERAL_APA_TUTORIAL: &str = "497011786";
 const DEFAULT_GENERAL_EU_TUTORIAL: &str = "3463861546";
 const DEFAULT_GENERAL_EU_CLASSIC: &str = "232716472";
 /// GLA_ClassicGeneral ServerId — default AI opponent.
 const DEFAULT_GENERAL_GLA_CLASSIC: &str = "580378690";
+const DEFAULT_GENERAL_GLA_TUTORIAL: &str = "145977592";
 
 fn is_alpha_tutorial_map(map_path: &str) -> bool {
     map_path
@@ -1766,7 +1768,7 @@ fn strip_poisoned_host_ai_pending(gid: i64) {
     }
 }
 
-fn merge_pending_into_player(gid: i64, player: &mut CncPlayer) {
+fn merge_pending_into_player(gid: i64, player: &mut CncPlayer, map_path: &str) {
     // Overlay pid=0 (pre-auth host) then exact persona. Do not copy `_isai=1` onto a human.
     let overlays = {
         let pending = pending_player_attrs().lock();
@@ -1790,7 +1792,7 @@ fn merge_pending_into_player(gid: i64, player: &mut CncPlayer) {
             apply_attr_to_player(player, k, v);
         }
     }
-    ensure_general_attr(player);
+    ensure_general_attr(player, map_path);
     if !overlays.is_empty() {
         crate::debug_println!(
             "[CNC] merge pending attrs gid={} pid={} faction={:?} general={:?}",
@@ -1802,7 +1804,22 @@ fn merge_pending_into_player(gid: i64, player: &mut CncPlayer) {
     }
 }
 
-fn ensure_general_attr(player: &mut CncPlayer) {
+fn ensure_general_attr(player: &mut CncPlayer, map_path: &str) {
+    let map = if map_path.is_empty() {
+        DEFAULT_MAP_PATH
+    } else {
+        map_path
+    };
+    let faction = player
+        .attribs
+        .get("_faction")
+        .map(|s| s.as_str())
+        .unwrap_or("APA");
+    if is_alpha_tutorial_map(&map) {
+        apply_attr_to_player(player, "_general", tutorial_general_for_faction(faction));
+        return;
+    }
+
     let gen_missing = player
         .attribs
         .get("_general")
@@ -1811,28 +1828,12 @@ fn ensure_general_attr(player: &mut CncPlayer) {
     if !gen_missing {
         return;
     }
-    let faction = player
-        .attribs
-        .get("_faction")
-        .map(|s| s.as_str())
-        .unwrap_or("APA");
     if matches!(
         faction.trim().to_ascii_uppercase().as_str(),
         "USA" | "NONE" | "" | "0"
     ) {
-        let map = get_map_path(resolve_host_reset_gid());
-        let map = if map.is_empty() {
-            DEFAULT_MAP_PATH.to_string()
-        } else {
-            map
-        };
-        if is_alpha_tutorial_map(&map) {
-            apply_attr_to_player(player, "_faction", "EU");
-            apply_attr_to_player(player, "_general", DEFAULT_GENERAL_EU_TUTORIAL);
-        } else {
-            apply_attr_to_player(player, "_faction", "APA");
-            apply_attr_to_player(player, "_general", DEFAULT_GENERAL_APA_CLASSIC);
-        }
+        apply_attr_to_player(player, "_faction", "APA");
+        apply_attr_to_player(player, "_general", DEFAULT_GENERAL_APA_CLASSIC);
     } else {
         apply_attr_to_player(player, "_general", default_general_for_faction(faction));
     }
@@ -1848,6 +1849,12 @@ fn write_pending_player_attrs(gid: i64, persona_id: i64, attrs: &IndexMap<String
 }
 
 fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<String, String>) {
+    let map = get_map_path(gid);
+    let map_path = if map.is_empty() {
+        DEFAULT_MAP_PATH
+    } else {
+        map.as_str()
+    };
     let mut m = games().lock();
     let Some(game) = m.get_mut(&gid) else {
         return;
@@ -1870,6 +1877,7 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
                     for (k, v) in attrs {
                         apply_attr_to_player(player, k, v);
                     }
+                    ensure_general_attr(player, map_path);
                     return;
                 }
             }
@@ -1902,6 +1910,7 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
         for (k, v) in attrs {
             apply_attr_to_player(&mut player, k, v);
         }
+        ensure_general_attr(&mut player, map_path);
         game.players.push(player);
         return;
     }
@@ -1931,6 +1940,7 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
                 }
                 apply_attr_to_player(player, k, v);
             }
+            ensure_general_attr(player, map_path);
         }
     }
 }
@@ -2120,6 +2130,15 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
     })
 }
 
+fn tutorial_general_for_faction(faction: &str) -> &'static str {
+    match faction.trim().to_ascii_uppercase().as_str() {
+        "APA" | "CHINA" | "CHI" => DEFAULT_GENERAL_APA_TUTORIAL,
+        "ESC" | "EU" => DEFAULT_GENERAL_EU_TUTORIAL,
+        "GLA" => DEFAULT_GENERAL_GLA_TUTORIAL,
+        _ => DEFAULT_GENERAL_EU_TUTORIAL,
+    }
+}
+
 fn default_general_for_faction(faction: &str) -> &'static str {
     match faction.trim().to_ascii_uppercase().as_str() {
         "APA" | "CHINA" | "CHI" => DEFAULT_GENERAL_APA_CLASSIC,
@@ -2180,7 +2199,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         custom_data: IndexMap::new(),
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
-    merge_pending_into_player(gid, &mut host_player);
+    merge_pending_into_player(gid, &mut host_player, map_for_defaults);
     let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers) = games()
         .lock()
         .get(&gid)
@@ -2243,7 +2262,7 @@ pub fn seed_from_join(gid: i64) {
         custom_data: IndexMap::new(),
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
-    merge_pending_into_player(gid, &mut host_player);
+    merge_pending_into_player(gid, &mut host_player, map_for_defaults);
     let mut m = games().lock();
     if m.contains_key(&gid) {
         return;
@@ -3003,6 +3022,12 @@ fn next_free_slot(players: &[CncPlayer]) -> i32 {
 pub fn add_queued_player(payload: &[u8]) -> BlazeResult<(i64, CncPlayer)> {
     let gid = parse_add_queued_gid(payload);
     seed_from_join(gid);
+    let map = get_map_path(gid);
+    let map_for_defaults = if map.is_empty() {
+        DEFAULT_MAP_PATH
+    } else {
+        map.as_str()
+    };
 
     let slot = TdfEncoder::find_int_field(payload, "SLOT")
         .or_else(|| TdfEncoder::find_int_field(payload, "SLOT"))
@@ -3019,7 +3044,7 @@ pub fn add_queued_player(payload: &[u8]) -> BlazeResult<(i64, CncPlayer)> {
 
     let attribs = default_ai_attribs(slot, 2, "GLA");
 
-    let player = CncPlayer {
+    let mut player = CncPlayer {
         persona_id: ai_id,
         display_name: ai_name,
         slot,
@@ -3030,6 +3055,7 @@ pub fn add_queued_player(payload: &[u8]) -> BlazeResult<(i64, CncPlayer)> {
         custom_data: IndexMap::new(),
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
+    ensure_general_attr(&mut player, map_for_defaults);
     game.players.push(player.clone());
     refresh_pros_wire_for_gid(gid);
     *LAST_ADD_QUEUED
@@ -3051,6 +3077,14 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
     if !is_standby {
         seed_from_join(gid);
     }
+    let map_for_merge = {
+        let map = get_map_path(gid);
+        if map.is_empty() {
+            DEFAULT_MAP_PATH.to_string()
+        } else {
+            map
+        }
+    };
     let player = {
         let mut m = games().lock();
         let game = m.get_mut(&gid)?;
@@ -3059,7 +3093,11 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
             .iter()
             .position(|p| p.persona_id == persona_id)
         {
-            merge_pending_into_player(gid, &mut game.players[existing_idx]);
+            merge_pending_into_player(
+                gid,
+                &mut game.players[existing_idx],
+                &map_for_merge,
+            );
             if game.host_persona == 0 {
                 game.host_persona = persona_id;
             }
@@ -3104,7 +3142,7 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
             custom_data: IndexMap::new(),
             stat: PROS_STAT_ACTIVE_CONNECTING,
         };
-        merge_pending_into_player(gid, &mut player);
+        merge_pending_into_player(gid, &mut player, &map_for_defaults);
         let mut m = games().lock();
         let game = m.get_mut(&gid)?;
         if game.players.iter().any(|p| p.persona_id == persona_id) {

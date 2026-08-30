@@ -95,6 +95,22 @@ body.cc-theme {
     text-rendering: auto !important;
     -webkit-font-smoothing: subpixel-antialiased;
 }
+
+/* Shell UI is button-driven; prevent accidental drag-selection while navigating. */
+.cc-theme,
+.cc-theme * {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Preserve normal editing and copy/paste behavior in text-entry controls. */
+.cc-theme input,
+.cc-theme textarea,
+.cc-theme [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
 .clearfix:before, .clearfix:after { content: " "; display: table; }
 .clearfix:after { clear: both; }
 

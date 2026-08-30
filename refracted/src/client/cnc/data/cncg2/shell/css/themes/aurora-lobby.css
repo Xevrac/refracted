@@ -1172,10 +1172,36 @@
 }
 
 .au-lobby__maps-row {
+    position: relative;
     padding: 10px 12px;
     border-bottom: 1px solid #1c2a32;
     cursor: pointer;
     overflow: hidden;
+}
+
+.au-lobby__maps-row-status {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 2px 7px;
+    border: 1px solid rgba(212, 180, 90, 0.62);
+    background: rgba(44, 38, 20, 0.9);
+    color: #d4b45a;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    line-height: normal;
+}
+
+.au-lobby__maps-row.disabled {
+    cursor: default;
+    -webkit-filter: grayscale(1);
+    filter: grayscale(1);
+    opacity: 0.46;
+}
+
+.au-lobby__maps-row.disabled:hover {
+    background: transparent;
 }
 
 .au-lobby__maps-row:hover {
@@ -1783,6 +1809,104 @@
     box-sizing: border-box;
 }
 
+.au-lobby__map-card:before,
+.au-lobby__map-card:after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.au-lobby__map-card:before {
+    z-index: 3;
+    opacity: 0.16;
+    background-image: -webkit-repeating-linear-gradient(
+        -55deg,
+        rgba(176, 182, 188, 0.18) 0,
+        rgba(176, 182, 188, 0.18) 1px,
+        transparent 1px,
+        transparent 10px
+    );
+    background-image: repeating-linear-gradient(
+        -55deg,
+        rgba(176, 182, 188, 0.18) 0,
+        rgba(176, 182, 188, 0.18) 1px,
+        transparent 1px,
+        transparent 10px
+    );
+}
+
+.au-lobby__map-card:after {
+    z-index: 1;
+    background:
+        -webkit-linear-gradient(110deg, rgba(4, 8, 11, 0.68), transparent 48%),
+        -webkit-linear-gradient(top, rgba(4, 8, 11, 0.04), rgba(4, 8, 11, 0.34));
+    background:
+        linear-gradient(110deg, rgba(4, 8, 11, 0.68), transparent 48%),
+        linear-gradient(to bottom, rgba(4, 8, 11, 0.04), rgba(4, 8, 11, 0.34));
+}
+
+.au-lobby__map-card:hover:before {
+    opacity: 0.22;
+}
+
+.au-lobby__map-card.on:before {
+    opacity: 0.25;
+    background-image: -webkit-repeating-linear-gradient(
+        -55deg,
+        rgba(198, 204, 210, 0.24) 0,
+        rgba(198, 204, 210, 0.24) 1px,
+        transparent 1px,
+        transparent 10px
+    );
+    background-image: repeating-linear-gradient(
+        -55deg,
+        rgba(198, 204, 210, 0.24) 0,
+        rgba(198, 204, 210, 0.24) 1px,
+        transparent 1px,
+        transparent 10px
+    );
+}
+
+.au-lobby__map-card-badges {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    white-space: nowrap;
+}
+
+.au-lobby__map-card-badges .au-lobby__map-card-mode {
+    position: static;
+    display: inline-block;
+    vertical-align: top;
+}
+
+.au-lobby__map-card-badges .au-lobby__map-card-mode,
+.au-lobby__map-card-status {
+    height: 20px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    line-height: 14px;
+}
+
+.au-lobby__map-card-status {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 2px 9px;
+    border: 1px solid rgba(212, 180, 90, 0.62);
+    background: rgba(44, 38, 20, 0.9);
+    color: #d4b45a;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-align: center;
+    vertical-align: top;
+}
+
 .au-lobby__map-card:hover {
     border-color: #3aa0ff;
 }
@@ -1793,6 +1917,24 @@
     box-shadow: 0 0 0 1px rgba(58, 160, 255, 0.55), 0 0 14px rgba(0, 136, 255, 0.28);
 }
 
+.au-lobby__map-card.disabled,
+.au-lobby__map-card:disabled {
+    cursor: default;
+    -webkit-filter: grayscale(1);
+    filter: grayscale(1);
+    opacity: 0.46;
+}
+
+.au-lobby__map-card.disabled:hover,
+.au-lobby__map-card:disabled:hover {
+    border-color: #1c2a32;
+}
+
+.au-lobby__map-card.disabled:before,
+.au-lobby__map-card:disabled:before {
+    opacity: 0.08;
+}
+
 .au-lobby__map-card-veil {
     position: absolute;
     left: 0;
@@ -1801,7 +1943,7 @@
     height: 72%;
     background: -webkit-linear-gradient(top, rgba(7,9,11,0) 0%, rgba(7,9,11,0.88) 100%);
     background: linear-gradient(180deg, rgba(7,9,11,0) 0%, rgba(7,9,11,0.88) 100%);
-    z-index: 1;
+    z-index: 2;
     pointer-events: none;
 }
 
@@ -1811,14 +1953,14 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    z-index: 2;
+    z-index: 4;
 }
 
 .au-lobby__map-card-mode {
     position: absolute;
     top: 8px;
     right: 8px;
-    z-index: 3;
+    z-index: 5;
     padding: 2px 7px;
     background: rgba(12, 15, 13, 0.82);
     border: 1px solid #1c2a32;
@@ -1839,7 +1981,7 @@
     left: 12px;
     right: 12px;
     bottom: 10px;
-    z-index: 3;
+    z-index: 5;
     color: #f0f4f8;
     font-size: 14px;
     font-weight: bold;
@@ -1851,7 +1993,7 @@
     position: absolute;
     left: 10px;
     top: 8px;
-    z-index: 3;
+    z-index: 5;
     width: 16px;
     height: 16px;
     border: 1px solid #3aa0ff;

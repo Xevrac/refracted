@@ -15,11 +15,17 @@
                 <button type="button"
                         class="au-lobby__map-card"
                         ng-repeat="m in maps"
-                        ng-class="{on: m.id == selectedMap.id}"
-                        ng-click="selectMap(m)">
+                        ng-class="{on: m.id == selectedMap.id, disabled: m.comingSoon}"
+                        ng-style="mapCardStyle(m)"
+                        ng-attr-aria-disabled="{{m.comingSoon ? 'true' : 'false'}}"
+                        ng-click="selectMap(m, $event)">
                     <span class="au-lobby__map-card-veil" aria-hidden="true"></span>
                     <span class="au-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
-                    <span class="au-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
+                    <span class="au-lobby__map-card-badges">
+                        <span class="au-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
+                        <span class="au-lobby__map-card-status" ng-if="m.comingSoon"
+                              title="Coming soon">SOON</span>
+                    </span>
                     <span class="au-lobby__map-card-name">{{ m.label }}</span>
                     <span class="au-lobby__map-card-check" ng-show="m.id == selectedMap.id" aria-hidden="true"></span>
                 </button>
@@ -410,10 +416,13 @@
                             <div class="au-lobby__maps-list">
                                 <div class="au-lobby__maps-row"
                                      ng-repeat="m in maps"
-                                     ng-class="{on: m.id == pickerMap().id}"
-                                     ng-click="previewMapInPicker(m)">
+                                     ng-class="{on: m.id == pickerMap().id, disabled: m.comingSoon}"
+                                     ng-attr-aria-disabled="{{m.comingSoon ? 'true' : 'false'}}"
+                                     ng-click="previewMapInPicker(m, $event)">
                                     <span class="au-lobby__maps-row-name">{{ m.label }}</span>
                                     <span class="au-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
+                                    <span class="au-lobby__maps-row-status" ng-if="m.comingSoon"
+                                          title="Coming soon">SOON</span>
                                 </div>
                             </div>
                         </div>
@@ -437,7 +446,8 @@
                     </div>
                     <div class="au-lobby__options-actions">
                         <button type="button" class="au-btn au-btn--ghost" ng-click="closeMapPicker()">Cancel</button>
-                        <button type="button" class="au-btn au-btn--primary" ng-click="confirmMapPicker()">Select</button>
+                        <button type="button" class="au-btn au-btn--primary"
+                                ng-click="confirmMapPicker($event)">Select</button>
                     </div>
                 </div>
             </div>

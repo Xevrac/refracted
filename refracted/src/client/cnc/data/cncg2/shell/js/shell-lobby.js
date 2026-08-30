@@ -11,6 +11,7 @@
 
     var MINIMAP_DIR = '/cnc/utfwin/images/MiniMap/';
     var LOBBY_MINIMAP_DIR = '/cncg2/shell/view/image/lobby-minimaps/';
+    var LOBBY_CARD_ART_DIR = '/cncg2/shell/view/image/lobby-card-art/';
     var MAP_THUMB = MINIMAP_DIR + 'MissingMap.png';
     // UTFWin MiniMaps are 512²; lobby PNGs crop the playable island. Pip UV uses map.world.
     var WORLD_XZ = { minX: -512, maxX: 512, minZ: -512, maxZ: 512 };
@@ -35,6 +36,10 @@
         return minimapUrl(file);
     }
 
+    function lobbyCardArtUrl(file) {
+        return LOBBY_CARD_ART_DIR + file + '?v=1';
+    }
+
     var MAPS = [
         {
             id: 'Alpha_Tutorial',
@@ -45,7 +50,9 @@
             mode: 'TUTORIAL',
             minimap: 'Alpha_Tutorial.png',
             image: minimapUrl('Alpha_Tutorial.png'),
+            cardImage: lobbyCardArtUrl('alpha_tutorial.png'),
             accent: '#5a8f3a',
+            comingSoon: true,
             forceTutorialGeneral: true,
             forceFaction: 'EU',
             texCrop: { u0: 0.086, v0: 0.210, u1: 0.914, v1: 0.790 },
@@ -64,6 +71,7 @@
             mode: '1v1',
             minimap: 'DM_Smalltown_1v1_CR.png',
             image: minimapUrl('DM_Smalltown_1v1_CR.png'),
+            cardImage: lobbyCardArtUrl('smalltown.png'),
             accent: '#c07828',
             texCrop: { u0: 0.217, v0: 0.084, u1: 0.799, v1: 0.910 },
             world: { minX: -289.8, maxX: 306.2, minZ: -419.8, maxZ: 426.0 },
@@ -82,6 +90,7 @@
             mode: '1v1',
             minimap: 'DM_KapuKai_1v1_JKS.png',
             image: minimapUrl('DM_KapuKai_1v1_JKS.png'),
+            cardImage: lobbyCardArtUrl('kapukai.png'),
             accent: '#2a7ab8',
             texCrop: { u0: 0.318, v0: 0.299, u1: 0.693, v1: 0.703 },
             world: { minX: -379.7, maxX: 379.7, minZ: -379.7, maxZ: 379.7 },
@@ -100,6 +109,7 @@
             mode: '2v2',
             minimap: 'DM_Oasis_2v2_JT.png',
             image: minimapUrl('DM_Oasis_2v2_JT.png'),
+            cardImage: lobbyCardArtUrl('oasis.png'),
             accent: '#b83a3a',
             texCrop: { u0: 0.311, v0: 0.303, u1: 0.689, v1: 0.693 },
             world: { minX: -396.4, maxX: 394.4, minZ: -383.3, maxZ: 407.6 },
@@ -120,6 +130,7 @@
             mode: '3v3',
             minimap: 'DM_Monsoon_3v3_MO.png',
             image: minimapUrl('DM_Monsoon_3v3_MO.png'),
+            cardImage: lobbyCardArtUrl('monsoon.png'),
             accent: '#6a5ab0',
             texCrop: { u0: 0.219, v0: 0.215, u1: 0.783, v1: 0.762 },
             world: { minX: -447.6, maxX: 452.9, minZ: -448.9, maxZ: 451.6 },
@@ -142,6 +153,7 @@
             mode: '3v3',
             minimap: 'DM_Overpass_3v3_JKS.png',
             image: minimapUrl('DM_Overpass_3v3_JKS.png'),
+            cardImage: lobbyCardArtUrl('overpass.png'),
             accent: '#3a9a8a',
             world: { minX: -453.8, maxX: 448.8, minZ: -443.8, maxZ: 458.8 },
             // u/v = pip locations (not worldToUv). 1↔5 and 2↔6 UVs swapped.
@@ -163,7 +175,9 @@
             mode: 'ONSLAUGHT',
             minimap: 'FirstPlayable_MPHorde_Final.png',
             image: minimapUrl('FirstPlayable_MPHorde_Final.png'),
+            cardImage: lobbyCardArtUrl('dreadzone.png'),
             accent: '#b84a2a',
+            comingSoon: true,
             world: { minX: -512, maxX: 512, minZ: -512, maxZ: 512 },
             starts: [
                 { id: 1, x: -127.090, z: 236.141, u: 0.871, v: 0.139 },
@@ -171,6 +185,15 @@
             ]
         }
     ];
+
+    function firstAvailableMap() {
+        for (var i = 0; i < MAPS.length; i++) {
+            if (!MAPS[i].comingSoon) {
+                return MAPS[i];
+            }
+        }
+        return MAPS[0];
+    }
 
     var COLORS = ['#3a7bd5', '#2aa8a0', '#3fbf4a', '#e6b322', '#e67e22', '#c0392b', '#ececec', '#8e44ad'];
     var DIFFS = ['EASY', 'MEDIUM', 'HARD'];
@@ -258,7 +281,7 @@
 
     function defaultGeneralId(code, map) {
         if (map && map.forceTutorialGeneral) {
-            return tutorialGeneralId(code) || classicGeneralId(code);
+            return tutorialGeneralId(code);
         }
         return classicGeneralId(code);
     }
@@ -564,7 +587,7 @@
 
     CCApp.controller('ShellLobbyController', function ($scope, $rootScope, $timeout) {
         $scope.maps = MAPS;
-        $scope.selectedMap = MAPS[0];
+        $scope.selectedMap = firstAvailableMap();
         $scope.mapPath = $scope.selectedMap.path;
         $scope.mapForcesTutorial = !!$scope.selectedMap.forceTutorialGeneral;
         $timeout(function () {
@@ -578,6 +601,7 @@
         $scope.lobbyOptionsOpen = false;
         $scope.mapPickerOpen = false;
         $scope.mapPickerFocus = null;
+        $scope.mapPickerDevOverride = false;
         $scope.startModalSlot = null;
         $scope.lobbyChat = [];
         $scope.lobbyChatDraft = '';
@@ -635,8 +659,16 @@
             return avatarForSlot(slot);
         };
 
-        $scope.mapCardStyle = function () {
-            return {};
+        $scope.mapCardStyle = function (map) {
+            if (!map) {
+                return {};
+            }
+            return {
+                'background-image': 'url("' + (map.cardImage || MAP_THUMB) + '")',
+                'background-position': 'center center',
+                'background-repeat': 'no-repeat',
+                'background-size': 'cover'
+            };
         };
 
         $scope.lobbyMinimapSrc = function (map) {
@@ -698,7 +730,7 @@
         };
 
         $scope.pickerMap = function () {
-            return $scope.mapPickerFocus || $scope.selectedMap || MAPS[0];
+            return $scope.mapPickerFocus || $scope.selectedMap || firstAvailableMap();
         };
 
         $scope.slotMenuKey = function (team, index) {
@@ -728,15 +760,13 @@
             if (!$scope.mapForcesTutorial) {
                 return list;
             }
-            var tid = tutorialGeneralId(slot.faction);
-            var out = [];
-            var i;
-            for (i = 0; i < list.length; i++) {
-                if (list[i].id === tid) {
-                    out.push(list[i]);
+            var tutorial = [];
+            for (var i = 0; i < list.length; i++) {
+                if (/Tutorial/i.test(list[i].key) && list[i].id) {
+                    tutorial.push(list[i]);
                 }
             }
-            return out.length ? out : list;
+            return tutorial;
         };
 
         $scope.canChangeGeneral = function () {
@@ -1064,7 +1094,7 @@
                         continue;
                     }
                     slot.faction = forcedFaction;
-                    slot.general = tutorialGeneralId(forcedFaction) || classicGeneralId(forcedFaction);
+                    slot.general = tutorialGeneralId(forcedFaction);
                     slot.codename = codenameForSlot(slot);
                     slot.avatar = avatarForSlot(slot);
                 }
@@ -1075,8 +1105,8 @@
         rebuildStartChoices();
         assignDefaultStartpoints();
 
-        $scope.selectMap = function (map) {
-            if (!map) {
+        $scope.selectMap = function (map, $event) {
+            if (!map || (map.comingSoon && !($event && $event.shiftKey))) {
                 return;
             }
             $scope.selectedMap = map;
@@ -1091,6 +1121,11 @@
                     : Math.max(2, map.slots);
             }
             applyTutorialConstraints();
+            if ($scope.mapForcesTutorial) {
+                eachOccupiedSlot(function (slot) {
+                    syncPlayerAttrsToServer(slot);
+                });
+            }
             if (Number(map.slots) === 1) {
                 clearExtraOccupiedSlotsForSolo();
             }
@@ -1156,28 +1191,33 @@
             $scope.startModalSlot = null;
             $scope.lobbyOptionsOpen = false;
             $scope.mapPickerFocus = $scope.selectedMap || MAPS[0];
+            $scope.mapPickerDevOverride = false;
             $scope.mapPickerOpen = true;
         };
 
         $scope.closeMapPicker = function () {
             $scope.mapPickerOpen = false;
             $scope.mapPickerFocus = null;
+            $scope.mapPickerDevOverride = false;
         };
 
-        $scope.previewMapInPicker = function (map) {
-            if (!map) {
+        $scope.previewMapInPicker = function (map, $event) {
+            if (!map || (map.comingSoon && !($event && $event.shiftKey))) {
                 return;
             }
             $scope.mapPickerFocus = map;
+            $scope.mapPickerDevOverride = !!map.comingSoon;
         };
 
-        $scope.confirmMapPicker = function () {
+        $scope.confirmMapPicker = function ($event) {
             var map = $scope.mapPickerFocus || $scope.selectedMap;
-            if (map) {
-                $scope.selectMap(map);
+            var allowComingSoon = $scope.mapPickerDevOverride || ($event && $event.shiftKey);
+            if (map && (!map.comingSoon || allowComingSoon)) {
+                $scope.selectMap(map, allowComingSoon ? { shiftKey: true } : $event);
             }
             $scope.mapPickerOpen = false;
             $scope.mapPickerFocus = null;
+            $scope.mapPickerDevOverride = false;
         };
 
         $scope.pickMapFromModal = $scope.previewMapInPicker;
@@ -1334,7 +1374,9 @@
             if (!slot || slot.invitePending || !$scope.canChangeGeneral()) {
                 return;
             }
-            slot.general = Number(generalId) || 0;
+            slot.general = $scope.mapForcesTutorial
+                ? tutorialGeneralId(slot.faction)
+                : (Number(generalId) || 0);
             slot.codename = codenameForSlot(slot);
             $scope.slotMenu = null;
         };
@@ -1518,14 +1560,14 @@
                 if (path && MAPS[i].path === path) {
                     return {
                         label: MAPS[i].label,
-                        image: MAP_THUMB,
+                        image: MAPS[i].cardImage || MAP_THUMB,
                         mode: MAPS[i].mode || ''
                     };
                 }
                 if (leaf && MAPS[i].path && MAPS[i].path.split('/').pop() === leaf) {
                     return {
                         label: MAPS[i].label,
-                        image: MAP_THUMB,
+                        image: MAPS[i].cardImage || MAP_THUMB,
                         mode: MAPS[i].mode || ''
                     };
                 }
@@ -1533,7 +1575,7 @@
                         String(MAPS[i].label).toLowerCase() === String(leaf).toLowerCase()) {
                     return {
                         label: MAPS[i].label,
-                        image: MAP_THUMB,
+                        image: MAPS[i].cardImage || MAP_THUMB,
                         mode: MAPS[i].mode || ''
                     };
                 }
@@ -1580,6 +1622,19 @@
 
         $scope.browserMapThumb = function (g) {
             return resolveBrowserMap(g).image;
+        };
+
+        $scope.browserMapArtStyle = function (g) {
+            var resolved = resolveBrowserMap(g);
+            if (!g || g.isStandby || g.kind === 'standby' || g.map === 'Standby') {
+                return {};
+            }
+            return {
+                'background-image': 'url("' + resolved.image + '")',
+                'background-position': 'center center',
+                'background-repeat': 'no-repeat',
+                'background-size': 'cover'
+            };
         };
 
         $scope.browserMapMode = function (g) {
