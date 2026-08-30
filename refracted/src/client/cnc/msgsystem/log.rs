@@ -11,8 +11,8 @@ use crate::core::console::push_grpc_compact_upsert;
 use super::messages::{
     frame_type_label, ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_FINISHED_LOAD_TYPE_ID,
     GENERAL_TAUNT_TYPE_ID, LOAD_MAP_TYPE_ID, PING_QUERY_TYPE_ID, PING_REPLY_TYPE_ID,
-    REQUEST_RANDOM_GENERAL_TAUNT_TYPE_ID, REQUEST_SPECIFIC_GENERAL_TAUNT_TYPE_ID,
-    START_GAME_TYPE_ID,
+    PLACED_BUILD_COMPLETED_TYPE_ID, REQUEST_RANDOM_GENERAL_TAUNT_TYPE_ID,
+    REQUEST_SPECIFIC_GENERAL_TAUNT_TYPE_ID, START_GAME_TYPE_ID,
 };
 
 pub const RTS_TAG: &str = "\x1b[38;2;56;156;220m[RTS]\x1b[0m";
@@ -52,6 +52,7 @@ fn is_handshake_milestone(type_id: u16) -> bool {
         || type_id == GENERAL_TAUNT_TYPE_ID
         || type_id == REQUEST_RANDOM_GENERAL_TAUNT_TYPE_ID
         || type_id == REQUEST_SPECIFIC_GENERAL_TAUNT_TYPE_ID
+        || type_id == PLACED_BUILD_COMPLETED_TYPE_ID
 }
 
 fn relay_milestone_line(direction: RelayDirection, frame_name: &str) -> String {
@@ -148,6 +149,9 @@ fn log_relay(
         info!("{}", relay_milestone_line(direction, frame_name));
         if type_id == ALLOW_INPUT_CHANGE_TYPE_ID && extra.starts_with("payload=") {
             info!("{RTS_TAG} AllowInputChange wire {extra}");
+        }
+        if type_id == PLACED_BUILD_COMPLETED_TYPE_ID && extra.starts_with("payload=") {
+            info!("{RTS_TAG} PlacedBuildCompleted wire {extra}");
         }
     }
 }

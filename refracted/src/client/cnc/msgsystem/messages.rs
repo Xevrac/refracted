@@ -21,6 +21,9 @@ pub const PING_QUERY_TYPE_ID: u16 = 106;
 pub const PING_REPLY_TYPE_ID: u16 = 107;
 pub const REQUEST_RANDOM_GENERAL_TAUNT_TYPE_ID: u16 = 180;
 pub const REQUEST_SPECIFIC_GENERAL_TAUNT_TYPE_ID: u16 = 186;
+// Raw SimpleHeaderSerializer id from the shipped generated SerializerTable.
+// ClientChannelDescriptor's descriptor index 88 is not the raw wire id.
+pub const PLACED_BUILD_COMPLETED_TYPE_ID: u16 = 110;
 pub const SERVER_HELLO_TYPE_ID: u16 = 200;
 pub const SERVER_READY_TO_START_TYPE_ID: u16 = 201;
 pub const START_GAME_TYPE_ID: u16 = 215;
@@ -35,6 +38,7 @@ pub fn frame_type_label(type_id: u16) -> &'static str {
         12 => "AllowInputChange",
         27 => "ClientFinishedLoad",
         28 => "ClientHello",
+        110 => "PlacedBuildCompleted",
         92 => "GeneralTaunt",
         100 => "LoadMap",
         106 => "PingQuery",

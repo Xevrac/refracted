@@ -15,7 +15,7 @@ use super::log::{
 };
 use super::messages::{
     decode_client_hello, decode_load_map_id, ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID,
-    LOAD_MAP_TYPE_ID,
+    LOAD_MAP_TYPE_ID, PLACED_BUILD_COMPLETED_TYPE_ID,
 };
 use super::wire::SimpleFrame;
 
@@ -207,6 +207,9 @@ where
                     .unwrap_or_else(|| "relay".to_string())
             } else if frame.type_id == ALLOW_INPUT_CHANGE_TYPE_ID {
                 // Payload is a serialized bool -- expect a non-zero Enable byte for dismiss.
+                format!("payload={}", hex::encode(&frame.payload))
+            } else if frame.type_id == PLACED_BUILD_COMPLETED_TYPE_ID {
+                // Completion must be proven at the wire boundary before changing native state.
                 format!("payload={}", hex::encode(&frame.payload))
             } else {
                 "relay".to_string()
