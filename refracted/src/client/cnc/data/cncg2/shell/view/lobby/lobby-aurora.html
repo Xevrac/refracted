@@ -383,6 +383,13 @@
                                                ng-change="applyLobbyMatchOptions()">
                                         Tech Tree
                                     </label>
+                                    <label class="au-lobby__options-check">
+                                        <input type="checkbox"
+                                               ng-model="lobbyOptions.enableUnlockFullFactionRoster"
+                                               ng-disabled="lobbyOptions.enableTechTree === false"
+                                               ng-change="applyLobbyMatchOptions()">
+                                        Full Faction Roster
+                                    </label>
                                     <label class="au-lobby__options-check au-lobby__options-check--disabled"
                                            title="Coming soon">
                                         <input type="checkbox"

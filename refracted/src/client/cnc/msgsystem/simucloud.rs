@@ -43,12 +43,15 @@ pub const CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES: u32 = 0x40;
 pub const CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY: u32 = 0x80;
 /// Resource centers do not deplete. Default off.
 pub const CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS: u32 = 0x100;
+/// Unlock entire faction unit roster at match start (dev tweak). Default off.
+pub const CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER: u32 = 0x200;
 
 fn create_game_options(
     enable_tech_tree: bool,
     enable_special_abilities: bool,
     enable_oil_economy: bool,
     infinite_resource_centers: bool,
+    unlock_full_faction_roster: bool,
 ) -> u32 {
     let mut options = CREATE_GAME_OPTIONS_ALLOW_RECONNECT;
     if enable_tech_tree {
@@ -62,6 +65,9 @@ fn create_game_options(
     }
     if infinite_resource_centers {
         options |= CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS;
+    }
+    if unlock_full_faction_roster {
+        options |= CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER;
     }
     options
 }
@@ -514,12 +520,13 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={}",
+        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} fullRoster={}",
         roster.len(),
         game.enable_special_abilities,
         game.enable_tech_tree,
         game.enable_oil_economy,
-        game.enable_infinite_resource_centers
+        game.enable_infinite_resource_centers,
+        game.enable_unlock_full_faction_roster
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -559,6 +566,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
                 game.enable_special_abilities,
                 game.enable_oil_economy,
                 game.enable_infinite_resource_centers,
+                game.enable_unlock_full_faction_roster,
             ),
         ),
     };
@@ -707,32 +715,37 @@ mod tests {
     #[test]
     fn create_game_options_ors_unused_lobby_bits() {
         assert_eq!(
-            create_game_options(false, false, false, false),
+            create_game_options(false, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
         );
         assert_eq!(
-            create_game_options(true, false, false, false),
+            create_game_options(true, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
         );
         assert_eq!(
-            create_game_options(false, true, false, false),
+            create_game_options(false, true, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES
         );
         assert_eq!(
-            create_game_options(false, false, true, false),
+            create_game_options(false, false, true, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY
         );
         assert_eq!(
-            create_game_options(true, true, true, false),
+            create_game_options(true, true, true, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
                 | CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES
                 | CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY
         );
         assert_eq!(
-            create_game_options(false, false, false, true),
+            create_game_options(false, false, false, true, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS
+        );
+        assert_eq!(
+            create_game_options(false, false, false, false, true),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT
+                | CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER
         );
     }
 
@@ -744,14 +757,14 @@ mod tests {
             "Oasis",
             "Levels/MP/",
             &[sample_player(1201618778, 1, 0)],
-            create_game_options(true, true, true, false),
+            create_game_options(true, true, true, false, false),
         );
         let off = encode_create_game_payload(
             &gid,
             "Oasis",
             "Levels/MP/",
             &[sample_player(1201618778, 1, 0)],
-            create_game_options(false, false, false, false),
+            create_game_options(false, false, false, false, false),
         );
         assert_eq!(&both[both.len() - 5..], &[9, 0xE1, 0, 0, 0]);
         assert_eq!(&off[off.len() - 5..], &[9, 0x01, 0, 0, 0]);
