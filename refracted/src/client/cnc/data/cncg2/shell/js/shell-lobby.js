@@ -615,7 +615,8 @@
             enableSpecialAbilities: true,
             enableTechTree: true,
             enableOilEconomy: false,
-            enableInfiniteResourceCenters: false
+            enableInfiniteResourceCenters: false,
+            enableUnlockFullFactionRoster: false
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -2107,6 +2108,7 @@
             $scope.lobbyOptions.enableTechTree = true;
             $scope.lobbyOptions.enableOilEconomy = false;
             $scope.lobbyOptions.enableInfiniteResourceCenters = false;
+            $scope.lobbyOptions.enableUnlockFullFactionRoster = false;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -2232,6 +2234,9 @@
                 }
                 if (data.enableInfiniteResourceCenters != null) {
                     $scope.lobbyOptions.enableInfiniteResourceCenters = false;
+                }
+                if (data.enableUnlockFullFactionRoster != null) {
+                    $scope.lobbyOptions.enableUnlockFullFactionRoster = !!data.enableUnlockFullFactionRoster;
                 }
             }
             $scope.allHumansReady = !!data.allReady;
@@ -3047,12 +3052,14 @@
             var tech = $scope.lobbyOptions.enableTechTree !== false;
             var oil = false;
             var infinite = false;
+            var fullRoster = $scope.lobbyOptions.enableUnlockFullFactionRoster === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
                 specialAbilities: special,
                 techTree: tech,
                 oilEconomy: oil,
-                infiniteResourceCenters: infinite
+                infiniteResourceCenters: infinite,
+                unlockFullFactionRoster: fullRoster
             }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
@@ -3069,6 +3076,9 @@
                     }
                     if (data.enableInfiniteResourceCenters != null) {
                         $scope.lobbyOptions.enableInfiniteResourceCenters = false;
+                    }
+                    if (data.enableUnlockFullFactionRoster != null) {
+                        $scope.lobbyOptions.enableUnlockFullFactionRoster = !!data.enableUnlockFullFactionRoster;
                     }
                 });
             });

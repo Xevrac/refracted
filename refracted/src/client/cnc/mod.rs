@@ -1032,13 +1032,14 @@ fn json_opt_bool(v: &serde_json::Value) -> Option<bool> {
 fn parse_gid_pid_match_options(
     query: Option<&str>,
     body: &[u8],
-) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
+) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
     let mut gid: i64 = 0;
     let mut pid: i64 = 0;
     let mut special: Option<bool> = None;
     let mut tech: Option<bool> = None;
     let mut oil: Option<bool> = None;
     let mut infinite: Option<bool> = None;
+    let mut full_roster: Option<bool> = None;
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
@@ -1053,6 +1054,9 @@ fn parse_gid_pid_match_options(
                     "oilEconomy" | "enableOilEconomy" => oil = parse_opt_bool_str(&decoded),
                     "infiniteResourceCenters" | "enableInfiniteResourceCenters" => {
                         infinite = parse_opt_bool_str(&decoded)
+                    }
+                    "unlockFullFactionRoster" | "enableUnlockFullFactionRoster" => {
+                        full_roster = parse_opt_bool_str(&decoded)
                     }
                     _ => {}
                 }
@@ -1094,6 +1098,12 @@ fn parse_gid_pid_match_options(
                 break;
             }
         }
+        for key in ["unlockFullFactionRoster", "enableUnlockFullFactionRoster"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                full_roster = Some(b);
+                break;
+            }
+        }
     }
     if pid <= 0 {
         let session = crate::session::get_user_session();
@@ -1101,11 +1111,11 @@ fn parse_gid_pid_match_options(
             pid = session.persona_id as i64;
         }
     }
-    (gid, pid, special, tech, oil, infinite)
+    (gid, pid, special, tech, oil, infinite, full_roster)
 }
 
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
-    let (gid, pid, special, tech, oil, infinite) = parse_gid_pid_match_options(query, body);
+    let (gid, pid, special, tech, oil, infinite, full_roster) = parse_gid_pid_match_options(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1113,22 +1123,36 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             br#"{"ok":false,"error":"gid required"}"#.to_vec(),
         );
     }
-    if special.is_none() && tech.is_none() && oil.is_none() && infinite.is_none() {
+    if special.is_none()
+        && tech.is_none()
+        && oil.is_none()
+        && infinite.is_none()
+        && full_roster.is_none()
+    {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, or infiniteResourceCenters required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, or unlockFullFactionRoster required"}"#.to_vec(),
         );
     }
-    let resp = game_state::set_match_options(gid, pid, special, tech, oil, infinite);
-    crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} ok={}",
+    let resp = game_state::set_match_options(
         gid,
         pid,
         special,
         tech,
         oil,
         infinite,
+        full_roster,
+    );
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} unlockFullFactionRoster={:?} ok={}",
+        gid,
+        pid,
+        special,
+        tech,
+        oil,
+        infinite,
+        full_roster,
         resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
     );
     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
