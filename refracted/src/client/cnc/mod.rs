@@ -40,8 +40,7 @@ const JGS_IN_QUEUE: i32 = 1;
 #[allow(dead_code)]
 const JGS_GROUP_PART_JOIN: i32 = 2;
 
-// Blaze GameManager `NTOP` (NetworkTopology) constants -- values verified
-// against this CNC build's TDF dump (1 = CLIENT_SERVER_DEDICATED).
+// Blaze GameManager `NTOP` (NetworkTopology) constants
 #[allow(dead_code)]
 const NTOP_NETWORK_DISABLED: i32 = 0;
 #[allow(dead_code)]
@@ -54,6 +53,93 @@ const NTOP_PEER_TO_PEER_FULL_MESH: i32 = 3;
 const NTOP_PEER_TO_PEER_PARTIAL_MESH: i32 = 4;
 
 const NTOP_DEFAULT: i32 = NTOP_CLIENT_SERVER_DEDICATED;
+
+/// Host game clients should use to reach this Refracted instance.
+fn cnc_advertised_host() -> String {
+    if let Some(env) = crate::common::app_env::current_app_env() {
+        let h = normalize_client_host(&env.mysql.host);
+        if !h.is_empty() {
+            return h;
+        }
+    }
+    "127.0.0.1".to_string()
+}
+
+fn normalize_client_host(raw: &str) -> String {
+    let h = raw.split(',').next().unwrap_or(raw).trim();
+    let h = h
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(h);
+    let h = match h.rsplit_once(':') {
+        Some((name, port))
+            if !name.is_empty() && !name.contains(':') && port.parse::<u16>().is_ok() =>
+        {
+            name
+        }
+        _ => h,
+    };
+    let h = h.trim();
+    if h.is_empty() || h == "0.0.0.0" || h == "*" || h == "::" || h == "::0" {
+        String::new()
+    } else {
+        h.to_string()
+    }
+}
+
+fn rewrite_loopback_urls(bytes: &[u8], host: &str) -> Vec<u8> {
+    if host.is_empty() || host == "127.0.0.1" || host.eq_ignore_ascii_case("localhost") {
+        return bytes.to_vec();
+    }
+    let Ok(s) = std::str::from_utf8(bytes) else {
+        return bytes.to_vec();
+    };
+    s.replace("http://127.0.0.1", &format!("http://{host}"))
+        .replace("https://127.0.0.1", &format!("https://{host}"))
+        .into_bytes()
+}
+
+fn ipv4_to_blaze_int(host: &str) -> i32 {
+    host.parse::<std::net::Ipv4Addr>()
+        .map(|a| u32::from_be_bytes(a.octets()) as i32)
+        .unwrap_or(0x7f000001u32 as i32)
+}
+
+#[cfg(test)]
+mod advertised_host_tests {
+    use super::*;
+
+    #[test]
+    fn normalize_strips_port_and_rejects_wildcard_bind() {
+        assert_eq!(normalize_client_host("123.456.789.10:80"), "123.456.789.10");
+        assert_eq!(normalize_client_host("0.0.0.0"), "");
+        assert_eq!(normalize_client_host("au-rfr-01.test.local"), "au-rfr-01.test.local");
+    }
+
+    #[test]
+    fn rewrite_replaces_loopback_webbaseurl() {
+        let cfg = b"-RtsClientSettings.WebBaseUrl http://127.0.0.1/cncg2/shell/\n";
+        let out = rewrite_loopback_urls(cfg, "123.456.789.10");
+        let s = String::from_utf8(out).unwrap();
+        assert!(s.contains("http://123.456.789.10/cncg2/shell/"));
+        assert!(!s.contains("127.0.0.1"));
+    }
+
+    #[test]
+    fn rewrite_leaves_loopback_when_host_is_local() {
+        let cfg = b"http://127.0.0.1/cncg2/shell/";
+        assert_eq!(rewrite_loopback_urls(cfg, "127.0.0.1"), cfg);
+    }
+
+    #[test]
+    fn blaze_int_for_tailscale_ip() {
+        assert_eq!(ipv4_to_blaze_int("127.0.0.1"), 0x7f000001u32 as i32);
+        assert_eq!(
+            ipv4_to_blaze_int("123.456.789.10"),
+            u32::from_be_bytes([123, 456, 789, 10]) as i32
+        );
+    }
+}
 
 fn cnc_blaze_conf_map() -> indexmap::IndexMap<String, String> {
     let mut conf_map = indexmap::IndexMap::new();
@@ -90,39 +176,39 @@ fn cnc_qos_ping_site_struct(qos_host: &str, qos_port: i32, site_name: &str) -> V
 
 fn cnc_encode_preauth_qoss_field() -> Vec<u8> {
     let qos_ports = crate::common::game::current_service_ports();
-    let qos_host = "127.0.0.1";
+    let qos_host = cnc_advertised_host();
     let qos_port = qos_ports.qos_data as i32;
     let coordinator = "qoscoordinator.gameservices.ea.com";
 
     let mut qoss_struct = Vec::new();
 
-    let bwps = cnc_qos_ping_site_struct(qos_host, qos_port, coordinator);
+    let bwps = cnc_qos_ping_site_struct(&qos_host, qos_port, coordinator);
     qoss_struct.extend_from_slice(&TdfEncoder::encode_struct("BWPS", &bwps));
 
     qoss_struct.extend_from_slice(&TdfEncoder::encode_int("LNP ", 10));
 
     let mut ltps_map = indexmap::IndexMap::new();
     let regions = [
-        ("aws-bah", qos_host),
-        ("aws-brz", qos_host),
-        ("aws-cmh", qos_host),
-        ("aws-cpt", qos_host),
-        ("aws-dub", qos_host),
-        ("aws-fra", qos_host),
-        ("aws-hkg", qos_host),
-        ("aws-iad", qos_host),
-        ("aws-icn", qos_host),
-        ("aws-lhr", qos_host),
-        ("aws-nrt", qos_host),
-        ("aws-pdx", qos_host),
-        ("aws-sin", qos_host),
-        ("aws-sjc", qos_host),
-        ("aws-syd", qos_host),
+        "aws-bah",
+        "aws-brz",
+        "aws-cmh",
+        "aws-cpt",
+        "aws-dub",
+        "aws-fra",
+        "aws-hkg",
+        "aws-iad",
+        "aws-icn",
+        "aws-lhr",
+        "aws-nrt",
+        "aws-pdx",
+        "aws-sin",
+        "aws-sjc",
+        "aws-syd",
     ];
-    for (alias, host) in regions {
+    for alias in regions {
         // SNA should match the LTPS alias; empty SNA leaves QosManager unable to
         // select a bandwidth site after latency probes complete.
-        let region = cnc_qos_ping_site_struct(host, qos_port, alias);
+        let region = cnc_qos_ping_site_struct(&qos_host, qos_port, alias);
         ltps_map.insert(alias.to_string(), region);
     }
     qoss_struct.extend_from_slice(&TdfEncoder::encode_string_struct_map_ordered("LTPS", &ltps_map));
@@ -217,9 +303,6 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     }
     if base == "cnc/player-attrs" && is_post {
         return Some(handle_cnc_player_attrs(query, body));
-    }
-    if base == "cnc/shell-theme" {
-        return Some(handle_cnc_shell_theme(is_post, body));
     }
     // GET /cnc/player-probe?gid= -- validate map + player lobby/CreateGame fields.
     if base == "cnc/player-probe" && is_get {
@@ -666,89 +749,6 @@ fn cnc_process_dirs() -> Vec<PathBuf> {
     Vec::new()
 }
 
-fn shell_theme_prefs_path() -> PathBuf {
-    cnc_data_runtime_dir()
-        .join("cncg2")
-        .join("shell")
-        .join("prefs")
-        .join("ui-theme.json")
-}
-
-fn normalize_shell_theme_id(raw: &str) -> &'static str {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "aurora" => "aurora",
-        "classic" | "cnc-alpha" | "alpha" => "classic",
-        _ => "aurora",
-    }
-}
-
-/// Body/file JSON: `{ "theme": "classic"|"aurora", "defaultTheme": "classic"|"aurora" }`.
-fn handle_cnc_shell_theme(is_post: bool, body: &[u8]) -> HttpResponse {
-    let path = shell_theme_prefs_path();
-    if is_post {
-        let mut theme = "aurora".to_string();
-        let mut default_theme = "aurora".to_string();
-        if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
-            if let Some(t) = v.get("theme").and_then(|t| t.as_str()) {
-                theme = normalize_shell_theme_id(t).to_string();
-            }
-            if let Some(t) = v.get("defaultTheme").and_then(|t| t.as_str()) {
-                default_theme = normalize_shell_theme_id(t).to_string();
-            } else {
-                default_theme = theme.clone();
-            }
-        } else if let Ok(s) = std::str::from_utf8(body) {
-            let s = s.trim();
-            if !s.is_empty() {
-                theme = normalize_shell_theme_id(s).to_string();
-                default_theme = theme.clone();
-            }
-        }
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let payload = serde_json::json!({
-            "theme": theme,
-            "defaultTheme": default_theme
-        });
-        match std::fs::write(&path, payload.to_string()) {
-            Ok(()) => HttpResponse::new(200, "application/json", payload.to_string().into_bytes()),
-            Err(e) => HttpResponse::new(
-                500,
-                "application/json",
-                serde_json::json!({ "ok": false, "error": e.to_string() })
-                    .to_string()
-                    .into_bytes(),
-            ),
-        }
-    } else {
-        let (theme, default_theme) = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-            .map(|v| {
-                let theme = v
-                    .get("theme")
-                    .and_then(|t| t.as_str())
-                    .map(normalize_shell_theme_id)
-                    .unwrap_or("aurora")
-                    .to_string();
-                let default_theme = v
-                    .get("defaultTheme")
-                    .and_then(|t| t.as_str())
-                    .map(normalize_shell_theme_id)
-                    .unwrap_or(theme.as_str())
-                    .to_string();
-                (theme, default_theme)
-            })
-            .unwrap_or_else(|| ("aurora".to_string(), "aurora".to_string()));
-        let payload = serde_json::json!({
-            "theme": theme,
-            "defaultTheme": default_theme
-        });
-        HttpResponse::new(200, "application/json", payload.to_string().into_bytes())
-    }
-}
-
 fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
     let mut gid: i64 = 1;
@@ -1032,7 +1032,7 @@ fn json_opt_bool(v: &serde_json::Value) -> Option<bool> {
 fn parse_gid_pid_match_options(
     query: Option<&str>,
     body: &[u8],
-) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
+) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
     let mut gid: i64 = 0;
     let mut pid: i64 = 0;
     let mut special: Option<bool> = None;
@@ -1040,6 +1040,7 @@ fn parse_gid_pid_match_options(
     let mut oil: Option<bool> = None;
     let mut infinite: Option<bool> = None;
     let mut full_roster: Option<bool> = None;
+    let mut instant_selling: Option<bool> = None;
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
@@ -1055,8 +1056,10 @@ fn parse_gid_pid_match_options(
                     "infiniteResourceCenters" | "enableInfiniteResourceCenters" => {
                         infinite = parse_opt_bool_str(&decoded)
                     }
-                    "unlockFullFactionRoster" | "enableUnlockFullFactionRoster" => {
-                        full_roster = parse_opt_bool_str(&decoded)
+                    "unlockFullFactionRoster" | "enableUnlockFullFactionRoster" | "factionsOnly"
+                    | "enableFactionsOnly" => full_roster = parse_opt_bool_str(&decoded),
+                    "instantSelling" | "enableInstantSelling" => {
+                        instant_selling = parse_opt_bool_str(&decoded)
                     }
                     _ => {}
                 }
@@ -1098,9 +1101,20 @@ fn parse_gid_pid_match_options(
                 break;
             }
         }
-        for key in ["unlockFullFactionRoster", "enableUnlockFullFactionRoster"] {
+        for key in [
+            "unlockFullFactionRoster",
+            "enableUnlockFullFactionRoster",
+            "factionsOnly",
+            "enableFactionsOnly",
+        ] {
             if let Some(b) = v.get(key).and_then(json_opt_bool) {
                 full_roster = Some(b);
+                break;
+            }
+        }
+        for key in ["instantSelling", "enableInstantSelling"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                instant_selling = Some(b);
                 break;
             }
         }
@@ -1111,11 +1125,12 @@ fn parse_gid_pid_match_options(
             pid = session.persona_id as i64;
         }
     }
-    (gid, pid, special, tech, oil, infinite, full_roster)
+    (gid, pid, special, tech, oil, infinite, full_roster, instant_selling)
 }
 
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
-    let (gid, pid, special, tech, oil, infinite, full_roster) = parse_gid_pid_match_options(query, body);
+    let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling) =
+        parse_gid_pid_match_options(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1128,11 +1143,12 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && oil.is_none()
         && infinite.is_none()
         && full_roster.is_none()
+        && instant_selling.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, or unlockFullFactionRoster required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, or instantSelling required"}"#.to_vec(),
         );
     }
     let resp = game_state::set_match_options(
@@ -1143,9 +1159,10 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         oil,
         infinite,
         full_roster,
+        instant_selling,
     );
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} unlockFullFactionRoster={:?} ok={}",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} factionsOnly={:?} instantSelling={:?} ok={}",
         gid,
         pid,
         special,
@@ -1153,6 +1170,7 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         oil,
         infinite,
         full_roster,
+        instant_selling,
         resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
     );
     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1667,8 +1685,9 @@ pub fn try_handle_http_request(method: &str, path: &str) -> Option<HttpResponse>
     let request_rel = cnc_local_request_relative_path(clean)?;
 
     let rel = sanitize_relative_request_path(&request_rel)?;
+    let rewrite_host = cnc_advertised_host();
     for root in cnc_http_data_roots() {
-        if let Some(response) = try_read_http_file(&root, &rel, is_head) {
+        if let Some(response) = try_read_http_file(&root, &rel, is_head, &rewrite_host) {
             return Some(response);
         }
     }
@@ -1688,7 +1707,7 @@ fn cnc_http_data_roots() -> Vec<PathBuf> {
     roots
 }
 
-fn try_read_http_file(root: &Path, rel: &Path, is_head: bool) -> Option<HttpResponse> {
+fn try_read_http_file(root: &Path, rel: &Path, is_head: bool, rewrite_host: &str) -> Option<HttpResponse> {
     let full = root.join(rel);
 
     let mut try_paths = if full.is_dir() {
@@ -1703,10 +1722,22 @@ fn try_read_http_file(root: &Path, rel: &Path, is_head: bool) -> Option<HttpResp
     for candidate in try_paths {
         if let Ok(bytes) = std::fs::read(&candidate) {
             let ct = content_type_for(&candidate);
+            let is_cfg = candidate
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("cfg"));
             let body = if is_head {
                 Vec::new()
             } else if ct == "text/html" {
                 inject_profile_script(&bytes)
+            } else if is_cfg {
+                let rewritten = rewrite_loopback_urls(&bytes, rewrite_host);
+                if rewritten != bytes {
+                    crate::debug_println!(
+                        "\x1b[38;2;100;200;255m[CNC]\x1b[0m rewrite build-cfg loopback URLs -> {rewrite_host}"
+                    );
+                }
+                rewritten
             } else {
                 bytes
             };
@@ -1714,7 +1745,8 @@ fn try_read_http_file(root: &Path, rel: &Path, is_head: bool) -> Option<HttpResp
             if matches!(
                 ct,
                 "text/html" | "application/javascript" | "text/javascript" | "text/css"
-            ) {
+            ) || is_cfg
+            {
                 response.headers.insert(
                     "Cache-Control".to_string(),
                     "no-cache, no-store, must-revalidate".to_string(),
@@ -1771,12 +1803,12 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
 
 pub fn handle_redirector_get_server_instance(_payload: &[u8]) -> BlazeResult<Bytes> {
     let ports = crate::common::game::current_service_ports();
-    let host = "127.0.0.1";
-    let ip = u32::from_be_bytes(std::net::Ipv4Addr::new(127, 0, 0, 1).octets()) as i32;
+    let host = cnc_advertised_host();
+    let ip = ipv4_to_blaze_int(&host);
 
     let mut response = Vec::new();
     response.extend_from_slice(&encode_union_struct("ADDR", 0, |valu| {
-        valu.extend_from_slice(&TdfEncoder::encode_string("HOST", host));
+        valu.extend_from_slice(&TdfEncoder::encode_string("HOST", &host));
         valu.extend_from_slice(&TdfEncoder::encode_int("IP\0\0", ip));
         valu.extend_from_slice(&TdfEncoder::encode_int("PORT", ports.blaze_main as i32));
     }));
@@ -1891,7 +1923,7 @@ pub fn handle_util_preauth(payload: &[u8]) -> BlazeResult<Bytes> {
 
     let cfid = TdfEncoder::find_string_field(payload, "CFID").unwrap_or_else(|| "BlazeSDK".to_string());
     let web = crate::common::game::current_service_ports().web_http;
-    let grpc_url = format!("http://127.0.0.1:{web}");
+    let grpc_url = format!("http://{}:{web}", cnc_advertised_host());
     crate::session::session_module::record_last_fetch_client_config(&cfid, "cnc", &grpc_url);
 
     Ok(Bytes::from(response))
@@ -1900,7 +1932,7 @@ pub fn handle_util_preauth(payload: &[u8]) -> BlazeResult<Bytes> {
 pub fn handle_util_fetch_client_config(payload: &[u8]) -> BlazeResult<Bytes> {
     let cfid = TdfEncoder::find_string_field(payload, "CFID").unwrap_or_else(|| "BlazeSDK".to_string());
     let web = crate::common::game::current_service_ports().web_http;
-    let grpc_url = format!("http://127.0.0.1:{web}");
+    let grpc_url = format!("http://{}:{web}", cnc_advertised_host());
     crate::session::session_module::record_last_fetch_client_config(&cfid, "cnc", &grpc_url);
     let conf_map = cnc_blaze_conf_map();
     Ok(Bytes::from(TdfEncoder::encode_string_string_map_ordered(
@@ -1914,9 +1946,11 @@ pub fn handle_util_post_auth(_payload: &[u8]) -> BlazeResult<Bytes> {
 
     let mut response = Vec::new();
 
+    let adrs = cnc_advertised_host();
+
     // Ascending packed-tag order: ADRS CSIG OIDS PJID PORT RPRT TIID.
     let mut pss = Vec::new();
-    pss.extend_from_slice(&TdfEncoder::encode_string("ADRS", "127.0.0.1"));
+    pss.extend_from_slice(&TdfEncoder::encode_string("ADRS", &adrs));
     pss.extend_from_slice(&TdfEncoder::encode_struct("CSIG", &[]));
     pss.extend_from_slice(&TdfEncoder::encode_object_id_list("OIDS", &[]));
     pss.extend_from_slice(&TdfEncoder::encode_string("PJID", "123071"));
@@ -1928,7 +1962,7 @@ pub fn handle_util_post_auth(_payload: &[u8]) -> BlazeResult<Bytes> {
     // Field order aligned with Labs `postAuth` TELE so Prism / strict TDF decoders stay in sync.
     let disa = "AD,AF,AG,AI,AL,AM,AN,AO,AQ,AR,AS,AW,AX,AZ,BA,BB,BD,BF,BH,BI,BJ,BM,BN,BO,BR,BS,BT,BV,BW,BY,BZ,CC,CD,CF,CG,CI,CK,CL,CM,CN,CO,CR,CU,CV,CX,DJ,DM,DO,DZ,EC,EG,EH,ER,ET,FJ,FK,FM,FO,GA,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GS,GT,GU,GW,GY,HM,HN,HT,ID,IL,IM,IN,IO,IQ,IR,IS,JE,JM,JO,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LY,MA,MC,MD,ME,MG,MH,ML,MM,MN,MO,MP,MQ,MR,MS,MU,MV,MW,MY,MZ,NA,NC,NE,NF,NG,NI,NP,NR,NU,OM,PA,PE,PF,PG,PH,PK,PM,PN,PS,PW,PY,QA,RE,RS,RW,SA,SB,SC,SD,SG,SH,SJ,SL,SM,SN,SO,SR,ST,SV,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TT,TV,TZ,UA,UG,UM,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZM,ZW,ZZ";
     let mut tele = Vec::new();
-    tele.extend_from_slice(&TdfEncoder::encode_string("ADRS", "127.0.0.1"));
+    tele.extend_from_slice(&TdfEncoder::encode_string("ADRS", &adrs));
     tele.extend_from_slice(&TdfEncoder::encode_int("ANON", 0));
     tele.extend_from_slice(&TdfEncoder::encode_string("BKEY", ""));
     tele.extend_from_slice(&TdfEncoder::encode_int("CTRY", 0));
@@ -1954,11 +1988,11 @@ pub fn handle_util_post_auth(_payload: &[u8]) -> BlazeResult<Bytes> {
     response.extend_from_slice(&TdfEncoder::encode_struct("TELE", &tele));
 
     let mut tick = Vec::new();
-    tick.extend_from_slice(&TdfEncoder::encode_string("ADRS", "127.0.0.1"));
+    tick.extend_from_slice(&TdfEncoder::encode_string("ADRS", &adrs));
     tick.extend_from_slice(&TdfEncoder::encode_int("PORT", 8999));
     tick.extend_from_slice(&TdfEncoder::encode_string(
         "SKEY",
-        &format!("{uid},127.0.0.1:80,cncprod150805,10,50,50,50,50,0,0"),
+        &format!("{uid},{adrs}:80,cncprod150805,10,50,50,50,50,0,0"),
     ));
     response.extend_from_slice(&TdfEncoder::encode_struct("TICK", &tick));
 
