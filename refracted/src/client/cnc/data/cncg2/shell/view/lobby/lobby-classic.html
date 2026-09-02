@@ -64,7 +64,6 @@
                             ng-click="openMapPicker($event)"
                             ng-disabled="!isLobbyHost()">MAPS</button>
                     <button type="button" class="cc-lobby__gear"
-                            title="Options"
                             ng-click="openLobbyOptions($event)"
                             ng-disabled="!isLobbyHost()"
                             ng-class="{on: lobbyOptionsOpen}">
@@ -120,7 +119,7 @@
                          ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
                          ng-click="$event.stopPropagation()">
                         <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal && isLobbyHost()"
-                                ng-click="clearSlot(1, $index, $event)" title="Remove">&times;</button>
+                                ng-click="clearSlot(1, $index, $event)">&times;</button>
                         <div class="cc-lobby__card-left">
                             <div class="cc-lobby__portrait"
                                  ng-class="{'cc-lobby__portrait--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
@@ -130,17 +129,19 @@
                                  ng-style="{'background-color': slot.color}"></div>
                             <div class="cc-lobby__tools" ng-if="!slot.invitePending">
                                 <div class="cc-lobby__ready" ng-class="{on: slot.ready}"
-                                     ng-if="!slot.isAi" title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
+                                     ng-if="!slot.isAi"
+                                     data-tip="{{ slot.ready ? 'Ready' : 'Not ready' }}"
+                                     data-tip-tone="{{ slot.ready ? 'ready' : 'not-ready' }}">
                                     <span class="cc-lobby__ready-tick" ng-show="slot.ready"></span>
                                 </div>
                                 <button type="button" class="cc-lobby__start-badge"
                                         ng-click="openStartModal(slot, $event)"
                                         ng-disabled="!canChangeStartpoint(slot)"
-                                        title="Start location">{{ startpointLabel(slot.startpoint) }}</button>
+                                        data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(1, $index, $event)"
                                         ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
-                                        title="Faction / house / colour"></button>
+                                        data-tip="Pick faction and colour"></button>
                             </div>
                             <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
@@ -188,7 +189,7 @@
                          ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(2, $index)}"
                          ng-click="$event.stopPropagation()">
                         <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal && isLobbyHost()"
-                                ng-click="clearSlot(2, $index, $event)" title="Remove">&times;</button>
+                                ng-click="clearSlot(2, $index, $event)">&times;</button>
                         <div class="cc-lobby__card-left">
                             <div class="cc-lobby__portrait"
                                  ng-class="{'cc-lobby__portrait--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
@@ -198,17 +199,19 @@
                                  ng-style="{'background-color': slot.color}"></div>
                             <div class="cc-lobby__tools" ng-if="!slot.invitePending">
                                 <div class="cc-lobby__ready" ng-class="{on: slot.ready}"
-                                     ng-if="!slot.isAi" title="{{ slot.ready ? 'Ready' : 'Not ready' }}">
+                                     ng-if="!slot.isAi"
+                                     data-tip="{{ slot.ready ? 'Ready' : 'Not ready' }}"
+                                     data-tip-tone="{{ slot.ready ? 'ready' : 'not-ready' }}">
                                     <span class="cc-lobby__ready-tick" ng-show="slot.ready"></span>
                                 </div>
                                 <button type="button" class="cc-lobby__start-badge"
                                         ng-click="openStartModal(slot, $event)"
                                         ng-disabled="!canChangeStartpoint(slot)"
-                                        title="Start location">{{ startpointLabel(slot.startpoint) }}</button>
+                                        data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(2, $index, $event)"
                                         ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
-                                        title="Faction / house / colour"></button>
+                                        data-tip="Pick faction and colour"></button>
                             </div>
                             <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
@@ -280,8 +283,7 @@
                                     ng-click="applyRoomPassword()">{{ passwordProtected ? 'UPDATE' : 'SET' }}</button>
                             <button type="button" class="cc-lobby__btn cc-lobby__password-clear"
                                     ng-show="passwordProtected"
-                                    ng-click="clearRoomPassword()"
-                                    title="Clear password">
+                                    ng-click="clearRoomPassword()">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                                     <path fill="none" stroke="#e8e0c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                                           d="M4 7h16M9 7V5h6v2M6 7l1 14h10l1-14M10 11v6M14 11v6"/>
@@ -301,7 +303,9 @@
                                 <em class="cc-lobby__options-stub">SOON</em>
                             </div>
                             <select ng-model="lobbyOptions.startingCash"
-                                    ng-disabled="true">
+                                    ng-disabled="true"
+                                    data-tip-pos="below"
+                                    data-tip="Coming soon">
                                 <option value="low">LOW</option>
                                 <option value="standard">STANDARD</option>
                                 <option value="high">HIGH</option>
@@ -313,7 +317,9 @@
                                 <em class="cc-lobby__options-stub">SOON</em>
                             </div>
                             <select ng-model="lobbyOptions.startingUnits"
-                                    ng-disabled="true">
+                                    ng-disabled="true"
+                                    data-tip-pos="below"
+                                    data-tip="Coming soon">
                                 <option value="none">NONE</option>
                                 <option value="standard">STANDARD</option>
                                 <option value="many">MANY</option>
@@ -327,14 +333,16 @@
                                 <em class="cc-lobby__options-stub">SOON</em>
                             </div>
                             <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                   title="Coming soon">
+                                   data-tip-pos="below"
+                                   data-tip="Coming soon">
                                 <input type="checkbox"
                                        ng-model="lobbyOptions.noBaseBuilding"
                                        ng-disabled="true">
                                 NO BASE BUILDING
                             </label>
                             <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                   title="Coming soon">
+                                   data-tip-pos="below"
+                                   data-tip="Coming soon">
                                 <input type="checkbox"
                                        ng-model="lobbyOptions.noFogOfWar"
                                        ng-disabled="true">
@@ -345,34 +353,49 @@
                             <div class="cc-lobby__options-cell-head">
                                 <span>TWEAKS</span>
                             </div>
-                            <label class="cc-lobby__options-check">
+                            <label class="cc-lobby__options-check"
+                                   data-tip-pos="below"
+                                   data-tip="Enable general special abilities">
                                 <input type="checkbox"
                                        ng-model="lobbyOptions.enableSpecialAbilities"
                                        ng-change="applyLobbyMatchOptions()">
                                 SPECIAL ABILITIES
                             </label>
-                                <label class="cc-lobby__options-check">
+                                <label class="cc-lobby__options-check"
+                                       data-tip-pos="below"
+                                       data-tip="Require structure build prerequisites">
                                     <input type="checkbox"
                                            ng-model="lobbyOptions.enableTechTree"
                                            ng-change="applyLobbyMatchOptions()">
                                     TECH TREE
                                 </label>
-                                <label class="cc-lobby__options-check">
+                                <label class="cc-lobby__options-check"
+                                       data-tip-pos="below"
+                                       data-tip="Unlock all faction units">
                                     <input type="checkbox"
                                            ng-model="lobbyOptions.enableUnlockFullFactionRoster"
-                                           ng-disabled="lobbyOptions.enableTechTree === false"
                                            ng-change="applyLobbyMatchOptions()">
-                                    FULL FACTION ROSTER
+                                    FACTIONS ONLY
+                                </label>
+                                <label class="cc-lobby__options-check"
+                                       data-tip-pos="below"
+                                       data-tip="Structure sell completes in ~0.01 seconds">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableInstantSelling"
+                                           ng-change="applyLobbyMatchOptions()">
+                                    INSTANT SELLING
                                 </label>
                                 <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                       title="Coming soon">
+                                       data-tip-pos="below"
+                                       data-tip="Coming soon">
                                     <input type="checkbox"
                                            ng-model="lobbyOptions.enableOilEconomy"
                                            ng-disabled="true">
                                     OIL ECONOMY
                                 </label>
                                 <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                       title="Coming soon">
+                                       data-tip-pos="below"
+                                       data-tip="Coming soon">
                                     <input type="checkbox"
                                            ng-model="lobbyOptions.enableInfiniteResourceCenters"
                                            ng-disabled="true">

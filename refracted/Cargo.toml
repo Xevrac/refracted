@@ -126,7 +126,7 @@ desktop = [
 build = "build.rs"
 edition = "2021"
 name = "refracted"
-version = "0.4.1839"
+version = "0.4.1855"
 
 [target."cfg(windows)".build-dependencies]
 winres = "0.1"

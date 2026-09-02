@@ -953,8 +953,10 @@ pub struct CncGame {
     pub enable_oil_economy: bool,
     /// Resource centers do not deplete. Default off.
     pub enable_infinite_resource_centers: bool,
-    /// Unlock entire faction roster when Tech Tree is on. Default off.
+    /// Factions Only: all general-specific units buildable per faction. Independent of tech tree. Default off.
     pub enable_unlock_full_faction_roster: bool,
+    /// Structure sell completes in ~0.01s. Default off (retail 10s).
+    pub enable_instant_selling: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
     /// `PROS` roster rows last sent in `NotifyGameSetup` (reused for `getFullGameData`).
@@ -1030,6 +1032,7 @@ pub fn set_match_options(
     enable_oil_economy: Option<bool>,
     enable_infinite_resource_centers: Option<bool>,
     enable_unlock_full_faction_roster: Option<bool>,
+    enable_instant_selling: Option<bool>,
 ) -> serde_json::Value {
     let mut m = games().lock();
     let Some(game) = m.get_mut(&gid) else {
@@ -1057,6 +1060,9 @@ pub fn set_match_options(
     if let Some(v) = enable_unlock_full_faction_roster {
         game.enable_unlock_full_faction_roster = v;
     }
+    if let Some(v) = enable_instant_selling {
+        game.enable_instant_selling = v;
+    }
     serde_json::json!({
         "ok": true,
         "gid": gid,
@@ -1065,10 +1071,12 @@ pub fn set_match_options(
         "enableOilEconomy": game.enable_oil_economy,
         "enableInfiniteResourceCenters": game.enable_infinite_resource_centers,
         "enableUnlockFullFactionRoster": game.enable_unlock_full_faction_roster,
+        "enableFactionsOnly": game.enable_unlock_full_faction_roster,
+        "enableInstantSelling": game.enable_instant_selling,
     })
 }
 
-pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool) {
+pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool, bool) {
     games()
         .lock()
         .get(&gid)
@@ -1079,9 +1087,10 @@ pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool) {
                 g.enable_oil_economy,
                 g.enable_infinite_resource_centers,
                 g.enable_unlock_full_faction_roster,
+                g.enable_instant_selling,
             )
         })
-        .unwrap_or((true, true, false, false, false))
+        .unwrap_or((true, true, false, false, false, false))
 }
 
 /// Copy host lobby progression flags onto a dedicated gid (same pattern as pending map).
@@ -1098,10 +1107,11 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
                     game.enable_oil_economy,
                     game.enable_infinite_resource_centers,
                     game.enable_unlock_full_faction_roster,
+                    game.enable_instant_selling,
                 )
             })
     };
-    let Some((special, tech, oil, infinite, full_roster)) = source else {
+    let Some((special, tech, oil, infinite, full_roster, instant_selling)) = source else {
         return;
     };
     if let Some(game) = games().lock().get_mut(&dedicated_gid) {
@@ -1110,6 +1120,7 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
         game.enable_oil_economy = false;
         game.enable_infinite_resource_centers = infinite;
         game.enable_unlock_full_faction_roster = full_roster;
+        game.enable_instant_selling = instant_selling;
         let _ = oil;
     }
 }
@@ -1335,6 +1346,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_oil_economy: false,
             enable_infinite_resource_centers: false,
             enable_unlock_full_faction_roster: false,
+            enable_instant_selling: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -1369,6 +1381,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_oil_economy = false;
     game.enable_infinite_resource_centers = false;
     game.enable_unlock_full_faction_roster = false;
+    game.enable_instant_selling = false;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -2115,7 +2128,7 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
             })
         })
         .collect();
-    let (enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster) = game
+    let (enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling) = game
         .as_ref()
         .map(|g| {
             (
@@ -2124,9 +2137,10 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
                 g.enable_oil_economy,
                 g.enable_infinite_resource_centers,
                 g.enable_unlock_full_faction_roster,
+                g.enable_instant_selling,
             )
         })
-        .unwrap_or((true, true, false, false, false));
+        .unwrap_or((true, true, false, false, false, false));
     serde_json::json!({
         "ok": issues.is_empty() && game.is_some(),
         "gid": gid,
@@ -2137,6 +2151,8 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
         "enableOilEconomy": enable_oil_economy,
         "enableInfiniteResourceCenters": enable_infinite_resource_centers,
         "enableUnlockFullFactionRoster": enable_unlock_full_faction_roster,
+        "enableFactionsOnly": enable_unlock_full_faction_roster,
+        "enableInstantSelling": enable_instant_selling,
         "player_count": players_json.len(),
         "players": players_json,
         "pending_attrs": pending_json,
@@ -2214,7 +2230,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player, map_for_defaults);
-    let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster) = games()
+    let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling) = games()
         .lock()
         .get(&gid)
         .map(|g| {
@@ -2226,9 +2242,10 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
                 g.enable_oil_economy,
                 g.enable_infinite_resource_centers,
                 g.enable_unlock_full_faction_roster,
+                g.enable_instant_selling,
             )
         })
-        .unwrap_or((None, String::new(), true, true, true, false, false));
+        .unwrap_or((None, String::new(), true, true, true, false, false, false));
     let game = CncGame {
         gid,
         name: gnam,
@@ -2247,6 +2264,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_oil_economy,
         enable_infinite_resource_centers,
         enable_unlock_full_faction_roster,
+        enable_instant_selling,
         replicated_wire: None,
         pros_wire: None,
     };
@@ -2303,6 +2321,7 @@ pub fn seed_from_join(gid: i64) {
             enable_oil_economy: false,
             enable_infinite_resource_centers: false,
             enable_unlock_full_faction_roster: false,
+            enable_instant_selling: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -2824,6 +2843,8 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableOilEconomy": game.enable_oil_economy,
         "enableInfiniteResourceCenters": game.enable_infinite_resource_centers,
         "enableUnlockFullFactionRoster": game.enable_unlock_full_faction_roster,
+        "enableFactionsOnly": game.enable_unlock_full_faction_roster,
+        "enableInstantSelling": game.enable_instant_selling,
         "allReady": all_ready,
         "players": players,
         "serverLost": false,

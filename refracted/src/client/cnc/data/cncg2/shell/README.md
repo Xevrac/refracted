@@ -19,9 +19,11 @@ Pickable from **OPTIONS → INTERFACE** on the **main shell only** (not in-game 
 | `classic` | Classic | Original Generals 2 layout (`view/roots/classic.html` + `view/home.html`) |
 | `aurora` | Aurora | Modern HUD layout (`view/roots/aurora.html` + `view/home-aurora.html`) |
 
-Persistence:
-1. `localStorage` key `cnc_shell_ui_theme` (immediate)
-2. Refracted `GET/POST /cnc/shell-theme` → `data/.../cncg2/shell/prefs/ui-theme.json` (survives browser profile wipes)
+Persistence (per-machine, per game install):
+1. Shell UI theme — `localStorage` key `cnc_shell_ui_theme` in the shell WebKit profile (`CNCO_DL\0\webkit` on retail)
+2. Lobby defaults — `localStorage` key `cnc_lobby_defaults` in the same WebKit profile
+
+These are client-side only. Refracted does not write shell prefs to its host filesystem.
 
 Legacy id `cnc-alpha` maps to `classic`.
 CSS: `css/themes/` (+ `aurora-layout.css` for the Aurora root).

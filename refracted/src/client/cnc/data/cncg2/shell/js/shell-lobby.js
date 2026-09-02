@@ -462,14 +462,26 @@
         return out;
     }
 
+    function applyLobbyDefaultsToSlot(slot, map) {
+        if (!slot) {
+            return;
+        }
+        if (window.CncLobbyDefaults && CncLobbyDefaults.applyToSlot) {
+            CncLobbyDefaults.applyToSlot(slot, map);
+        } else {
+            slot.faction = defaultFactionForMap(map);
+            slot.general = defaultGeneralId(slot.faction, map);
+        }
+        slot.codename = codenameForSlot(slot);
+        slot.avatar = avatarForSlot(slot);
+    }
+
     function fillLocalSlot(name, map) {
         var s = emptySlot();
         s.occupied = true;
         s.isLocal = true;
         s.ready = false;
-        s.faction = defaultFactionForMap(map);
-        s.general = defaultGeneralId(s.faction, map);
-        s.codename = codenameForSlot(s);
+        applyLobbyDefaultsToSlot(s, map);
         s.displayName = name || 'UnknownPlayer';
         s.teamNum = 1;
         s.startpoint = 0;
@@ -616,7 +628,8 @@
             enableTechTree: true,
             enableOilEconomy: false,
             enableInfiniteResourceCenters: false,
-            enableUnlockFullFactionRoster: false
+            enableUnlockFullFactionRoster: false,
+            enableInstantSelling: false
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -2063,6 +2076,15 @@
             postLeaveGameRoom();
         });
 
+        $scope.$on('cnc:lobbyDefaultsSaved', function () {
+            if ($scope.team1[0] && $scope.team1[0].isLocal && !$scope._joinedGameroom) {
+                applyLobbyDefaultsToSlot($scope.team1[0], $scope.selectedMap);
+                if (!$scope.mapForcesTutorial) {
+                    syncPlayerAttrsToServer($scope.team1[0]);
+                }
+            }
+        });
+
         function postLeaveGameRoom() {
             if (!$scope._joinedGameroom) {
                 return;
@@ -2109,6 +2131,7 @@
             $scope.lobbyOptions.enableOilEconomy = false;
             $scope.lobbyOptions.enableInfiniteResourceCenters = false;
             $scope.lobbyOptions.enableUnlockFullFactionRoster = false;
+            $scope.lobbyOptions.enableInstantSelling = false;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -2117,6 +2140,9 @@
             if ($scope.team1[0]) {
                 $scope.team1[0].isHost = false;
                 $scope.team1[0].ready = false;
+                if ($scope.team1[0].isLocal) {
+                    applyLobbyDefaultsToSlot($scope.team1[0], $scope.selectedMap);
+                }
             }
             clearRemoteHumanSlots();
             if (window.CncProbe) {
@@ -2237,6 +2263,11 @@
                 }
                 if (data.enableUnlockFullFactionRoster != null) {
                     $scope.lobbyOptions.enableUnlockFullFactionRoster = !!data.enableUnlockFullFactionRoster;
+                } else if (data.enableFactionsOnly != null) {
+                    $scope.lobbyOptions.enableUnlockFullFactionRoster = !!data.enableFactionsOnly;
+                }
+                if (data.enableInstantSelling != null) {
+                    $scope.lobbyOptions.enableInstantSelling = !!data.enableInstantSelling;
                 }
             }
             $scope.allHumansReady = !!data.allReady;
@@ -2909,6 +2940,7 @@
             } catch (e) { /* ignore */ }
             applyMapFromBrowserGame(g);
             if ($scope.team1[0] && $scope.team1[0].isLocal) {
+                applyLobbyDefaultsToSlot($scope.team1[0], $scope.selectedMap);
                 $scope.team1[0].ready = !!$scope._localIsLobbyHost;
                 $scope.team1[0].isHost = !!$scope._localIsLobbyHost;
                 if (window.CncBlazeState && CncBlazeState.getPersonaId) {
@@ -3052,14 +3084,16 @@
             var tech = $scope.lobbyOptions.enableTechTree !== false;
             var oil = false;
             var infinite = false;
-            var fullRoster = $scope.lobbyOptions.enableUnlockFullFactionRoster === true;
+            var factionsOnly = $scope.lobbyOptions.enableUnlockFullFactionRoster === true;
+            var instantSelling = $scope.lobbyOptions.enableInstantSelling === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
                 specialAbilities: special,
                 techTree: tech,
                 oilEconomy: oil,
                 infiniteResourceCenters: infinite,
-                unlockFullFactionRoster: fullRoster
+                factionsOnly: factionsOnly,
+                instantSelling: instantSelling
             }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
@@ -3079,6 +3113,11 @@
                     }
                     if (data.enableUnlockFullFactionRoster != null) {
                         $scope.lobbyOptions.enableUnlockFullFactionRoster = !!data.enableUnlockFullFactionRoster;
+                    } else if (data.enableFactionsOnly != null) {
+                        $scope.lobbyOptions.enableUnlockFullFactionRoster = !!data.enableFactionsOnly;
+                    }
+                    if (data.enableInstantSelling != null) {
+                        $scope.lobbyOptions.enableInstantSelling = !!data.enableInstantSelling;
                     }
                 });
             });
