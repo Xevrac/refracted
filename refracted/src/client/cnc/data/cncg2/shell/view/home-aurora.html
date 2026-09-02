@@ -7,8 +7,9 @@
         <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'LEARN'}" ng-click="setTab('LEARN')">Learn</button>
         <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'SUPPORT'}" ng-click="setTab('SUPPORT')">Support</button>
         <button type="button" class="au-rail__item au-rail__item--play" ng-click="openLobby()">Play</button>
+        <button type="button" class="au-rail__item" ng-click="openConfirmQuit()">quit</button>
         <div class="au-rail__grow"></div>
-        <button type="button" class="au-rail__item au-rail__item--support" title="Support Refracted on Patreon" ng-click="openSupportUs()">Support Us</button>
+        <button type="button" class="au-rail__item au-rail__item--support" data-tip="Support us on Patreon" ng-click="openSupportUs()">Support Us</button>
         <div class="au-build au-build--rail" aria-label="Build information">
             <div>rfr/{{ buildRfr }}</div>
             <div>prism/{{ buildPrism }}</div>

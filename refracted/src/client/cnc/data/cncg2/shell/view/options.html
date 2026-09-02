@@ -154,6 +154,43 @@
                                 ng-disabled="!settingsReady"></select>
                         <p class="opt-hint">{{ shellThemeHint }} Applies now and on the next shell start.</p>
                     </div>
+                    <div class="opt-group opt-group--lobby-defaults">
+                        <label class="opt-label-main">Lobby Defaults</label>
+                        <p class="opt-hint">Set your preferred defaults when starting a lobby.</p>
+                        <div class="opt-row">
+                            <label class="opt-label-main">Preference</label>
+                            <select class="opt-select"
+                                    ng-model="lobbyDefaultsMode"
+                                    ng-options="m.id as m.label for m in lobbyDefaultModeOptions"
+                                    ng-change="onLobbyDefaultModeChange()"
+                                    ng-disabled="!settingsReady"></select>
+                            <p class="opt-hint" ng-show="lobbyDefaultsMode === 'random'">
+                                Faction, general, and colour are rolled randomly each time you join a lobby.
+                            </p>
+                        </div>
+                        <div class="opt-row">
+                            <label class="opt-label-main">Preferred Faction</label>
+                            <select class="opt-select"
+                                    ng-model="lobbyDefaults.faction"
+                                    ng-options="f.code as f.label for f in lobbyFactionOptions"
+                                    ng-change="onLobbyDefaultFactionChange()"
+                                    ng-disabled="!settingsReady || lobbyDefaultsMode === 'random'"></select>
+                        </div>
+                        <div class="opt-row">
+                            <label class="opt-label-main">Preferred General</label>
+                            <select class="opt-select"
+                                    ng-model="lobbyDefaults.general"
+                                    ng-options="g.id as g.label for g in lobbyGeneralOptions()"
+                                    ng-disabled="!settingsReady || lobbyDefaultsMode === 'random'"></select>
+                        </div>
+                        <div class="opt-row">
+                            <label class="opt-label-main">Preferred Colour</label>
+                            <select class="opt-select opt-select--colour"
+                                    ng-model="lobbyDefaults.color"
+                                    ng-options="c.value as c.label for c in lobbyColorOptions"
+                                    ng-disabled="!settingsReady || lobbyDefaultsMode === 'random'"></select>
+                        </div>
+                    </div>
                 </div>
                 </fieldset>
             </div>

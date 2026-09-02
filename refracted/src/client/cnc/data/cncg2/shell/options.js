@@ -212,6 +212,20 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         { id: 'aurora', label: 'Aurora' }
     ];
     $scope.allowShellThemeSelect = !!$scope.$root.allowShellThemeSelect;
+    $scope.lobbyFactionOptions = (window.CncLobbyDefaults && CncLobbyDefaults.factions)
+        ? CncLobbyDefaults.factions()
+        : [];
+    $scope.lobbyColorOptions = (window.CncLobbyDefaults && CncLobbyDefaults.colors)
+        ? CncLobbyDefaults.colors()
+        : [];
+    $scope.lobbyDefaultModeOptions = [
+        { id: 'random', label: 'Random' },
+        { id: 'fixed', label: 'Fixed preferences' }
+    ];
+    $scope.lobbyDefaults = (window.CncLobbyDefaults && CncLobbyDefaults.get)
+        ? angular.copy(CncLobbyDefaults.get())
+        : { random: false, faction: 'APA', general: 2914080600, color: '#3a7bd5' };
+    $scope.lobbyDefaultsMode = $scope.lobbyDefaults.random ? 'random' : 'fixed';
     // Placeholder defaults must never be applied/saved until /usersettings hydrates.
     $scope.settingsReady = false;
     $scope.settingsLoadError = false;
@@ -219,6 +233,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
 
     var themeSnapshot = null;
     var themeSaveCommitted = false;
+    var lobbyDefaultsSnapshot = null;
+    var lobbyDefaultsSaveCommitted = false;
     var settingsLoadSeq = 0;
     var controlsResynced = false;
 
@@ -264,6 +280,51 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         refreshShellThemeHint();
     }
+
+    function readCommittedLobbyDefaults() {
+        return (window.CncLobbyDefaults && CncLobbyDefaults.get)
+            ? angular.copy(CncLobbyDefaults.get())
+            : angular.copy($scope.lobbyDefaults);
+    }
+
+    function syncLobbyDefaultsModeUi() {
+        $scope.lobbyDefaultsMode = ($scope.lobbyDefaults && $scope.lobbyDefaults.random)
+            ? 'random'
+            : 'fixed';
+    }
+
+    function captureLobbyDefaultsSnapshot() {
+        lobbyDefaultsSnapshot = readCommittedLobbyDefaults();
+        $scope.lobbyDefaults = angular.copy(lobbyDefaultsSnapshot);
+        syncLobbyDefaultsModeUi();
+        lobbyDefaultsSaveCommitted = false;
+    }
+
+    function revertLobbyDefaultsDraft() {
+        if (!lobbyDefaultsSnapshot) {
+            lobbyDefaultsSnapshot = readCommittedLobbyDefaults();
+        }
+        $scope.lobbyDefaults = angular.copy(lobbyDefaultsSnapshot);
+        syncLobbyDefaultsModeUi();
+    }
+
+    $scope.lobbyGeneralOptions = function () {
+        if (!window.CncLobbyDefaults || !CncLobbyDefaults.generals) {
+            return [];
+        }
+        return CncLobbyDefaults.generals($scope.lobbyDefaults.faction, false);
+    };
+
+    $scope.onLobbyDefaultFactionChange = function () {
+        if (!window.CncLobbyDefaults || !CncLobbyDefaults.coerceForFaction) {
+            return;
+        }
+        $scope.lobbyDefaults = CncLobbyDefaults.coerceForFaction($scope.lobbyDefaults);
+    };
+
+    $scope.onLobbyDefaultModeChange = function () {
+        $scope.lobbyDefaults.random = ($scope.lobbyDefaultsMode === 'random');
+    };
 
     refreshShellThemeHint();
 
@@ -854,6 +915,11 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         if ($scope.allowShellThemeSelect && $scope.settings.shellUiThemeDefault) {
             $scope.settings.shellUiTheme = $scope.settings.shellUiThemeDefault;
         }
+        if (window.CncLobbyDefaults && CncLobbyDefaults.FACTORY) {
+            $scope.lobbyDefaults = angular.copy(CncLobbyDefaults.FACTORY);
+            $scope.onLobbyDefaultFactionChange();
+            syncLobbyDefaultsModeUi();
+        }
         syncBrightnessPercent();
         syncResolutionModels();
         applyPartial(buildApplyPayloadFromSettings());
@@ -917,6 +983,14 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             }
             refreshShellThemeHint();
         }
+        if (window.CncLobbyDefaults && CncLobbyDefaults.save) {
+            $scope.lobbyDefaults.random = ($scope.lobbyDefaultsMode === 'random');
+            CncLobbyDefaults.save($scope.lobbyDefaults);
+            lobbyDefaultsSnapshot = readCommittedLobbyDefaults();
+            syncLobbyDefaultsModeUi();
+            lobbyDefaultsSaveCommitted = true;
+            $scope.$root.$broadcast('cnc:lobbyDefaultsSaved');
+        }
     };
 
     $scope.actionCancel = function() {
@@ -928,6 +1002,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             revertThemeDraft();
             themeSaveCommitted = false;
         }
+        revertLobbyDefaultsDraft();
+        lobbyDefaultsSaveCommitted = false;
         $scope.closeOptions();
     };
 
@@ -943,8 +1019,14 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             if ($scope.allowShellThemeSelect) {
                 captureThemeSnapshot();
             }
-        } else if ($scope.allowShellThemeSelect && !themeSaveCommitted) {
-            revertThemeDraft();
+            captureLobbyDefaultsSnapshot();
+        } else {
+            if ($scope.allowShellThemeSelect && !themeSaveCommitted) {
+                revertThemeDraft();
+            }
+            if (!lobbyDefaultsSaveCommitted) {
+                revertLobbyDefaultsDraft();
+            }
         }
     });
 

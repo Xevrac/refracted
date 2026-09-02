@@ -1,11 +1,10 @@
 /**
  * Shell UI theme — Classic vs Aurora.
  * Active theme: applied now. Default theme: used on next shell boot.
- * Persists: localStorage + Refracted GET/POST /cnc/shell-theme (prefs JSON).
+ * Persists in the shell WebKit profile localStorage (CNCO_DL\0\webkit on retail).
  */
 (function (global) {
     var STORAGE_KEY = 'cnc_shell_ui_theme';
-    var PREFS_URL = '/cnc/shell-theme';
     var THEMES = {
         classic: {
             id: 'classic',
@@ -126,92 +125,6 @@
         return themeId;
     }
 
-    function persistRemote(prefs) {
-        var payload = JSON.stringify({
-            theme: normalize(prefs.theme),
-            defaultTheme: normalize(prefs.defaultTheme)
-        });
-        try {
-            if (global.jQuery && global.jQuery.ajax) {
-                global.jQuery.ajax({
-                    url: PREFS_URL,
-                    type: 'POST',
-                    contentType: 'application/json',
-                    data: payload,
-                    dataType: 'text',
-                    timeout: 4000
-                });
-                return;
-            }
-        } catch (e) { /* ignore */ }
-        try {
-            var xhr = new global.XMLHttpRequest();
-            xhr.open('POST', PREFS_URL, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.send(payload);
-        } catch (e2) { /* ignore */ }
-    }
-
-    function fetchRemote(done) {
-        function finish(prefs) {
-            if (typeof done === 'function') {
-                done({
-                    theme: normalize(prefs.theme),
-                    defaultTheme: normalize(prefs.defaultTheme)
-                });
-            }
-        }
-        try {
-            if (global.jQuery && global.jQuery.ajax) {
-                global.jQuery.ajax({
-                    url: PREFS_URL,
-                    type: 'GET',
-                    dataType: 'json',
-                    timeout: 3000,
-                    success: function (data) {
-                        var local = readLocalPrefs();
-                        finish({
-                            theme: data && data.theme ? data.theme : local.theme,
-                            defaultTheme: data && (data.defaultTheme || data.theme)
-                                ? (data.defaultTheme || data.theme)
-                                : local.defaultTheme
-                        });
-                    },
-                    error: function () {
-                        finish(readLocalPrefs());
-                    }
-                });
-                return;
-            }
-        } catch (e) { /* ignore */ }
-        try {
-            var xhr = new global.XMLHttpRequest();
-            xhr.open('GET', PREFS_URL, true);
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== 4) {
-                    return;
-                }
-                if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
-                    try {
-                        var data = global.JSON ? JSON.parse(xhr.responseText) : null;
-                        var local = readLocalPrefs();
-                        finish({
-                            theme: data && data.theme ? data.theme : local.theme,
-                            defaultTheme: data && (data.defaultTheme || data.theme)
-                                ? (data.defaultTheme || data.theme)
-                                : local.defaultTheme
-                        });
-                        return;
-                    } catch (pe) { /* ignore */ }
-                }
-                finish(readLocalPrefs());
-            };
-            xhr.send(null);
-            return;
-        } catch (e2) { /* ignore */ }
-        finish(readLocalPrefs());
-    }
-
     function get() {
         return readLocalPrefs().theme;
     }
@@ -224,7 +137,6 @@
         var prefs = readLocalPrefs();
         prefs.theme = apply(id);
         writeLocalPrefs(prefs);
-        persistRemote(prefs);
         return prefs.theme;
     }
 
@@ -232,7 +144,6 @@
         var prefs = readLocalPrefs();
         prefs.defaultTheme = normalize(id);
         writeLocalPrefs(prefs);
-        persistRemote(prefs);
         return prefs.defaultTheme;
     }
 
@@ -242,7 +153,6 @@
             defaultTheme: normalize(defaultThemeId || themeId)
         };
         writeLocalPrefs(prefs);
-        persistRemote(prefs);
         apply(prefs.theme);
         return prefs.theme;
     }
@@ -277,17 +187,15 @@
     }
 
     function boot(done) {
-        fetchRemote(function (prefs) {
-            // Default theme is what survives restarts; active theme follows it on boot.
-            var bootId = normalize(prefs.defaultTheme || prefs.theme);
-            prefs.theme = bootId;
-            prefs.defaultTheme = normalize(prefs.defaultTheme || bootId);
-            writeLocalPrefs(prefs);
-            apply(bootId);
-            if (typeof done === 'function') {
-                done(bootId);
-            }
-        });
+        var prefs = readLocalPrefs();
+        var bootId = normalize(prefs.defaultTheme || prefs.theme);
+        prefs.theme = bootId;
+        prefs.defaultTheme = normalize(prefs.defaultTheme || bootId);
+        writeLocalPrefs(prefs);
+        apply(bootId);
+        if (typeof done === 'function') {
+            done(bootId);
+        }
     }
 
     if (global.document) {

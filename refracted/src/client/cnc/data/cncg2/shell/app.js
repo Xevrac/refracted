@@ -241,6 +241,28 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
         $rootScope.alertPopupOpen = !$rootScope.alertPopupOpen;
     };
 
+    $rootScope.confirmQuitOpen = false;
+    $rootScope.quittingOpen = false;
+    $rootScope.openConfirmQuit = function () {
+        $rootScope.confirmQuitOpen = true;
+    };
+    $rootScope.cancelConfirmQuit = function () {
+        $rootScope.confirmQuitOpen = false;
+    };
+    $rootScope.confirmQuitYes = function () {
+        $rootScope.confirmQuitOpen = false;
+        $rootScope.quittingOpen = true;
+        if (window.CncShellQuit && CncShellQuit.quitToDesktop) {
+            CncShellQuit.quitToDesktop();
+            return;
+        }
+        try {
+            if (typeof gameclient !== 'undefined' && gameclient && typeof gameclient.execute === 'function') {
+                gameclient.execute('quit true');
+            }
+        } catch (e) { /* ignore */ }
+    };
+
     $rootScope.serverLostError = '';
     $rootScope.showServerLostModal = function (message) {
         $rootScope.serverLostError = message || 'Server connection lost.';

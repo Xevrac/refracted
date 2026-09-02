@@ -643,7 +643,12 @@
 }
 
 .au-lobby__options-check {
-    display: block !important;
+    display: -webkit-box !important;
+    display: -webkit-flex !important;
+    display: flex !important;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
     margin: 0 0 8px 0;
     color: #c8d4e0 !important;
     font-size: 12px !important;
@@ -651,7 +656,7 @@
     text-transform: none !important;
     font-weight: normal !important;
     cursor: pointer;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 
 .au-lobby__options-check:last-child {
@@ -659,10 +664,11 @@
 }
 
 .au-lobby__options-check input {
-    margin-right: 8px;
+    margin: 0 8px 0 0;
     width: 13px;
     height: 13px;
-    vertical-align: middle;
+    -webkit-flex-shrink: 0;
+    flex-shrink: 0;
 }
 
 .au-lobby__options-check--disabled,
@@ -869,19 +875,33 @@
     background: rgba(16, 48, 28, 0.95);
 }
 
+.au-lobby__ready[data-tip]:hover,
+.au-lobby__ready[data-tip]:focus {
+    outline: none;
+}
+
+.au-lobby__ready.on[data-tip]:hover {
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.85);
+}
+
+.au-lobby__ready[data-tip]:not(.on):hover {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.85);
+}
+
 .au-lobby__ready-tick {
     display: block;
     position: absolute;
     left: 50%;
     top: 50%;
     width: 5px;
-    height: 9px;
-    margin-left: -4px;
-    margin-top: -6px;
+    height: 8px;
+    margin: 0;
     border: solid #3dff8a;
     border-width: 0 2px 2px 0;
-    -webkit-transform: rotate(45deg);
-    transform: rotate(45deg);
+    -webkit-transform: translate(-50%, -58%) rotate(45deg);
+    transform: translate(-50%, -58%) rotate(45deg);
 }
 
 .au-lobby__menu-btn {
@@ -2077,4 +2097,45 @@
     text-align: left;
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
+}
+
+/* Aurora lobby hover tooltip (JS-positioned; WebKit 535 safe) */
+.au-lobby__hover-tip {
+    position: absolute;
+    z-index: 10000;
+    padding: 5px 9px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    font-weight: normal;
+    line-height: 1.25;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    background: rgba(10, 18, 28, 0.97);
+    color: #e8f4ff;
+    border: 1px solid rgba(58, 160, 255, 0.55);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.au-lobby__hover-tip--ready {
+    border-color: #2ecc71;
+    color: #d8ffe8;
+    box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.4), 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.au-lobby__hover-tip--not-ready {
+    border-color: #e74c3c;
+    color: #ffd8d8;
+    box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.4), 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.au-lobby__options-cell,
+.au-lobby__options {
+    overflow: visible;
+}
+
+.au-lobby__banner-tools [data-tip] {
+    display: inline-block;
+    vertical-align: middle;
 }

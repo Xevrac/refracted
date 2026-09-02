@@ -709,19 +709,33 @@
     background: rgba(20, 60, 30, 0.95);
 }
 
+.cc-lobby__ready[data-tip]:hover,
+.cc-lobby__ready[data-tip]:focus {
+    outline: none;
+}
+
+.cc-lobby__ready.on[data-tip]:hover {
+    border-color: #2ecc71;
+    box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.85);
+}
+
+.cc-lobby__ready[data-tip]:not(.on):hover {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.85);
+}
+
 .cc-lobby__ready-tick {
     display: block;
     position: absolute;
     left: 50%;
     top: 50%;
     width: 5px;
-    height: 9px;
-    margin-left: -4px;
-    margin-top: -6px;
+    height: 8px;
+    margin: 0;
     border: solid #3dff8a;
     border-width: 0 2px 2px 0;
-    -webkit-transform: rotate(45deg);
-    transform: rotate(45deg);
+    -webkit-transform: translate(-50%, -62%) rotate(45deg);
+    transform: translate(-50%, -62%) rotate(45deg);
 }
 
 .cc-lobby__arrow {
@@ -1209,14 +1223,19 @@
 }
 
 .cc-lobby__options-check {
-    display: block !important;
+    display: -webkit-box !important;
+    display: -webkit-flex !important;
+    display: flex !important;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
     margin: 0 0 8px 0;
     color: #d8d0b8 !important;
     font-size: 12px !important;
     letter-spacing: 0.04em !important;
     font-weight: normal !important;
     cursor: pointer;
-    line-height: 1.4;
+    line-height: 1.3;
 }
 
 .cc-lobby__options-check:last-child {
@@ -1224,10 +1243,11 @@
 }
 
 .cc-lobby__options-check input {
-    margin-right: 8px;
+    margin: 0 8px 0 0;
     width: 13px;
     height: 13px;
-    vertical-align: middle;
+    -webkit-flex-shrink: 0;
+    flex-shrink: 0;
 }
 
 .cc-lobby__options-check--disabled,
@@ -2132,4 +2152,177 @@
     text-align: left;
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
+}
+
+/* Classic lobby hover tooltip (JS-positioned; WebKit 535 safe) */
+.cc-lobby__hover-tip {
+    position: absolute;
+    z-index: 10000;
+    padding: 5px 9px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    font-weight: normal;
+    line-height: 1.25;
+    letter-spacing: 0.03em;
+    text-transform: none;
+    white-space: nowrap;
+    pointer-events: none;
+    background: rgba(18, 16, 12, 0.97);
+    color: #e8e0c8;
+    border: 1px solid #8a7a50;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+.cc-lobby__hover-tip--ready {
+    border-color: #2ecc71;
+    color: #d8ffe8;
+    box-shadow: 0 0 0 1px rgba(46, 204, 113, 0.35), 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+.cc-lobby__hover-tip--not-ready {
+    border-color: #e74c3c;
+    color: #ffd8d8;
+    box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.35), 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+
+/* Sideways slide + staggered type-in (shared cc + au tip nodes) */
+@-webkit-keyframes shell-tip-panel-in-l {
+    0% {
+        opacity: 0;
+        -webkit-transform: translateX(-16px) scaleX(0.94);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: translateX(0) scaleX(1);
+    }
+}
+
+@-webkit-keyframes shell-tip-panel-in-r {
+    0% {
+        opacity: 0;
+        -webkit-transform: translateX(16px) scaleX(0.94);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: translateX(0) scaleX(1);
+    }
+}
+
+@-webkit-keyframes shell-tip-char-in-l {
+    0% {
+        opacity: 0;
+        -webkit-transform: translateX(-0.65em);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: translateX(0);
+    }
+}
+
+@-webkit-keyframes shell-tip-char-in-r {
+    0% {
+        opacity: 0;
+        -webkit-transform: translateX(0.65em);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: translateX(0);
+    }
+}
+
+@keyframes shell-tip-panel-in-l {
+    0% {
+        opacity: 0;
+        transform: translateX(-16px) scaleX(0.94);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scaleX(1);
+    }
+}
+
+@keyframes shell-tip-panel-in-r {
+    0% {
+        opacity: 0;
+        transform: translateX(16px) scaleX(0.94);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scaleX(1);
+    }
+}
+
+@keyframes shell-tip-char-in-l {
+    0% {
+        opacity: 0;
+        transform: translateX(-0.65em);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes shell-tip-char-in-r {
+    0% {
+        opacity: 0;
+        transform: translateX(0.65em);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.cc-lobby__hover-tip.shell-tip--from-left.shell-tip--in,
+.au-lobby__hover-tip.shell-tip--from-left.shell-tip--in {
+    -webkit-animation: shell-tip-panel-in-l 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: shell-tip-panel-in-l 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    -webkit-transform-origin: left center;
+    transform-origin: left center;
+}
+
+.cc-lobby__hover-tip.shell-tip--from-right.shell-tip--in,
+.au-lobby__hover-tip.shell-tip--from-right.shell-tip--in {
+    -webkit-animation: shell-tip-panel-in-r 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: shell-tip-panel-in-r 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+    -webkit-transform-origin: right center;
+    transform-origin: right center;
+}
+
+.shell-tip__track {
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.shell-tip__char {
+    display: inline-block;
+    opacity: 0;
+    -webkit-animation-duration: 0.18s;
+    animation-duration: 0.18s;
+    -webkit-animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    -webkit-animation-fill-mode: both;
+    animation-fill-mode: both;
+}
+
+.shell-tip--from-left .shell-tip__char {
+    -webkit-animation-name: shell-tip-char-in-l;
+    animation-name: shell-tip-char-in-l;
+}
+
+.shell-tip--from-right .shell-tip__char {
+    -webkit-animation-name: shell-tip-char-in-r;
+    animation-name: shell-tip-char-in-r;
+}
+
+.cc-lobby__options-cell,
+.cc-lobby__options {
+    overflow: visible;
+}
+
+.cc-lobby__map-setup [data-tip],
+.cc-lobby__map-setup > [data-tip] {
+    display: inline-block;
+    vertical-align: middle;
 }

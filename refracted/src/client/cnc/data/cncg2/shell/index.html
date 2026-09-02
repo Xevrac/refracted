@@ -34,10 +34,13 @@
     <link rel='stylesheet' href='css/themes/aurora-lobby.css'>
 
     <script src='js/shell-theme.js'></script>
+    <script src='js/shell-lobby-defaults.js'></script>
     <script src='js/cnc-blaze-state.js'></script>
     <script src='js/cnc-pre-landing.js'></script>
+    <script src='js/shell-quit.js'></script>
     <script src='app.js'></script>
     <script src='js/shell-lobby.js'></script>
+    <script src='js/shell-lobby-tooltips.js'></script>
     <script src='js/debug-probe.js'></script>
     <script src='options.js'></script>
     <script src='profile.js'></script>
@@ -69,6 +72,23 @@
                 <div>{{ serverLostError }}</div>
                 <button type="button" class="cc-shell-lost-modal__ok"
                         ng-click="dismissServerLostError()">OK</button>
+            </div>
+        </div>
+        <div class="cc-shell-quit-modal" ng-show="confirmQuitOpen">
+            <div class="cc-shell-quit-modal__box">
+                <h2 class="cc-shell-quit-modal__title">Confirm Quit?</h2>
+                <p class="cc-shell-quit-modal__msg">Are you sure you want to quit to desktop?</p>
+                <div class="cc-shell-quit-modal__actions">
+                    <button type="button" class="cc-shell-quit-modal__btn cc-shell-quit-modal__btn--yes"
+                            ng-click="confirmQuitYes()">Yes</button>
+                    <button type="button" class="cc-shell-quit-modal__btn cc-shell-quit-modal__btn--no"
+                            ng-click="cancelConfirmQuit()">No</button>
+                </div>
+            </div>
+        </div>
+        <div class="cc-shell-quit-progress" ng-show="quittingOpen">
+            <div class="cc-shell-quit-progress__box">
+                <p>Quitting game..</p>
             </div>
         </div>
     </div>
