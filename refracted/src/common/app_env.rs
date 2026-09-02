@@ -156,6 +156,24 @@ pub fn current_app_env() -> Option<AppEnv> {
     CURRENT_ENV.lock().clone()
 }
 
+#[cfg(test)]
+static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// Run `f` with a parsed env as the process current env, then restore.
+#[cfg(test)]
+pub fn with_test_app_env<R>(content: &str, f: impl FnOnce() -> R) -> R {
+    let _guard = TEST_ENV_LOCK.lock();
+    let prev = CURRENT_ENV.lock().clone();
+    let env = parse_app_env(PathBuf::from("test.env"), content).expect("parse test env");
+    *CURRENT_ENV.lock() = Some(env);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+    *CURRENT_ENV.lock() = prev;
+    match result {
+        Ok(v) => v,
+        Err(payload) => std::panic::resume_unwind(payload),
+    }
+}
+
 pub fn load_app_env(path: &Path) -> Result<AppEnv, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("failed to read env file {}: {e}", path.display()))?;

@@ -590,13 +590,7 @@ pub fn pushes_game_ready_attrib(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
         gid
     );
     let mut attrs = indexmap::IndexMap::new();
-    let serverid = super::dedicated_pool::host_for_gid(gid)
-        .map(|h| {
-            let ip = (if h.exip_ip != 0 { h.exip_ip } else { h.inip_ip }) as u32;
-            format!("{}.{}.{}.{}", (ip >> 24) & 0xFF, (ip >> 16) & 0xFF, (ip >> 8) & 0xFF, ip & 0xFF)
-        })
-        .filter(|s| s != "0.0.0.0")
-        .unwrap_or_else(|| "127.0.0.1".to_string());
+    let serverid = super::cnc_msgsys_serverid();
     attrs.insert("CnCGameId".to_string(), gid.to_string());
     attrs.insert("serverid".to_string(), serverid);
     attrs.insert("GameReady".to_string(), "1".to_string());
