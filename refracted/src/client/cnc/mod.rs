@@ -54,10 +54,10 @@ const NTOP_PEER_TO_PEER_PARTIAL_MESH: i32 = 4;
 
 const NTOP_DEFAULT: i32 = NTOP_CLIENT_SERVER_DEDICATED;
 
-/// Host game clients should use to reach this Refracted instance.
+/// Host game clients should use to reach this Refracted instance 
 fn cnc_advertised_host() -> String {
     if let Some(env) = crate::common::app_env::current_app_env() {
-        let h = normalize_client_host(&env.mysql.host);
+        let h = normalize_client_host(&env.host);
         if !h.is_empty() {
             return h;
         }
