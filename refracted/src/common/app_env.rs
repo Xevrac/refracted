@@ -13,14 +13,16 @@ use super::paths;
 pub const ENV_FILE_NAME: &str = "refracted.env";
 
 pub const DEFAULT_ENV_CONTENTS: &str = "\
-# what game
+# what to run
 game=cnc
-# what environment ie dev, prod, staging
 environment=dev
-# what datasource ie json (localized testing only), mysql
 datasource=json
-# mysql parameters
+
+# where players connect
 host=127.0.0.1
+
+# database
+sql_host=127.0.0.1
 database=refracted
 user=refracted
 pass=
@@ -98,6 +100,8 @@ pub struct AppEnv {
     pub game: String,
     pub environment: Environment,
     pub datasource: Datasource,
+    /// Address game clients use to reach this process
+    pub host: String,
     pub mysql: MysqlParams,
     pub listen_host: Option<String>,
     pub data_dir: Option<PathBuf>,
@@ -167,8 +171,9 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         .unwrap_or_else(|| "cnc".to_string());
     let environment = Environment::parse(map.get("environment").map(String::as_str).unwrap_or("dev"));
     let datasource = Datasource::parse(map.get("datasource").map(String::as_str).unwrap_or("json"))?;
+    let host = nonempty(map.get("host"), "127.0.0.1");
     let mysql = MysqlParams {
-        host: nonempty(map.get("host"), "127.0.0.1"),
+        host: nonempty(map.get("sql_host"), "127.0.0.1"),
         database: nonempty(map.get("database"), "refracted"),
         user: nonempty(map.get("user"), "refracted"),
         pass: map.get("pass").cloned().unwrap_or_default(),
@@ -192,6 +197,7 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         game,
         environment,
         datasource,
+        host,
         mysql,
         listen_host,
         data_dir,
@@ -327,6 +333,7 @@ mod tests {
         assert_eq!(env.game, "cnc");
         assert_eq!(env.environment, Environment::Dev);
         assert_eq!(env.datasource, Datasource::Json);
+        assert_eq!(env.host, "127.0.0.1");
         assert_eq!(env.mysql.host, "127.0.0.1");
         assert_eq!(env.mysql.database, "refracted");
         assert_eq!(env.mysql.user, "refracted");
@@ -345,7 +352,8 @@ mod tests {
 game=bf-labs
 environment=production
 datasource=mysql
-host=db.internal:3307
+host=192.0.2.1
+sql_host=db.internal:3307
 database=nexus
 user=blaze
 pass=s3cret#hash
@@ -354,6 +362,7 @@ pass=s3cret#hash
         assert_eq!(env.game, "bf-labs");
         assert_eq!(env.environment, Environment::Prod);
         assert_eq!(env.datasource, Datasource::Mysql);
+        assert_eq!(env.host, "192.0.2.1");
         assert_eq!(env.mysql.host, "db.internal:3307");
         assert_eq!(env.mysql.host_port(), ("db.internal".to_string(), 3307));
         assert_eq!(env.mysql.pass, "s3cret#hash");
