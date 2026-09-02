@@ -1308,7 +1308,7 @@ fn host_context_from_entry(entry: &DedicatedServerEntry) -> DedicatedHostContext
         .filter(|&ip| ip != 0)
         .unwrap_or(peer_ip);
     let (inip_port, exip_port) = resolve_dedicated_game_ports(entry);
-    // Use this dedicated's EXIP/INIP; never the joining client's QoS.
+    
     let exip_ip = entry
         .network_exip_ip
         .filter(|&ip| ip != 0)

@@ -54,7 +54,7 @@ const NTOP_PEER_TO_PEER_PARTIAL_MESH: i32 = 4;
 
 const NTOP_DEFAULT: i32 = NTOP_CLIENT_SERVER_DEDICATED;
 
-/// Host game clients should use to reach this Refracted instance 
+/// Host game clients should use
 fn cnc_advertised_host() -> String {
     if let Some(env) = crate::common::app_env::current_app_env() {
         let h = normalize_client_host(&env.host);
@@ -63,6 +63,11 @@ fn cnc_advertised_host() -> String {
         }
     }
     "127.0.0.1".to_string()
+}
+
+/// MsgSys TCP
+fn cnc_msgsys_serverid() -> String {
+    cnc_advertised_host()
 }
 
 fn normalize_client_host(raw: &str) -> String {
@@ -3378,21 +3383,7 @@ fn build_client_replicated_game_data(
         out
     };
 
-    let serverid = {
-        let sid_ip = (if host_exip_ip != 0 { host_exip_ip } else { host_inip_ip }) as u32;
-        if sid_ip != 0 {
-            format!(
-                "{}.{}.{}.{}",
-                (sid_ip >> 24) & 0xFF,
-                (sid_ip >> 16) & 0xFF,
-                (sid_ip >> 8) & 0xFF,
-                sid_ip & 0xFF
-            )
-        } else {
-            "127.0.0.1".to_string()
-        }
-    };
-    let mut attr_map =
+    let serverid = cnc_msgsys_serverid();
         TdfEncoder::find_string_string_map_field(request_payload, "ATTR").unwrap_or_default();
     attr_map.insert("serverid".to_string(), serverid.clone());
     let map_path = crate::client::cnc::game_state::get_map_path(gid);
@@ -3553,20 +3544,7 @@ fn build_dedicated_host_replicated_game_data(
         h.extend_from_slice(&TdfEncoder::encode_int("HSLT", 0));
         h
     };
-    let serverid = {
-        let sid_ip = (if exip_ip != 0 { exip_ip } else { inip_ip }) as u32;
-        if sid_ip != 0 {
-            format!(
-                "{}.{}.{}.{}",
-                (sid_ip >> 24) & 0xFF,
-                (sid_ip >> 16) & 0xFF,
-                (sid_ip >> 8) & 0xFF,
-                sid_ip & 0xFF
-            )
-        } else {
-            "127.0.0.1".to_string()
-        }
-    };
+    let serverid = cnc_msgsys_serverid();
     let mut game = Vec::new();
     game.extend_from_slice(&TdfEncoder::encode_long_list("ADMN", &[host_persona]));
     let mut ded_attr =
@@ -3674,20 +3652,7 @@ fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     let gnam = game_state::game_name(gid);
     let game_uuid = game_state::game_uuid(gid);
 
-    let serverid = {
-        let sid_ip = (if host_exip_ip != 0 { host_exip_ip } else { host_inip_ip }) as u32;
-        if sid_ip != 0 {
-            format!(
-                "{}.{}.{}.{}",
-                (sid_ip >> 24) & 0xFF,
-                (sid_ip >> 16) & 0xFF,
-                (sid_ip >> 8) & 0xFF,
-                sid_ip & 0xFF
-            )
-        } else {
-            "127.0.0.1".to_string()
-        }
-    };
+    let serverid = cnc_msgsys_serverid();
     let mut attr = indexmap::IndexMap::new();
     attr.insert("PingSiteAlias".to_string(), "False".to_string());
     attr.insert("serverid".to_string(), serverid.clone());
@@ -4330,6 +4295,7 @@ mod notify_game_setup_tests {
     /// serverid must be present in initial NotifyGameSetup payloads.
     #[test]
     fn notify_setup_carries_serverid_in_initial_attr() {
+        crate::common::app_env::with_test_app_env("host=127.0.0.1\n", || {
         reset_test_games();
         // TDF string-string map stores null-terminated key/value bytes; check both are present
         // and structurally valid (GAME struct parses) in create/reset, join, and dedicated-host.
@@ -4364,12 +4330,13 @@ mod notify_game_setup_tests {
         assert!(has(&jpayload, b"127.0.0.1\0"), "serverid value missing (join path)");
         assert!(game_has_matr(&jpayload), "MATR missing (join path)");
 
+        let dedicated_exip = 0xC0000263u32 as i32; // 192.0.2.99
         let dpayload = build_dedicated_host_notify_game_setup(
             700010,
             1000,
-            0x7f000001,
+            dedicated_exip,
             25200,
-            0x7f000001,
+            dedicated_exip,
             25200,
             42,
             &[],
@@ -4383,8 +4350,37 @@ mod notify_game_setup_tests {
             "dedicated-host GAME struct must parse"
         );
         assert!(has(&dpayload, b"serverid\0"), "serverid key missing (dedicated host)");
-        assert!(has(&dpayload, b"127.0.0.1\0"), "serverid value missing (dedicated host)");
+        assert!(has(&dpayload, b"127.0.0.1\0"), "serverid is hub host, not dedicated EXIP");
+        assert!(
+            !has(&dpayload, b"192.0.2.99\0"),
+            "serverid must not copy dedicated EXIP"
+        );
         assert!(game_has_matr(&dpayload), "MATR missing (dedicated host) - Join needs mesh attributes");
+        });
+    }
+
+    #[test]
+    fn serverid_uses_env_host_not_dedicated_exip() {
+        crate::common::app_env::with_test_app_env("host=192.0.2.1\n", || {
+            let has = |p: &[u8], needle: &[u8]| p.windows(needle.len()).any(|w| w == needle);
+            let dedicated_exip = 0xC0000263u32 as i32; // 192.0.2.99
+            let dpayload = build_dedicated_host_notify_game_setup(
+                700011,
+                1000,
+                dedicated_exip,
+                25200,
+                dedicated_exip,
+                25200,
+                42,
+                &[],
+            )
+            .expect("encode dedicated host");
+            assert!(has(&dpayload, b"192.0.2.1\0"), "serverid should be env host=");
+            assert!(
+                !has(&dpayload, b"192.0.2.99\0"),
+                "serverid must not copy dedicated EXIP"
+            );
+        });
     }
 
     #[test]
