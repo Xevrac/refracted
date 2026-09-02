@@ -21,10 +21,16 @@ use tracing_subscriber::registry::LookupSpan;
     about = "Refracted Blaze emulator (headless)",
     after_help = "\
 Env file (created next to rfrcli on first run as refracted.env):
+  # what to run
   game=cnc
   environment=dev
   datasource=json
+
+  # where players connect
   host=127.0.0.1
+
+  # database
+  sql_host=127.0.0.1
   database=refracted
   user=refracted
   pass=
