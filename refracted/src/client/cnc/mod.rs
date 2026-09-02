@@ -3384,6 +3384,7 @@ fn build_client_replicated_game_data(
     };
 
     let serverid = cnc_msgsys_serverid();
+    let mut attr_map =
         TdfEncoder::find_string_string_map_field(request_payload, "ATTR").unwrap_or_default();
     attr_map.insert("serverid".to_string(), serverid.clone());
     let map_path = crate::client::cnc::game_state::get_map_path(gid);
