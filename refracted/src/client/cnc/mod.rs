@@ -294,10 +294,10 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
         let _ = body;
         return Some(handle_cnc_online_count());
     }
-    // GET /cnc/build-info -- RFR (Cargo) + Prism (running instance sidecar/log) + cnc_rl.
+    // GET /cnc/build-info
     if base == "cnc/build-info" && is_get {
         let _ = body;
-        return Some(handle_cnc_build_info());
+        return Some(handle_cnc_build_info(query));
     }
     // POST /cnc/api/start-battle -- advance game state for a given GID (testing API).
     if base == "cnc/api/start-battle" && is_post {
@@ -536,47 +536,45 @@ fn handle_cnc_online_count() -> HttpResponse {
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
-fn handle_cnc_build_info() -> HttpResponse {
-    let body = shell_build_info_json();
+fn handle_cnc_build_info(query: Option<&str>) -> HttpResponse {
+    let body = shell_build_info_json(client_reported_prism_version(query));
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
 const CNC_RL_BUILD: &str = "150805";
 
-fn shell_build_info_json() -> serde_json::Value {
-    let rfr = env!("CARGO_PKG_VERSION").to_string();
-    let prism = resolve_prism_version().unwrap_or_else(|| "?".to_string());
-    serde_json::json!({
-        "ok": true,
-        "rfr": rfr,
-        "prism": prism,
-        "cnc": CNC_RL_BUILD,
-        "cnc_rl": CNC_RL_BUILD,
-    })
-}
-
-fn resolve_prism_version() -> Option<String> {
-    if let Ok(v) = std::env::var("CNC_PRISM_VERSION") {
-        let t = v.trim();
-        if !t.is_empty() {
-            return Some(t.to_string());
-        }
-    }
-    for dir in prism_version_search_dirs() {
-        if let Some(v) = read_prism_version_file(&dir.join("prism.version")) {
-            return Some(v);
-        }
-        if let Some(v) = parse_prism_version_from_log(&dir.join("prism.log")) {
-            return Some(v);
-        }
-        if let Some(v) = parse_prism_version_from_log(&dir.join("prism.log.prev")) {
-            return Some(v);
+/// Prism version is owned by the client process (Prism DLL). The backend only
+/// echoes a value the client attached to this request — never reads player disks.
+fn client_reported_prism_version(query: Option<&str>) -> Option<String> {
+    let q = query?;
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == "prism" {
+                let t = percent_decode_plus(v);
+                let t = t.trim();
+                if !t.is_empty() && t.len() <= 64 && t.chars().all(|c| {
+                    c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_'
+                }) {
+                    return Some(t.to_string());
+                }
+            }
         }
     }
     None
 }
 
-/// `UTFWinAssets` root (MiniMap PNGs under `images/MiniMap/`).
+fn shell_build_info_json(client_prism: Option<String>) -> serde_json::Value {
+    let rfr = env!("CARGO_PKG_VERSION").to_string();
+    serde_json::json!({
+        "ok": true,
+        "rfr": rfr,
+        "prism": client_prism,
+        "cnc": CNC_RL_BUILD,
+        "cnc_rl": CNC_RL_BUILD,
+    })
+}
+
+/// `UTFWinAssets` root (MiniMap PNGs). Operator-configured paths only
 fn utfwin_asset_roots() -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
     let push_utf = |roots: &mut Vec<PathBuf>, game: &Path| {
@@ -594,13 +592,11 @@ fn utfwin_asset_roots() -> Vec<PathBuf> {
             }
         }
     };
-    for dir in prism_version_search_dirs() {
-        push_utf(&mut roots, &dir);
+    for key in ["CNC_UTFWIN_DIR", "CNC_GAME_DIR"] {
+        if let Ok(d) = std::env::var(key) {
+            push_utf(&mut roots, Path::new(&d));
+        }
     }
-    push_utf(
-        &mut roots,
-        Path::new(r"D:\_DATA\Projects\RE\Command and Conquer\Bin\Command & Conquer"),
-    );
     roots
 }
 
@@ -621,137 +617,6 @@ fn handle_cnc_utfwin(base: &str) -> HttpResponse {
         }
     }
     HttpResponse::new(404, "text/plain", b"Not Found".to_vec())
-}
-
-fn prism_version_search_dirs() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = Vec::new();
-    let push = |dirs: &mut Vec<PathBuf>, p: PathBuf| {
-        if p.is_dir() && !dirs.iter().any(|d| d == &p) {
-            dirs.push(p);
-        }
-    };
-    if let Ok(d) = std::env::var("CNC_GAME_DIR") {
-        push(&mut dirs, PathBuf::from(d));
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        push(&mut dirs, cwd);
-    }
-    if let Some(exe) = crate::common::paths::executable_dir() {
-        push(&mut dirs, exe);
-    }
-    for p in cnc_process_dirs() {
-        push(&mut dirs, p);
-    }
-    dirs
-}
-
-fn read_prism_version_file(path: &Path) -> Option<String> {
-    let raw = std::fs::read_to_string(path).ok()?;
-    let line = raw.lines().next()?.trim();
-    if line.is_empty() {
-        return None;
-    }
-    Some(line.to_string())
-}
-
-fn parse_prism_version_from_log(path: &Path) -> Option<String> {
-    let raw = std::fs::read_to_string(path).ok()?;
-    for line in raw.lines() {
-        let t = line.trim();
-        // Strip common ANSI / log prefixes then match splash "Version: x.y.z".
-        let bare = strip_ansi_approx(t);
-        let bare = bare.trim();
-        if let Some(rest) = bare.strip_prefix("Version:") {
-            let v = rest.trim();
-            if !v.is_empty() {
-                return Some(v.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn strip_ansi_approx(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'[' {
-            i += 2;
-            while i < bytes.len() && !bytes[i].is_ascii_alphabetic() {
-                i += 1;
-            }
-            if i < bytes.len() {
-                i += 1;
-            }
-            continue;
-        }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    out
-}
-
-#[cfg(windows)]
-fn cnc_process_dirs() -> Vec<PathBuf> {
-    use std::os::windows::ffi::OsStringExt;
-    use winapi::shared::minwindef::{DWORD, FALSE, MAX_PATH};
-    use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-    use winapi::um::processthreadsapi::OpenProcess;
-    use winapi::um::psapi::GetModuleFileNameExW;
-    use winapi::um::tlhelp32::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
-        TH32CS_SNAPPROCESS,
-    };
-    use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
-    use winapi::um::winnt::PROCESS_VM_READ;
-
-    let mut out = Vec::new();
-    unsafe {
-        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snap == INVALID_HANDLE_VALUE {
-            return out;
-        }
-        let mut pe: PROCESSENTRY32W = std::mem::zeroed();
-        pe.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-        if Process32FirstW(snap, &mut pe) != FALSE {
-            loop {
-                let name = {
-                    let len = pe
-                        .szExeFile
-                        .iter()
-                        .position(|&c| c == 0)
-                        .unwrap_or(pe.szExeFile.len());
-                    String::from_utf16_lossy(&pe.szExeFile[..len]).to_ascii_lowercase()
-                };
-                if name == "cnc.exe" || name == "cnc.server.exe" {
-                    let access = PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
-                    let proc = OpenProcess(access, FALSE, pe.th32ProcessID);
-                    if !proc.is_null() {
-                        let mut buf = [0u16; MAX_PATH];
-                        let n = GetModuleFileNameExW(proc, std::ptr::null_mut(), buf.as_mut_ptr(), buf.len() as DWORD);
-                        CloseHandle(proc);
-                        if n > 0 {
-                            let path = std::ffi::OsString::from_wide(&buf[..n as usize]);
-                            if let Some(parent) = Path::new(&path).parent() {
-                                out.push(parent.to_path_buf());
-                            }
-                        }
-                    }
-                }
-                if Process32NextW(snap, &mut pe) == FALSE {
-                    break;
-                }
-            }
-        }
-        CloseHandle(snap);
-    }
-    out
-}
-
-#[cfg(not(windows))]
-fn cnc_process_dirs() -> Vec<PathBuf> {
-    Vec::new()
 }
 
 fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
@@ -1782,7 +1647,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
         "personaId": p.persona_id,
         "userId": p.user_id,
     });
-    let build = shell_build_info_json();
+    let build = shell_build_info_json(None);
     let script = format!(
         "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};</script>",
         json, build

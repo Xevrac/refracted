@@ -551,8 +551,17 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         if (body.rfr) {
             $scope.buildRfr = body.rfr;
         }
-        if (body.prism) {
-            $scope.buildPrism = body.prism;
+        // Prism version is client-owned
+        try {
+            if (window.__PRISM_VERSION) {
+                $scope.buildPrism = window.__PRISM_VERSION;
+            } else if (body.prism) {
+                $scope.buildPrism = body.prism;
+            }
+        } catch (eP) {
+            if (body.prism) {
+                $scope.buildPrism = body.prism;
+            }
         }
         var cnc = body.cnc_rl || body.cnc;
         if (cnc) {
@@ -567,16 +576,23 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
                 applyBuildInfo(injected);
             }
         } catch (e0) { /* ignore */ }
+        try {
+            if (window.__PRISM_VERSION) {
+                $scope.buildPrism = window.__PRISM_VERSION;
+            }
+        } catch (e1) { /* ignore */ }
         function applyBody(body) {
             if (!body || body === true || !body.ok) {
                 return;
             }
             applyBuildInfo(body);
         }
+        // Client Prism rewrites this to /cnc/build-info?prism=<PRISM_VERSION>.
+        var buildUrl = '/cnc/build-info';
         try {
             if (window.jQuery && jQuery.ajax) {
                 jQuery.ajax({
-                    url: '/cnc/build-info',
+                    url: buildUrl,
                     type: 'GET',
                     dataType: 'json',
                     timeout: 4000,
@@ -593,7 +609,7 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         } catch (e) { /* ignore */ }
         try {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/cnc/build-info', true);
+            xhr.open('GET', buildUrl, true);
             xhr.onreadystatechange = function () {
                 if (xhr.readyState !== 4 || xhr.status < 200 || xhr.status >= 300) {
                     return;
