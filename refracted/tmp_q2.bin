@@ -1,7 +1,0 @@
-lity.Low,
-			UndergrowthQuality = Quality.Low,
-			
-			AntiAliasingDeferred = AntiAliasingDeferred.Off,
-			AntiAliasingPost = AntiAliasingPost.Off,
-			AnisotropicFilter = AnisotropicFilter.X2,
-		
