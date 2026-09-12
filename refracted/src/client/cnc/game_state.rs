@@ -1411,20 +1411,20 @@ pub fn force_standby_reset(gid: i64) {
 }
 
 fn host_persona() -> i64 {
-    let session = get_user_session();
-    if session.persona_id == 0 {
+    let (persona, _) = super::cnc_game_client_identity();
+    if persona == 0 {
         1000
     } else {
-        session.persona_id as i64
+        persona as i64
     }
 }
 
 fn host_display_name() -> String {
-    let session = get_user_session();
-    if session.display_name.is_empty() {
+    let (_, name) = super::cnc_game_client_identity();
+    if name.is_empty() {
         "Player".to_string()
     } else {
-        session.display_name.clone()
+        name
     }
 }
 

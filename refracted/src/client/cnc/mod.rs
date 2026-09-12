@@ -921,9 +921,9 @@ fn parse_gid_pid_password(query: Option<&str>, body: &[u8]) -> (i64, i64, String
         }
     }
     if pid <= 0 {
-        let session = crate::session::get_user_session();
-        if session.persona_id != 0 {
-            pid = session.persona_id as i64;
+        let (persona, _) = cnc_game_client_identity();
+        if persona != 0 {
+            pid = persona as i64;
         }
     }
     (gid, pid, password)
@@ -1054,9 +1054,9 @@ fn parse_gid_pid_match_options(
         }
     }
     if pid <= 0 {
-        let session = crate::session::get_user_session();
-        if session.persona_id != 0 {
-            pid = session.persona_id as i64;
+        let (persona, _) = cnc_game_client_identity();
+        if persona != 0 {
+            pid = persona as i64;
         }
     }
     (gid, pid, special, tech, oil, infinite, full_roster, instant_selling)
@@ -1350,9 +1350,9 @@ fn handle_cnc_leave_game(query: Option<&str>) -> HttpResponse {
         }
     }
     if pid <= 0 {
-        let session = crate::session::get_user_session();
-        if session.persona_id != 0 {
-            pid = session.persona_id as i64;
+        let (persona, _) = cnc_game_client_identity();
+        if persona != 0 {
+            pid = persona as i64;
         }
     }
     if gid <= 0 {
@@ -1439,12 +1439,8 @@ fn handle_cnc_player_ready(query: Option<&str>) -> HttpResponse {
         }
     }
     if pid <= 0 {
-        let session = crate::session::get_user_session();
-        pid = if session.persona_id == 0 {
-            1000
-        } else {
-            session.persona_id as i64
-        };
+        let (persona, _) = cnc_game_client_identity();
+        pid = if persona == 0 { 1000 } else { persona as i64 };
     }
     let ok = game_state::set_player_ready(gid, pid, ready);
     let body = serde_json::json!({
@@ -1491,11 +1487,11 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
         }
     }
     if user.is_empty() {
-        let session = crate::session::get_user_session();
-        user = if session.display_name.is_empty() {
+        let (_, name) = cnc_game_client_identity();
+        user = if name.is_empty() {
             "Player".to_string()
         } else {
-            session.display_name.clone()
+            name
         };
     }
     let json = game_state::lobby_chat_push(gid, &user, &text);
@@ -1876,8 +1872,8 @@ pub fn handle_util_fetch_client_config(payload: &[u8]) -> BlazeResult<Bytes> {
 }
 
 pub fn handle_util_post_auth(_payload: &[u8]) -> BlazeResult<Bytes> {
-    let session = crate::session::get_user_session();
-    let uid = if session.persona_id == 0 { 1000 } else { session.persona_id as i64 };
+    let (uid_u, _) = cnc_effective_identity();
+    let uid = if uid_u == 0 { 1000 } else { uid_u as i64 };
 
     let mut response = Vec::new();
 
@@ -1954,11 +1950,121 @@ pub fn handle_util_get_telemetry_server(_payload: &[u8]) -> BlazeResult<Bytes> {
     Ok(Bytes::from(response))
 }
 
-/// Dedicated uses its CNCO persona; other sessions use the client profile.
+/// JSON/local test: bind this Blaze game client to `current` or `{name}2`, `{name}3`, …
+/// No-op on mysql, dedicated, or a session that already has an identity.
+fn bind_json_test_client_identity() {
+    if !crate::nexus::identity::json_personas_allowed() {
+        return;
+    }
+    let Some(sid) = crate::session::session_module::current_blaze_session_id() else {
+        return;
+    };
+    if dedicated_pool::dedicated_identity_for_session(sid).is_some() {
+        return;
+    }
+    let Some(slot) = crate::session::blaze_sessions::take_json_client_slot(sid) else {
+        return;
+    };
+    let profile = crate::common::user_profile::claim_json_test_client_profile(slot);
+    crate::session::blaze_sessions::set_client_identity(
+        sid,
+        &profile.display_name,
+        profile.persona_id,
+        profile.user_id,
+        &profile.email,
+    );
+    if slot == 0 {
+        let mut session = get_user_session();
+        session.user_id = profile.user_id;
+        session.persona_id = profile.persona_id;
+        session.display_name = profile.display_name.clone();
+        session.email = profile.email.clone();
+        session.psid = profile.psid;
+        set_user_session(session);
+    }
+    crate::console_println!(
+        "\x1b[38;2;100;200;255m[CNC]\x1b[0m JSON test client #{} `{}` (persona_id={}, user_id={})",
+        slot + 1,
+        profile.display_name,
+        profile.persona_id,
+        profile.user_id
+    );
+}
+
+fn json_test_client_is_secondary() -> bool {
+    let Some(sid) = crate::session::session_module::current_blaze_session_id() else {
+        return false;
+    };
+    if !crate::session::blaze_sessions::session_identity_bound(sid) {
+        return false;
+    }
+    let Some(sess) = crate::session::blaze_sessions::get_session(sid) else {
+        return false;
+    };
+    let global = get_user_session().persona_id;
+    sess.persona_id.filter(|&p| p != 0 && p != global).is_some()
+}
+
+/// Human on this Blaze thread (JSON extra client or primary). Dedicated falls back to the global profile.
+pub fn cnc_game_client_identity() -> (u64, String) {
+    if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
+        if dedicated_pool::dedicated_identity_for_session(sid).is_none()
+            && crate::session::blaze_sessions::session_identity_bound(sid)
+        {
+            if let Some(sess) = crate::session::blaze_sessions::get_session(sid) {
+                if let Some(pid) = sess.persona_id.filter(|&p| p != 0) {
+                    let name = sess
+                        .display_name
+                        .filter(|n| !n.is_empty())
+                        .unwrap_or_else(|| "Player".to_string());
+                    return (pid, name);
+                }
+            }
+        }
+    }
+    let s = get_user_session();
+    let persona = if s.persona_id == 0 { 1000 } else { s.persona_id };
+    let name = if s.display_name.is_empty() {
+        "Player".to_string()
+    } else {
+        s.display_name.clone()
+    };
+    (persona, name)
+}
+
+fn cnc_effective_email() -> String {
+    if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
+        if dedicated_pool::dedicated_identity_for_session(sid).is_some() {
+            return String::new();
+        }
+        if crate::session::blaze_sessions::session_identity_bound(sid) {
+            if let Some(email) = crate::session::blaze_sessions::get_session(sid)
+                .and_then(|s| s.email)
+                .filter(|e| !e.is_empty())
+            {
+                return email;
+            }
+        }
+    }
+    get_user_session().email
+}
+
+/// Dedicated uses its CNCO persona; JSON extra clients use their bound row; else the client profile.
 pub fn cnc_effective_identity() -> (u64, String) {
     if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
         if let Some((persona, name)) = dedicated_pool::dedicated_identity_for_session(sid) {
             return (persona, name);
+        }
+        if crate::session::blaze_sessions::session_identity_bound(sid) {
+            if let Some(sess) = crate::session::blaze_sessions::get_session(sid) {
+                if let Some(pid) = sess.persona_id.filter(|&p| p != 0) {
+                    let name = sess
+                        .display_name
+                        .filter(|n| !n.is_empty())
+                        .unwrap_or_else(|| "Player".to_string());
+                    return (pid, name);
+                }
+            }
         }
     }
     let s = get_user_session();
@@ -1982,15 +2088,19 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
             let (name, persona) = dedicated_pool::allocate_dedicated_identity(sid);
             crate::session::blaze_sessions::set_dedicated_identity(sid, &name, persona);
         }
-    } else if let Some(mail) = mail {
-        let mut s = get_user_session();
-        s.email = mail;
-        set_user_session(s);
+    } else {
+        bind_json_test_client_identity();
+        if let Some(mail) = mail {
+            if !json_test_client_is_secondary() {
+                let mut s = get_user_session();
+                s.email = mail;
+                set_user_session(s);
+            }
+        }
     }
 
     let (uid_u, display_name) = cnc_effective_identity();
     let uid = uid_u as i64;
-    let session = crate::session::get_user_session();
     let session_key =
         crate::client::labs::payload_auth::blaze_session_key(uid, uid);
 
@@ -1999,7 +2109,6 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
     response.extend_from_slice(&TdfEncoder::encode_bool("NTOS", false));
     response.extend_from_slice(&TdfEncoder::encode_string("PCTK", ""));
 
-    let _ = &session;
     let mut profile_struct = Vec::new();
     profile_struct.extend_from_slice(&TdfEncoder::encode_string("DSNM", &display_name));
     profile_struct.extend_from_slice(&TdfEncoder::encode_int("LAST", 0));
@@ -2024,17 +2133,20 @@ pub fn handle_auth_login_persona(payload: &[u8]) -> BlazeResult<Bytes> {
         .map(|sid| dedicated_pool::dedicated_identity_for_session(sid).is_some())
         .unwrap_or(false);
     if !is_dedicated {
-        let mut session = crate::session::get_user_session();
-        if let Some(pnam) = TdfEncoder::find_string_field(payload, "PNAM") {
-            if !pnam.is_empty() {
-                session.display_name = pnam;
+        bind_json_test_client_identity();
+        if !json_test_client_is_secondary() {
+            let mut session = crate::session::get_user_session();
+            if let Some(pnam) = TdfEncoder::find_string_field(payload, "PNAM") {
+                if !pnam.is_empty() {
+                    session.display_name = pnam;
+                }
             }
+            if session.persona_id == 0 {
+                session.persona_id = 1000;
+                session.user_id = 1000;
+            }
+            set_user_session(session);
         }
-        if session.persona_id == 0 {
-            session.persona_id = 1000;
-            session.user_id = 1000;
-        }
-        set_user_session(session);
     }
 
     let (uid_u, display_name) = cnc_effective_identity();
@@ -2042,7 +2154,7 @@ pub fn handle_auth_login_persona(payload: &[u8]) -> BlazeResult<Bytes> {
     let mail = if is_dedicated {
         String::new()
     } else {
-        get_user_session().email
+        cnc_effective_email()
     };
     let session_key = crate::client::labs::payload_auth::blaze_session_key(uid, uid);
     let now = SystemTime::now()
@@ -2317,17 +2429,8 @@ fn cnc_join_game_response_with_ocal(gid: i64, gsid: Option<i64>) -> Bytes {
 /// `GameManager.joinGame` (0x0004::0x0009) -- `JoinGameResponse` with the requested or default game id.
 pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
     let gid = cnc_extract_join_game_id(payload);
-    let session = crate::session::get_user_session();
-    let pid = if session.persona_id == 0 {
-        1000_i64
-    } else {
-        session.persona_id as i64
-    };
-    let name = if session.display_name.is_empty() {
-        "Player".to_string()
-    } else {
-        session.display_name.clone()
-    };
+    let (pid_u, name) = cnc_game_client_identity();
+    let pid = if pid_u == 0 { 1000_i64 } else { pid_u as i64 };
     if !game_state::join_password_allowed(gid, pid) {
         crate::debug_println!(
             "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (password required - verify via shell / ATTR _password)",
@@ -2935,7 +3038,11 @@ pub fn build_user_sessions_user_authenticated_notification() -> BlazeResult<Byte
     response.extend_from_slice(&TdfEncoder::encode_string("KEY ", "SESSKY"));
     response.extend_from_slice(&TdfEncoder::encode_int("LAST", now as i32));
     response.extend_from_slice(&TdfEncoder::encode_long("LLOG", now));
-    let mail = if is_dedicated { String::new() } else { get_user_session().email };
+    let mail = if is_dedicated {
+        String::new()
+    } else {
+        cnc_effective_email()
+    };
     response.extend_from_slice(&TdfEncoder::encode_string("MAIL", &mail));
     response.extend_from_slice(&TdfEncoder::encode_long("PID ", uid));
     response.extend_from_slice(&TdfEncoder::encode_int("PLAT", 4));
