@@ -741,6 +741,9 @@
         if (opts.general != null) {
             q += '&general=' + encodeURIComponent(opts.general);
         }
+        if (opts.color) {
+            q += '&color=' + encodeURIComponent(opts.color);
+        }
         if (opts.isai != null) {
             q += '&isai=' + encodeURIComponent(opts.isai ? '1' : '0');
         }
@@ -852,7 +855,7 @@
             '  Network.SelectSpawnGroup — UI/network spawn group selection\n' +
             '  Network.SpawnOnSelected — confirm spawn at selected group\n\n' +
             'Pre-game lobby slot index: use _startpoint via Blaze attribute above (1-based).\n' +
-            'HouseColorSelectorWinProc fires RtsBlaze.AddHouseColor internally; shell has no addHouseColor route.'
+            'House colour: player ATTR color=RRGGBB.'
         );
     };
 

@@ -142,6 +142,12 @@
                     <div class="opt-group">
                         <label class="opt-checkbox"><input type="checkbox" ng-model="settings.allowdeselect" ng-change="applyGameplay()"> Allow Deselect</label>
                     </div>
+                    <div class="opt-group">
+                        <label class="opt-label-main">Default Player Colours</label>
+                        <label class="opt-radio"><input type="radio" name="unitColors" ng-value="false" ng-model="settings.usefriendorfoecolors" ng-change="applyGameplay()"> House Colours</label>
+                        <label class="opt-radio"><input type="radio" name="unitColors" ng-value="true" ng-model="settings.usefriendorfoecolors" ng-change="applyGameplay()"> Friend or Foe</label>
+                        <p class="opt-hint">House Colours uses the colour chosen in the lobby. Friend or Foe tints your units by allegiance. Ctrl+F still toggles this in a match.</p>
+                    </div>
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'INTERFACE' && allowShellThemeSelect">

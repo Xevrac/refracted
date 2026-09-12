@@ -140,8 +140,8 @@ mod advertised_host_tests {
     fn blaze_int_for_tailscale_ip() {
         assert_eq!(ipv4_to_blaze_int("127.0.0.1"), 0x7f000001u32 as i32);
         assert_eq!(
-            ipv4_to_blaze_int("123.456.789.10"),
-            u32::from_be_bytes([123, 456, 789, 10]) as i32
+            ipv4_to_blaze_int("123.45.67.10"),
+            u32::from_be_bytes([123, 45, 67, 10]) as i32
         );
     }
 }
@@ -680,7 +680,45 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
-/// Query or JSON: `gid`, `pid` (0 = host), `faction`, `team`, `startpoint`, `general`, `isai`.
+/// Player ATTR `color=` while the frontend RtsClient is still alive.
+fn enqueue_native_house_color_attr(gid: i64) {
+    use crate::client::cnc::game_state;
+    use indexmap::IndexMap;
+
+    for p in game_state::players_for_gid(gid) {
+        if p.is_ai {
+            continue;
+        }
+        let Some(hex) = p
+            .attribs
+            .get(game_state::ATTR_HOUSE_COLOR)
+            .cloned()
+            .or_else(|| p.attribs.get("_color").cloned())
+            .and_then(|s| game_state::normalize_house_color(&s))
+        else {
+            continue;
+        };
+        let mut attrs = IndexMap::new();
+        attrs.insert(game_state::ATTR_HOUSE_COLOR.to_string(), hex);
+        let Ok(pushes) = fireframe::pushes_after_set_player_attributes(gid, p.persona_id, &attrs)
+        else {
+            continue;
+        };
+        let sessions = crate::session::blaze_sessions::list_sessions();
+        for s in &sessions {
+            if s.persona_id != Some(p.persona_id as u64) {
+                continue;
+            }
+            if dedicated_pool::is_dedicated_blaze_session(s.id) {
+                continue;
+            }
+            fireframe::enqueue_pending_pushes(s.id, pushes.clone());
+            let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+        }
+    }
+}
+
+/// Query or JSON: `gid`, `pid` (0 = host), `faction`, `team`, `startpoint`, `general`, `isai`, `color`.
 fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
     use indexmap::IndexMap;
@@ -708,6 +746,9 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
             }
             "difficulty" | "_difficulty" => {
                 attrs.insert("_difficulty".into(), v);
+            }
+            "color" | "_color" | "housecolor" | "houseColor" => {
+                attrs.insert("color".into(), v);
             }
             _ => {}
         }
@@ -749,6 +790,10 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
             "isai",
             "_difficulty",
             "difficulty",
+            "color",
+            "_color",
+            "housecolor",
+            "houseColor",
         ] {
             if let Some(s) = v.get(key).and_then(|x| {
                 x.as_str()
@@ -787,6 +832,25 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         attrs
     );
     game_state::set_pending_player_attrs(gid, pid, attrs.clone());
+    if attrs.contains_key("color")
+        || attrs.contains_key("_color")
+        || attrs.contains_key("housecolor")
+        || attrs.contains_key("houseColor")
+    {
+        enqueue_native_house_color_attr(gid);
+    }
+    if let Some(game) = game_state::get_game(gid) {
+        let lookup = if pid == 0 { game.host_persona } else { pid };
+        if let Some(p) = game.players.iter().find(|p| p.persona_id == lookup) {
+            if let Some(hex) = p.attribs.get(game_state::ATTR_HOUSE_COLOR) {
+                attrs.insert("color".into(), hex.clone());
+                attrs.insert(
+                    "colorCss".into(),
+                    game_state::css_house_color(hex),
+                );
+            }
+        }
+    }
     let probe = game_state::player_data_probe(gid);
     let body = serde_json::json!({
         "ok": true,
@@ -1481,6 +1545,7 @@ fn handle_cnc_start_battle(body: &[u8]) -> HttpResponse {
     }
 
     game_state::set_phase(gid, game_state::GamePhase::InGame);
+    enqueue_native_house_color_attr(gid);
     let players = game_state::players_for_gid(gid);
 
     // Enqueue advanceGameState notifications for each human player's Blaze session.
@@ -3954,6 +4019,66 @@ mod notify_game_setup_tests {
         assert_eq!(applied.0, 1);
         assert_eq!(applied.1, 1_201_618_778);
         assert_eq!(applied.2.get("_faction").map(String::as_str), Some("USA"));
+    }
+
+    #[test]
+    fn house_color_normalize_and_unique_pick() {
+        use std::collections::HashSet;
+        assert_eq!(
+            game_state::normalize_house_color("#3a7bd5").as_deref(),
+            Some("3A7BD5")
+        );
+        assert_eq!(
+            game_state::normalize_house_color("FF3A7BD5").as_deref(),
+            Some("3A7BD5")
+        );
+        assert_eq!(game_state::css_house_color("3A7BD5"), "#3a7bd5");
+        let mut used = HashSet::new();
+        used.insert("3A7BD5".to_string());
+        assert_eq!(
+            game_state::pick_unique_house_color(&used, Some("#3a7bd5"), None),
+            "2AA8A0"
+        );
+        assert_eq!(
+            game_state::pick_unique_house_color(&used, Some("2AA8A0"), None),
+            "2AA8A0"
+        );
+    }
+
+    #[test]
+    fn house_color_hue_deny_rejects_nearby_red() {
+        use std::collections::HashSet;
+        assert!(game_state::house_colors_too_close("#c0392b", "#e74c3c"));
+        assert!(game_state::house_colors_too_close("C0392B", "E05040"));
+        assert!(!game_state::house_colors_too_close("#c0392b", "#3a7bd5"));
+        assert!(!game_state::house_colors_too_close("#e6b322", "#e67e22"));
+        assert!(!game_state::house_colors_too_close("#ececec", "#c0392b"));
+        let mut used = HashSet::new();
+        used.insert("C0392B".to_string());
+        let picked = game_state::pick_unique_house_color(&used, Some("#e74c3c"), None);
+        assert_ne!(picked, "E74C3C");
+        assert!(!game_state::house_colors_too_close(&picked, "C0392B"));
+    }
+
+    #[test]
+    fn house_color_rejects_duplicate() {
+        game_state::clear_all_games_for_test();
+        game_state::seed_from_join(4242);
+        let a = game_state::ensure_client_player(4242, 111, "Alpha").expect("a");
+        let b = game_state::ensure_client_player(4242, 222, "Bravo").expect("b");
+        let mut red = IndexMap::new();
+        red.insert("color".to_string(), "#c0392b".to_string());
+        game_state::set_pending_player_attrs(4242, a.persona_id, red.clone());
+        game_state::set_pending_player_attrs(4242, b.persona_id, red);
+        let game = game_state::get_game(4242).expect("game");
+        let color_of = |pid: i64| {
+            game.players
+                .iter()
+                .find(|p| p.persona_id == pid)
+                .and_then(|p| p.attribs.get(game_state::ATTR_HOUSE_COLOR).cloned())
+        };
+        assert_eq!(color_of(a.persona_id).as_deref(), Some("C0392B"));
+        assert_ne!(color_of(b.persona_id).as_deref(), Some("C0392B"));
     }
 
     #[test]

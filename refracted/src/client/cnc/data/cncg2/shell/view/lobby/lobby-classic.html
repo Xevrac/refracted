@@ -118,8 +118,10 @@
                          ng-show="slot.occupied"
                          ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
                          ng-click="$event.stopPropagation()">
-                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal && isLobbyHost()"
-                                ng-click="clearSlot(1, $index, $event)">&times;</button>
+                        <button type="button" class="cc-lobby__kick" ng-if="isLobbyHost()"
+                                ng-class="{disabled: slot.isLocal}"
+                                ng-click="clearSlot(1, $index, $event)"
+                                data-tip="{{ kickTip(slot) }}">&times;</button>
                         <div class="cc-lobby__card-left">
                             <div class="cc-lobby__portrait"
                                  ng-class="{'cc-lobby__portrait--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
@@ -156,8 +158,16 @@
                                 <li class="cc-lobby__menu-label">Color</li>
                                 <li class="cc-lobby__menu-colors">
                                     <button type="button" class="cc-lobby__swatch" ng-repeat="c in colors"
-                                            ng-style="{'background-color': c}" ng-class="{on: slot.color == c}"
+                                            ng-style="{'background-color': c}"
+                                            ng-class="{on: sameHouseColor(slot.color, c), taken: colorTaken(c, slot)}"
+                                            ng-disabled="colorTaken(c, slot) || !canChangeColor(slot)"
                                             ng-click="setColor(slot, c, $event)"></button>
+                                    <button type="button" class="cc-lobby__swatch cc-lobby__swatch--rainbow"
+                                            ng-class="{on: isCustomHouseColor(slot)}"
+                                            ng-disabled="!canChangeColor(slot)"
+                                            ng-click="openCustomColorPicker(slot, $event)"
+                                            data-tip="Custom color"
+                                            data-tip-pos="below"></button>
                                 </li>
                             </ul>
                         </div>
@@ -188,8 +198,10 @@
                          ng-show="slot.occupied"
                          ng-class="{pending: slot.invitePending, local: slot.isLocal, 'menu-open': slotMenu == slotMenuKey(2, $index)}"
                          ng-click="$event.stopPropagation()">
-                        <button type="button" class="cc-lobby__kick" ng-if="!slot.isLocal && isLobbyHost()"
-                                ng-click="clearSlot(2, $index, $event)">&times;</button>
+                        <button type="button" class="cc-lobby__kick" ng-if="isLobbyHost()"
+                                ng-class="{disabled: slot.isLocal}"
+                                ng-click="clearSlot(2, $index, $event)"
+                                data-tip="{{ kickTip(slot) }}">&times;</button>
                         <div class="cc-lobby__card-left">
                             <div class="cc-lobby__portrait"
                                  ng-class="{'cc-lobby__portrait--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
@@ -226,8 +238,16 @@
                                 <li class="cc-lobby__menu-label">Color</li>
                                 <li class="cc-lobby__menu-colors">
                                     <button type="button" class="cc-lobby__swatch" ng-repeat="c in colors"
-                                            ng-style="{'background-color': c}" ng-class="{on: slot.color == c}"
+                                            ng-style="{'background-color': c}"
+                                            ng-class="{on: sameHouseColor(slot.color, c), taken: colorTaken(c, slot)}"
+                                            ng-disabled="colorTaken(c, slot) || !canChangeColor(slot)"
                                             ng-click="setColor(slot, c, $event)"></button>
+                                    <button type="button" class="cc-lobby__swatch cc-lobby__swatch--rainbow"
+                                            ng-class="{on: isCustomHouseColor(slot)}"
+                                            ng-disabled="!canChangeColor(slot)"
+                                            ng-click="openCustomColorPicker(slot, $event)"
+                                            data-tip="Custom color"
+                                            data-tip-pos="below"></button>
                                 </li>
                             </ul>
                         </div>

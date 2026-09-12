@@ -942,7 +942,7 @@
     right: 0;
     top: 100%;
     margin-top: 6px;
-    width: 180px;
+    width: 196px;
     padding: 4px 0;
     list-style: none;
     border: 1px solid #1c2a32;
@@ -1008,6 +1008,28 @@
     border-color: #fff;
     -webkit-box-shadow: 0 0 0 1px #fff;
     box-shadow: 0 0 0 1px #fff;
+}
+
+.au-lobby__swatch.taken,
+.au-lobby__swatch:disabled {
+    opacity: 0.35;
+    cursor: default;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+}
+
+.au-lobby__swatch--rainbow {
+    background-color: #3a7bd5;
+    background-image: -webkit-linear-gradient(left, #ff3b30 0%, #ffcc00 16%, #34c759 33%, #00c7be 50%, #007aff 66%, #af52de 83%, #ff3b30 100%);
+    background-image: linear-gradient(to right, #ff3b30 0%, #ffcc00 16%, #34c759 33%, #00c7be 50%, #007aff 66%, #af52de 83%, #ff3b30 100%);
+}
+
+.au-lobby__swatch--rainbow:hover {
+    border-color: #3aa0ff;
+}
+
+.au-lobby__swatch--rainbow:disabled:hover {
+    border-color: #0c0f0d;
 }
 
 .au-lobby__team-actions {
@@ -1107,6 +1129,15 @@
 .au-lobby__kick:hover {
     color: #fff;
     border-color: #3aa0ff;
+}
+
+.au-lobby__kick.disabled,
+.au-lobby__kick.disabled:hover {
+    color: #4a5560;
+    border-color: #1c2a32;
+    background: #121618;
+    opacity: 0.4;
+    cursor: default;
 }
 
 .au-lobby__actions {
@@ -2138,4 +2169,27 @@
 .au-lobby__banner-tools [data-tip] {
     display: inline-block;
     vertical-align: middle;
+}
+
+.au-lobby__hue-picker {
+    background: rgba(10, 18, 28, 0.97);
+    color: #e8f4ff;
+    border: 1px solid rgba(58, 160, 255, 0.55);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(120, 190, 255, 0.16);
+}
+
+.au-lobby__hue-picker .cnc-hue-picker__head {
+    color: #8b9aab;
+}
+
+.au-lobby__hue-picker .cnc-hue-picker__close {
+    color: #8b9aab;
+}
+
+.au-lobby__hue-picker canvas {
+    border: 1px solid rgba(58, 160, 255, 0.35);
+}
+
+.au-lobby__hue-picker .cnc-hue-picker__hint {
+    color: #6d8499;
 }

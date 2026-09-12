@@ -619,6 +619,7 @@
         $scope.lobbyChatDraft = '';
         $scope._startpointHoldUntil = 0;
         $scope._startpointResyncAt = 0;
+        $scope._colorHoldUntil = 0;
         $scope.lobbyOptions = {
             startingCash: 'standard',
             startingUnits: 'standard',
@@ -807,6 +808,118 @@
                 }
             }
         }
+
+        function cssHouseColor(raw) {
+            var s = String(raw || '').replace(/^\s+|\s+$/g, '');
+            if (!s) {
+                return '';
+            }
+            if (s.charAt(0) !== '#') {
+                s = '#' + s;
+            }
+            return s.toLowerCase();
+        }
+
+        function houseColorWire(raw) {
+            var s = cssHouseColor(raw);
+            if (!s) {
+                return '';
+            }
+            if (s.charAt(0) === '#') {
+                s = s.slice(1);
+            }
+            return s;
+        }
+
+        function sameHouseColor(a, b) {
+            var left = cssHouseColor(a);
+            var right = cssHouseColor(b);
+            return !!(left && right && left === right);
+        }
+
+        $scope.colorTaken = function (color, exceptSlot) {
+            return colorTaken(color, exceptSlot);
+        };
+
+        $scope.sameHouseColor = sameHouseColor;
+
+        function colorsTooClose(a, b) {
+            if (window.CncLobbyColorPicker && window.CncLobbyColorPicker.tooClose) {
+                return window.CncLobbyColorPicker.tooClose(a, b);
+            }
+            return sameHouseColor(a, b);
+        }
+
+        function colorTaken(color, exceptSlot) {
+            var want = cssHouseColor(color);
+            var taken = false;
+            if (!want) {
+                return false;
+            }
+            eachOccupiedSlot(function (slot) {
+                if (slot === exceptSlot) {
+                    return;
+                }
+                if (colorsTooClose(slot.color, want)) {
+                    taken = true;
+                }
+            });
+            return taken;
+        }
+
+        $scope.isCustomHouseColor = function (slot) {
+            var i;
+            if (!slot || !slot.color) {
+                return false;
+            }
+            for (i = 0; i < COLORS.length; i++) {
+                if (sameHouseColor(slot.color, COLORS[i])) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        function takenHouseColors(exceptSlot) {
+            var out = [];
+            eachOccupiedSlot(function (slot) {
+                var c;
+                if (slot === exceptSlot) {
+                    return;
+                }
+                c = cssHouseColor(slot.color);
+                if (c) {
+                    out.push(c);
+                }
+            });
+            return out;
+        }
+
+        function closeColorPicker() {
+            if (window.CncLobbyColorPicker) {
+                window.CncLobbyColorPicker.close();
+            }
+        }
+
+        function unusedColor(exceptSlot) {
+            var i;
+            for (i = 0; i < COLORS.length; i++) {
+                if (!colorTaken(COLORS[i], exceptSlot)) {
+                    return COLORS[i];
+                }
+            }
+            return COLORS[0];
+        }
+
+        $scope.canChangeColor = function (slot) {
+            if (!slot || !slot.occupied || slot.invitePending) {
+                return false;
+            }
+            if ($scope.isLobbyHost && $scope.isLobbyHost()) {
+                return true;
+            }
+            return !!slot.isLocal;
+        };
 
         function takenStartpoints(exceptSlot) {
             var used = {};
@@ -1025,6 +1138,7 @@
             $scope.slotMenu = null;
             $scope.mapMenuOpen = false;
             $scope.startModalSlot = slot;
+            closeColorPicker();
         };
 
         $scope.closeStartModal = function () {
@@ -1180,12 +1294,14 @@
             }
             $scope.mapMenuOpen = !$scope.mapMenuOpen;
             $scope.slotMenu = null;
+            closeColorPicker();
         };
 
         $scope.closeMenus = function () {
             $scope.mapMenuOpen = false;
             $scope.slotMenu = null;
             $scope.startModalSlot = null;
+            closeColorPicker();
         };
 
         $scope.openMapPicker = function ($event) {
@@ -1204,6 +1320,7 @@
             $scope.mapMenuOpen = false;
             $scope.startModalSlot = null;
             $scope.lobbyOptionsOpen = false;
+            closeColorPicker();
             $scope.mapPickerFocus = $scope.selectedMap || MAPS[0];
             $scope.mapPickerDevOverride = false;
             $scope.mapPickerOpen = true;
@@ -1313,6 +1430,7 @@
         $scope.setLobbySubTab = function (tab) {
             $scope.lobbySubTab = tab;
             $scope.slotMenu = null;
+            closeColorPicker();
             $scope.mapMenuOpen = (tab === 'MAPS');
             if (tab === 'MAPS') {
                 $scope.lobbyOptionsOpen = false;
@@ -1336,6 +1454,7 @@
             $scope.startModalSlot = null;
             $scope.mapPickerOpen = false;
             $scope.lobbySubTab = 'OPTIONS';
+            closeColorPicker();
             $scope.lobbyOptionsOpen = true;
         };
 
@@ -1362,6 +1481,7 @@
                 return;
             }
             var key = $scope.slotMenuKey(team, index);
+            closeColorPicker();
             $scope.slotMenu = ($scope.slotMenu === key) ? null : key;
             $scope.mapMenuOpen = false;
         };
@@ -1393,15 +1513,58 @@
                 : (Number(generalId) || 0);
             slot.codename = codenameForSlot(slot);
             $scope.slotMenu = null;
+            closeColorPicker();
         };
 
         $scope.setColor = function (slot, color, $event) {
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
-            if (slot && slot.occupied && !slot.invitePending) {
-                slot.color = color;
+            if (!$scope.canChangeColor(slot)) {
+                return;
             }
+            if (colorTaken(color, slot)) {
+                return;
+            }
+            slot.color = cssHouseColor(color) || unusedColor(slot);
+            $scope._colorHoldUntil = Date.now() + 2500;
+            syncPlayerAttrsToServer(slot);
+            if ($event) {
+                closeColorPicker();
+            }
+        };
+
+        $scope.openCustomColorPicker = function (slot, $event) {
+            var host;
+            if ($event) {
+                if ($event.stopPropagation) {
+                    $event.stopPropagation();
+                }
+                if ($event.preventDefault) {
+                    $event.preventDefault();
+                }
+            }
+            if (!$scope.canChangeColor(slot)) {
+                return;
+            }
+            host = $event && ($event.currentTarget || $event.target);
+            if (!host || !window.CncLobbyColorPicker) {
+                return;
+            }
+            if (window.CncLobbyColorPicker.isOpenFor(host)) {
+                window.CncLobbyColorPicker.close();
+                return;
+            }
+            window.CncLobbyColorPicker.open(host, {
+                current: slot.color,
+                taken: takenHouseColors(slot),
+                onPick: function (hex) {
+                    $scope.setColor(slot, hex);
+                    if (!$scope.$$phase) {
+                        $scope.$apply();
+                    }
+                }
+            });
         };
 
         $scope.addAi = function (team) {
@@ -1424,11 +1587,12 @@
                     slot.codename = codenameForSlot(slot);
                     slot.displayName = 'AI';
                     slot.difficulty = 'HARD';
-                    slot.color = COLORS[(i + 2) % COLORS.length];
+                    slot.color = unusedColor(slot);
                     slot.teamNum = team;
                     slot.startpoint = unusedStartpoint(slot);
                     ensureAiPersonaId(slot);
                     slots[i] = slot;
+                    syncPlayerAttrsToServer(slot, true);
                     return;
                 }
             }
@@ -1455,6 +1619,19 @@
             }
         };
 
+        $scope.kickTip = function (slot) {
+            if (!slot) {
+                return '';
+            }
+            if (slot.isLocal) {
+                return 'You cannot remove yourself!';
+            }
+            if (slot.isAi) {
+                return 'Remove AI player';
+            }
+            return 'Kick player from lobby';
+        };
+
         $scope.clearSlot = function (team, index, $event) {
             if ($event) {
                 if ($event.stopPropagation) {
@@ -1474,6 +1651,7 @@
             cleared.startpoint = 0;
             slots.splice(index, 1, cleared);
             $scope.slotMenu = null;
+            closeColorPicker();
         };
 
         $scope.setDifficulty = function (slot, diff) {
@@ -2185,6 +2363,17 @@
                     if (p.startpoint != null) {
                         team[i].startpoint = clampStartIdToMap(p.startpoint);
                     }
+                    if (p.color) {
+                        team[i].color = cssHouseColor(p.color);
+                    }
+                    if (p.faction) {
+                        team[i].faction = normalizeFaction(p.faction);
+                        team[i].general = p.general
+                            ? Number(p.general) || team[i].general
+                            : defaultGeneralId(team[i].faction, $scope.selectedMap);
+                        team[i].codename = codenameForSlot(team[i]);
+                        team[i].avatar = avatarForSlot(team[i]);
+                    }
                     return;
                 }
             }
@@ -2206,6 +2395,19 @@
                     s.startpoint = (p.startpoint != null)
                         ? clampStartIdToMap(p.startpoint)
                         : 0;
+                    if (p.color) {
+                        s.color = cssHouseColor(p.color);
+                    } else {
+                        s.color = unusedColor(s);
+                    }
+                    if (p.faction) {
+                        s.faction = normalizeFaction(p.faction);
+                        s.general = p.general
+                            ? Number(p.general) || defaultGeneralId(s.faction, $scope.selectedMap)
+                            : defaultGeneralId(s.faction, $scope.selectedMap);
+                        s.codename = codenameForSlot(s);
+                        s.avatar = avatarForSlot(s);
+                    }
                     team[i] = s;
                     return;
                 }
@@ -2309,6 +2511,9 @@
                             } else if (localSp > 0 && serverSp === 0) {
                                 maybeResyncStartpoint($scope.team1[0]);
                             }
+                        }
+                        if (p.color && Date.now() >= ($scope._colorHoldUntil || 0)) {
+                            $scope.team1[0].color = cssHouseColor(p.color);
                         }
                     }
                 } else {
@@ -2488,6 +2693,7 @@
                 return httpRequest('GET', '/cnc/online-count');
             }
             var pid = slot.isAi ? ensureAiPersonaId(slot) : (slot.pid || 0);
+            var colorWire = houseColorWire(slot.color);
             var q = '/cnc/player-attrs?gid=' + encodeURIComponent($scope.gameId) +
                 '&pid=' + encodeURIComponent(pid);
             if (slot.faction) {
@@ -2503,11 +2709,14 @@
             if (slot.general != null && slot.general !== '') {
                 q += '&general=' + encodeURIComponent(slot.general);
             }
+            if (colorWire) {
+                q += '&color=' + encodeURIComponent(colorWire);
+            }
             q += slot.isAi ? '&isai=1' : '&isai=0';
             if (slot.difficulty) {
                 q += '&difficulty=' + encodeURIComponent(difficultyAttrValue(slot.difficulty));
             }
-            return httpRequest('POST', q);
+            return httpRequest('POST', q, colorWire ? { color: colorWire } : null);
         }
 
         function aiSlots() {

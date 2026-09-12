@@ -16,6 +16,12 @@ const PROS_STAT_ACTIVE_CONNECTING: i32 = 2;
 const STAS_IN_GAME: i32 = 2;
 pub const ATTR_PASSWORD_FLAG: &str = "_password";
 pub const ATTR_PASSWORD_SECRET: &str = "_spw";
+/// Player ATTR `color` (RRGGBB).
+pub const ATTR_HOUSE_COLOR: &str = "color";
+/// Lobby palette (RGB hex, no '#').
+pub const SELECTABLE_HOUSE_COLORS: &[&str] = &[
+    "3A7BD5", "2AA8A0", "3FBF4A", "E6B322", "E67E22", "C0392B", "ECECEC", "8E44AD",
+];
 
 static GAMES: OnceLock<Mutex<HashMap<i64, CncGame>>> = OnceLock::new();
 static LAST_ADD_QUEUED: OnceLock<Mutex<Option<(i64, CncPlayer)>>> = OnceLock::new();
@@ -1554,6 +1560,156 @@ fn startpoint_from_attrs(attrs: &IndexMap<String, String>) -> i32 {
         .unwrap_or(0)
 }
 
+/// `#rrggbb` / `rrggbb` / `AARRGGBB` → uppercase RGB hex.
+pub fn normalize_house_color(raw: &str) -> Option<String> {
+    let s = raw.trim().trim_start_matches('#');
+    if s.len() != 6 && s.len() != 8 {
+        return None;
+    }
+    if !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let rgb = if s.len() == 8 { &s[2..] } else { s };
+    Some(rgb.to_ascii_uppercase())
+}
+
+pub fn css_house_color(hex: &str) -> String {
+    let n = normalize_house_color(hex)
+        .unwrap_or_else(|| SELECTABLE_HOUSE_COLORS[0].to_string());
+    format!("#{}", n.to_ascii_lowercase())
+}
+
+pub const HOUSE_COLOR_HUE_BLOCK_DEG: f32 = 14.0;
+const HOUSE_COLOR_SAT_CHROMA: f32 = 0.18;
+const HOUSE_COLOR_GREY_V_BLOCK: f32 = 0.22;
+
+fn hex_rgb(hex: &str) -> Option<(u8, u8, u8)> {
+    let n = normalize_house_color(hex)?;
+    let r = u8::from_str_radix(&n[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&n[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&n[4..6], 16).ok()?;
+    Some((r, g, b))
+}
+
+fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
+    let rf = r as f32 / 255.0;
+    let gf = g as f32 / 255.0;
+    let bf = b as f32 / 255.0;
+    let max = rf.max(gf).max(bf);
+    let min = rf.min(gf).min(bf);
+    let d = max - min;
+    let h = if d < 1e-6 {
+        0.0
+    } else if (max - rf).abs() < 1e-6 {
+        let mut h = (gf - bf) / d;
+        if h < 0.0 {
+            h += 6.0;
+        }
+        h * 60.0
+    } else if (max - gf).abs() < 1e-6 {
+        ((bf - rf) / d + 2.0) * 60.0
+    } else {
+        ((rf - gf) / d + 4.0) * 60.0
+    };
+    let s = if max < 1e-6 { 0.0 } else { d / max };
+    (h, s, max)
+}
+
+fn hue_dist_deg(a: f32, b: f32) -> f32 {
+    let d = (a - b).abs();
+    d.min(360.0 - d)
+}
+
+pub fn house_colors_too_close(a: &str, b: &str) -> bool {
+    let (ar, ag, ab) = match hex_rgb(a) {
+        Some(v) => v,
+        None => return false,
+    };
+    let (br, bg, bb) = match hex_rgb(b) {
+        Some(v) => v,
+        None => return false,
+    };
+    if ar == br && ag == bg && ab == bb {
+        return true;
+    }
+    let (ha, sa, va) = rgb_to_hsv(ar, ag, ab);
+    let (hb, sb, vb) = rgb_to_hsv(br, bg, bb);
+    let grey_a = sa < HOUSE_COLOR_SAT_CHROMA;
+    let grey_b = sb < HOUSE_COLOR_SAT_CHROMA;
+    if grey_a && grey_b {
+        return (va - vb).abs() < HOUSE_COLOR_GREY_V_BLOCK;
+    }
+    if grey_a || grey_b {
+        return false;
+    }
+    hue_dist_deg(ha, hb) < HOUSE_COLOR_HUE_BLOCK_DEG
+}
+
+fn used_conflicts_house_color(hex: &str, used_by_others: &HashSet<String>) -> bool {
+    used_by_others
+        .iter()
+        .any(|u| house_colors_too_close(hex, u))
+}
+
+fn house_color_from_attrs(attrs: &IndexMap<String, String>) -> Option<String> {
+    attrs
+        .get(ATTR_HOUSE_COLOR)
+        .or_else(|| attrs.get("_color"))
+        .and_then(|s| normalize_house_color(s))
+}
+
+pub fn pick_unique_house_color(
+    used_by_others: &HashSet<String>,
+    requested: Option<&str>,
+    current: Option<&str>,
+) -> String {
+    if let Some(hex) = requested.and_then(normalize_house_color) {
+        if !used_conflicts_house_color(&hex, used_by_others) {
+            return hex;
+        }
+    }
+    if let Some(hex) = current.and_then(normalize_house_color) {
+        if !used_conflicts_house_color(&hex, used_by_others) {
+            return hex;
+        }
+    }
+    for &c in SELECTABLE_HOUSE_COLORS {
+        if !used_conflicts_house_color(c, used_by_others) {
+            return c.to_string();
+        }
+    }
+    SELECTABLE_HOUSE_COLORS[0].to_string()
+}
+
+fn used_house_colors_except(players: &[CncPlayer], persona_id: i64) -> HashSet<String> {
+    players
+        .iter()
+        .filter(|p| p.persona_id != persona_id)
+        .filter_map(|p| house_color_from_attrs(&p.attribs))
+        .collect()
+}
+
+fn assign_unique_house_color(
+    player: &mut CncPlayer,
+    others: &[CncPlayer],
+    requested: Option<&str>,
+) {
+    let used = used_house_colors_except(others, player.persona_id);
+    let current = house_color_from_attrs(&player.attribs);
+    let hex = pick_unique_house_color(&used, requested, current.as_deref());
+    player.attribs.shift_remove("_color");
+    player
+        .attribs
+        .insert(ATTR_HOUSE_COLOR.to_string(), hex);
+}
+
+fn take_requested_house_color(attrs: &mut IndexMap<String, String>) -> Option<String> {
+    let raw = attrs
+        .shift_remove(ATTR_HOUSE_COLOR)
+        .or_else(|| attrs.shift_remove("_color"));
+    raw.as_deref().and_then(normalize_house_color)
+}
+
 /// Live roster plus pending lobby overlays.
 pub fn effective_startpoint_for_player(gid: i64, player: &CncPlayer) -> i32 {
     let live = startpoint_from_attrs(&player.attribs);
@@ -1812,12 +1968,24 @@ fn merge_pending_into_player(gid: i64, player: &mut CncPlayer, map_path: &str) {
         }
         layers
     };
+    let mut requested_color = None;
     for attrs in &overlays {
+        if requested_color.is_none() {
+            requested_color = house_color_from_attrs(attrs);
+        }
         for (k, v) in attrs {
+            if k == ATTR_HOUSE_COLOR || k == "_color" {
+                continue;
+            }
             apply_attr_to_player(player, k, v);
         }
     }
     ensure_general_attr(player, map_path);
+    if let Some(hex) = requested_color {
+        player
+            .attribs
+            .insert(ATTR_HOUSE_COLOR.to_string(), hex);
+    }
     if !overlays.is_empty() {
         crate::debug_println!(
             "[CNC] merge pending attrs gid={} pid={} faction={:?} general={:?}",
@@ -1899,10 +2067,18 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
         if let Some(idx) = game.players.iter().position(|p| p.persona_id == pid) {
             if let Some(player) = game.players.get_mut(idx) {
                 if player.persona_id != game.host_persona || player.is_ai {
+                    let requested = house_color_from_attrs(attrs);
                     for (k, v) in attrs {
+                        if k == ATTR_HOUSE_COLOR || k == "_color" {
+                            continue;
+                        }
                         apply_attr_to_player(player, k, v);
                     }
                     ensure_general_attr(player, map_path);
+                    let others = game.players.clone();
+                    if let Some(player) = game.players.get_mut(idx) {
+                        assign_unique_house_color(player, &others, requested.as_deref());
+                    }
                     return;
                 }
             }
@@ -1933,9 +2109,14 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
             stat: PROS_STAT_ACTIVE_CONNECTING,
         };
         for (k, v) in attrs {
+            if k == ATTR_HOUSE_COLOR || k == "_color" {
+                continue;
+            }
             apply_attr_to_player(&mut player, k, v);
         }
         ensure_general_attr(&mut player, map_path);
+        let requested = house_color_from_attrs(attrs);
+        assign_unique_house_color(&mut player, &game.players, requested.as_deref());
         game.players.push(player);
         return;
     }
@@ -1957,15 +2138,20 @@ fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<
             .map(|(i, _)| i)
             .collect()
     };
+    let requested = house_color_from_attrs(attrs);
     for i in targets {
         if let Some(player) = game.players.get_mut(i) {
             for (k, v) in attrs {
-                if k == "_isai" {
+                if k == "_isai" || k == ATTR_HOUSE_COLOR || k == "_color" {
                     continue;
                 }
                 apply_attr_to_player(player, k, v);
             }
             ensure_general_attr(player, map_path);
+        }
+        let others = game.players.clone();
+        if let Some(player) = game.players.get_mut(i) {
+            assign_unique_house_color(player, &others, requested.as_deref());
         }
     }
 }
@@ -1990,8 +2176,32 @@ pub fn set_pending_player_attrs(gid: i64, mut persona_id: i64, attrs: IndexMap<S
         persona_id = synthetic_ai_persona(startpoint_from_attrs(&attrs));
         strip_poisoned_host_ai_pending(gid);
     }
+    let mut attrs = attrs;
+    let requested_color = take_requested_house_color(&mut attrs);
+    if let Some(ref hex) = requested_color {
+        attrs.insert(ATTR_HOUSE_COLOR.to_string(), hex.clone());
+    }
     write_pending_player_attrs(gid, persona_id, &attrs);
     apply_pending_attrs_to_live_game(gid, persona_id, &attrs);
+    let assigned = {
+        let m = games().lock();
+        m.get(&gid).and_then(|g| {
+            let pid = if persona_id == 0 {
+                g.host_persona
+            } else {
+                persona_id
+            };
+            g.players
+                .iter()
+                .find(|p| p.persona_id == pid || (persona_id == 0 && !p.is_ai && p.persona_id == g.host_persona))
+                .and_then(|p| house_color_from_attrs(&p.attribs))
+        })
+    };
+    if let Some(hex) = assigned {
+        let mut resolved = IndexMap::new();
+        resolved.insert(ATTR_HOUSE_COLOR.to_string(), hex);
+        write_pending_player_attrs(gid, persona_id, &resolved);
+    }
 }
 
 pub fn adopt_host_lobby_pending_attrs_into(dedicated_gid: i64) {
@@ -2109,6 +2319,7 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
                 "startpoint": start,
                 "faction": faction,
                 "general": general,
+                "color": p.attribs.get(ATTR_HOUSE_COLOR).cloned().unwrap_or_default(),
                 "is_ai": is_ai,
                 "stat": p.stat,
                 "spawned_hint": p.stat >= PROS_STAT_ACTIVE_CONNECTING,
@@ -2297,6 +2508,7 @@ pub fn seed_from_join(gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player, map_for_defaults);
+    assign_unique_house_color(&mut host_player, &[], None);
     let mut m = games().lock();
     if m.contains_key(&gid) {
         return;
@@ -2826,6 +3038,11 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
                 "slot": p.slot,
                 "team": p.team,
                 "startpoint": startpoint,
+                "faction": p.attribs.get("_faction").cloned().unwrap_or_default(),
+                "general": p.attribs.get("_general").cloned().unwrap_or_default(),
+                "color": house_color_from_attrs(&p.attribs)
+                    .map(|h| css_house_color(&h))
+                    .unwrap_or_else(|| css_house_color(SELECTABLE_HOUSE_COLORS[0])),
                 "isAi": p.is_ai,
                 "ready": p.ready || p.is_ai || is_host,
                 "isHost": is_host,
@@ -3137,6 +3354,8 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
                 &mut game.players[existing_idx],
                 &map_for_merge,
             );
+            let others = game.players.clone();
+            assign_unique_house_color(&mut game.players[existing_idx], &others, None);
             if game.host_persona == 0 {
                 game.host_persona = persona_id;
             }
@@ -3191,6 +3410,7 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
                 .find(|p| p.persona_id == persona_id)
                 .cloned();
         }
+        assign_unique_house_color(&mut player, &game.players, None);
         game.players.push(player.clone());
         player
     };

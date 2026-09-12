@@ -646,6 +646,15 @@
     z-index: 12;
 }
 
+.cc-lobby__kick.disabled,
+.cc-lobby__kick.disabled:hover {
+    color: #555;
+    border-color: #333;
+    background: #1a1a1a;
+    opacity: 0.4;
+    cursor: default;
+}
+
 .cc-lobby__card-left {
     float: left;
     width: 60px;
@@ -795,7 +804,7 @@
     position: absolute;
     left: 0;
     top: 92px;
-    width: 180px;
+    width: 196px;
     margin: 0;
     padding: 4px 0;
     list-style: none;
@@ -850,6 +859,26 @@
 
 .cc-lobby__swatch.on {
     border-color: #fff;
+}
+
+.cc-lobby__swatch.taken,
+.cc-lobby__swatch:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.cc-lobby__swatch--rainbow {
+    background-color: #3a7bd5;
+    background-image: -webkit-linear-gradient(left, #ff3b30 0%, #ffcc00 16%, #34c759 33%, #00c7be 50%, #007aff 66%, #af52de 83%, #ff3b30 100%);
+    background-image: linear-gradient(to right, #ff3b30 0%, #ffcc00 16%, #34c759 33%, #00c7be 50%, #007aff 66%, #af52de 83%, #ff3b30 100%);
+}
+
+.cc-lobby__swatch--rainbow:hover {
+    border-color: #d4c48a;
+}
+
+.cc-lobby__swatch--rainbow:disabled:hover {
+    border-color: #222;
 }
 
 .cc-lobby__card-right {
@@ -2325,4 +2354,155 @@
 .cc-lobby__map-setup > [data-tip] {
     display: inline-block;
     vertical-align: middle;
+}
+
+/* Custom house-colour picker (JS-positioned; WebKit 535 safe) */
+.cnc-hue-picker {
+    position: absolute;
+    z-index: 10020;
+    width: 188px;
+    padding: 8px 8px 7px 8px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    line-height: 1.25;
+    display: none;
+}
+
+@-webkit-keyframes cncHuePickerIn {
+    0% {
+        opacity: 0;
+        -webkit-transform: translateY(-5px);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: translateY(0);
+    }
+}
+
+@keyframes cncHuePickerIn {
+    0% {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.cnc-hue-picker--in {
+    -webkit-animation: cncHuePickerIn 0.16s ease-out;
+    animation: cncHuePickerIn 0.16s ease-out;
+}
+
+.cnc-hue-picker__head {
+    height: 16px;
+    margin: 0 0 7px 0;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.cnc-hue-picker__close {
+    float: right;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 14px;
+}
+
+.cnc-hue-picker__sv-wrap,
+.cnc-hue-picker__hue-wrap {
+    font-size: 0;
+    line-height: 0;
+}
+
+.cnc-hue-picker__sv,
+.cnc-hue-picker__hue {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+.cnc-hue-picker__sv {
+    width: 172px;
+    height: 118px;
+    cursor: crosshair;
+}
+
+.cnc-hue-picker__hue {
+    width: 172px;
+    height: 14px;
+    margin-top: 6px;
+    cursor: pointer;
+}
+
+.cnc-hue-picker__foot {
+    margin-top: 7px;
+    height: 18px;
+    line-height: 18px;
+    overflow: hidden;
+}
+
+.cnc-hue-picker__chip {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border: 1px solid #fff;
+}
+
+.cnc-hue-picker__chip.is-denied {
+    border-color: #e74c3c;
+    opacity: 0.55;
+}
+
+.cnc-hue-picker__hex {
+    display: inline-block;
+    vertical-align: middle;
+    letter-spacing: 0.04em;
+}
+
+.cnc-hue-picker__hex.is-denied {
+    color: #e74c3c;
+    text-decoration: line-through;
+}
+
+.cnc-hue-picker__hint {
+    margin-top: 4px;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+}
+
+.cc-lobby__hue-picker {
+    background: rgba(18, 16, 12, 0.97);
+    color: #e8e0c8;
+    border: 1px solid #8a7a50;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(232, 224, 200, 0.12);
+}
+
+.cc-lobby__hue-picker .cnc-hue-picker__head {
+    color: #b8a878;
+}
+
+.cc-lobby__hue-picker .cnc-hue-picker__close {
+    color: #b8a878;
+}
+
+.cc-lobby__hue-picker canvas {
+    border: 1px solid #6a5c3a;
+}
+
+.cc-lobby__hue-picker .cnc-hue-picker__hint {
+    color: #8a7a50;
 }
