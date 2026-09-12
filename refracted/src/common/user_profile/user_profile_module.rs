@@ -195,6 +195,64 @@ pub fn create_new_profile() -> UserProfile {
     }
 }
 
+/// JSON/local test client name. Slot 0 is the current profile; later slots append 2, 3, …
+pub fn json_test_client_profile_name(base: &str, slot: usize) -> String {
+    if slot == 0 {
+        base.to_string()
+    } else {
+        format!("{}{}", base, slot + 1)
+    }
+}
+
+fn numbered_email(base_email: &str, n: u32) -> String {
+    let email = base_email.trim();
+    if email.is_empty() {
+        return format!("player{n}@ea.com");
+    }
+    if let Some((local, domain)) = email.split_once('@') {
+        format!("{local}{n}@{domain}")
+    } else {
+        format!("{email}{n}@ea.com")
+    }
+}
+
+/// JSON/local test only. Slot 0 is the current profile; slot N is `{name}{N+1}` with its own UID/PID.
+pub fn claim_json_test_client_profile(slot: usize) -> UserProfile {
+    let profiles = get_profiles();
+    if slot == 0 {
+        return profiles
+            .profiles
+            .get(&profiles.current_profile)
+            .cloned()
+            .unwrap_or_default();
+    }
+    let base = profiles.current_profile.clone();
+    let name = json_test_client_profile_name(&base, slot);
+    if let Some(existing) = profiles.profiles.get(&name) {
+        return existing.clone();
+    }
+    let base_profile = profiles
+        .profiles
+        .get(&base)
+        .cloned()
+        .unwrap_or_default();
+    let mut profile = create_new_profile();
+    profile.email = numbered_email(&base_profile.email, (slot + 1) as u32);
+    if let Err(e) = save_profile(&name, profile.clone()) {
+        crate::console_println!(
+            "\x1b[38;2;255;150;150m[Nexus]\x1b[0m failed to persist JSON test profile `{name}`: {e}"
+        );
+        profile.username = name.clone();
+        profile.display_name = name;
+        return profile;
+    }
+    get_profiles()
+        .profiles
+        .get(&name)
+        .cloned()
+        .unwrap_or(profile)
+}
+
 /// Push the JSON profile into the Blaze session. No-op on headless mysql.
 pub fn sync_profile_to_session() {
     if !crate::nexus::identity::json_personas_allowed() {
@@ -225,5 +283,23 @@ pub fn sync_profile_to_session() {
         network_bps: None,
         next_message_id: 1160000,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{json_test_client_profile_name, numbered_email};
+
+    #[test]
+    fn json_test_client_names_append_slot() {
+        assert_eq!(json_test_client_profile_name("Xevrac", 0), "Xevrac");
+        assert_eq!(json_test_client_profile_name("Xevrac", 1), "Xevrac2");
+        assert_eq!(json_test_client_profile_name("Xevrac", 2), "Xevrac3");
+    }
+
+    #[test]
+    fn numbered_email_inserts_before_at() {
+        assert_eq!(numbered_email("xevrac@ea.com", 2), "xevrac2@ea.com");
+        assert_eq!(numbered_email("", 2), "player2@ea.com");
+    }
 }
 

@@ -34,6 +34,9 @@ pub struct BlazeSessionEntry {
     /// Blaze client name/type string from request `CLNT` (e.g. `RtsBlazeClient` vs dedicated server).
     #[serde(default)]
     pub clnt: Option<String>,
+    /// This row has its own persona (JSON extra client or dedicated). Do not stamp from GLOBAL_SESSION.
+    #[serde(default)]
+    pub identity_bound: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -141,6 +144,7 @@ pub fn register(peer: std::net::SocketAddr, listener: &str) -> u64 {
             persona_id: None,
             email: None,
             clnt: None,
+            identity_bound: false,
         },
     );
     drop(m);
@@ -154,11 +158,11 @@ pub fn sync_all_from_global_session() {
     let mut m = registry().lock();
     if let Some(s) = snapshot {
         for e in m.values_mut() {
-            if e
-                .clnt
-                .as_deref()
-                .map(crate::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
-                .unwrap_or(false)
+            if e.identity_bound
+                || e.clnt
+                    .as_deref()
+                    .map(crate::client::cnc::dedicated_pool::clnt_qualifies_for_pool)
+                    .unwrap_or(false)
             {
                 continue;
             }
@@ -296,8 +300,56 @@ pub fn set_dedicated_identity(id: u64, name: &str, persona_id: u64) {
         if !is_server {
             e.clnt = Some("RtsBlazeServer".to_string());
         }
+        e.identity_bound = true;
     }
     persist_sessions_to_disk();
+}
+
+/// Bind a JSON/local-test game client to a distinct persona on this Blaze row only.
+pub fn set_client_identity(id: u64, name: &str, persona_id: u64, user_id: u64, email: &str) {
+    {
+        let mut m = registry().lock();
+        let Some(e) = m.get_mut(&id) else {
+            return;
+        };
+        e.display_name = Some(name.to_string());
+        e.persona_id = Some(persona_id);
+        e.user_id = Some(user_id);
+        if !email.is_empty() {
+            e.email = Some(email.to_string());
+        }
+        e.identity_bound = true;
+    }
+    persist_sessions_to_disk();
+}
+
+pub fn session_identity_bound(id: u64) -> bool {
+    registry()
+        .lock()
+        .get(&id)
+        .map(|e| e.identity_bound)
+        .unwrap_or(false)
+}
+
+/// Reserve the next JSON extra-client slot on this session. `None` if already bound, missing, or a server.
+pub fn take_json_client_slot(session_id: u64) -> Option<usize> {
+    let mut m = registry().lock();
+    let is_server = m.get(&session_id).map(entry_is_server).unwrap_or(false);
+    if is_server {
+        return None;
+    }
+    let already = m.get(&session_id).map(|e| e.identity_bound).unwrap_or(true);
+    if already {
+        return None;
+    }
+    let slot = m
+        .values()
+        .filter(|e| e.identity_bound && !entry_is_server(e))
+        .count();
+    if let Some(e) = m.get_mut(&session_id) {
+        e.identity_bound = true;
+    }
+    Some(slot)
 }
 
 pub fn mark_authenticated(id: u64) {
