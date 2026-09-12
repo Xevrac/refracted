@@ -107,6 +107,32 @@ local function refractedInstallUsersettingsGraphics()
     return v
   end
 
+  -- Prism get/setUseFriendOrFoeColors (not getUserOptions).
+  local function friendOrFoeBinding()
+    return {
+      function()
+        if type(getUseFriendOrFoeColors) == "function" then
+          local ok, value = pcall(getUseFriendOrFoeColors)
+          if ok and value ~= nil then
+            return value
+          end
+        end
+        return 0
+      end,
+      function(nextValue)
+        local on = toProfileBool(nextValue)
+        if type(setUseFriendOrFoeColors) == "function" then
+          pcall(setUseFriendOrFoeColors, on and 1 or 0)
+        end
+        if type(executeConsoleCommand) == "function" then
+          pcall(executeConsoleCommand,
+            "Rts.UseFriendOrFoeColors " .. (on and "true" or "false"))
+        end
+      end,
+    }
+  end
+  mod.userSettings.usefriendorfoecolors = friendOrFoeBinding()
+
   -- Rts.AllowCameraRotation is a UI console var, not SettingsManager / RtsProfileSettings.
   -- getUserOptions("AllowCameraRotation") asserts (Setting not defined); pcall cannot catch it.
   -- Persist via Prism get/setAllowCameraRotation → PrismOptions.cfg.
@@ -211,6 +237,14 @@ local function refractedInstallUsersettingsGraphics()
       pcall(executeConsoleCommand,
         "Rts.IssueRightClickOnMouseDown " .. (on and "true" or "false"))
     end
+    local fofBinding = mod.userSettings.usefriendorfoecolors
+    if type(fofBinding) == "table" and type(fofBinding[1]) == "function" then
+      local ok, value = pcall(fofBinding[1])
+      if ok then
+        pcall(executeConsoleCommand,
+          "Rts.UseFriendOrFoeColors " .. (toProfileBool(value) and "true" or "false"))
+      end
+    end
   end
 
   local graphicsKeys = {
@@ -238,6 +272,7 @@ local function refractedInstallUsersettingsGraphics()
     allowcamerarotation = true,
     movemodeattack = true,
     allowdeselect = true,
+    usefriendorfoecolors = true,
   }
 
   local function applyFromPayload(payload)

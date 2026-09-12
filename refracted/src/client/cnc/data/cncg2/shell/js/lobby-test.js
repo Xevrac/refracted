@@ -593,6 +593,9 @@
             if (slot.difficulty) {
                 q += '&difficulty=' + encodeURIComponent(difficultyAttrValue(slot.difficulty));
             }
+            if (slot.color) {
+                q += '&color=' + encodeURIComponent(slot.color);
+            }
             var t = httpRequest('POST', q, { json: true });
             return {
                 then: function (resolve) {

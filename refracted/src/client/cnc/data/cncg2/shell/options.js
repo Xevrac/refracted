@@ -182,6 +182,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         allowcamerarotation: false,
         movemodeattack: false,
         allowdeselect: true,
+        usefriendorfoecolors: false,
         fullscreenResolution: asResolution(systemWidth, systemHeight),
         windowedResolution: systemWindowedResolution,
         overallgraphicsquality: OVERALL.Autodetect,
@@ -565,7 +566,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             middlemousecameradrag: $scope.settings.middlemousecameradrag ? 1 : 0,
             allowcamerarotation: $scope.settings.allowcamerarotation ? 1 : 0,
             movemodeattack: $scope.settings.movemodeattack ? 1 : 0,
-            allowdeselect: $scope.settings.allowdeselect ? 1 : 0
+            allowdeselect: $scope.settings.allowdeselect ? 1 : 0,
+            usefriendorfoecolors: $scope.settings.usefriendorfoecolors ? 1 : 0
         };
         angular.extend(payload, buildGraphicsPayload());
         return payload;
@@ -696,6 +698,10 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         if (res.allowdeselect != null) {
             $scope.settings.allowdeselect = asBool(res.allowdeselect, $scope.settings.allowdeselect);
+        }
+        if (res.usefriendorfoecolors != null) {
+            $scope.settings.usefriendorfoecolors = asBool(
+                res.usefriendorfoecolors, $scope.settings.usefriendorfoecolors);
         }
         // Coerce stringy graphics ints before readGraphicsFromResponse.
         var gKeys = [
@@ -886,7 +892,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         executeShell('/usersettings/apply', {
             movemodeattack: $scope.settings.movemodeattack ? 1 : 0,
-            allowdeselect: $scope.settings.allowdeselect ? 1 : 0
+            allowdeselect: $scope.settings.allowdeselect ? 1 : 0,
+            usefriendorfoecolors: $scope.settings.usefriendorfoecolors ? 1 : 0
         }, function () {
             executeShell('/usersettings/save');
         });
