@@ -630,7 +630,8 @@
             enableOilEconomy: false,
             enableInfiniteResourceCenters: false,
             enableUnlockFullFactionRoster: false,
-            enableInstantSelling: false
+            enableInstantSelling: false,
+            enableRebuildableDerricks: false
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -2310,6 +2311,7 @@
             $scope.lobbyOptions.enableInfiniteResourceCenters = false;
             $scope.lobbyOptions.enableUnlockFullFactionRoster = false;
             $scope.lobbyOptions.enableInstantSelling = false;
+            $scope.lobbyOptions.enableRebuildableDerricks = false;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -2470,6 +2472,9 @@
                 }
                 if (data.enableInstantSelling != null) {
                     $scope.lobbyOptions.enableInstantSelling = !!data.enableInstantSelling;
+                }
+                if (data.enableRebuildableDerricks != null) {
+                    $scope.lobbyOptions.enableRebuildableDerricks = !!data.enableRebuildableDerricks;
                 }
             }
             $scope.allHumansReady = !!data.allReady;
@@ -3295,6 +3300,7 @@
             var infinite = false;
             var factionsOnly = $scope.lobbyOptions.enableUnlockFullFactionRoster === true;
             var instantSelling = $scope.lobbyOptions.enableInstantSelling === true;
+            var rebuildableDerricks = $scope.lobbyOptions.enableRebuildableDerricks === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
                 specialAbilities: special,
@@ -3302,7 +3308,8 @@
                 oilEconomy: oil,
                 infiniteResourceCenters: infinite,
                 factionsOnly: factionsOnly,
-                instantSelling: instantSelling
+                instantSelling: instantSelling,
+                rebuildableDerricks: rebuildableDerricks
             }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
@@ -3327,6 +3334,9 @@
                     }
                     if (data.enableInstantSelling != null) {
                         $scope.lobbyOptions.enableInstantSelling = !!data.enableInstantSelling;
+                    }
+                    if (data.enableRebuildableDerricks != null) {
+                        $scope.lobbyOptions.enableRebuildableDerricks = !!data.enableRebuildableDerricks;
                     }
                 });
             });

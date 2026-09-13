@@ -47,6 +47,8 @@ pub const CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS: u32 = 0x100;
 pub const CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER: u32 = 0x200;
 /// Structure sell completes in ~0.01s. Default off (retail 10s).
 pub const CREATE_GAME_OPTIONS_INSTANT_SELLING: u32 = 0x400;
+/// Destroyed oil derricks can be rebuilt (husk cleared, oil well restored). Default off.
+pub const CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS: u32 = 0x800;
 
 fn create_game_options(
     enable_tech_tree: bool,
@@ -55,6 +57,7 @@ fn create_game_options(
     infinite_resource_centers: bool,
     unlock_full_faction_roster: bool,
     instant_selling: bool,
+    rebuildable_derricks: bool,
 ) -> u32 {
     let mut options = CREATE_GAME_OPTIONS_ALLOW_RECONNECT;
     if enable_tech_tree {
@@ -74,6 +77,9 @@ fn create_game_options(
     }
     if instant_selling {
         options |= CREATE_GAME_OPTIONS_INSTANT_SELLING;
+    }
+    if rebuildable_derricks {
+        options |= CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS;
     }
     options
 }
@@ -526,14 +532,15 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={}",
+        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={}",
         roster.len(),
         game.enable_special_abilities,
         game.enable_tech_tree,
         game.enable_oil_economy,
         game.enable_infinite_resource_centers,
         game.enable_unlock_full_faction_roster,
-        game.enable_instant_selling
+        game.enable_instant_selling,
+        game.enable_rebuildable_derricks
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -575,6 +582,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
                 game.enable_infinite_resource_centers,
                 game.enable_unlock_full_faction_roster,
                 game.enable_instant_selling,
+                game.enable_rebuildable_derricks,
             ),
         ),
     };
@@ -723,48 +731,53 @@ mod tests {
     #[test]
     fn create_game_options_ors_unused_lobby_bits() {
         assert_eq!(
-            create_game_options(false, false, false, false, false, false),
+            create_game_options(false, false, false, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
         );
         assert_eq!(
-            create_game_options(true, false, false, false, false, false),
+            create_game_options(true, false, false, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
         );
         assert_eq!(
-            create_game_options(false, true, false, false, false, false),
+            create_game_options(false, true, false, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES
         );
         assert_eq!(
-            create_game_options(false, false, true, false, false, false),
+            create_game_options(false, false, true, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT | CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY
         );
         assert_eq!(
-            create_game_options(true, true, true, false, false, false),
+            create_game_options(true, true, true, false, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
                 | CREATE_GAME_OPTIONS_ENABLE_SPECIAL_ABILITIES
                 | CREATE_GAME_OPTIONS_ENABLE_OIL_ECONOMY
         );
         assert_eq!(
-            create_game_options(false, false, false, true, false, false),
+            create_game_options(false, false, false, true, false, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS
         );
         assert_eq!(
-            create_game_options(false, false, false, false, true, false),
+            create_game_options(false, false, false, false, true, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER
         );
         assert_eq!(
-            create_game_options(true, false, false, false, true, false),
+            create_game_options(true, false, false, false, true, false, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_ENABLE_TECH_TREE
                 | CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER
         );
         assert_eq!(
-            create_game_options(false, false, false, false, false, true),
+            create_game_options(false, false, false, false, false, true, false),
             CREATE_GAME_OPTIONS_ALLOW_RECONNECT
                 | CREATE_GAME_OPTIONS_INSTANT_SELLING
+        );
+        assert_eq!(
+            create_game_options(false, false, false, false, false, false, true),
+            CREATE_GAME_OPTIONS_ALLOW_RECONNECT
+                | CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS
         );
     }
 
@@ -776,14 +789,14 @@ mod tests {
             "Oasis",
             "Levels/MP/",
             &[sample_player(1201618778, 1, 0)],
-            create_game_options(true, true, true, false, false, false),
+            create_game_options(true, true, true, false, false, false, false),
         );
         let off = encode_create_game_payload(
             &gid,
             "Oasis",
             "Levels/MP/",
             &[sample_player(1201618778, 1, 0)],
-            create_game_options(false, false, false, false, false, false),
+            create_game_options(false, false, false, false, false, false, false),
         );
         assert_eq!(&both[both.len() - 5..], &[9, 0xE1, 0, 0, 0]);
         assert_eq!(&off[off.len() - 5..], &[9, 0x01, 0, 0, 0]);

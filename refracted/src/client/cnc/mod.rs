@@ -966,7 +966,7 @@ fn json_opt_bool(v: &serde_json::Value) -> Option<bool> {
 fn parse_gid_pid_match_options(
     query: Option<&str>,
     body: &[u8],
-) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
+) -> (i64, i64, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>, Option<bool>) {
     let mut gid: i64 = 0;
     let mut pid: i64 = 0;
     let mut special: Option<bool> = None;
@@ -975,6 +975,7 @@ fn parse_gid_pid_match_options(
     let mut infinite: Option<bool> = None;
     let mut full_roster: Option<bool> = None;
     let mut instant_selling: Option<bool> = None;
+    let mut rebuildable_derricks: Option<bool> = None;
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
@@ -994,6 +995,9 @@ fn parse_gid_pid_match_options(
                     | "enableFactionsOnly" => full_roster = parse_opt_bool_str(&decoded),
                     "instantSelling" | "enableInstantSelling" => {
                         instant_selling = parse_opt_bool_str(&decoded)
+                    }
+                    "rebuildableDerricks" | "enableRebuildableDerricks" => {
+                        rebuildable_derricks = parse_opt_bool_str(&decoded)
                     }
                     _ => {}
                 }
@@ -1052,6 +1056,12 @@ fn parse_gid_pid_match_options(
                 break;
             }
         }
+        for key in ["rebuildableDerricks", "enableRebuildableDerricks"] {
+            if let Some(b) = v.get(key).and_then(json_opt_bool) {
+                rebuildable_derricks = Some(b);
+                break;
+            }
+        }
     }
     if pid <= 0 {
         let (persona, _) = cnc_game_client_identity();
@@ -1059,11 +1069,21 @@ fn parse_gid_pid_match_options(
             pid = persona as i64;
         }
     }
-    (gid, pid, special, tech, oil, infinite, full_roster, instant_selling)
+    (
+        gid,
+        pid,
+        special,
+        tech,
+        oil,
+        infinite,
+        full_roster,
+        instant_selling,
+        rebuildable_derricks,
+    )
 }
 
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
-    let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling) =
+    let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling, rebuildable) =
         parse_gid_pid_match_options(query, body);
     if gid <= 0 {
         return HttpResponse::new(
@@ -1078,11 +1098,12 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && infinite.is_none()
         && full_roster.is_none()
         && instant_selling.is_none()
+        && rebuildable.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, or instantSelling required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, or rebuildableDerricks required"}"#.to_vec(),
         );
     }
     let resp = game_state::set_match_options(
@@ -1094,9 +1115,10 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         infinite,
         full_roster,
         instant_selling,
+        rebuildable,
     );
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} factionsOnly={:?} instantSelling={:?} ok={}",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} specialAbilities={:?} techTree={:?} oilEconomy={:?} infiniteResourceCenters={:?} factionsOnly={:?} instantSelling={:?} rebuildableDerricks={:?} ok={}",
         gid,
         pid,
         special,
@@ -1105,6 +1127,7 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         infinite,
         full_roster,
         instant_selling,
+        rebuildable,
         resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
     );
     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
