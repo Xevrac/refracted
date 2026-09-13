@@ -405,6 +405,14 @@
                                            ng-change="applyLobbyMatchOptions()">
                                     INSTANT SELLING
                                 </label>
+                                <label class="cc-lobby__options-check"
+                                       data-tip-pos="below"
+                                       data-tip="Allow rebuilding of destroyed oil derricks">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.enableRebuildableDerricks"
+                                           ng-change="applyLobbyMatchOptions()">
+                                    REBUILDABLE DERRICKS
+                                </label>
                                 <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
                                        data-tip-pos="below"
                                        data-tip="Coming soon">

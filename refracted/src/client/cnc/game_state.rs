@@ -963,6 +963,7 @@ pub struct CncGame {
     pub enable_unlock_full_faction_roster: bool,
     /// Structure sell completes in ~0.01s. Default off (retail 10s).
     pub enable_instant_selling: bool,
+    pub enable_rebuildable_derricks: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
     /// `PROS` roster rows last sent in `NotifyGameSetup` (reused for `getFullGameData`).
@@ -1039,6 +1040,7 @@ pub fn set_match_options(
     enable_infinite_resource_centers: Option<bool>,
     enable_unlock_full_faction_roster: Option<bool>,
     enable_instant_selling: Option<bool>,
+    enable_rebuildable_derricks: Option<bool>,
 ) -> serde_json::Value {
     let mut m = games().lock();
     let Some(game) = m.get_mut(&gid) else {
@@ -1069,6 +1071,9 @@ pub fn set_match_options(
     if let Some(v) = enable_instant_selling {
         game.enable_instant_selling = v;
     }
+    if let Some(v) = enable_rebuildable_derricks {
+        game.enable_rebuildable_derricks = v;
+    }
     serde_json::json!({
         "ok": true,
         "gid": gid,
@@ -1079,10 +1084,11 @@ pub fn set_match_options(
         "enableUnlockFullFactionRoster": game.enable_unlock_full_faction_roster,
         "enableFactionsOnly": game.enable_unlock_full_faction_roster,
         "enableInstantSelling": game.enable_instant_selling,
+        "enableRebuildableDerricks": game.enable_rebuildable_derricks,
     })
 }
 
-pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool, bool) {
+pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool, bool, bool) {
     games()
         .lock()
         .get(&gid)
@@ -1094,9 +1100,10 @@ pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool, bool) {
                 g.enable_infinite_resource_centers,
                 g.enable_unlock_full_faction_roster,
                 g.enable_instant_selling,
+                g.enable_rebuildable_derricks,
             )
         })
-        .unwrap_or((true, true, false, false, false, false))
+        .unwrap_or((true, true, false, false, false, false, false))
 }
 
 /// Copy host lobby progression flags onto a dedicated gid (same pattern as pending map).
@@ -1114,10 +1121,11 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
                     game.enable_infinite_resource_centers,
                     game.enable_unlock_full_faction_roster,
                     game.enable_instant_selling,
+                    game.enable_rebuildable_derricks,
                 )
             })
     };
-    let Some((special, tech, oil, infinite, full_roster, instant_selling)) = source else {
+    let Some((special, tech, oil, infinite, full_roster, instant_selling, rebuildable)) = source else {
         return;
     };
     if let Some(game) = games().lock().get_mut(&dedicated_gid) {
@@ -1127,6 +1135,7 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
         game.enable_infinite_resource_centers = infinite;
         game.enable_unlock_full_faction_roster = full_roster;
         game.enable_instant_selling = instant_selling;
+        game.enable_rebuildable_derricks = rebuildable;
         let _ = oil;
     }
 }
@@ -1353,6 +1362,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_infinite_resource_centers: false,
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
+            enable_rebuildable_derricks: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -1388,6 +1398,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_infinite_resource_centers = false;
     game.enable_unlock_full_faction_roster = false;
     game.enable_instant_selling = false;
+    game.enable_rebuildable_derricks = false;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -2339,7 +2350,7 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
             })
         })
         .collect();
-    let (enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling) = game
+    let (enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = game
         .as_ref()
         .map(|g| {
             (
@@ -2349,9 +2360,10 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
                 g.enable_infinite_resource_centers,
                 g.enable_unlock_full_faction_roster,
                 g.enable_instant_selling,
+                g.enable_rebuildable_derricks,
             )
         })
-        .unwrap_or((true, true, false, false, false, false));
+        .unwrap_or((true, true, false, false, false, false, false));
     serde_json::json!({
         "ok": issues.is_empty() && game.is_some(),
         "gid": gid,
@@ -2364,6 +2376,7 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
         "enableUnlockFullFactionRoster": enable_unlock_full_faction_roster,
         "enableFactionsOnly": enable_unlock_full_faction_roster,
         "enableInstantSelling": enable_instant_selling,
+        "enableRebuildableDerricks": enable_rebuildable_derricks,
         "player_count": players_json.len(),
         "players": players_json,
         "pending_attrs": pending_json,
@@ -2441,7 +2454,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player, map_for_defaults);
-    let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling) = games()
+    let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = games()
         .lock()
         .get(&gid)
         .map(|g| {
@@ -2454,9 +2467,10 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
                 g.enable_infinite_resource_centers,
                 g.enable_unlock_full_faction_roster,
                 g.enable_instant_selling,
+                g.enable_rebuildable_derricks,
             )
         })
-        .unwrap_or((None, String::new(), true, true, true, false, false, false));
+        .unwrap_or((None, String::new(), true, true, true, false, false, false, false));
     let game = CncGame {
         gid,
         name: gnam,
@@ -2476,6 +2490,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_infinite_resource_centers,
         enable_unlock_full_faction_roster,
         enable_instant_selling,
+        enable_rebuildable_derricks,
         replicated_wire: None,
         pros_wire: None,
     };
@@ -2534,6 +2549,7 @@ pub fn seed_from_join(gid: i64) {
             enable_infinite_resource_centers: false,
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
+            enable_rebuildable_derricks: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -3062,6 +3078,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableUnlockFullFactionRoster": game.enable_unlock_full_faction_roster,
         "enableFactionsOnly": game.enable_unlock_full_faction_roster,
         "enableInstantSelling": game.enable_instant_selling,
+        "enableRebuildableDerricks": game.enable_rebuildable_derricks,
         "allReady": all_ready,
         "players": players,
         "serverLost": false,
