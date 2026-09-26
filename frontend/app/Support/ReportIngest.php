@@ -23,6 +23,26 @@ class ReportIngest
         return $domain ? ['domain' => $domain] : [];
     }
 
+    public static function localDashboard(): bool
+    {
+        if (app()->environment('local', 'development', 'dev')) {
+            return true;
+        }
+
+        return ! app()->isProduction()
+            && ! app()->environment('testing')
+            && (bool) config('app.debug');
+    }
+
+    public static function dashboardHost(): ?string
+    {
+        if (self::localDashboard()) {
+            return null;
+        }
+
+        return self::domain();
+    }
+
     public static function uris(): array
     {
         $key = self::key();

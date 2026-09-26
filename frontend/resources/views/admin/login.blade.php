@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>Admin login — {{ config('app.name', 'Refracted') }}</title>
+    <title>Sign in — Sentry</title>
     <link rel="icon" href="{{ asset('images/brand/refracted-icon.png') }}" type="image/png">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=sora:400,500,600|space-grotesk:500,600,700&display=swap" rel="stylesheet" />
@@ -26,12 +26,12 @@
                     class="h-9 w-9 shrink-0 rounded-lg object-contain"
                 >
                 <div class="flex h-9 items-center pt-[0.1em]">
-                    <p class="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Admin</p>
+                    <p class="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Sentry</p>
                 </div>
             </div>
 
             <p class="mt-5 text-sm leading-relaxed text-grit-mist">
-                Sign in to manage games and communities.
+                Sign into Dashboard
             </p>
 
             @if ($errors->any())
@@ -40,7 +40,7 @@
                 </div>
             @endif
 
-            @if (app()->environment('local'))
+            @if (\App\Support\ReportIngest::localDashboard())
                 <form method="POST" action="{{ route('admin.login.dev') }}" class="mt-7 space-y-5">
                     @csrf
                     <div class="space-y-2">
@@ -84,7 +84,7 @@
 
             <a
                 href="{{ route('discord.login') }}"
-                class="{{ app()->environment('local') ? '' : 'mt-7 ' }}inline-flex w-full items-center justify-center gap-2 border border-[#5865F2]/50 bg-[#5865F2]/15 px-5 py-3 font-display text-sm font-semibold tracking-[-0.01em] text-[#dee0ff] transition hover:border-[#5865F2] hover:bg-[#5865F2]/25 hover:text-white"
+                class="{{ \App\Support\ReportIngest::localDashboard() ? '' : 'mt-7 ' }}inline-flex w-full items-center justify-center gap-2 border border-[#5865F2]/50 bg-[#5865F2]/15 px-5 py-3 font-display text-sm font-semibold tracking-[-0.01em] text-[#dee0ff] transition hover:border-[#5865F2] hover:bg-[#5865F2]/25 hover:text-white"
             >
                 Discord
             </a>

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Community;
 use App\Models\Game;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +14,6 @@ class GameController extends Controller
     {
         return view('admin.games.index', [
             'games' => Game::query()->ordered()->get(),
-            'communities' => Community::query()->ordered()->get(),
         ]);
     }
 

@@ -6,11 +6,12 @@
     <div class="flex flex-wrap items-end justify-between gap-4">
         <div>
             <p class="font-display text-xs font-semibold uppercase tracking-[0.2em] text-signal">
-                <a href="{{ route('admin.reports.index') }}" class="hover:text-signal-soft">Reports</a>
+                <a href="{{ route('admin.reports.index') }}" class="hover:text-signal-soft">Sentry</a>
             </p>
             <h1 class="mt-2 font-display text-3xl font-semibold tracking-[-0.02em]">{{ $issue->title }}</h1>
             <p class="mt-2 font-mono text-sm text-grit-mist">
-                {{ $issue->type }}
+                {{ \App\Support\GameReport::gameLabel($issue->game ?: 'unknown') }}
+                · {{ $issue->type }}
                 @if ($issue->culprit)
                     · {{ $issue->culprit }}
                 @endif

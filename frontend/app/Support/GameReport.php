@@ -95,8 +95,12 @@ class GameReport
         foreach ($xml->children() as $child) {
             $name = strtolower($child->getName());
 
-            if ($name === 'customfield') {
-                $key = strtolower(trim((string) ($child->Key ?? $child->key ?? '')));
+                if ($name === 'customfield') {
+                $key = strtolower((string) preg_replace(
+                    '/[^a-z0-9]+/i',
+                    '',
+                    trim((string) ($child->Key ?? $child->key ?? '')),
+                ));
                 $value = trim((string) ($child->Value ?? $child->value ?? ''));
 
                 if ($key !== '' && $value !== '') {
@@ -113,15 +117,139 @@ class GameReport
             }
         }
 
-        if (isset($fields['title'])) {
-            $fields['categoryid'] = $fields['title'];
+        return new self(self::promoteDevTrack($fields), $category !== '' ? $category : 'submit', $byteLength);
+    }
+
+    /**
+     * The Submit Bug dialog writes the assert into a Data field. Description is the extra note, often empty.
+     *
+     * @param  array<string, string>  $fields
+     * @return array<string, string>
+     */
+    private static function promoteDevTrack(array $fields): array
+    {
+        foreach ($fields as $key => $value) {
+            $normalised = strtolower((string) preg_replace('/[^a-z0-9]+/i', '', $key));
+
+            if ($normalised !== '' && $normalised !== $key) {
+                $fields[$normalised] = $value;
+            }
         }
 
-        if (isset($fields['description'])) {
-            $fields['contextdata'] = $fields['description'];
+        $summary = $fields['title'] ?? '';
+        $description = $fields['description'] ?? '';
+        $data = $fields['data'] ?? '';
+
+        if ($data === '') {
+            foreach ($fields as $key => $value) {
+                if (in_array($key, ['title', 'type', 'description'], true)) {
+                    continue;
+                }
+
+                if (stripos($value, 'Assert Info') !== false || stripos($value, 'Expression:') !== false) {
+                    $data = $value;
+                    break;
+                }
+            }
         }
 
-        return new self($fields, $category !== '' ? $category : 'submit', $byteLength);
+        $fileLine = self::extractFileLine($data);
+        $function = self::labeledLine($data, 'Function');
+        $isAssert = $fileLine !== null
+            || $function !== null
+            || stripos($data, 'Assert Info') !== false
+            || stripos($data, 'Expression:') !== false;
+
+        if ($isAssert) {
+            $fields['type'] = 'assert';
+        }
+
+        if ($fileLine !== null) {
+            $fields['categoryid'] = $function !== null ? $fileLine.' '.$function : $fileLine;
+        } elseif ($summary !== '') {
+            $fields['categoryid'] = $summary;
+        }
+
+        $context = $data;
+
+        if ($description !== '' && $description !== $data) {
+            $context = trim($context."\n\n".$description);
+        }
+
+        if ($context === '') {
+            $context = $summary;
+        }
+
+        if ($isAssert) {
+            $header = [];
+
+            foreach (['severity' => 'Severity', 'assignto' => 'Assign To', 'changelist' => 'Changelist'] as $key => $label) {
+                $value = $fields[$key] ?? '';
+
+                if ($value !== '' && ! str_contains($context, $value)) {
+                    $header[] = $label.': '.$value;
+                }
+            }
+
+            if ($header !== []) {
+                $context = implode("\n", $header)."\n\n".$context;
+            }
+        }
+
+        if ($context !== '') {
+            $fields['contextdata'] = $context;
+        }
+
+        $stack = self::extractCallstack($data);
+
+        if ($stack !== null) {
+            $fields['stack'] = $stack;
+        }
+
+        $build = $fields['build'] ?? '';
+
+        if ($build !== '') {
+            $fields['buildsignature'] = $build;
+        }
+
+        $session = $fields['juicesessionid'] ?? '';
+
+        if ($session !== '') {
+            $fields['sessionid'] = $session;
+        }
+
+        return $fields;
+    }
+
+    private static function extractFileLine(string $text): ?string
+    {
+        if (preg_match('/([A-Za-z0-9_.-]+\.(?:cpp|h|hpp|inl|c))\((\d+)\)/', $text, $match) !== 1) {
+            return null;
+        }
+
+        return $match[1].':'.$match[2];
+    }
+
+    private static function labeledLine(string $text, string $label): ?string
+    {
+        if (preg_match('/'.preg_quote($label, '/').':\s*(.+)/i', $text, $match) !== 1) {
+            return null;
+        }
+
+        $value = trim($match[1]);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private static function extractCallstack(string $text): ?string
+    {
+        if (preg_match('/Callstack:\s*(.+)\z/si', $text, $match) !== 1) {
+            return null;
+        }
+
+        $stack = trim($match[1]);
+
+        return $stack !== '' ? $stack : null;
     }
 
     private static function normaliseXml(string $body): string
@@ -158,6 +286,42 @@ class GameReport
         return $this->fields[$name] ?? null;
     }
 
+    public function game(): string
+    {
+        return self::gameSlug($this->field('sku') ?: $this->namedGame());
+    }
+
+    public static function gameSlug(?string $raw): string
+    {
+        $slug = strtolower(trim((string) $raw));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug) ?? '';
+        $slug = trim($slug, '-');
+
+        return $slug !== '' ? substr($slug, 0, 64) : 'unknown';
+    }
+
+    public static function gameLabel(string $slug): string
+    {
+        return match ($slug) {
+            'cnc', 'command-conquer', 'command-and-conquer' => 'Command & Conquer',
+            'battlefield', 'bf' => 'Battlefield',
+            'battlefield-labs', 'labs' => 'Battlefield Labs',
+            'unknown' => 'Unknown',
+            default => Str::headline(str_replace('-', ' ', $slug)),
+        };
+    }
+
+    private function namedGame(): ?string
+    {
+        $value = $this->field('game');
+
+        if ($value === null || in_array(strtolower($value), self::TYPES, true)) {
+            return null;
+        }
+
+        return $value;
+    }
+
     public function type(): string
     {
         $type = strtolower($this->field('type') ?? $this->category);
@@ -172,7 +336,7 @@ class GameReport
 
     public function fingerprint(): string
     {
-        $parts = [$this->type(), $this->categoryId() ?? $this->firstStackFrame()];
+        $parts = [$this->game(), $this->type(), $this->categoryId() ?? $this->firstStackFrame()];
 
         if ($parts[1] === null) {
             $parts[] = Str::uuid()->toString();
@@ -206,8 +370,8 @@ class GameReport
     {
         $categoryId = $this->categoryId();
 
-        if ($categoryId !== null && preg_match('/^(.+):(\d+)$/', $categoryId) === 1) {
-            return $categoryId;
+        if ($categoryId !== null && preg_match('/^(.+\.(?:cpp|h|hpp|inl|c):\d+)/', $categoryId, $match) === 1) {
+            return $match[1];
         }
 
         return $this->firstStackFrame();

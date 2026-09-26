@@ -58,6 +58,7 @@ class ReportIngestController extends Controller
                 ['fingerprint' => $report->fingerprint()],
                 [
                     'type' => $report->type(),
+                    'game' => $report->game(),
                     'category_id' => $report->categoryId(),
                     'title' => $report->title(),
                     'culprit' => $report->culprit(),
@@ -71,7 +72,7 @@ class ReportIngestController extends Controller
                 'category' => $report->category,
                 'category_id' => $report->categoryId(),
                 'session_id' => $report->field('sessionid'),
-                'sku' => $report->field('sku'),
+                'sku' => $report->field('sku') ?: ($report->game() !== 'unknown' ? $report->game() : null),
                 'build_signature' => $report->field('buildsignature'),
                 'report_version' => $report->field('version'),
                 'server_name' => $report->field('servername'),
@@ -97,7 +98,13 @@ class ReportIngestController extends Controller
                 ? ['status' => 'unresolved', 'resolved_at' => null, 'resolved_by' => null]
                 : [];
 
+            $game = $issue->game;
+            if (($game === null || $game === 'unknown') && $report->game() !== 'unknown') {
+                $game = $report->game();
+            }
+
             $issue->forceFill($reopened + [
+                'game' => $game,
                 'last_seen_at' => $receivedAt,
                 'first_seen_at' => $issue->first_seen_at ?? $receivedAt,
             ])->save();

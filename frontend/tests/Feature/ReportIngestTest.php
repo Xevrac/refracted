@@ -36,6 +36,21 @@ class ReportIngestTest extends TestCase
             ->assertRedirect(route('admin.reports.index'));
     }
 
+    public function test_main_site_does_not_serve_the_dashboard(): void
+    {
+        $this->call('GET', 'http://refracted.au/admin/login', server: [
+            'HTTP_HOST' => 'refracted.au',
+        ])->assertNotFound();
+
+        $this->call('GET', 'http://refracted.au/admin', server: [
+            'HTTP_HOST' => 'refracted.au',
+        ])->assertNotFound();
+
+        $this->call('GET', 'http://sentry.refracted.au/admin/login', server: [
+            'HTTP_HOST' => 'sentry.refracted.au',
+        ])->assertOk();
+    }
+
     public function test_main_site_does_not_accept_report_posts(): void
     {
         $xml = '<?xml version="1.0"?><report><type>crash</type><categoryid>foo.cpp:1</categoryid></report>';
@@ -86,6 +101,46 @@ XML;
         $this->assertSame('submit', $issue->type);
         $this->assertSame('Units path the wrong way', $issue->title);
         $this->assertSame('Right click north, they walk south.', $issue->events()->first()?->context_data);
+    }
+
+    public function test_assert_submit_keeps_the_dialog_fields(): void
+    {
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<DevTrackBug>
+  <Title>lowDistance: 1.26729, nearPlane: 2.25, farPlane: 20000.1</Title>
+  <Description></Description>
+  <CustomField><Key>Severity</Key><Value>Major</Value></CustomField>
+  <CustomField><Key>Game</Key><Value>CNC</Value></CustomField>
+  <CustomField><Key>Juice Session Id</Key><Value>juice-1</Value></CustomField>
+  <CustomField><Key>Data</Key><Value>Assert Info:
+Z:\EALA\World\Render\WorldRenderer.cpp(393):
+Invalid split distances for slice 0 and slice 1.
+Function: fb::buildCascadingShadowViews
+Module: Static
+Expression: outSliceSplitDistances[sliceIt] &lt; outSliceSplitDistances[sliceIt+1]
+Callstack:
+0x00A221D4
+0x00A239B6</Value></CustomField>
+</DevTrackBug>
+XML;
+
+        $this->sentry('POST', '/testkey/submit/', $xml)->assertOk();
+
+        $issue = ReportIssue::query()->first();
+        $this->assertNotNull($issue);
+        $this->assertSame('assert', $issue->type);
+        $this->assertSame('cnc', $issue->game);
+        $this->assertSame('WorldRenderer.cpp:393 fb::buildCascadingShadowViews', $issue->category_id);
+        $this->assertSame('WorldRenderer.cpp:393', $issue->culprit);
+
+        $event = $issue->events()->first();
+        $this->assertNotNull($event);
+        $this->assertStringContainsString('Severity: Major', (string) $event->context_data);
+        $this->assertStringContainsString('Invalid split distances', (string) $event->context_data);
+        $this->assertStringContainsString('outSliceSplitDistances', (string) $event->context_data);
+        $this->assertStringContainsString("0x00A221D4\n0x00A239B6", (string) $event->stack);
+        $this->assertSame('juice-1', $event->session_id);
     }
 
     public function test_dedicated_assert_wrapper_is_stored(): void

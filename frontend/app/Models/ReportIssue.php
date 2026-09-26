@@ -17,6 +17,7 @@ class ReportIssue extends Model
     protected $fillable = [
         'fingerprint',
         'type',
+        'game',
         'category_id',
         'title',
         'culprit',
@@ -53,6 +54,11 @@ class ReportIssue extends Model
     public function scopeType(Builder $query, ?string $type): Builder
     {
         return filled($type) ? $query->where('type', $type) : $query;
+    }
+
+    public function scopeGame(Builder $query, ?string $game): Builder
+    {
+        return filled($game) ? $query->where('game', $game) : $query;
     }
 
     public function scopeSearch(Builder $query, ?string $term): Builder

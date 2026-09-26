@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Admin') — {{ config('app.name', 'Refracted') }}</title>
+    <title>@yield('title', 'Dashboard') — Dashboard</title>
     <link rel="icon" href="{{ asset('images/brand/refracted-icon.png') }}" type="image/png">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=sora:400,500,600|space-grotesk:500,600,700&display=swap" rel="stylesheet" />
@@ -18,18 +18,18 @@
         aria-hidden="true"
     ></div>
 
-    <div class="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
+    <div class="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8">
         <header class="mb-10 flex flex-wrap items-center justify-between gap-4 border-b border-grit-line pb-6">
             <div class="flex items-center gap-3">
                 <img src="{{ asset('images/brand/refracted-icon.png') }}" alt="" class="h-9 w-9 rounded-lg object-contain">
                 <div>
-                    <p class="font-display text-lg font-semibold tracking-[-0.02em]">Refracted Admin</p>
+                    <p class="font-display text-lg font-semibold tracking-[-0.02em]">Dashboard</p>
                     <p class="text-xs text-grit-mist">{{ auth()->user()?->discord_username ?? auth()->user()?->name }}</p>
                 </div>
             </div>
             <div class="flex items-center gap-3 text-sm">
                 @if (auth()->user()?->isStaff())
-                    <a href="{{ route('admin.reports.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Reports</a>
+                    <a href="{{ route('admin.reports.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Sentry</a>
                 @endif
                 @if (auth()->user()?->isAdmin())
                     <a href="{{ route('admin.games.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Games</a>

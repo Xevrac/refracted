@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ReportEvent;
 use App\Models\ReportIssue;
 use App\Support\GameReport;
+use App\Support\SampleReport;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -16,29 +17,79 @@ class ReportController extends Controller
 {
     public function index(Request $request): View
     {
+        SampleReport::ensure();
+
+        $tab = $request->string('tab')->toString() === 'reporting' ? 'reporting' : 'issues';
         $filters = [
             'status' => $request->string('status')->toString() ?: 'unresolved',
             'type' => $request->string('type')->toString(),
+            'game' => $request->string('game')->toString(),
             'q' => $request->string('q')->toString(),
         ];
 
-        $issues = ReportIssue::query()
-            ->status($filters['status'] === 'all' ? null : $filters['status'])
+        $scoped = ReportIssue::query()
             ->type($filters['type'])
+            ->game($filters['game']);
+
+        $issues = (clone $scoped)
+            ->status($filters['status'] === 'all' ? null : $filters['status'])
             ->search($filters['q'])
             ->recent()
             ->paginate(25)
             ->withQueryString();
 
+        $games = ReportIssue::query()
+            ->whereNotNull('game')
+            ->distinct()
+            ->orderBy('game')
+            ->pluck('game');
+
         return view('admin.reports.index', [
+            'tab' => $tab,
             'issues' => $issues,
             'filters' => $filters,
             'types' => GameReport::TYPES,
-            'statusCounts' => ReportIssue::query()
+            'games' => $games,
+            'statusCounts' => (clone $scoped)
                 ->selectRaw('status, count(*) as total')
                 ->groupBy('status')
                 ->pluck('total', 'status'),
+            'report' => $this->reportingSummary(),
         ]);
+    }
+
+    /**
+     * @return array{
+     *     open: int,
+     *     issues: int,
+     *     events: int,
+     *     games: int,
+     *     byGame: \Illuminate\Support\Collection,
+     *     byType: \Illuminate\Support\Collection
+     * }
+     */
+    protected function reportingSummary(): array
+    {
+        $byGame = ReportIssue::query()
+            ->selectRaw('game, count(*) as issues, sum(events_count) as events, sum(case when status = ? then 1 else 0 end) as open_issues, max(last_seen_at) as last_seen_at', ['unresolved'])
+            ->groupBy('game')
+            ->orderByDesc('issues')
+            ->get();
+
+        $byType = ReportIssue::query()
+            ->selectRaw('type, count(*) as issues, sum(events_count) as events')
+            ->groupBy('type')
+            ->orderByDesc('issues')
+            ->get();
+
+        return [
+            'open' => (int) ReportIssue::query()->where('status', 'unresolved')->count(),
+            'issues' => (int) ReportIssue::query()->count(),
+            'events' => (int) ReportIssue::query()->sum('events_count'),
+            'games' => (int) $byGame->pluck('game')->filter()->unique()->count(),
+            'byGame' => $byGame,
+            'byType' => $byType,
+        ];
     }
 
     public function show(Request $request, ReportIssue $issue): View
