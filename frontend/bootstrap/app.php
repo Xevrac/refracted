@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\ReportIngest;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,10 +14,18 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
+        $middleware->trustHosts(
+            at: array_values(array_filter([ReportIngest::domain()])),
+            subdomains: true,
+        );
 
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'staff' => \App\Http\Middleware\EnsureUserIsStaff::class,
         ]);
+
+        // Game clients post reports directly and have no session or token.
+        $middleware->validateCsrfTokens(except: ReportIngest::csrfExcept());
 
         $middleware->redirectGuestsTo('/admin/login');
         $middleware->redirectUsersTo('/admin');

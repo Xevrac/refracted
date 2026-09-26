@@ -255,10 +255,6 @@ impl HttpHandler {
             return Some(self.handle_collector_errors(path, method, body));
         }
 
-        if host.contains("reports.tools.gos.ea.com") || host.contains("tools.gos.ea.com") {
-            return Some(self.handle_collector_errors(path, method, body));
-        }
-
         if host.contains("api.k.social.ea.com") {
             return Some(self.handle_social_api(path, method, body));
         }

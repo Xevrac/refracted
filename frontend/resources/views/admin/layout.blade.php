@@ -28,7 +28,13 @@
                 </div>
             </div>
             <div class="flex items-center gap-3 text-sm">
-                <a href="{{ url('/') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">View site</a>
+                @if (auth()->user()?->isStaff())
+                    <a href="{{ route('admin.reports.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Reports</a>
+                @endif
+                @if (auth()->user()?->isAdmin())
+                    <a href="{{ route('admin.games.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Games</a>
+                @endif
+                <a href="{{ config('app.url') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">View site</a>
                 <form method="POST" action="{{ route('admin.logout') }}">
                     @csrf
                     <button type="submit" class="text-signal-soft underline decoration-signal/30 underline-offset-2 hover:text-signal">Log out</button>

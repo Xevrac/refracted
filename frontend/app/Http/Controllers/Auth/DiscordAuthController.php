@@ -28,7 +28,11 @@ class DiscordAuthController extends Controller
             Auth::login($user, true);
             $request->session()->regenerate();
 
-            return redirect()->intended(route('admin.games.index'));
+            $home = $user->isAdmin()
+                ? route('admin.games.index')
+                : route('admin.reports.index');
+
+            return redirect()->intended($home);
         } catch (AuthenticationException $e) {
             return redirect()
                 ->route('admin.login')
