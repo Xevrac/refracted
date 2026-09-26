@@ -28,14 +28,14 @@
                 </div>
             </div>
             <div class="flex items-center gap-3 text-sm">
-                @if (auth()->user()?->isStaff())
-                    <a href="{{ route('admin.reports.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Sentry</a>
+                @if (auth()->user()?->isStaff() && (\App\Support\AdminHosts::localDashboard() || request()->getHost() === \App\Support\AdminHosts::domain()))
+                    <a href="{{ \App\Support\AdminHosts::sentryUrl() }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Sentry</a>
                 @endif
-                @if (auth()->user()?->isAdmin())
-                    <a href="{{ route('admin.games.index') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Games</a>
+                @if (auth()->user()?->isAdmin() && (\App\Support\AdminHosts::localDashboard() || request()->getHost() === \App\Support\AdminHosts::siteHost()))
+                    <a href="{{ \App\Support\AdminHosts::gamesUrl() }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Games</a>
                 @endif
                 <a href="{{ config('app.url') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">View site</a>
-                <form method="POST" action="{{ route('admin.logout') }}">
+                <form method="POST" action="{{ Route::has('admin.logout') ? route('admin.logout') : route('site.admin.logout') }}">
                     @csrf
                     <button type="submit" class="text-signal-soft underline decoration-signal/30 underline-offset-2 hover:text-signal">Log out</button>
                 </form>

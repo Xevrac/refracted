@@ -7,7 +7,7 @@ use App\Http\Controllers\Auth\DiscordAuthController;
 use App\Http\Controllers\ReportIngestController;
 use App\Models\Game;
 use App\Support\GameReport;
-use App\Support\ReportIngest;
+use App\Support\AdminHosts;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -22,10 +22,10 @@ Route::get('gateway/callback', [DiscordAuthController::class, 'callback'])
     ->name('discord.callback');
 
 /*
- * sentry.refracted.au.
+ * sentry.refracted.au
  */
-Route::group(ReportIngest::routeGroup(), function () {
-    if (ReportIngest::domain()) {
+Route::group(AdminHosts::routeGroup(), function () {
+    if (AdminHosts::domain()) {
         Route::get('/', function () {
             if (auth()->check() && auth()->user()->isStaff()) {
                 return redirect()->route('admin.reports.index');
@@ -38,7 +38,7 @@ Route::group(ReportIngest::routeGroup(), function () {
     if (filled(config('reports.key'))) {
         $category = implode('|', GameReport::TYPES);
 
-        foreach (ReportIngest::uris() as $uri) {
+        foreach (AdminHosts::uris() as $uri) {
             Route::post($uri, [ReportIngestController::class, 'store'])
                 ->where('category', $category)
                 ->middleware('throttle:report-ingest')
@@ -47,16 +47,16 @@ Route::group(ReportIngest::routeGroup(), function () {
     }
 });
 
-$dashboard = ReportIngest::dashboardHost()
-    ? ['domain' => ReportIngest::dashboardHost()]
+$sentryUi = AdminHosts::dashboardHost()
+    ? ['domain' => AdminHosts::dashboardHost()]
     : [];
 
-Route::group($dashboard, function () {
+Route::group($sentryUi, function () {
     Route::middleware('guest')->group(function () {
         Route::view('admin/login', 'admin.login')->name('admin.login');
         Route::get('auth/discord', [DiscordAuthController::class, 'redirect'])->name('discord.login');
 
-        if (ReportIngest::localDashboard()) {
+        if (AdminHosts::localDashboard()) {
             Route::post('admin/login/dev', [DevLoginController::class, 'store'])->name('admin.login.dev');
         }
     });
@@ -66,6 +66,8 @@ Route::group($dashboard, function () {
     });
 
     Route::middleware(['auth', 'staff'])->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/', fn () => redirect()->route('admin.reports.index'));
+
         Route::get('reports/inbox', [ReportController::class, 'inbox'])->name('reports.inbox');
         Route::post('reports/read-all', [ReportController::class, 'readAll'])->name('reports.read-all');
         Route::post('reports/{issue}/read', [ReportController::class, 'read'])->name('reports.read');
@@ -78,15 +80,43 @@ Route::group($dashboard, function () {
         Route::delete('reports/{issue}', [ReportController::class, 'destroy'])->name('reports.destroy');
     });
 
-    Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-        Route::get('/', fn () => redirect()->route('admin.games.index'));
-
-        Route::post('games/reorder', [GameController::class, 'reorder'])->name('games.reorder');
-        Route::get('games', [GameController::class, 'index'])->name('games.index');
-        Route::get('games/create', [GameController::class, 'create'])->name('games.create');
-        Route::post('games', [GameController::class, 'store'])->name('games.store');
-        Route::get('games/{game}/edit', [GameController::class, 'edit'])->name('games.edit');
-        Route::put('games/{game}', [GameController::class, 'update'])->name('games.update');
-        Route::delete('games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
-    });
+    if (AdminHosts::localDashboard()) {
+        Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+            Route::post('games/reorder', [GameController::class, 'reorder'])->name('games.reorder');
+            Route::get('games', [GameController::class, 'index'])->name('games.index');
+            Route::get('games/create', [GameController::class, 'create'])->name('games.create');
+            Route::post('games', [GameController::class, 'store'])->name('games.store');
+            Route::get('games/{game}/edit', [GameController::class, 'edit'])->name('games.edit');
+            Route::put('games/{game}', [GameController::class, 'update'])->name('games.update');
+            Route::delete('games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
+        });
+    }
 });
+
+/*
+ * refracted.au — site Games admin only (not on sentry host).
+ */
+if ($site = AdminHosts::siteHost()) {
+    Route::group(['domain' => $site], function () {
+        Route::middleware('guest')->group(function () {
+            Route::view('admin/login', 'admin.login')->name('site.admin.login');
+            Route::get('auth/discord', [DiscordAuthController::class, 'redirect'])->name('site.discord.login');
+        });
+
+        Route::middleware('auth')->prefix('admin')->name('site.admin.')->group(function () {
+            Route::post('logout', [DiscordAuthController::class, 'logout'])->name('logout');
+        });
+
+        Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+            Route::get('/', fn () => redirect()->route('admin.games.index'));
+
+            Route::post('games/reorder', [GameController::class, 'reorder'])->name('games.reorder');
+            Route::get('games', [GameController::class, 'index'])->name('games.index');
+            Route::get('games/create', [GameController::class, 'create'])->name('games.create');
+            Route::post('games', [GameController::class, 'store'])->name('games.store');
+            Route::get('games/{game}/edit', [GameController::class, 'edit'])->name('games.edit');
+            Route::put('games/{game}', [GameController::class, 'update'])->name('games.update');
+            Route::delete('games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
+        });
+    });
+}

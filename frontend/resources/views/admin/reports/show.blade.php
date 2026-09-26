@@ -36,6 +36,27 @@
                     <path d="M5 15V5h10"></path>
                 </svg>
             </button>
+            <form
+                method="POST"
+                action="{{ route('admin.reports.destroy', $issue) }}"
+                onsubmit="return confirm('Delete this issue and all of its events?');"
+            >
+                @csrf
+                @method('DELETE')
+                <button
+                    type="submit"
+                    class="flex h-9 w-9 items-center justify-center border border-grit-line text-grit-text hover:border-signal hover:text-signal"
+                    title="Delete issue"
+                    aria-label="Delete issue"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M4 7h16"></path>
+                        <path d="M9 7V5h6v2"></path>
+                        <path d="M6 7l1 13h10l1-13"></path>
+                        <path d="M10 11v6M14 11v6"></path>
+                    </svg>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -111,8 +132,14 @@
             @endif
             @if ($event->stackFrames())
                 <div>
-                    <h3 class="text-xs uppercase tracking-[0.14em] text-grit-mist">Stack</h3>
+                    <h3 class="text-xs uppercase tracking-[0.14em] text-grit-mist">Callstack</h3>
                     <pre class="ref-pre mt-2 font-mono text-xs text-grit-text">{{ implode("\n", $event->stackFrames()) }}</pre>
+                </div>
+            @endif
+            @if (filled($event->prism_log))
+                <div>
+                    <h3 class="text-xs uppercase tracking-[0.14em] text-grit-mist">Prism</h3>
+                    <pre class="ref-pre mt-2 font-mono text-xs text-grit-text">{{ $event->prism_log }}</pre>
                 </div>
             @endif
         </section>
@@ -166,7 +193,10 @@
                 $copy[] = "Context:\n".$event->context_data;
             }
             if ($frames = $event->stackFrames()) {
-                $copy[] = "Stack:\n".implode("\n", $frames);
+                $copy[] = "Callstack:\n".implode("\n", $frames);
+            }
+            if (filled($event->prism_log)) {
+                $copy[] = "Prism:\n".$event->prism_log;
             }
         }
     @endphp

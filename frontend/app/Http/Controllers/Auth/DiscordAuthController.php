@@ -30,16 +30,16 @@ class DiscordAuthController extends Controller
 
             $home = $user->isAdmin()
                 ? route('admin.games.index')
-                : route('admin.reports.index');
+                : \App\Support\AdminHosts::sentryUrl();
 
             return redirect()->intended($home);
         } catch (AuthenticationException $e) {
             return redirect()
-                ->route('admin.login')
+                ->to(\App\Support\AdminHosts::loginUrl())
                 ->withErrors(['discord' => $e->getMessage()]);
         } catch (\Throwable) {
             return redirect()
-                ->route('admin.login')
+                ->to(\App\Support\AdminHosts::loginUrl())
                 ->withErrors(['discord' => 'Discord sign-in could not be completed.']);
         }
     }
@@ -50,6 +50,6 @@ class DiscordAuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('admin.login');
+        return redirect()->to(\App\Support\AdminHosts::loginUrl());
     }
 }

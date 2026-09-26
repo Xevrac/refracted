@@ -80,6 +80,7 @@ class ReportIngestController extends Controller
                 'server_error' => $report->field('servererror'),
                 'desync_id' => $report->field('desyncid'),
                 'stack' => $report->field('stack'),
+                'prism_log' => $report->field('prismlog'),
                 'threads' => $report->field('threads'),
                 'system_config' => $report->field('systemconfig'),
                 'context_data' => $report->field('contextdata'),

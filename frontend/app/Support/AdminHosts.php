@@ -3,9 +3,9 @@
 namespace App\Support;
 
 /**
- * Host and path helpers for the Prism report collector.
+ * Host and URL helpers for the Sentry and site admin surfaces.
  */
-class ReportIngest
+class AdminHosts
 {
     public static function domain(): ?string
     {
@@ -41,6 +41,54 @@ class ReportIngest
         }
 
         return self::domain();
+    }
+
+    /** Main marketing site host for Games admin */
+    public static function siteHost(): ?string
+    {
+        if (self::localDashboard()) {
+            return null;
+        }
+
+        $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+        return filled($host) && $host !== self::domain() ? $host : null;
+    }
+
+    public static function gamesUrl(): string
+    {
+        if (self::localDashboard() || ! self::siteHost()) {
+            return route('admin.games.index');
+        }
+
+        return rtrim((string) config('app.url'), '/').'/admin/games';
+    }
+
+    public static function sentryUrl(): string
+    {
+        if (self::localDashboard() || ! self::domain()) {
+            return route('admin.reports.index');
+        }
+
+        return 'https://'.self::domain().'/admin/reports';
+    }
+
+    public static function loginUrl(): string
+    {
+        if (self::siteHost() && request()->getHost() === self::siteHost() && \Illuminate\Support\Facades\Route::has('site.admin.login')) {
+            return route('site.admin.login');
+        }
+
+        return route('admin.login');
+    }
+
+    public static function discordLoginUrl(): string
+    {
+        if (self::siteHost() && request()->getHost() === self::siteHost() && \Illuminate\Support\Facades\Route::has('site.discord.login')) {
+            return route('site.discord.login');
+        }
+
+        return route('discord.login');
     }
 
     public static function uris(): array

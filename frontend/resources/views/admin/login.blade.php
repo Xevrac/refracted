@@ -40,7 +40,7 @@
                 </div>
             @endif
 
-            @if (\App\Support\ReportIngest::localDashboard())
+            @if (\App\Support\AdminHosts::localDashboard())
                 <form method="POST" action="{{ route('admin.login.dev') }}" class="mt-7 space-y-5">
                     @csrf
                     <div class="space-y-2">
@@ -83,8 +83,8 @@
             @endif
 
             <a
-                href="{{ route('discord.login') }}"
-                class="{{ \App\Support\ReportIngest::localDashboard() ? '' : 'mt-7 ' }}inline-flex w-full items-center justify-center gap-2 border border-[#5865F2]/50 bg-[#5865F2]/15 px-5 py-3 font-display text-sm font-semibold tracking-[-0.01em] text-[#dee0ff] transition hover:border-[#5865F2] hover:bg-[#5865F2]/25 hover:text-white"
+                href="{{ \App\Support\AdminHosts::discordLoginUrl() }}"
+                class="{{ \App\Support\AdminHosts::localDashboard() ? '' : 'mt-7 ' }}inline-flex w-full items-center justify-center gap-2 border border-[#5865F2]/50 bg-[#5865F2]/15 px-5 py-3 font-display text-sm font-semibold tracking-[-0.01em] text-[#dee0ff] transition hover:border-[#5865F2] hover:bg-[#5865F2]/25 hover:text-white"
             >
                 Discord
             </a>

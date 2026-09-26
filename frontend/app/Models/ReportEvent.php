@@ -24,6 +24,7 @@ class ReportEvent extends Model
         'server_error',
         'desync_id',
         'stack',
+        'prism_log',
         'threads',
         'system_config',
         'context_data',
