@@ -119,7 +119,23 @@
                     @if (filled($value))
                         <div>
                             <dt class="text-xs uppercase tracking-[0.14em] text-grit-mist">{{ $label }}</dt>
-                            <dd class="mt-1 font-mono text-grit-text">{{ $value }}</dd>
+                            @if ($label === 'IP')
+                                <dd class="mt-1">
+                                    <button
+                                        type="button"
+                                        class="ref-spoiler font-mono text-grit-text"
+                                        data-ref-spoiler
+                                        aria-expanded="false"
+                                        aria-label="Hidden IP address. Click to reveal."
+                                        title="Click to reveal"
+                                    >
+                                        <span class="ref-spoiler__value">{{ $value }}</span>
+                                        <span class="ref-spoiler__hint" aria-hidden="true">Click to reveal</span>
+                                    </button>
+                                </dd>
+                            @else
+                                <dd class="mt-1 font-mono text-grit-text">{{ $value }}</dd>
+                            @endif
                         </div>
                     @endif
                 @endforeach
@@ -215,8 +231,86 @@
         .tippy-box[data-theme~='refracted'][data-placement^='top'] > .tippy-arrow::before {
             border-top-color: #2a3038;
         }
+
+        /* Self-contained so spoilers work before a Vite rebuild ships. */
+        .ref-spoiler {
+            position: relative;
+            display: inline-flex;
+            min-width: 11.5rem;
+            max-width: 100%;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 0.25rem 0.65rem;
+            border: 1px solid rgba(42, 48, 56, 0.95);
+            border-radius: 0.375rem;
+            background: rgba(10, 11, 13, 0.92);
+            cursor: pointer;
+            user-select: none;
+            vertical-align: baseline;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .ref-spoiler:focus-visible {
+            outline: 1px solid rgba(74, 163, 255, 0.7);
+            outline-offset: 2px;
+        }
+        .ref-spoiler__value {
+            filter: blur(5px);
+            opacity: 0.55;
+        }
+        .ref-spoiler__hint {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 0.5rem;
+            background: rgba(18, 20, 23, 0.72);
+            color: rgba(154, 163, 173, 0.25);
+            font-family: Sora, ui-sans-serif, system-ui, sans-serif;
+            font-size: 0.65rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .ref-spoiler.is-revealed {
+            cursor: text;
+            user-select: text;
+            border-color: transparent;
+            background: transparent;
+            padding-inline: 0;
+        }
+        .ref-spoiler.is-revealed .ref-spoiler__value {
+            filter: none;
+            opacity: 1;
+        }
+        .ref-spoiler.is-revealed .ref-spoiler__hint {
+            display: none;
+        }
     </style>
     <script>
+        document.querySelectorAll('[data-ref-spoiler]').forEach(function (node) {
+            const reveal = function () {
+                if (node.classList.contains('is-revealed')) {
+                    return;
+                }
+                node.classList.add('is-revealed');
+                node.setAttribute('aria-expanded', 'true');
+                node.removeAttribute('tabindex');
+            };
+            node.addEventListener('click', reveal);
+            node.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+                event.preventDefault();
+                reveal();
+            });
+        });
+
         document.getElementById('copy-issue')?.addEventListener('click', function () {
             const text = @json(implode("\n\n", $copy));
             const button = this;

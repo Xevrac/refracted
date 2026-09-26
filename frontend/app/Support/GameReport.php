@@ -346,7 +346,15 @@ class GameReport
 
     public function categoryId(): ?string
     {
-        return $this->field('categoryid');
+        $value = $this->field('categoryid');
+
+        if ($value === null) {
+            return null;
+        }
+
+        // Dedicated SEH dumps used to put the entire detail line in categoryid.
+        // DB columns are varchar(255); keep the short head, full text stays in contextdata.
+        return Str::limit($value, 240, '');
     }
 
     public function fingerprint(): string

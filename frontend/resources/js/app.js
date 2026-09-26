@@ -116,6 +116,34 @@ const initReveals = () => {
     nodes.forEach((node) => observer.observe(node));
 };
 
+const initSpoilers = () => {
+    document.querySelectorAll('[data-ref-spoiler]').forEach((node) => {
+        if (node.dataset.spoilerBound === '1') {
+            return;
+        }
+
+        node.dataset.spoilerBound = '1';
+        node.addEventListener('click', () => {
+            if (node.classList.contains('is-revealed')) {
+                return;
+            }
+
+            node.classList.add('is-revealed');
+            node.setAttribute('aria-expanded', 'true');
+            node.removeAttribute('tabindex');
+        });
+
+        node.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+
+            event.preventDefault();
+            node.click();
+        });
+    });
+};
+
 const collectOrder = (root) => Array.from(root.querySelectorAll('[data-id]'))
     .map((item) => Number(item.dataset.id))
     .filter((id) => Number.isInteger(id));
@@ -471,6 +499,7 @@ const initSentryInbox = () => {
 const boot = () => {
     initHeroSlider();
     initReveals();
+    initSpoilers();
     initSortables();
     initSentryInbox();
 };
