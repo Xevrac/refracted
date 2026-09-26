@@ -133,9 +133,6 @@ impl BlazeServer {
             SanType::DnsName("leaderboards-api-ext.leaderboards.ea.com".to_string()),
             SanType::DnsName("qoscoordinator.gameservices.ea.com".to_string()),
             SanType::DnsName("tos.ea.com".to_string()),
-            SanType::DnsName("reports.tools.gos.ea.com".to_string()),
-            SanType::DnsName("tools.gos.ea.com".to_string()),
-            SanType::DnsName("*.tools.gos.ea.com".to_string()),
         ];
         subject_alt_names.dedup();
         params.subject_alt_names = subject_alt_names;
