@@ -66,6 +66,9 @@ Route::group($dashboard, function () {
     });
 
     Route::middleware(['auth', 'staff'])->prefix('admin')->name('admin.')->group(function () {
+        Route::get('reports/inbox', [ReportController::class, 'inbox'])->name('reports.inbox');
+        Route::post('reports/read-all', [ReportController::class, 'readAll'])->name('reports.read-all');
+        Route::post('reports/{issue}/read', [ReportController::class, 'read'])->name('reports.read');
         Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
         Route::get('reports/events/{event}/screenshot', [ReportController::class, 'screenshot'])
             ->name('reports.screenshot');

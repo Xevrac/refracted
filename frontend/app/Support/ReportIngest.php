@@ -53,16 +53,19 @@ class ReportIngest
 
     /**
      * CSRF exceptions for the game POSTs (no session, no token).
+     *
+     * Built before config is loaded, so the key is not available here. The
+     * star matches whatever key the route uses.
      */
     public static function csrfExcept(): array
     {
-        $key = self::key();
         $except = [];
 
         foreach (GameReport::TYPES as $type) {
-            $path = $key !== '' ? $key.'/'.$type : $type;
-            $except[] = $path;
-            $except[] = $path.'/';
+            $except[] = $type;
+            $except[] = $type.'/';
+            $except[] = '*/'.$type;
+            $except[] = '*/'.$type.'/';
         }
 
         return $except;

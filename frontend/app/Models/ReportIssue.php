@@ -81,6 +81,43 @@ class ReportIssue extends Model
         return $query->orderByDesc('last_seen_at')->orderByDesc('id');
     }
 
+    public function reads(): HasMany
+    {
+        return $this->hasMany(ReportIssueRead::class);
+    }
+
+    public function markReadBy(User $user): void
+    {
+        $this->reads()->updateOrCreate(
+            ['user_id' => $user->id],
+            ['read_at' => now()],
+        );
+    }
+
+    /** A new event after read_at makes the issue unread again for that person. */
+    public function scopeUnreadFor(Builder $query, User $user): Builder
+    {
+        return $query->where(function (Builder $inner) use ($user) {
+            $inner->whereDoesntHave('reads', function (Builder $reads) use ($user) {
+                $reads->where('user_id', $user->id);
+            })->orWhereHas('reads', function (Builder $reads) use ($user) {
+                $reads->where('user_id', $user->id)
+                    ->whereColumn('report_issue_reads.read_at', '<', 'report_issues.last_seen_at');
+            });
+        });
+    }
+
+    public function isUnreadFor(User $user): bool
+    {
+        $read = $this->reads()->where('user_id', $user->id)->first();
+
+        if (! $read) {
+            return true;
+        }
+
+        return $this->last_seen_at !== null && $read->read_at !== null && $read->read_at->lt($this->last_seen_at);
+    }
+
     /** Recount from events so the list stays honest after a prune or delete. */
     public function refreshCounts(): void
     {

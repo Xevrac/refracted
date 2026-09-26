@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ReportEvent;
 use App\Models\ReportIssue;
+use App\Models\ReportIssueRead;
 use App\Support\GameReport;
 use App\Support\SampleReport;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -38,6 +40,11 @@ class ReportController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $unreadIds = ReportIssue::query()
+            ->unreadFor($request->user())
+            ->pluck('id')
+            ->flip();
+
         $games = ReportIssue::query()
             ->whereNotNull('game')
             ->distinct()
@@ -55,6 +62,7 @@ class ReportController extends Controller
                 ->groupBy('status')
                 ->pluck('total', 'status'),
             'report' => $this->reportingSummary(),
+            'unreadIds' => $unreadIds,
         ]);
     }
 
@@ -105,11 +113,82 @@ class ReportController extends Controller
             ? $issue->events()->whereKey($request->integer('event'))->first()
             : $events->first();
 
+        $issue->markReadBy($request->user());
+
         return view('admin.reports.show', [
             'issue' => $issue,
             'events' => $events,
             'event' => $selected,
         ]);
+    }
+
+    public function inbox(Request $request): JsonResponse
+    {
+        $issues = ReportIssue::query()
+            ->unreadFor($request->user())
+            ->recent()
+            ->limit(20)
+            ->get();
+
+        $unreadIds = ReportIssue::query()->unreadFor($request->user())->pluck('id');
+
+        return response()->json([
+            'unread' => $unreadIds->count(),
+            'ids' => $unreadIds->values(),
+            'issues' => $issues->map(fn (ReportIssue $issue) => $this->inboxIssue($issue))->values(),
+        ]);
+    }
+
+    public function readAll(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $now = now();
+        $rows = ReportIssue::query()
+            ->unreadFor($user)
+            ->pluck('id')
+            ->map(fn ($id) => [
+                'user_id' => $user->id,
+                'report_issue_id' => $id,
+                'read_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])
+            ->all();
+
+        if ($rows !== []) {
+            ReportIssueRead::query()->upsert($rows, ['user_id', 'report_issue_id'], ['read_at', 'updated_at']);
+        }
+
+        return response()->json(['unread' => 0]);
+    }
+
+    public function read(Request $request, ReportIssue $issue): JsonResponse
+    {
+        $issue->markReadBy($request->user());
+
+        return response()->json([
+            'unread' => ReportIssue::query()->unreadFor($request->user())->count(),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function inboxIssue(ReportIssue $issue): array
+    {
+        return [
+            'id' => $issue->id,
+            'title' => $issue->title,
+            'game' => GameReport::gameLabel($issue->game ?: 'unknown'),
+            'game_slug' => $issue->game ?: 'unknown',
+            'type' => $issue->type,
+            'status' => $issue->status,
+            'status_label' => $issue->status === 'unresolved' ? 'Open' : $issue->status,
+            'events' => $issue->events_count,
+            'seen' => $issue->last_seen_at?->diffForHumans() ?? '—',
+            'url' => route('admin.reports.show', $issue),
+            'read_url' => route('admin.reports.read', $issue),
+        ];
     }
 
     public function update(Request $request, ReportIssue $issue): RedirectResponse
@@ -149,8 +228,11 @@ class ReportController extends Controller
 
         abort_unless($disk->exists($event->screenshot_path), 404);
 
-        return response($disk->get($event->screenshot_path), 200, [
-            'Content-Type' => 'image/jpeg',
+        $bytes = $disk->get($event->screenshot_path);
+        $png = str_starts_with($bytes, "\x89PNG\r\n\x1a\n");
+
+        return response($bytes, 200, [
+            'Content-Type' => $png ? 'image/png' : 'image/jpeg',
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }

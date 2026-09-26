@@ -6,7 +6,7 @@ return [
 
     'key' => env('REPORTS_INGEST_KEY'),
 
-    'max_bytes' => 256 * 1024,
+    'max_bytes' => 4 * 1024 * 1024,
 
     'rate_limit_per_minute' => (int) env('REPORTS_INGEST_RATE_LIMIT', 30),
 

@@ -126,7 +126,7 @@ class ReportIngestController extends Controller
         $paths = ['screenshot' => null, 'memdump' => null, 'raw' => null];
 
         if ($screenshot = $report->screenshotBytes()) {
-            $paths['screenshot'] = $folder.'/screenshot.jpg';
+            $paths['screenshot'] = $folder.'/screenshot.'.(str_starts_with($screenshot, "\x89PNG") ? 'png' : 'jpg');
             $disk->put($paths['screenshot'], $screenshot);
         }
 

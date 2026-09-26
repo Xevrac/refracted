@@ -153,6 +153,10 @@ class GameReport
             }
         }
 
+        if ($data === '' && (stripos($description, 'Assert Info') !== false || stripos($description, 'Expression:') !== false)) {
+            $data = $description;
+        }
+
         $fileLine = self::extractFileLine($data);
         $function = self::labeledLine($data, 'Function');
         $isAssert = $fileLine !== null
@@ -313,13 +317,24 @@ class GameReport
 
     private function namedGame(): ?string
     {
-        $value = $this->field('game');
+        // DevTrack writes the sku into customfield_10041. customfield_10032 is the label "Game".
+        foreach (['game', 'customfield10041', 'customfield_10041'] as $key) {
+            $value = $this->field($key);
 
-        if ($value === null || in_array(strtolower($value), self::TYPES, true)) {
-            return null;
+            if ($value === null) {
+                continue;
+            }
+
+            $lower = strtolower(trim($value));
+
+            if ($lower === '' || $lower === 'game' || in_array($lower, self::TYPES, true)) {
+                continue;
+            }
+
+            return $value;
         }
 
-        return $value;
+        return null;
     }
 
     public function type(): string
@@ -425,8 +440,11 @@ class GameReport
             return null;
         }
 
-        // JPEG SOI. Anything else is not something we should hand to a browser.
-        return str_starts_with($decoded, "\xFF\xD8\xFF") ? $decoded : null;
+        if (str_starts_with($decoded, "\xFF\xD8\xFF") || str_starts_with($decoded, "\x89PNG\r\n\x1a\n")) {
+            return $decoded;
+        }
+
+        return null;
     }
 
     public function memDumpBytes(): ?string
