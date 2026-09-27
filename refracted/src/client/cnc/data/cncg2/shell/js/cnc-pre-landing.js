@@ -149,7 +149,73 @@
 
         var main = { text: 'Communicating with Refracted...', url: '/blaze/authenticate?email=' + ctx.email + '&password=' + ctx.password };
         statusFn(main.text);
-        runShellStep(main, onComplete, AUTH_STEP_MS);
+        runShellStep(main, function () {
+            checkAuthRefusal(statusFn, onComplete);
+        }, AUTH_STEP_MS);
+    }
+
+    function formatBanDuration(secs) {
+        var n;
+        var unit;
+        if (secs >= 86400) {
+            n = Math.ceil(secs / 86400);
+            unit = 'day';
+        } else if (secs >= 3600) {
+            n = Math.ceil(secs / 3600);
+            unit = 'hour';
+        } else {
+            n = Math.max(1, Math.ceil(secs / 60));
+            unit = 'minute';
+        }
+        return n + ' ' + unit + (n === 1 ? '' : 's');
+    }
+
+    function authRefusalInfo(r) {
+        if (r.reason === 'banned') {
+            return {
+                title: 'Account Banned',
+                message: (r.permanent || r.remainingSecs == null)
+                    ? 'Your account has been banned permanently.'
+                    : 'Your account has been banned for ' + formatBanDuration(r.remainingSecs) + '.'
+            };
+        }
+        return {
+            title: 'Sign-in Required',
+            message: 'Missing or invalid token, close the game and retry via the launcher.'
+        };
+    }
+
+    /** Refracted records a refused Blaze login per client; a refusal blocks the shell behind a Quit-only modal. */
+    function checkAuthRefusal(statusFn, onComplete) {
+        var done = false;
+        var proceed = function () {
+            if (!done) {
+                done = true;
+                onComplete();
+            }
+        };
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/auth-refusal', true);
+            xhr.onload = function () {
+                var r = null;
+                try {
+                    r = JSON.parse(xhr.responseText);
+                } catch (e) { /* ignore */ }
+                if (r && r.refused && window.CncShowAuthRefusal) {
+                    done = true;
+                    statusFn('');
+                    window.CncShowAuthRefusal(authRefusalInfo(r));
+                    return;
+                }
+                proceed();
+            };
+            xhr.onerror = xhr.onabort = xhr.ontimeout = proceed;
+            xhr.timeout = 3000;
+            xhr.send(null);
+        } catch (e) {
+            proceed();
+        }
     }
 
     function shouldAnimateStatus(line) {

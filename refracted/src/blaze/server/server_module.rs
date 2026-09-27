@@ -2525,12 +2525,22 @@ impl BlazeProtocolServer {
                     }
                 }
 
-                // Tell per-session response builders which Blaze session is being served (synchronously,
-                // no await before the handler reads it), so a pooled dedicated server's own auth
-                // responses report its CNCO<N> persona instead of the shared client profile.
+                // Tell per-session response builders which Blaze session is being served
                 crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
+                // Refused logins reply AUTH_ERR_* so retail reaches onLoginFailure
                 let response_payload =
-                    handle_packet_fields(component, command, &payload, fire_incoming_seq)?;
+                    match handle_packet_fields(component, command, &payload, fire_incoming_seq) {
+                        Ok(p) => p,
+                        Err(BlazeError::AccountBanned) if component == 0x0001 => {
+                            blaze_error = crate::common::error::AUTH_ERR_BANNED as u16;
+                            Bytes::new()
+                        }
+                        Err(BlazeError::AuthorizationRequired) if component == 0x0001 => {
+                            blaze_error = crate::common::error::AUTH_ERR_INVALID_TOKEN as u16;
+                            Bytes::new()
+                        }
+                        Err(e) => return Err(e),
+                    };
 
                 if crate::common::game::get_current_game_id() == "cnc"
                     && component == 0x0004

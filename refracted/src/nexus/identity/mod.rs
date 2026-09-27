@@ -96,6 +96,42 @@ pub fn bind_mysql_client(
     Ok(bound)
 }
 
+/// Why a game client's Blaze login was refused.
+#[derive(Debug, Clone)]
+pub enum ClientLoginRefusal {
+    /// `until_unix`: `None` = permanent.
+    Banned { until_unix: Option<i64> },
+    Unauthorized(String),
+}
+
+/// Bind a game client from the Nexus session token sent in Blaze `LoginRequest.TOKN`.
+pub fn bind_presented_client(presented: &str) -> Result<BoundSession, ClientLoginRefusal> {
+    if !client_join_requires_login() {
+        return Err(ClientLoginRefusal::Unauthorized(
+            "bind_presented_client is only for datasource=mysql".into(),
+        ));
+    }
+    let store = current_identity_store()
+        .ok_or_else(|| ClientLoginRefusal::Unauthorized("mysql identity store is not ready".into()))?;
+    let bound = store.resolve_presented(presented).map_err(|e| {
+        let ban = store
+            .presented_user_id(presented)
+            .ok()
+            .flatten()
+            .and_then(|uid| store.active_ban_until(uid).ok().flatten());
+        match ban {
+            Some(until_unix) => ClientLoginRefusal::Banned { until_unix },
+            None => ClientLoginRefusal::Unauthorized(e),
+        }
+    })?;
+    *BOUND_SESSION.lock() = Some(bound.clone());
+    crate::nexus::log_nexus_to_blaze(format!(
+        "bound game client from TOKN user_id={} persona_id={} display={}",
+        bound.user_id, bound.persona_id, bound.display_name
+    ));
+    Ok(bound)
+}
+
 /// Active bound Nexus session for this process (mysql only).
 pub fn current_bound_session() -> Option<BoundSession> {
     BOUND_SESSION.lock().clone()

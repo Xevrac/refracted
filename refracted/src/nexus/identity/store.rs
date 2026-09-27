@@ -188,6 +188,32 @@ impl IdentityStore {
         Ok(row.is_some())
     }
 
+    /// Active ban: `Some(None)` permanent, `Some(Some(unix))` until that time, `None` not banned.
+    pub fn active_ban_until(&self, user_id: i64) -> Result<Option<Option<i64>>, String> {
+        let now = chrono::Utc::now()
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        let mut conn = self.conn()?;
+        let row: Option<(Option<String>,)> = conn
+            .exec_first(
+                "SELECT banned_until FROM bans
+                 WHERE user_id = :user_id
+                   AND lifted_at IS NULL
+                   AND (banned_until IS NULL OR banned_until > :now)
+                 ORDER BY banned_until IS NULL DESC, banned_until DESC
+                 LIMIT 1",
+                params! { "user_id" => user_id, "now" => now },
+            )
+            .map_err(|e| format!("mysql ban lookup: {e}"))?;
+        Ok(row.map(|(until,)| {
+            until.and_then(|t| {
+                chrono::NaiveDateTime::parse_from_str(&t, "%Y-%m-%d %H:%M:%S")
+                    .ok()
+                    .map(|dt| dt.and_utc().timestamp())
+            })
+        }))
+    }
+
     fn count(&self, sql: &str) -> Result<i64, String> {
         let mut conn = self
             .pool

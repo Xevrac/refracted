@@ -94,5 +94,17 @@
         </div>
     </div>
 
+    <div class="cc-shell-quit-modal cc-shell-auth-modal" ng-cloak ng-show="authRefusal">
+        <div class="cc-shell-quit-modal__box">
+            <h2 class="cc-shell-quit-modal__title">{{ authRefusal.title }}</h2>
+            <p class="cc-shell-quit-modal__msg">{{ authRefusal.message }}</p>
+            <div class="cc-shell-quit-modal__actions">
+                <p class="cc-shell-quit-modal__msg" ng-show="authRefusal.quitting">Quitting game..</p>
+                <button type="button" class="cc-shell-quit-modal__btn cc-shell-quit-modal__btn--yes"
+                        ng-hide="authRefusal.quitting" ng-click="authRefusalQuit()">Quit</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
