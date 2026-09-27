@@ -13,7 +13,11 @@ class NexusSessionIssuer
 {
     public const SESSION_TTL_SECS = 259_200;
 
-    public const GATEWAY_CLIENT_ID = 'GLACIER_LBGW_BK_OL_SERVER';
+    /** `azp` / `nexus.cli`: the Refracted launcher is the authorised party. */
+    public const CLIENT_ID = 'REFRACTED_LAUNCHER';
+
+    /** `nexus.prd`: Refracted Nexus product. */
+    public const PRODUCT_ID = 'REFRACTED';
 
     /**
      * @param  array{client_ip?: ?string, country_code?: ?string, game_id?: ?string}  $meta
@@ -146,15 +150,15 @@ class NexusSessionIssuer
         $payload = [
             'iss' => 'nexus.refracted.au',
             'jti' => $jwtId,
-            'azp' => self::GATEWAY_CLIENT_ID,
+            'azp' => self::CLIENT_ID,
             'iat' => $now,
             'exp' => $now + self::SESSION_TTL_SECS,
             'ver' => 1,
             'nexus' => [
-                'cli' => self::GATEWAY_CLIENT_ID,
-                'prd' => '5lkt',
+                'cli' => self::CLIENT_ID,
+                'prd' => self::PRODUCT_ID,
                 'pid' => (string) $personaId,
-                'pty' => 'NUCLEUS',
+                'pty' => 'NEXUS',
                 'uid' => (string) $userId,
                 'psid' => $psid,
                 'pltyp' => 'PC',

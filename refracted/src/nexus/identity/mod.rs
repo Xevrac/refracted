@@ -66,8 +66,9 @@ pub fn init_mysql_identity(env: &AppEnv) -> Result<(), String> {
     let users = store.user_count()?;
     let personas = store.persona_count()?;
     crate::nexus::log_nexus_to_blaze(format!(
-        "identity store ready (mysql) env={} users={users} personas={personas} (clients must authenticate)",
-        env.environment.as_str()
+        "identity store ready (mysql) env={} users={users} personas={personas} token_pepper={} (clients must authenticate)",
+        env.environment.as_str(),
+        auth::pepper_fingerprint()
     ));
     *IDENTITY.lock() = Some(store);
     Ok(())

@@ -19,6 +19,14 @@ pub struct IssuedCredentials {
     pub expires_at: String,
 }
 
+/// Non-secret pepper fingerprint
+pub fn pepper_fingerprint() -> String {
+    match std::env::var("NEXUS_TOKEN_PEPPER") {
+        Ok(p) if !p.is_empty() => format!("set len={} fp={}", p.len(), &sha256_hex(&p)[..8]),
+        _ => "unset (plain sha256)".into(),
+    }
+}
+
 pub fn hash_secret(salt_hex: &str, secret: &str) -> String {
     sha256_hex(&format!("{salt_hex}:{secret}"))
 }
@@ -149,7 +157,7 @@ impl IdentityStore {
             &jwt_id,
             &(persona_id as u64),
             display_name,
-            crate::jwt::NEXUS_GATEWAY_CLIENT_ID,
+            crate::jwt::REFRACTED_CLIENT_ID,
             &(user_id as u64),
         );
         let mut conn = self.conn()?;
@@ -189,7 +197,7 @@ impl IdentityStore {
             self.load_session_by_token_hash(&hash_token(presented))?
         };
         let Some(bound) = bound else {
-            return Err("unknown or revoked session".into());
+            return Err(self.explain_miss(presented));
         };
         if bound.expired {
             return Err("session expired".into());
@@ -237,6 +245,42 @@ impl IdentityStore {
             params! { "now" => now, "hash" => hash },
         )
         .map_err(|e| format!("mysql revoke session: {e}"))
+    }
+
+    /// Why a presented opaque token matched no live session; diagnostic only
+    fn explain_miss(&self, presented: &str) -> String {
+        if presented.matches('.').count() >= 2 {
+            return "unknown or revoked session (jwt jti not found)".into();
+        }
+        let peppered = hash_token(presented);
+        let plain = sha256_hex(presented);
+        let probe = |hash: &str| -> Option<(bool, bool)> {
+            let mut conn = self.conn().ok()?;
+            let row: Option<(Option<String>, i64, i64)> = conn
+                .exec_first(
+                    "SELECT CAST(s.revoked_at AS CHAR),
+                            (SELECT COUNT(*) FROM users u WHERE u.id = s.user_id),
+                            (SELECT COUNT(*) FROM personas p WHERE p.id = s.persona_id)
+                     FROM auth_sessions s WHERE s.token_hash = :h LIMIT 1",
+                    params! { "h" => hash },
+                )
+                .ok()?;
+            row.map(|(revoked, u, p)| (revoked.is_some(), u > 0 && p > 0))
+        };
+        let pepper = pepper_fingerprint();
+        let detail = match probe(&peppered) {
+            Some((true, _)) => "row found but revoked".to_string(),
+            Some((false, false)) => "row found but user/persona row missing".to_string(),
+            Some((false, true)) => "row found (unexpected miss)".to_string(),
+            None if peppered != plain && probe(&plain).is_some() => {
+                "row matches plain sha256: Laravel has no pepper, rfrcli does".to_string()
+            }
+            None => "no row for this hash: pepper differs from Laravel, or token not issued by this database".to_string(),
+        };
+        format!(
+            "unknown or revoked session ({detail}; pepper {pepper}; hash={}…)",
+            &peppered[..12]
+        )
     }
 
     fn load_session_by_token_hash(&self, token_hash: &str) -> Result<Option<BoundSession>, String> {
