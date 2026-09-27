@@ -26,6 +26,9 @@ sql_host=127.0.0.1
 database=refracted
 user=refracted
 pass=
+
+# must match NEXUS_TOKEN_PEPPER on the frontend
+token_pepper=
 ";
 
 static CURRENT_ENV: Mutex<Option<AppEnv>> = Mutex::new(None);
@@ -106,6 +109,7 @@ pub struct AppEnv {
     pub listen_host: Option<String>,
     pub data_dir: Option<PathBuf>,
     pub log_level: Option<String>,
+    pub token_pepper: Option<String>,
 }
 
 impl AppEnv {
@@ -119,6 +123,11 @@ impl AppEnv {
         if let Some(level) = &self.log_level {
             if std::env::var_os("RUST_LOG").is_none() {
                 std::env::set_var("RUST_LOG", level);
+            }
+        }
+        if let Some(pepper) = &self.token_pepper {
+            if std::env::var_os("NEXUS_TOKEN_PEPPER").is_none() {
+                std::env::set_var("NEXUS_TOKEN_PEPPER", pepper);
             }
         }
     }
@@ -214,6 +223,10 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         .get("log_level")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let token_pepper = map
+        .get("token_pepper")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     Ok(AppEnv {
         path,
@@ -225,6 +238,7 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         listen_host,
         data_dir,
         log_level,
+        token_pepper,
     })
 }
 
