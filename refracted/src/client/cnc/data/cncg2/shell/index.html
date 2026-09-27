@@ -52,7 +52,7 @@
 
 <body class="cc-theme cc-theme--aurora" ng-controller="RootController">
 
-    <div id="cc-pre-landing" class="cc-pre-landing" ng-class="{'cc-pre-landing--art': preLandingUseArt, 'cc-pre-landing--shell': preLandingHasShell}" ng-show="!preLandingComplete">
+    <div id="cc-pre-landing" class="cc-pre-landing" ng-class="{'cc-pre-landing--art': preLandingUseArt, 'cc-pre-landing--shell': preLandingHasShell}" ng-show="!preLandingComplete && !authRefusal">
         <div class="cc-pre-landing__inner">
             <div class="cc-pre-landing__brand">
                 <div class="cc-pre-landing__spinner" role="status" aria-label="Loading"></div>
@@ -64,7 +64,7 @@
         </div>
     </div>
 
-    <div class="cc-app-root" ng-cloak ng-show="preLandingComplete">
+    <div class="cc-app-root" ng-cloak ng-show="preLandingComplete && !authRefusal">
         <div ng-include="shellRootTemplate"></div>
         <div ng-include="'view/options.html'"></div>
         <div ng-include="'view/credits.html'"></div>
