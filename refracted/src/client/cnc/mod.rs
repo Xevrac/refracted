@@ -291,7 +291,7 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
         .unwrap_or((path, None));
     let base = base.trim_start_matches('/');
     if base == "cnc/auth-refusal" && is_get {
-        return Some(handle_cnc_auth_refusal());
+        return Some(handle_cnc_auth_refusal(query));
     }
     if base == "cnc/online-count" && is_get {
         let _ = body;
@@ -2159,48 +2159,70 @@ fn debug_auth_override() -> Option<(crate::common::error::BlazeError, Option<i64
     Some(refusal)
 }
 
+/// Identity recorded with a refusal (audit); `None` when the login carried no resolvable token.
+#[derive(Default)]
+struct RefusedIdentity {
+    user_id: Option<i64>,
+    persona_id: Option<i64>,
+    discord_id: Option<String>,
+}
+
 struct AuthRefusal {
     banned: bool,
     until_unix: Option<i64>,
     at: std::time::Instant,
 }
 
-/// Last refused Blaze login per client IP, read back by the shell via `/cnc/auth-refusal`.
-static AUTH_REFUSALS: std::sync::LazyLock<std::sync::Mutex<HashMap<std::net::IpAddr, AuthRefusal>>> =
+/// Last refused Blaze login per shell login key (`TOKN = <token>:<key>`), read by `/cnc/auth-refusal?key=`.
+static AUTH_REFUSALS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, AuthRefusal>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
 const AUTH_REFUSAL_TTL: std::time::Duration = std::time::Duration::from_secs(600);
 
-thread_local! {
-    static HTTP_PEER_IP: std::cell::Cell<Option<std::net::IpAddr>> = const { std::cell::Cell::new(None) };
-}
-
-/// Web server sets the requesting peer before dispatching a synchronous handler.
-pub fn set_http_peer_ip(ip: Option<std::net::IpAddr>) {
-    HTTP_PEER_IP.with(|c| c.set(ip));
-}
-
-fn blaze_session_peer_ip(sid: Option<u64>) -> Option<std::net::IpAddr> {
-    sid.and_then(crate::session::blaze_sessions::get_session)
-        .and_then(|s| s.peer.parse::<std::net::SocketAddr>().ok())
-        .map(|a| a.ip())
-}
-
-fn note_auth_refusal(sid: Option<u64>, banned: bool, until_unix: Option<i64>) {
-    if let (Some(ip), Ok(mut map)) = (blaze_session_peer_ip(sid), AUTH_REFUSALS.lock()) {
-        map.insert(ip, AuthRefusal { banned, until_unix, at: std::time::Instant::now() });
+fn note_auth_refusal(
+    key: Option<&str>,
+    sid: Option<u64>,
+    banned: bool,
+    until_unix: Option<i64>,
+    who: RefusedIdentity,
+) {
+    let peer = sid
+        .and_then(crate::session::blaze_sessions::get_session)
+        .map(|s| s.peer)
+        .unwrap_or_default();
+    crate::nexus::log_nexus_to_blaze(format!(
+        "login refused ({}) key={} peer={} user_id={:?} persona_id={:?} discord_id={:?} until={:?}",
+        if banned { "banned" } else { "unauthorized" },
+        key.unwrap_or("-"),
+        peer,
+        who.user_id,
+        who.persona_id,
+        who.discord_id,
+        until_unix
+    ));
+    let Some(key) = key else {
+        return;
+    };
+    if let Ok(mut map) = AUTH_REFUSALS.lock() {
+        map.retain(|_, r| r.at.elapsed() < AUTH_REFUSAL_TTL);
+        map.insert(key.to_string(), AuthRefusal { banned, until_unix, at: std::time::Instant::now() });
     }
 }
 
-fn clear_auth_refusal(sid: Option<u64>) {
-    if let (Some(ip), Ok(mut map)) = (blaze_session_peer_ip(sid), AUTH_REFUSALS.lock()) {
-        map.remove(&ip);
+fn clear_auth_refusal(key: Option<&str>) {
+    if let (Some(key), Ok(mut map)) = (key, AUTH_REFUSALS.lock()) {
+        map.remove(key);
     }
 }
 
-fn handle_cnc_auth_refusal() -> HttpResponse {
-    let ip = HTTP_PEER_IP.with(|c| c.get());
-    let body = match (ip, AUTH_REFUSALS.lock()) {
-        (Some(ip), Ok(map)) => match map.get(&ip).filter(|r| r.at.elapsed() < AUTH_REFUSAL_TTL) {
+fn handle_cnc_auth_refusal(query: Option<&str>) -> HttpResponse {
+    let key = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == "key").then(|| percent_decode_plus(v))
+        })
+    });
+    let body = match (key, AUTH_REFUSALS.lock()) {
+        (Some(key), Ok(map)) => match map.get(&key).filter(|r| r.at.elapsed() < AUTH_REFUSAL_TTL) {
             Some(r) if r.banned => serde_json::json!({
                 "refused": true,
                 "reason": "banned",
@@ -2218,9 +2240,21 @@ fn handle_cnc_auth_refusal() -> HttpResponse {
 pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
     refuse_if_nexus_banned()?;
 
-    let tokn = TdfEncoder::find_string_field(payload, "TOKN")
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty());
+    // Prism sends `TOKN = <nexus-token>:<shell login key>`; either half may be empty.
+    let (tokn, login_key) = match TdfEncoder::find_string_field(payload, "TOKN") {
+        Some(raw) => {
+            let raw = raw.trim().to_string();
+            match raw.rsplit_once(':') {
+                Some((token, key)) => (
+                    Some(token.trim().to_string()).filter(|t| !t.is_empty()),
+                    Some(key.trim().to_string()).filter(|k| !k.is_empty()),
+                ),
+                None => (Some(raw).filter(|t| !t.is_empty()), None),
+            }
+        }
+        None => (None, None),
+    };
+    let key = login_key.as_deref();
     let mail = TdfEncoder::find_string_field(payload, "MAIL").filter(|m| !m.is_empty());
     let sid = crate::session::session_module::current_blaze_session_id();
     // preAuth CLNT: RtsBlazeClient = game client, *Server* = dedicated.
@@ -2232,11 +2266,11 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
     if is_game_client {
         if let Some((refusal, until_unix)) = debug_auth_override() {
             let banned = matches!(refusal, crate::common::error::BlazeError::AccountBanned);
-            note_auth_refusal(sid, banned, until_unix);
+            note_auth_refusal(key, sid, banned, until_unix, RefusedIdentity::default());
             return Err(refusal);
         }
     }
-    if tokn.is_some() && mail.is_none() && !is_game_client {
+    if (tokn.is_some() || key.is_some()) && mail.is_none() && !is_game_client {
         // Token login with no email = pooled dedicated. Allocate CNCO identity now.
         if let Some(sid) = sid {
             let (name, persona) = dedicated_pool::allocate_dedicated_identity(sid);
@@ -2247,23 +2281,28 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
         use crate::nexus::identity::ClientLoginRefusal;
         let Some(token) = tokn.as_deref() else {
             crate::nexus::log_nexus_to_blaze("refusing login: no Nexus token in TOKN (sign in via the launcher)");
-            note_auth_refusal(sid, false, None);
+            note_auth_refusal(key, sid, false, None, RefusedIdentity::default());
             return Err(BlazeError::AuthorizationRequired);
         };
         let bound = crate::nexus::identity::bind_presented_client(token).map_err(|refusal| {
             crate::nexus::log_nexus_to_blaze(format!("refusing login: {refusal:?}"));
             match refusal {
-                ClientLoginRefusal::Banned { until_unix } => {
-                    note_auth_refusal(sid, true, until_unix);
+                ClientLoginRefusal::Banned { until_unix, user_id, persona_id, discord_id } => {
+                    let who = RefusedIdentity {
+                        user_id: Some(user_id),
+                        persona_id: Some(persona_id),
+                        discord_id,
+                    };
+                    note_auth_refusal(key, sid, true, until_unix, who);
                     BlazeError::AccountBanned
                 }
                 ClientLoginRefusal::Unauthorized(_) => {
-                    note_auth_refusal(sid, false, None);
+                    note_auth_refusal(key, sid, false, None, RefusedIdentity::default());
                     BlazeError::AuthorizationRequired
                 }
             }
         })?;
-        clear_auth_refusal(sid);
+        clear_auth_refusal(key);
         if let Some(sid) = sid {
             crate::session::blaze_sessions::set_client_identity(
                 sid,

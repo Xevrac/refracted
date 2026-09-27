@@ -2532,11 +2532,11 @@ impl BlazeProtocolServer {
                     match handle_packet_fields(component, command, &payload, fire_incoming_seq) {
                         Ok(p) => p,
                         Err(BlazeError::AccountBanned) if component == 0x0001 => {
-                            blaze_error = crate::common::error::AUTH_ERR_BANNED as u16;
+                            blaze_error = crate::common::error::error_module::AUTH_ERR_BANNED as u16;
                             Bytes::new()
                         }
                         Err(BlazeError::AuthorizationRequired) if component == 0x0001 => {
-                            blaze_error = crate::common::error::AUTH_ERR_INVALID_TOKEN as u16;
+                            blaze_error = crate::common::error::error_module::AUTH_ERR_INVALID_TOKEN as u16;
                             Bytes::new()
                         }
                         Err(e) => return Err(e),

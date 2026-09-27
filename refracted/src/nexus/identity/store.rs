@@ -188,6 +188,17 @@ impl IdentityStore {
         Ok(row.is_some())
     }
 
+    pub fn user_discord_id(&self, user_id: i64) -> Result<Option<String>, String> {
+        let mut conn = self.conn()?;
+        let row: Option<(Option<String>,)> = conn
+            .exec_first(
+                "SELECT discord_id FROM users WHERE id = :id",
+                params! { "id" => user_id },
+            )
+            .map_err(|e| format!("mysql discord lookup: {e}"))?;
+        Ok(row.and_then(|(d,)| d))
+    }
+
     /// Active ban: `Some(None)` permanent, `Some(Some(unix))` until that time, `None` not banned.
     pub fn active_ban_until(&self, user_id: i64) -> Result<Option<Option<i64>>, String> {
         let now = chrono::Utc::now()

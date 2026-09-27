@@ -200,8 +200,8 @@ impl IdentityStore {
         Ok(bound)
     }
 
-    /// Owner of a presented token/JWT, ignoring expiry and bans (refusal reporting only).
-    pub fn presented_user_id(&self, presented: &str) -> Result<Option<i64>, String> {
+    /// Session behind a presented token/JWT, ignoring expiry and bans (refusal reporting only).
+    pub fn presented_session(&self, presented: &str) -> Result<Option<BoundSession>, String> {
         let presented = presented.trim();
         let bound = if presented.matches('.').count() >= 2 {
             match jwt_id_from_token(presented) {
@@ -211,7 +211,7 @@ impl IdentityStore {
         } else {
             self.load_session_by_token_hash(&hash_token(presented))?
         };
-        Ok(bound.map(|b| b.user_id))
+        Ok(bound)
     }
 
     /// Game client join: presented credential must own the claimed user + persona.
