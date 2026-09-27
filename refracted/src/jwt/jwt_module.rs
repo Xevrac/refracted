@@ -8,6 +8,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// `UtilComponent.fetchClientConfig` (default labs: `conf_ch1_release_mp11_labs`).
 pub const NEXUS_GATEWAY_CLIENT_ID: &str = "GLACIER_LBGW_BK_OL_SERVER";
 
+/// `azp` / `nexus.cli` for sessions issued by Refracted Nexus (launcher sign-in).
+/// Must match `NexusSessionIssuer::CLIENT_ID` in the frontend.
+pub const REFRACTED_CLIENT_ID: &str = "REFRACTED_LAUNCHER";
+
+/// `nexus.prd` for Refracted Nexus sessions. Must match `NexusSessionIssuer::PRODUCT_ID`.
+pub const REFRACTED_PRODUCT_ID: &str = "REFRACTED";
+
 /// Session information extracted from JWT token
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
@@ -221,10 +228,12 @@ pub fn generate_ea_jwt_token(
     )));
     
     nexus.insert("cli", Value::String(client_id.to_string()));
-    nexus.insert("prd", Value::String("5lkt".to_string()));
+    let refracted = client_id == REFRACTED_CLIENT_ID;
+    let product = if refracted { REFRACTED_PRODUCT_ID } else { "5lkt" };
+    nexus.insert("prd", Value::String(product.to_string()));
     nexus.insert("sco", Value::String("dp.friends.platforms.ea offline dp.client.default signin".to_string()));
     nexus.insert("pid", Value::String(persona_id.to_string()));
-    nexus.insert("pty", Value::String("NUCLEUS".to_string()));
+    nexus.insert("pty", Value::String(if refracted { "NEXUS" } else { "NUCLEUS" }.to_string()));
     nexus.insert("uid", Value::String(user_id.to_string()));
     
     // PSID - use session psid if available, otherwise calculate from persona_id
