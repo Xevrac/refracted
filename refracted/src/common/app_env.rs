@@ -156,6 +156,11 @@ pub fn current_app_env() -> Option<AppEnv> {
     CURRENT_ENV.lock().clone()
 }
 
+pub fn set_current_app_env(env: AppEnv) {
+    env.apply_process_vars();
+    *CURRENT_ENV.lock() = Some(env);
+}
+
 #[cfg(test)]
 static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
 

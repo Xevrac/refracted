@@ -110,10 +110,60 @@ pub fn clone_user_session_if_set() -> Option<UserSession> {
     GLOBAL_SESSION.lock().clone()
 }
 
-/// Get the current user session, or the Xevrac JSON/desktop default if not set.
+/// Get the current user session.
+/// Prefer an explicit session, then a mysql-bound Nexus session. Never invent the
+/// Xevrac JSON default when `datasource=mysql` requires login.
 pub fn get_user_session() -> UserSession {
-    let global = GLOBAL_SESSION.lock();
-    global.clone().unwrap_or_default()
+    // Late launcher sign-in: bind before Blaze/LSX consumers ask for identity.
+    if crate::nexus::identity::client_join_requires_login()
+        && crate::nexus::identity::current_bound_session().is_none()
+    {
+        let _ = crate::nexus::identity::ensure_bound_from_handoff();
+    }
+
+    if let Some(session) = GLOBAL_SESSION.lock().clone() {
+        return session;
+    }
+    if let Some(bound) = crate::nexus::identity::current_bound_session() {
+        return UserSession {
+            user_id: bound.user_id as u64,
+            persona_id: bound.persona_id as u64,
+            display_name: bound.display_name,
+            email: bound.email,
+            psid: (bound.persona_id % 1_000_000_000) as u32,
+            jwt_token: None,
+            update_network_info_count: 0,
+            hwfg: 0,
+            network_exip_ip: None,
+            network_inip_ip: None,
+            network_exip_port: None,
+            network_inip_port: None,
+            network_bps: None,
+            next_message_id: 1160000,
+        };
+    }
+    if crate::nexus::identity::client_join_requires_login() {
+        crate::nexus::log_nexus_to_blaze(
+            "get_user_session: mysql mode with no bound session — refusing Xevrac default",
+        );
+        return UserSession {
+            user_id: 0,
+            persona_id: 0,
+            display_name: String::new(),
+            email: String::new(),
+            psid: 0,
+            jwt_token: None,
+            update_network_info_count: 0,
+            hwfg: 0,
+            network_exip_ip: None,
+            network_inip_ip: None,
+            network_exip_port: None,
+            network_inip_port: None,
+            network_bps: None,
+            next_message_id: 1160000,
+        };
+    }
+    UserSession::default()
 }
 
 thread_local! {

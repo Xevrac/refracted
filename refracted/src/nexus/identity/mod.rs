@@ -6,13 +6,18 @@
 mod migrate;
 mod store;
 mod auth;
+mod handoff;
 
 pub use store::{BoundSession, IdentityStore, PersonaRecord, UserRecord};
 pub use auth::{assert_bound_identity, IssuedCredentials};
+pub use handoff::{
+    ensure_bound_from_handoff, handoff_file_present, handoff_path, try_bind_launcher_handoff,
+};
 
 use crate::common::app_env::{AppEnv, Datasource};
 
 static IDENTITY: parking_lot::Mutex<Option<IdentityStore>> = parking_lot::Mutex::new(None);
+static BOUND_SESSION: parking_lot::Mutex<Option<BoundSession>> = parking_lot::Mutex::new(None);
 /// JSON personas stay off until boot enables them.
 static JSON_PERSONAS_ALLOWED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -83,7 +88,23 @@ pub fn bind_mysql_client(
         return Err("bind_mysql_client is only for datasource=mysql".into());
     }
     let store = current_identity_store().ok_or("mysql identity store is not ready")?;
-    store.bind_client(presented, claimed_user, claimed_persona)
+    let bound = store.bind_client(presented, claimed_user, claimed_persona)?;
+    *BOUND_SESSION.lock() = Some(bound.clone());
+    crate::nexus::log_nexus_to_blaze(format!(
+        "bound mysql client user_id={} persona_id={} display={}",
+        bound.user_id, bound.persona_id, bound.display_name
+    ));
+    Ok(bound)
+}
+
+/// Active bound Nexus session for this process (mysql only).
+pub fn current_bound_session() -> Option<BoundSession> {
+    BOUND_SESSION.lock().clone()
+}
+
+/// Clear the in-process bound session (logout / revoke locally).
+pub fn clear_bound_session() {
+    *BOUND_SESSION.lock() = None;
 }
 
 pub fn log_headless_identity_policy(env: &AppEnv) {

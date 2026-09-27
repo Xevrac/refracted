@@ -1,11 +1,11 @@
 //! Shared startup for desktop and headless binaries.
 //!
-//! Desktop uses JSON under `{exe}/data`. Headless uses JSON only when `datasource=json`;
-//! `datasource=mysql` is production identity.
+//! Desktop uses JSON under `{exe}/data` unless a launcher Nexus handoff is present
+//! and `refracted.env` has `datasource=mysql`. Headless follows `refracted.env`.
 
 use std::path::PathBuf;
 
-use crate::common::app_env::{AppEnv, Datasource};
+use crate::common::app_env::{self, AppEnv, Datasource};
 use crate::common::game;
 use crate::common::paths;
 use crate::common::settings;
@@ -54,11 +54,7 @@ pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
     }
 
     match &opts.env {
-        None => {
-            identity::enable_json_personas();
-            user_profile::sync_profile_to_session();
-            blaze_sessions::load_persisted_sessions();
-        }
+        None => boot_desktop_identity()?,
         Some(env) => {
             identity::log_headless_identity_policy(env);
             match env.datasource {
@@ -66,10 +62,16 @@ pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
                     identity::enable_json_personas();
                     user_profile::sync_profile_to_session();
                     blaze_sessions::load_persisted_sessions();
+                    if identity::handoff_file_present() {
+                        crate::nexus::log_nexus_to_blaze(
+                            "launcher handoff present but datasource=json — Nexus bind skipped",
+                        );
+                    }
                 }
                 Datasource::Mysql => {
                     identity::disable_json_personas();
                     identity::init_mysql_identity(env)?;
+                    let _ = identity::try_bind_launcher_handoff();
                 }
             }
         }
@@ -77,6 +79,53 @@ pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
 
     identity::lock_identity_policy();
     Ok(())
+}
+
+/// Desktop: JSON by default. If the launcher wrote a handoff **and** `refracted.env`
+/// is `datasource=mysql`, switch to Nexus bind so GetProfile returns the Discord persona.
+fn boot_desktop_identity() -> Result<(), String> {
+    if identity::handoff_file_present() {
+        match load_mysql_env_if_configured() {
+            Ok(Some(env)) => {
+                crate::nexus::log_nexus_to_blaze(
+                    "desktop: launcher handoff + datasource=mysql — binding Nexus persona",
+                );
+                identity::disable_json_personas();
+                identity::init_mysql_identity(&env)?;
+                let _ = identity::try_bind_launcher_handoff();
+                return Ok(());
+            }
+            Ok(None) => {
+                crate::nexus::log_nexus_to_blaze(
+                    "desktop: launcher handoff present but refracted.env is not datasource=mysql — using JSON personas",
+                );
+            }
+            Err(e) => {
+                crate::nexus::log_nexus_to_blaze(format!(
+                    "desktop: launcher handoff present but mysql env failed ({e}) — using JSON personas"
+                ));
+            }
+        }
+    }
+
+    identity::enable_json_personas();
+    user_profile::sync_profile_to_session();
+    blaze_sessions::load_persisted_sessions();
+    Ok(())
+}
+
+/// Load `{exe}/refracted.env` only if it already exists and asks for mysql. Never create it here.
+fn load_mysql_env_if_configured() -> Result<Option<AppEnv>, String> {
+    let path = app_env::default_env_path();
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let env = app_env::load_app_env(&path)?;
+    if env.datasource != Datasource::Mysql {
+        return Ok(None);
+    }
+    app_env::set_current_app_env(env.clone());
+    Ok(Some(env))
 }
 
 /// Known game ids from the current registry (after [`boot_emulator`] / settings init).

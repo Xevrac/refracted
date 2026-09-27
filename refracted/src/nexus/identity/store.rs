@@ -184,6 +184,28 @@ impl IdentityStore {
         .map_err(|e| format!("mysql personas: {e}"))
     }
 
+    /// Active account ban (permanent or not yet expired).
+    pub fn is_user_banned(&self, user_id: i64) -> Result<bool, String> {
+        let now = chrono::Utc::now()
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        let mut conn = self.conn()?;
+        let row: Option<(i64,)> = conn
+            .exec_first(
+                "SELECT id FROM bans
+                 WHERE user_id = :user_id
+                   AND lifted_at IS NULL
+                   AND (banned_until IS NULL OR banned_until > :now)
+                 LIMIT 1",
+                params! { "user_id" => user_id, "now" => now },
+            )
+            .map_err(|e| {
+                // Table may not exist until Nexus admin migration runs.
+                format!("mysql ban lookup: {e}")
+            })?;
+        Ok(row.is_some())
+    }
+
     fn count(&self, sql: &str) -> Result<i64, String> {
         let mut conn = self
             .pool
