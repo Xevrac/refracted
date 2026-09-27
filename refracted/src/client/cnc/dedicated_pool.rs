@@ -25,6 +25,7 @@ struct PendingEnginePeer {
     qos: Option<u16>,
     peer_host: Option<String>,
     noted_at_unix: u64,
+    name: Option<String>,
 }
 
 fn pool() -> &'static Mutex<HashMap<u64, DedicatedServerEntry>> {
@@ -204,6 +205,9 @@ pub struct DedicatedServerEntry {
     /// Reported QoS port (emulator QoS still binds globally).
     #[serde(default)]
     pub qos_port: Option<u16>,
+    /// Server name from the dedicated's `-name`
+    #[serde(default)]
+    pub configured_name: Option<String>,
 }
 
 /// Seconds to wait after unload before sending cmd 220.
@@ -242,8 +246,9 @@ pub fn recycle_create_game_extra_delay_ms(dedicated_session_id: u64, wanted_map:
 
 pub fn browser_server_name(entry: &DedicatedServerEntry) -> String {
     entry
-        .server_hostname
+        .configured_name
         .clone()
+        .or_else(|| entry.server_hostname.clone())
         .or_else(|| entry.game_name.clone())
         .unwrap_or_else(|| {
             peer_display_fallback(&entry.peer)
@@ -665,6 +670,9 @@ fn apply_prism_tcp_on_entry(
 
 fn apply_pending_on_entry(e: &mut DedicatedServerEntry, pending: &PendingEnginePeer) {
     e.engine_peer_udp_port = Some(pending.port);
+    if pending.name.is_some() {
+        e.configured_name = pending.name.clone();
+    }
     apply_prism_tcp_on_entry(e, pending.msg_sys, pending.simu_cloud, pending.qos);
     e.last_event_unix_secs = now_secs();
 }
@@ -690,6 +698,21 @@ fn attach_prism_tcp_ports(
         if let Some(p) = e.msg_sys_tcp_port {
             crate::client::cnc::msgsystem::server::spawn_pinned(msgsys_hub_listen_port(p), p);
         }
+    }
+}
+
+/// Record the dedicated's configured name and rename its standby lobby to match.
+fn set_configured_name(blaze_session_id: u64, name: &str) {
+    let gid = {
+        let mut m = pool().lock();
+        let Some(e) = m.get_mut(&blaze_session_id) else {
+            return;
+        };
+        e.configured_name = Some(name.to_string());
+        e.current_gid
+    };
+    if let Some(gid) = gid {
+        super::game_state::rename_standby_game(gid, name);
     }
 }
 
@@ -723,6 +746,7 @@ fn stash_pending_engine_peer(
     msg_sys: Option<u16>,
     simu_cloud: Option<u16>,
     qos: Option<u16>,
+    name: Option<&str>,
 ) {
     if !is_usable_dedicated_game_udp_port(port) {
         return;
@@ -750,6 +774,7 @@ fn stash_pending_engine_peer(
         qos,
         peer_host: host.clone(),
         noted_at_unix: now_secs(),
+        name: name.map(str::to_string),
     });
     crate::debug_println!(
         "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m EnginePeer UDP :{} msgsys={:?} simucloud={:?} pending (pool not ready yet; peer={})",
@@ -843,13 +868,18 @@ pub fn note_dedicated_engine_peer_report(
     msg_sys: Option<u16>,
     simu_cloud: Option<u16>,
     qos: Option<u16>,
+    name: Option<&str>,
 ) -> EnginePeerNote {
     if !is_usable_dedicated_game_udp_port(port) {
         return EnginePeerNote::Rejected;
     }
     sync_from_blaze_sessions();
+    let name = name.map(str::trim).filter(|n| !n.is_empty());
     let attach = |sid: u64| {
         attach_prism_tcp_ports(sid, msg_sys, simu_cloud, qos);
+        if let Some(n) = name {
+            set_configured_name(sid, n);
+        }
         EnginePeerNote::Applied { session: sid }
     };
     if let Some(sid) = blaze_session_id.filter(|&s| s != 0) {
@@ -869,7 +899,7 @@ pub fn note_dedicated_engine_peer_report(
     if let Some(sid) = note_dedicated_engine_peer_udp_sole(port) {
         return attach(sid);
     }
-    stash_pending_engine_peer(port, peer_host, msg_sys, simu_cloud, qos);
+    stash_pending_engine_peer(port, peer_host, msg_sys, simu_cloud, qos, name);
     EnginePeerNote::Pending
 }
 
@@ -1018,6 +1048,7 @@ fn ensure_pool_entry(blaze_session_id: u64) {
                 .or_else(|| Some("RtsBlazeServer".to_string())),
             display_name: s.display_name,
             server_hostname: None,
+            configured_name: None,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1043,6 +1074,7 @@ fn ensure_pool_entry(blaze_session_id: u64) {
             clnt: Some("RtsBlazeServer".to_string()),
             display_name: None,
             server_hostname: None,
+            configured_name: None,
             persona_id: None,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1755,6 +1787,7 @@ pub fn sync_from_blaze_sessions() {
             clnt: s.clnt.clone(),
             display_name: s.display_name.clone(),
             server_hostname: None,
+            configured_name: None,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1823,6 +1856,9 @@ pub fn on_register_creator(blaze_session_id: u64, register_payload: &[u8]) {
         let mut m = pool().lock();
         apply_pending_engine_peers_locked(&mut m);
     }
+    let hostname = get_entry(blaze_session_id)
+        .map(|e| browser_server_name(&e))
+        .unwrap_or(hostname);
     super::game_state::ensure_standby_game(gid, &hostname, blaze_session_id);
     crate::debug_println!(
         "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} registered as {} (browser={} gid={})",

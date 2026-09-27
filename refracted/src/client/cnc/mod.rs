@@ -1172,6 +1172,7 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     let mut msg_sys: u16 = 0;
     let mut simu_cloud: u16 = 0;
     let mut qos: u16 = 0;
+    let mut name = String::new();
     let parse_u16 = |v: &str| percent_decode_plus(v).parse().unwrap_or(0);
     let parse_kv = |k: &str,
                     v: &str,
@@ -1198,6 +1199,10 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
+                if k == "name" {
+                    name = percent_decode_plus(v).chars().take(32).collect();
+                    continue;
+                }
                 parse_kv(
                     k,
                     v,
@@ -1294,6 +1299,7 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
         (msg_sys != 0).then_some(msg_sys),
         (simu_cloud != 0).then_some(simu_cloud),
         (qos != 0).then_some(qos),
+        (!name.trim().is_empty()).then_some(name.as_str()),
     );
     match note {
         dedicated_pool::EnginePeerNote::Rejected => HttpResponse::new(

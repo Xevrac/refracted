@@ -1369,6 +1369,15 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
     );
 }
 
+/// Rename a dedicated's standby lobby
+pub fn rename_standby_game(gid: i64, name: &str) {
+    if let Some(game) = games().lock().get_mut(&gid) {
+        if game.is_standby {
+            game.name = name.to_string();
+        }
+    }
+}
+
 pub fn reset_standby_after_pool_return(gid: i64) {
     let dedicated_sid = games()
         .lock()
@@ -3764,17 +3773,17 @@ pub fn build_plst_entry(player: &CncPlayer) -> Vec<u8> {
 
 pub fn build_replicated_player(player: &CncPlayer, gid: i64) -> Vec<u8> {
     let gid_i32 = gid.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let pid_i32 = player.persona_id.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    // Nexus persona ids exceed i32; TDF integers are varints; write the full id.
     let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_int("EXID", pid_i32));
+    out.extend_from_slice(&TdfEncoder::encode_long("EXID", player.persona_id));
     out.extend_from_slice(&TdfEncoder::encode_int("GID ", gid_i32));
     out.extend_from_slice(&TdfEncoder::encode_int("LOC ", 0));
     out.extend_from_slice(&TdfEncoder::encode_string("NAME", &player.display_name));
-    out.extend_from_slice(&TdfEncoder::encode_int("PID ", pid_i32));
+    out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));
     out.extend_from_slice(&TdfEncoder::encode_int("SLOT", player.slot));
     out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
     out.extend_from_slice(&TdfEncoder::encode_int("TIDX", player.team.max(0)));
-    out.extend_from_slice(&TdfEncoder::encode_int("UID ", pid_i32));
+    out.extend_from_slice(&TdfEncoder::encode_long("UID ", player.persona_id));
     if !player.attribs.is_empty() {
         out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered(
             "ATTR",
@@ -4155,9 +4164,8 @@ fn slot_capacities_vector(tag: &str, public_participants: u16) -> Vec<u8> {
 }
 
 pub fn build_game_browser_player_data(player: &CncPlayer) -> Vec<u8> {
-    let pid_i32 = player.persona_id.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     let mut out = Vec::new();
-    out.extend_from_slice(&TdfEncoder::encode_int("EXID", pid_i32));
+    out.extend_from_slice(&TdfEncoder::encode_long("EXID", player.persona_id));
     out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));
     out.extend_from_slice(&TdfEncoder::encode_string("NAME", &player.display_name));
     out.extend_from_slice(&TdfEncoder::encode_int("TIDX", player.team.max(0)));
