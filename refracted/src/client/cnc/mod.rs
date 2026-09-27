@@ -2198,18 +2198,22 @@ struct AuthRefusal {
     at: std::time::Instant,
 }
 
-/// Persona bound by each shell login key (`TOKN = <token>:<key>`), read by `/cnc/lobby-roster?key=`.
-static LOGIN_KEY_PERSONAS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, i64>>> =
+/// Persona bound by each shell login key
+static LOGIN_KEY_PERSONAS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, (i64, String)>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
 
-fn note_login_key_persona(key: Option<&str>, persona_id: i64) {
+fn note_login_key_persona(key: Option<&str>, persona_id: i64, display_name: &str) {
     if let (Some(key), Ok(mut map)) = (key.filter(|k| !k.is_empty()), LOGIN_KEY_PERSONAS.lock()) {
-        map.insert(key.to_string(), persona_id);
+        map.insert(key.to_string(), (persona_id, display_name.to_string()));
     }
 }
 
 fn persona_for_login_key(key: &str) -> Option<i64> {
-    LOGIN_KEY_PERSONAS.lock().ok()?.get(key).copied()
+    LOGIN_KEY_PERSONAS.lock().ok()?.get(key).map(|(pid, _)| *pid)
+}
+
+fn identity_for_login_key(key: &str) -> Option<(i64, String)> {
+    LOGIN_KEY_PERSONAS.lock().ok()?.get(key).cloned()
 }
 
 /// Last refused Blaze login per shell login key (`TOKN = <token>:<key>`), read by `/cnc/auth-refusal?key=`.
@@ -2260,7 +2264,8 @@ fn handle_cnc_auth_refusal(query: Option<&str>) -> HttpResponse {
             (k == "key").then(|| percent_decode_plus(v))
         })
     });
-    let body = match (key, AUTH_REFUSALS.lock()) {
+    let identity = key.as_deref().and_then(identity_for_login_key);
+    let mut body = match (key, AUTH_REFUSALS.lock()) {
         (Some(key), Ok(map)) => match map.get(&key).filter(|r| r.at.elapsed() < AUTH_REFUSAL_TTL) {
             Some(r) if r.banned => serde_json::json!({
                 "refused": true,
@@ -2273,6 +2278,15 @@ fn handle_cnc_auth_refusal(query: Option<&str>) -> HttpResponse {
         },
         _ => serde_json::json!({ "refused": false }),
     };
+    // Signed-in identity for this launch
+    if let (Some((persona_id, display_name)), Some(obj)) = (identity, body.as_object_mut()) {
+        if obj.get("refused") == Some(&serde_json::Value::Bool(false)) {
+            obj.insert(
+                "identity".into(),
+                serde_json::json!({ "personaId": persona_id, "displayName": display_name }),
+            );
+        }
+    }
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -2344,7 +2358,7 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
             }
         })?;
         clear_auth_refusal(key);
-        note_login_key_persona(key, bound.persona_id);
+        note_login_key_persona(key, bound.persona_id, &bound.display_name);
         if let Some(sid) = sid {
             crate::session::blaze_sessions::set_client_identity(
                 sid,
