@@ -290,6 +290,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
         .map(|(b, q)| (b, Some(q)))
         .unwrap_or((path, None));
     let base = base.trim_start_matches('/');
+    if base == "cnc/auth-refusal" && is_get {
+        return Some(handle_cnc_auth_refusal());
+    }
     if base == "cnc/online-count" && is_get {
         let _ = body;
         return Some(handle_cnc_online_count());
@@ -2130,18 +2133,145 @@ fn refuse_if_nexus_banned() -> BlazeResult<()> {
     }
 }
 
+/// Dev toggle: `RFR_DEBUG_AUTH=unauth|banned|banned:<N>m|h|d` refuses every game-client login (any datasource).
+fn debug_auth_override() -> Option<(crate::common::error::BlazeError, Option<i64>)> {
+    use crate::common::error::BlazeError;
+    let raw = std::env::var("RFR_DEBUG_AUTH").ok()?;
+    let mode = raw.trim().to_ascii_lowercase();
+    let refusal = if mode == "unauth" {
+        (BlazeError::AuthorizationRequired, None)
+    } else if mode == "banned" {
+        (BlazeError::AccountBanned, None)
+    } else if let Some(spec) = mode.strip_prefix("banned:") {
+        let (num, unit) = spec.split_at(spec.len().saturating_sub(1));
+        let n: i64 = num.parse().ok()?;
+        let secs = match unit {
+            "m" => n * 60,
+            "h" => n * 3600,
+            "d" => n * 86400,
+            _ => return None,
+        };
+        (BlazeError::AccountBanned, Some(chrono::Utc::now().timestamp() + secs))
+    } else {
+        return None;
+    };
+    crate::nexus::log_nexus_to_blaze(format!("RFR_DEBUG_AUTH={} -- refusing game-client login", raw.trim()));
+    Some(refusal)
+}
+
+struct AuthRefusal {
+    banned: bool,
+    until_unix: Option<i64>,
+    at: std::time::Instant,
+}
+
+/// Last refused Blaze login per client IP, read back by the shell via `/cnc/auth-refusal`.
+static AUTH_REFUSALS: std::sync::LazyLock<std::sync::Mutex<HashMap<std::net::IpAddr, AuthRefusal>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+const AUTH_REFUSAL_TTL: std::time::Duration = std::time::Duration::from_secs(600);
+
+thread_local! {
+    static HTTP_PEER_IP: std::cell::Cell<Option<std::net::IpAddr>> = const { std::cell::Cell::new(None) };
+}
+
+/// Web server sets the requesting peer before dispatching a synchronous handler.
+pub fn set_http_peer_ip(ip: Option<std::net::IpAddr>) {
+    HTTP_PEER_IP.with(|c| c.set(ip));
+}
+
+fn blaze_session_peer_ip(sid: Option<u64>) -> Option<std::net::IpAddr> {
+    sid.and_then(crate::session::blaze_sessions::get_session)
+        .and_then(|s| s.peer.parse::<std::net::SocketAddr>().ok())
+        .map(|a| a.ip())
+}
+
+fn note_auth_refusal(sid: Option<u64>, banned: bool, until_unix: Option<i64>) {
+    if let (Some(ip), Ok(mut map)) = (blaze_session_peer_ip(sid), AUTH_REFUSALS.lock()) {
+        map.insert(ip, AuthRefusal { banned, until_unix, at: std::time::Instant::now() });
+    }
+}
+
+fn clear_auth_refusal(sid: Option<u64>) {
+    if let (Some(ip), Ok(mut map)) = (blaze_session_peer_ip(sid), AUTH_REFUSALS.lock()) {
+        map.remove(&ip);
+    }
+}
+
+fn handle_cnc_auth_refusal() -> HttpResponse {
+    let ip = HTTP_PEER_IP.with(|c| c.get());
+    let body = match (ip, AUTH_REFUSALS.lock()) {
+        (Some(ip), Ok(map)) => match map.get(&ip).filter(|r| r.at.elapsed() < AUTH_REFUSAL_TTL) {
+            Some(r) if r.banned => serde_json::json!({
+                "refused": true,
+                "reason": "banned",
+                "permanent": r.until_unix.is_none(),
+                "remainingSecs": r.until_unix.map(|u| (u - chrono::Utc::now().timestamp()).max(0)),
+            }),
+            Some(_) => serde_json::json!({ "refused": true, "reason": "unauthorized" }),
+            None => serde_json::json!({ "refused": false }),
+        },
+        _ => serde_json::json!({ "refused": false }),
+    };
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
 pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
     refuse_if_nexus_banned()?;
 
-    let has_tokn = TdfEncoder::find_string_field(payload, "TOKN")
-        .map(|t| !t.trim().is_empty())
-        .unwrap_or(false);
+    let tokn = TdfEncoder::find_string_field(payload, "TOKN")
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
     let mail = TdfEncoder::find_string_field(payload, "MAIL").filter(|m| !m.is_empty());
-    if has_tokn && mail.is_none() {
+    let sid = crate::session::session_module::current_blaze_session_id();
+    // preAuth CLNT: RtsBlazeClient = game client, *Server* = dedicated.
+    let is_game_client = sid
+        .and_then(crate::session::blaze_sessions::get_session)
+        .and_then(|s| s.clnt)
+        .map(|clnt| !dedicated_pool::clnt_qualifies_for_pool(&clnt))
+        .unwrap_or(false);
+    if is_game_client {
+        if let Some((refusal, until_unix)) = debug_auth_override() {
+            let banned = matches!(refusal, crate::common::error::BlazeError::AccountBanned);
+            note_auth_refusal(sid, banned, until_unix);
+            return Err(refusal);
+        }
+    }
+    if tokn.is_some() && mail.is_none() && !is_game_client {
         // Token login with no email = pooled dedicated. Allocate CNCO identity now.
-        if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
+        if let Some(sid) = sid {
             let (name, persona) = dedicated_pool::allocate_dedicated_identity(sid);
             crate::session::blaze_sessions::set_dedicated_identity(sid, &name, persona);
+        }
+    } else if crate::nexus::identity::client_join_requires_login() {
+        use crate::common::error::BlazeError;
+        use crate::nexus::identity::ClientLoginRefusal;
+        let Some(token) = tokn.as_deref() else {
+            crate::nexus::log_nexus_to_blaze("refusing login: no Nexus token in TOKN (sign in via the launcher)");
+            note_auth_refusal(sid, false, None);
+            return Err(BlazeError::AuthorizationRequired);
+        };
+        let bound = crate::nexus::identity::bind_presented_client(token).map_err(|refusal| {
+            crate::nexus::log_nexus_to_blaze(format!("refusing login: {refusal:?}"));
+            match refusal {
+                ClientLoginRefusal::Banned { until_unix } => {
+                    note_auth_refusal(sid, true, until_unix);
+                    BlazeError::AccountBanned
+                }
+                ClientLoginRefusal::Unauthorized(_) => {
+                    note_auth_refusal(sid, false, None);
+                    BlazeError::AuthorizationRequired
+                }
+            }
+        })?;
+        clear_auth_refusal(sid);
+        if let Some(sid) = sid {
+            crate::session::blaze_sessions::set_client_identity(
+                sid,
+                &bound.display_name,
+                bound.persona_id as u64,
+                bound.user_id as u64,
+                &bound.email,
+            );
         }
     } else {
         bind_json_test_client_identity();

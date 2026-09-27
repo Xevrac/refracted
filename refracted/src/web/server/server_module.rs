@@ -342,7 +342,10 @@ impl WebProtocolServer {
 
         // Handle the request
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Routing request to handler");
-        let response = http_handler.handle_request(&host, &path, &method, &body)?;
+        crate::client::cnc::set_http_peer_ip(Some(addr.ip()));
+        let response = http_handler.handle_request(&host, &path, &method, &body);
+        crate::client::cnc::set_http_peer_ip(None);
+        let response = response?;
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Handler returned response (status: {}, body size: {})", response.status_code, response.body.len());
 
         // Send HTTP response
@@ -415,7 +418,10 @@ impl WebProtocolServer {
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Parsed request - Method: {}, Path: {}, Host: {}, Body size: {}", method, path, host, body.len());
         
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Routing HTTP/1.1 over TLS request to handler");
-        let response = match http_handler.handle_request(&host, &path, &method, &body) {
+        crate::client::cnc::set_http_peer_ip(Some(addr.ip()));
+        let routed = http_handler.handle_request(&host, &path, &method, &body);
+        crate::client::cnc::set_http_peer_ip(None);
+        let response = match routed {
             Ok(r) => r,
             Err(e) => {
                 error!("[Web-HTTP-1.1-TLS] Handler error for {} {}: {}", method, path, e);

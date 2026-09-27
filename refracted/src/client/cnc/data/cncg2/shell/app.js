@@ -249,6 +249,25 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
     $rootScope.cancelConfirmQuit = function () {
         $rootScope.confirmQuitOpen = false;
     };
+    // Refused Blaze login (cnc-pre-landing -> /cnc/auth-refusal): blocking modal, Quit only.
+    $rootScope.authRefusal = null;
+    window.CncShowAuthRefusal = function (info) {
+        var show = function () {
+            $rootScope.authRefusal = info;
+        };
+        if ($rootScope.$$phase) {
+            show();
+        } else {
+            $rootScope.$apply(show);
+        }
+    };
+    $rootScope.authRefusalQuit = function () {
+        if ($rootScope.authRefusal) {
+            $rootScope.authRefusal.quitting = true;
+        }
+        $rootScope.confirmQuitYes();
+    };
+
     $rootScope.confirmQuitYes = function () {
         $rootScope.confirmQuitOpen = false;
         $rootScope.quittingOpen = true;

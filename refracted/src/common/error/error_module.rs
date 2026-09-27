@@ -145,6 +145,7 @@ pub const ERR_NOT_SUPPORTED: u32 = 19;
 
 // Authentication Component Error Codes (used when Auth replies fail)
 pub const AUTH_ERR_BANNED: u32 = 43;
+pub const AUTH_ERR_INVALID_TOKEN: u32 = 13;
 
 // Authorization Error Codes
 pub const ERR_AUTHORIZATION_REQUIRED: u32 = 1074266112;

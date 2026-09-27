@@ -969,6 +969,10 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
     z-index: 5000;
     background: rgba(0, 0, 0, 0.58);
 }
+.cc-shell-auth-modal {
+    z-index: 20001;
+    pointer-events: all;
+}
 .cc-shell-quit-modal__box {
     position: absolute;
     top: 50%;
