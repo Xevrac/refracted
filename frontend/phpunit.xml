@@ -34,5 +34,11 @@
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="REPORTS_INGEST_DOMAIN" value="sentry.refracted.au"/>
         <env name="REPORTS_INGEST_KEY" value="testkey"/>
+        <env name="NEXUS_DOMAIN" value=""/>
+        <env name="NEXUS_DB_CONNECTION" value="nexus"/>
+        <env name="NEXUS_DB_DRIVER" value="sqlite"/>
+        <env name="NEXUS_DB_DATABASE" value=":memory:"/>
+        <env name="CDN_DOMAIN" value=""/>
+        <env name="CDN_REQUIRE_LAUNCHER_HEADERS" value="true"/>
     </php>
 </phpunit>

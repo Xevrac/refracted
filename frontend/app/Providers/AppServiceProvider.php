@@ -27,5 +27,15 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('report-ingest', fn (Request $request) => Limit::perMinute(
             (int) config('reports.rate_limit_per_minute')
         )->by($request->ip()));
+
+        RateLimiter::for('nexus-device-start', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+        RateLimiter::for('nexus-device-poll', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
+        RateLimiter::for('nexus-device-revoke', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+        RateLimiter::for('nexus-device-approve', fn (Request $request) => Limit::perMinute(10)->by(
+            optional($request->user())->id ?: $request->ip()
+        ));
+        RateLimiter::for('cdn-public', fn (Request $request) => Limit::perMinute(
+            (int) config('cdn.rate_limit_per_minute', 120)
+        )->by($request->ip()));
     }
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>Sign in — Sentry</title>
+    <title>Login</title>
     <link rel="icon" href="{{ asset('images/brand/refracted-icon.png') }}" type="image/png">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=sora:400,500,600|space-grotesk:500,600,700&display=swap" rel="stylesheet" />
@@ -26,13 +26,9 @@
                     class="h-9 w-9 shrink-0 rounded-lg object-contain"
                 >
                 <div class="flex h-9 items-center pt-[0.1em]">
-                    <p class="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Sentry</p>
+                    <p class="font-display text-xl font-semibold leading-none tracking-[-0.02em]">Login</p>
                 </div>
             </div>
-
-            <p class="mt-5 text-sm leading-relaxed text-grit-mist">
-                Sign into Dashboard
-            </p>
 
             @if ($errors->any())
                 <div class="mt-5 border border-red-500/30 bg-red-500/10 px-3.5 py-3 text-sm text-red-200">

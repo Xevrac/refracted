@@ -113,9 +113,9 @@
 
             <div class="mt-8 space-y-8 text-sm leading-relaxed text-grit-mist sm:text-base">
                 <p>
-                    Welcome to Refracted (“we,” “our,” or “us”). By accessing or using Refracted’s websites, software,
-                    or related services (collectively, the “Service”), you agree to these Terms of Service (“Terms”).
-                    If you do not agree, do not use the Service.
+                    Welcome to Refracted (“we,” “our,” or “us”). By accessing or using Refracted’s websites
+                    (including nexus.refracted.au), software, or related services (collectively, the “Service”),
+                    you agree to these Terms of Service (“Terms”). If you do not agree, do not use the Service.
                 </p>
 
                 <div>
@@ -126,11 +126,23 @@
                         <li><strong class="text-grit-text">No abuse of live services:</strong> Do not use Refracted to attack, disrupt, or gain unauthorized access to publisher or third-party live infrastructure.</li>
                         <li><strong class="text-grit-text">No cheating support:</strong> Do not use Refracted to develop or distribute cheats, bots, or tools intended to unfairly disrupt others in online play.</li>
                         <li><strong class="text-grit-text">Respect the community:</strong> No harassment, hate speech, or harmful behavior toward other users or the project team.</li>
+                        <li><strong class="text-grit-text">Account integrity:</strong> Do not evade bans, misuse others’ accounts, or abuse sign-in / launcher approval flows.</li>
                     </ul>
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">2. Intellectual property</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">2. Accounts &amp; Nexus</h3>
+                    <p class="mt-3">
+                        <strong class="text-grit-text">Nexus</strong> is Refracted’s sign-in and in-game identity service.
+                        Sign-in may use Discord (subject to Discord’s terms). We may limit or revoke access at any time,
+                        including for playtesting, security, or Terms violations. Display names must not impersonate staff or harass others.
+                        Approving a launcher on your account is your responsibility; we may end sessions when needed.
+                        Nexus is not an EA or Origin account.
+                    </p>
+                </div>
+
+                <div>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">3. Intellectual property</h3>
                     <p class="mt-3">
                         Refracted’s independently authored software, documentation, and branding are owned by the project and its contributors,
                         subject to any open-source licenses published with the source.
@@ -149,7 +161,7 @@
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">3. Limitation of liability</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">4. Limitation of liability</h3>
                     <p class="mt-3">
                         Refracted is provided “as is” without warranties of any kind, express or implied.
                         We are not responsible for service interruptions, data loss, damages, or legal consequences arising from your use of the Service.
@@ -158,7 +170,7 @@
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">4. Donations &amp; support</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">5. Donations &amp; support</h3>
                     <p class="mt-3">
                         Optional donations may help cover infrastructure costs. They are never required and do not purchase advantages,
                         exclusive access, or ownership interest. Third-party payment processors handle payment details under their own terms.
@@ -167,7 +179,7 @@
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">5. Changes to the Terms</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">6. Changes to the Terms</h3>
                     <p class="mt-3">
                         We may update these Terms from time to time.
                         Continued use of Refracted after updates constitutes acceptance of the revised Terms.
@@ -175,7 +187,7 @@
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">6. Contact</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">7. Contact</h3>
                     <p class="mt-3">
                         Questions:
                         Discord
@@ -197,14 +209,16 @@
 
             <div class="mt-8 space-y-8 text-sm leading-relaxed text-grit-mist sm:text-base">
                 <p>
-                    This Privacy Policy explains what data we may collect when you use the Refracted website and related online services.
+                    This Privacy Policy explains what data we may collect when you use the Refracted website, Nexus, and related services.
                 </p>
 
                 <div>
                     <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">1. Data we may collect</h3>
                     <ul class="mt-4 list-disc space-y-2 ps-5">
-                        <li><strong class="text-grit-text">Account information:</strong> if you sign in to admin tools, Discord identity details needed for authentication.</li>
-                        <li><strong class="text-grit-text">Technical data:</strong> IP address, browser metadata, and logs needed for security and reliability.</li>
+                        <li><strong class="text-grit-text">Account information:</strong> if you sign in with Discord, identity details needed for authentication (such as Discord id, username, and email if provided).</li>
+                        <li><strong class="text-grit-text">Nexus profile:</strong> account and persona details you use on the Service (such as display name).</li>
+                        <li><strong class="text-grit-text">Session data:</strong> sign-in and launcher session records needed to keep you authenticated and to revoke access when appropriate.</li>
+                        <li><strong class="text-grit-text">Technical data:</strong> IP address, coarse country estimate when available from our network edge, browser or client metadata, and logs needed for security and reliability.</li>
                         <li><strong class="text-grit-text">Support communications:</strong> messages you send via Discord or Telegram.</li>
                         <li><strong class="text-grit-text">Donation-related data:</strong> limited confirmation details from payment providers if you choose to donate.</li>
                     </ul>
@@ -213,8 +227,8 @@
                 <div>
                     <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">2. How we use data</h3>
                     <ul class="mt-4 list-disc space-y-2 ps-5">
-                        <li>Operate and improve the website and related services.</li>
-                        <li>Authenticate administrators and prevent misuse.</li>
+                        <li>Operate and improve the website, Nexus, and related services.</li>
+                        <li>Authenticate users, manage sessions, and prevent misuse.</li>
                         <li>Provide support and analyze aggregated usage to guide development.</li>
                     </ul>
                 </div>
@@ -222,12 +236,21 @@
                 <div>
                     <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">3. Sharing</h3>
                     <p class="mt-3">
-                        We do not sell personal data. Data may be shared only as required by law or with processors needed to host the Service.
+                        We do not sell personal data. Data may be shared only as required by law or with processors needed to host the Service
+                        (including Discord when you choose Discord sign-in).
                     </p>
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">4. Retention &amp; rights</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">4. Cookies &amp; local storage</h3>
+                    <p class="mt-3">
+                        We may use cookies or similar storage to keep you signed in.
+                        Launchers may store session credentials on your device; you can clear them or contact us to revoke access.
+                    </p>
+                </div>
+
+                <div>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">5. Retention &amp; rights</h3>
                     <p class="mt-3">
                         We retain data only as long as needed to operate the Service or meet legal obligations.
                         You may request access, correction, or deletion by contacting
@@ -239,7 +262,7 @@
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">5. Children’s privacy</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">6. Children’s privacy</h3>
                     <p class="mt-3">
                         Refracted’s website is not intended for users under 13.
                         We do not knowingly collect data from children under 13.
@@ -247,7 +270,7 @@
                 </div>
 
                 <div>
-                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">6. Contact</h3>
+                    <h3 class="font-display text-lg font-semibold tracking-[-0.01em] text-grit-text">7. Contact</h3>
                     <p class="mt-3">
                         Privacy questions:
                         Discord

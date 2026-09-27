@@ -2100,7 +2100,39 @@ pub fn cnc_effective_identity() -> (u64, String) {
     (persona, name)
 }
 
+fn refuse_if_nexus_banned() -> BlazeResult<()> {
+    use crate::common::error::BlazeError;
+    use crate::nexus::identity::{client_join_requires_login, current_bound_session, current_identity_store};
+
+    if !client_join_requires_login() {
+        return Ok(());
+    }
+    let Some(bound) = current_bound_session() else {
+        return Ok(());
+    };
+    let Some(store) = current_identity_store() else {
+        return Ok(());
+    };
+    match store.is_user_banned(bound.user_id) {
+        Ok(true) => {
+            crate::nexus::log_nexus_to_blaze(format!(
+                "refusing auth: nexus user_id={} is banned",
+                bound.user_id
+            ));
+            crate::nexus::identity::clear_bound_session();
+            Err(BlazeError::AccountBanned)
+        }
+        Ok(false) => Ok(()),
+        Err(e) => {
+            crate::nexus::log_nexus_to_blaze(format!("ban check failed: {e}"));
+            Ok(())
+        }
+    }
+}
+
 pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
+    refuse_if_nexus_banned()?;
+
     let has_tokn = TdfEncoder::find_string_field(payload, "TOKN")
         .map(|t| !t.trim().is_empty())
         .unwrap_or(false);
@@ -2150,6 +2182,8 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
 
 pub fn handle_auth_login_persona(payload: &[u8]) -> BlazeResult<Bytes> {
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    refuse_if_nexus_banned()?;
 
     // Don't let a pooled dedicated server's loginPersona overwrite the shared client profile.
     let is_dedicated = crate::session::session_module::current_blaze_session_id()

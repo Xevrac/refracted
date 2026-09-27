@@ -13,7 +13,7 @@ class EnsureUserIsStaff
         $user = $request->user();
 
         if (! $user || ! $user->isStaff()) {
-            abort(403, 'Staff access required.');
+            abort(403, 'Forbidden');
         }
 
         return $next($request);

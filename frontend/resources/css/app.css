@@ -178,6 +178,36 @@
         display: none;
     }
 
+    .ref-spoiler--plate {
+        min-width: 0;
+        gap: 0.35rem;
+        padding: 0.2rem 0.45rem;
+        border-style: dashed;
+        border-radius: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.6875rem;
+        line-height: 1.2;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+    .ref-spoiler--plate .ref-spoiler__label {
+        flex-shrink: 0;
+        font-family: Sora, ui-sans-serif, system-ui, sans-serif;
+        font-size: 0.625rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: rgba(154, 163, 173, 0.8);
+    }
+
+    .ref-spoiler--plate.is-revealed {
+        cursor: pointer;
+        user-select: text;
+        border-color: rgba(42, 48, 56, 0.95);
+        background: rgba(10, 11, 13, 0.55);
+        padding: 0.2rem 0.45rem;
+    }
+
     .ref-issue-id {
         position: relative;
     }

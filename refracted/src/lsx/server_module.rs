@@ -310,6 +310,7 @@ impl LsxServer {
                                 .unwrap_or_else(|| "".to_string());
                             
                             // Store user session for JWT generation
+                            if crate::nexus::identity::json_personas_allowed() {
                             use crate::session::{set_user_session, UserSession};
                             set_user_session(UserSession {
                                 jwt_token: None,
@@ -343,7 +344,9 @@ impl LsxServer {
                             }
                             
                             crate::console_println!("\x1b[38;2;255;215;0m[LSX]\x1b[0m User session stored for JWT generation");
-                        } else if let Some(extracted_username) = Self::extract_username_from_profile(&response) {
+                            } else {
+                                crate::nexus::identity::ensure_bound_from_handoff();
+                            }                        } else if let Some(extracted_username) = Self::extract_username_from_profile(&response) {
                             username = Some(extracted_username.clone());
                             crate::console_println!("\x1b[38;2;255;215;0m[LSX]\x1b[0m User '{}' authenticated (using defaults)", extracted_username);
                         }
@@ -1025,13 +1028,55 @@ impl LsxServer {
     }
 
     fn get_profile_response(id: &str) -> String {
-        // Get current user profile for dynamic values
+        use crate::nexus::identity::{
+            client_join_requires_login, current_bound_session, ensure_bound_from_handoff,
+        };
+
+        // Phase 4: pick up launcher DPAPI handoff before answering (late sign-in OK).
+        let _ = ensure_bound_from_handoff();
+
+        if client_join_requires_login() {
+            let Some(bound) = current_bound_session() else {
+                crate::nexus::log_nexus_to_blaze(
+                    "GetProfile blocked: mysql mode with no bound Nexus session",
+                );
+                return format!(
+                    r#"<LSX>
+  <Response id="{id}" sender="EbisuSDK">
+    <Error errorCode="1" errorName="NO_PROFILE" />
+  </Response>
+</LSX>"#
+                );
+            };
+            if let Some(store) = crate::nexus::identity::current_identity_store() {
+                if store.is_user_banned(bound.user_id).unwrap_or(false) {
+                    crate::nexus::identity::clear_bound_session();
+                    crate::nexus::log_nexus_to_blaze(format!(
+                        "GetProfile blocked: nexus user_id={} banned",
+                        bound.user_id
+                    ));
+                    return format!(
+                        r#"<LSX>
+  <Response id="{id}" sender="EbisuSDK">
+    <Error errorCode="43" errorName="ACCOUNT_BANNED" />
+  </Response>
+</LSX>"#
+                    );
+                }
+            }
+            return format!(
+                r#"<LSX>
+  <Response id="{id}" sender="EbisuSDK">
+    <GetProfileResponse Country="US" GeoCountry="US" PersonaId="{}" IsTrialSubscriber="false" SubscriberLevel="2" Persona="{}" UserId="{}" CommerceCountry="US" CommerceCurrency="USD" AvatarId="" IsSubscriber="true" UserIndex="0" IsUnderAge="false" IsSteamSubscriber="false"/>
+  </Response>
+</LSX>"#,
+                bound.persona_id, bound.display_name, bound.user_id
+            );
+        }
+
         use crate::common::user_profile::get_current_profile;
         let profile = get_current_profile();
-        
-        // PersonaId (PID): Large numeric ID for the persona
-        // Persona (DSNM): Display name string (not a number!)
-        // UserId (UID): Large numeric user ID
+
         format!(
             r#"<LSX>
   <Response id="{}" sender="EbisuSDK">

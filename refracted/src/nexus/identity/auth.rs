@@ -24,7 +24,11 @@ pub fn hash_secret(salt_hex: &str, secret: &str) -> String {
 }
 
 pub fn hash_token(token: &str) -> String {
-    sha256_hex(token)
+    // Optional pepper shared with Laravel (`NEXUS_TOKEN_PEPPER`). Empty = plain sha256.
+    match std::env::var("NEXUS_TOKEN_PEPPER") {
+        Ok(pepper) if !pepper.is_empty() => sha256_hex(&format!("{pepper}:{token}")),
+        _ => sha256_hex(token),
+    }
 }
 
 pub fn new_salt_hex() -> String {
@@ -189,6 +193,9 @@ impl IdentityStore {
         };
         if bound.expired {
             return Err("session expired".into());
+        }
+        if self.is_user_banned(bound.user_id).unwrap_or(false) {
+            return Err("account banned".into());
         }
         Ok(bound)
     }

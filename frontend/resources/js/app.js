@@ -117,20 +117,57 @@ const initReveals = () => {
 };
 
 const initSpoilers = () => {
+    const tippyFn = typeof window.tippy === 'function' ? window.tippy : null;
+
     document.querySelectorAll('[data-ref-spoiler]').forEach((node) => {
         if (node.dataset.spoilerBound === '1') {
             return;
         }
 
         node.dataset.spoilerBound = '1';
-        node.addEventListener('click', () => {
-            if (node.classList.contains('is-revealed')) {
+        const canToggle = node.hasAttribute('data-ref-spoiler-toggle');
+        let tip = null;
+
+        if (tippyFn && node.hasAttribute('data-tippy-content')) {
+            tip = node._tippy || tippyFn(node, {
+                theme: 'refracted',
+                placement: 'top',
+                animation: 'fade',
+                arrow: true,
+                content: node.getAttribute('data-tippy-content') || 'Click to reveal',
+            });
+        }
+
+        const setTip = (content) => {
+            if (! tip) {
                 return;
             }
 
+            tip.setContent(content);
+        };
+
+        const reveal = () => {
             node.classList.add('is-revealed');
             node.setAttribute('aria-expanded', 'true');
-            node.removeAttribute('tabindex');
+            setTip('Click to Hide');
+        };
+
+        const hide = () => {
+            node.classList.remove('is-revealed');
+            node.setAttribute('aria-expanded', 'false');
+            setTip(node.getAttribute('data-tippy-content') || 'Click to reveal');
+        };
+
+        node.addEventListener('click', () => {
+            if (node.classList.contains('is-revealed')) {
+                if (canToggle) {
+                    hide();
+                }
+
+                return;
+            }
+
+            reveal();
         });
 
         node.addEventListener('keydown', (event) => {

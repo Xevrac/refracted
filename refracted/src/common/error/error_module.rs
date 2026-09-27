@@ -102,6 +102,9 @@ pub enum BlazeError {
     #[error("The entity provided is recognized, but searching by name is not supported")]
     NotSupported,
 
+    #[error("The account is banned")]
+    AccountBanned,
+
     // Authorization Errors
     #[error("Authorization required")]
     AuthorizationRequired,
@@ -139,6 +142,9 @@ pub const GEOIP_ERR_USER_OPTOUT: u32 = 23;
 pub const ERR_ENTITY_TYPE_NOT_FOUND: u32 = 17;
 pub const ERR_ENTITY_NOT_FOUND: u32 = 18;
 pub const ERR_NOT_SUPPORTED: u32 = 19;
+
+// Authentication Component Error Codes (used when Auth replies fail)
+pub const AUTH_ERR_BANNED: u32 = 43;
 
 // Authorization Error Codes
 pub const ERR_AUTHORIZATION_REQUIRED: u32 = 1074266112;
@@ -179,6 +185,8 @@ impl BlazeError {
             BlazeError::EntityTypeNotFound => ERR_ENTITY_TYPE_NOT_FOUND,
             BlazeError::EntityNotFound => ERR_ENTITY_NOT_FOUND,
             BlazeError::NotSupported => ERR_NOT_SUPPORTED,
+
+            BlazeError::AccountBanned => AUTH_ERR_BANNED,
 
             // Authorization Errors
             BlazeError::AuthorizationRequired => ERR_AUTHORIZATION_REQUIRED,

@@ -13,7 +13,7 @@ class EnsureUserIsAdmin
         $user = $request->user();
 
         if (! $user || ! $user->isAdmin()) {
-            abort(403, 'Admin access required.');
+            abort(403, 'Forbidden');
         }
 
         return $next($request);
