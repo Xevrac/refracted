@@ -64,7 +64,7 @@ pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
                     blaze_sessions::load_persisted_sessions();
                     if identity::handoff_file_present() {
                         crate::nexus::log_nexus_to_blaze(
-                            "launcher handoff present but datasource=json — Nexus bind skipped",
+                            "Launcher session ignored: datasource=json",
                         );
                     }
                 }
@@ -88,7 +88,7 @@ fn boot_desktop_identity() -> Result<(), String> {
         match load_mysql_env_if_configured() {
             Ok(Some(env)) => {
                 crate::nexus::log_nexus_to_blaze(
-                    "desktop: launcher handoff + datasource=mysql — binding Nexus persona",
+                    "Launcher session found, using MySQL identity",
                 );
                 identity::disable_json_personas();
                 identity::init_mysql_identity(&env)?;
@@ -97,12 +97,12 @@ fn boot_desktop_identity() -> Result<(), String> {
             }
             Ok(None) => {
                 crate::nexus::log_nexus_to_blaze(
-                    "desktop: launcher handoff present but refracted.env is not datasource=mysql — using JSON personas",
+                    "Launcher session ignored: refracted.env is not datasource=mysql",
                 );
             }
             Err(e) => {
                 crate::nexus::log_nexus_to_blaze(format!(
-                    "desktop: launcher handoff present but mysql env failed ({e}) — using JSON personas"
+                    "Launcher session ignored: MySQL unavailable ({e})"
                 ));
             }
         }

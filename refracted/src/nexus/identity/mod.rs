@@ -66,7 +66,7 @@ pub fn init_mysql_identity(env: &AppEnv) -> Result<(), String> {
     let users = store.user_count()?;
     let personas = store.persona_count()?;
     crate::nexus::log_nexus_to_blaze(format!(
-        "identity store ready (mysql) env={} users={users} personas={personas} token_pepper={} (clients must authenticate)",
+        "Identity: MySQL ({}), {users} users, {personas} personas, token pepper {}",
         env.environment.as_str(),
         auth::pepper_fingerprint()
     ));
@@ -91,8 +91,8 @@ pub fn bind_mysql_client(
     let bound = store.bind_client(presented, claimed_user, claimed_persona)?;
     *BOUND_SESSION.lock() = Some(bound.clone());
     crate::nexus::log_nexus_to_blaze(format!(
-        "bound mysql client user_id={} persona_id={} display={}",
-        bound.user_id, bound.persona_id, bound.display_name
+        "Signed in: {} (user {}, persona {})",
+        bound.display_name, bound.user_id, bound.persona_id
     ));
     Ok(bound)
 }
@@ -135,8 +135,8 @@ pub fn bind_presented_client(presented: &str) -> Result<BoundSession, ClientLogi
     })?;
     *BOUND_SESSION.lock() = Some(bound.clone());
     crate::nexus::log_nexus_to_blaze(format!(
-        "bound game client from TOKN user_id={} persona_id={} display={}",
-        bound.user_id, bound.persona_id, bound.display_name
+        "Signed in: {} (user {}, persona {})",
+        bound.display_name, bound.user_id, bound.persona_id
     ));
     Ok(bound)
 }
@@ -155,17 +155,12 @@ pub fn log_headless_identity_policy(env: &AppEnv) {
     match env.datasource {
         Datasource::Json => {
             crate::nexus::log_nexus_to_blaze(format!(
-                "headless datasource=json: localized testing — JSON/manual personas from {} (env={})",
+                "Identity: local JSON personas from {} ({})",
                 crate::common::paths::settings_json_path().display(),
                 env.environment.as_str()
             ));
         }
-        Datasource::Mysql => {
-            crate::nexus::log_nexus_to_blaze(format!(
-                "headless datasource=mysql: no JSON/manual personas; game clients must authenticate (env={})",
-                env.environment.as_str()
-            ));
-        }
+        Datasource::Mysql => {}
     }
 }
 

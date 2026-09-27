@@ -306,7 +306,8 @@ impl IdentityStore {
     ) -> Result<Option<BoundSession>, String> {
         let live = if include_revoked { "" } else { " AND s.revoked_at IS NULL" };
         let sql = format!(
-            "SELECT s.user_id, s.persona_id, u.email, p.display_name, s.expires_at, s.revoked_at
+            "SELECT s.user_id, s.persona_id, COALESCE(u.email, ''), p.display_name,
+                    CAST(s.expires_at AS CHAR), CAST(s.revoked_at AS CHAR)
              FROM auth_sessions s
              JOIN users u ON u.id = s.user_id
              JOIN personas p ON p.id = s.persona_id
