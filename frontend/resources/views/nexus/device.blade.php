@@ -8,7 +8,22 @@
     <link rel="icon" href="{{ asset('images/brand/refracted-icon.png') }}" type="image/png">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=sora:400,500,600|space-grotesk:500,600,700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <style>
+        .tippy-box[data-theme~='refracted-ok'] {
+            background: #0c1410;
+            color: rgba(134, 239, 172, 0.85);
+            border: 1px solid #3dce64;
+            font-family: Sora, ui-sans-serif, system-ui, sans-serif;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .tippy-box[data-theme~='refracted-ok'][data-placement^='top'] > .tippy-arrow::before {
+            border-top-color: #3dce64;
+        }
+    </style>
 </head>
 <body class="ref-canvas min-h-[100svh] font-sans text-grit-text antialiased">
     <div
@@ -63,14 +78,17 @@
                         Only continue if you started sign-in from your launcher.
                     </p>
 
-                    <div
-                        class="mx-auto mt-8 mb-8 w-full max-w-xs text-center"
+                    <button
+                        type="button"
+                        data-copy-code="{{ $userCode }}"
+                        aria-label="Copy code"
+                        class="mx-auto mt-8 mb-8 block w-full max-w-xs cursor-pointer text-center"
                         style="border: 1px solid #2a3038; background: #0a0b0d; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04); padding: 1rem 1.25rem;"
                     >
-                        <p class="font-display text-2xl font-semibold tracking-[0.18em] tabular-nums text-grit-text sm:text-3xl">
+                        <span class="block font-display text-2xl font-semibold tracking-[0.18em] tabular-nums text-grit-text sm:text-3xl">
                             {{ $userCode }}
-                        </p>
-                    </div>
+                        </span>
+                    </button>
 
                     <form method="POST" action="{{ route('nexus.device.approve') }}" class="space-y-4">
                         @csrf
@@ -89,7 +107,7 @@
                             >
                         </div>
                         <button type="submit" class="inline-flex w-full items-center justify-center bg-signal px-5 py-3 font-display text-sm font-semibold text-white hover:bg-signal-soft">
-                            Approve Refracted Launcher
+                            Approve Sign-In
                         </button>
                     </form>
                 @endif
@@ -100,5 +118,50 @@
             </p>
         </div>
     </main>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <script>
+        (function () {
+            var node = document.querySelector('[data-copy-code]');
+            if (! node) {
+                return;
+            }
+
+            var tip = typeof tippy === 'function'
+                ? tippy(node, { content: 'Copied to clipboard', theme: 'refracted-ok', placement: 'top', arrow: true, trigger: 'manual' })
+                : null;
+            var hideTimer = null;
+
+            function fallbackCopy(text) {
+                var area = document.createElement('textarea');
+                area.value = text;
+                area.setAttribute('readonly', '');
+                area.style.position = 'fixed';
+                area.style.opacity = '0';
+                document.body.appendChild(area);
+                area.select();
+                try { document.execCommand('copy'); } finally { document.body.removeChild(area); }
+            }
+
+            node.addEventListener('click', function () {
+                var code = node.getAttribute('data-copy-code') || '';
+                var done = function () {
+                    if (! tip) {
+                        return;
+                    }
+                    tip.show();
+                    clearTimeout(hideTimer);
+                    hideTimer = setTimeout(function () { tip.hide(); }, 1500);
+                };
+
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(code).then(done, function () { fallbackCopy(code); done(); });
+                } else {
+                    fallbackCopy(code);
+                    done();
+                }
+            });
+        })();
+    </script>
 </body>
 </html>

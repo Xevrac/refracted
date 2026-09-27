@@ -18,6 +18,7 @@ class NexusAuthSession extends Model
         'jwt_id',
         'expires_at',
         'revoked_at',
+        'revoked_reason',
         'created_at',
         'last_seen_at',
         'client_ip',
@@ -64,5 +65,15 @@ class NexusAuthSession extends Model
         }
 
         return $this->expires_at === null || $this->expires_at->isFuture();
+    }
+
+    /** active | revoked | expired */
+    public function state(): string
+    {
+        if ($this->revoked_at !== null) {
+            return 'revoked';
+        }
+
+        return $this->expires_at !== null && $this->expires_at->isPast() ? 'expired' : 'active';
     }
 }

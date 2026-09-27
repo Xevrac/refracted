@@ -189,6 +189,10 @@
                         href="{{ route('nexus.admin.gatekeeper') }}"
                         class="{{ ($active ?? '') === 'gatekeeper' ? 'text-grit-text' : 'text-grit-mist hover:text-grit-text' }}"
                     >Gatekeeper</a>
+                    <a
+                        href="{{ route('nexus.admin.sessions') }}"
+                        class="{{ ($active ?? '') === 'sessions' ? 'text-grit-text' : 'text-grit-mist hover:text-grit-text' }}"
+                    >Sessions</a>
                 </nav>
 
                 <div class="ref-menu" data-ref-menu>

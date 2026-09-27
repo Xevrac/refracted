@@ -19,9 +19,6 @@ return [
     'games' => [
         'cnc' => 'Command & Conquer',
         'bf3' => 'Battlefield 3',
-        'bf4' => 'Battlefield 4',
-        'bfh' => 'Battlefield Hardline',
-        'mohw' => 'Medal of Honor Warfighter',
     ],
 
 ];

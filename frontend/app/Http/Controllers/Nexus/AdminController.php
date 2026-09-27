@@ -49,6 +49,73 @@ class AdminController extends Controller
         ]);
     }
 
+    public function sessions(Request $request, NexusAccessControl $access): View
+    {
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:64'],
+            'state' => ['nullable', 'in:all,active,revoked,expired'],
+            'game' => ['nullable', 'string', 'max:64'],
+        ]);
+        $query = trim((string) ($filters['q'] ?? ''));
+        $state = $filters['state'] ?? 'all';
+        $game = trim((string) ($filters['game'] ?? ''));
+        $now = now()->utc()->format('Y-m-d H:i:s');
+
+        $sessions = NexusAuthSession::query()
+            ->with(['user', 'persona'])
+            ->when($state === 'active', fn ($q) => $q->whereNull('revoked_at')->where('expires_at', '>', $now))
+            ->when($state === 'revoked', fn ($q) => $q->whereNotNull('revoked_at'))
+            ->when($state === 'expired', fn ($q) => $q->whereNull('revoked_at')->where('expires_at', '<=', $now))
+            ->when($game !== '', fn ($q) => $q->where('game_id', $game))
+            ->when($query !== '', function ($q) use ($query) {
+                $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $query).'%';
+                $q->where(function ($w) use ($query, $like) {
+                    if (ctype_digit($query)) {
+                        $w->orWhere('user_id', (int) $query)->orWhere('persona_id', (int) $query);
+                    }
+                    $w->orWhere('jwt_id', 'like', $query.'%')
+                        ->orWhere('client_ip', 'like', $like)
+                        ->orWhereHas('user', fn ($u) => $u->where('username', 'like', $like)->orWhere('discord_id', 'like', $like))
+                        ->orWhereHas('persona', fn ($p) => $p->where('display_name', 'like', $like));
+                });
+            })
+            ->orderByDesc('id')
+            ->paginate(50)
+            ->withQueryString();
+
+        $bannedUsers = collect($sessions->items())
+            ->pluck('user')
+            ->filter()
+            ->unique('id')
+            ->filter(fn (NexusUser $u) => $access->activeBanForNexusUser((int) $u->id) !== null
+                || (filled($u->discord_id) && $access->activeBanForDiscord((string) $u->discord_id) !== null))
+            ->pluck('id')
+            ->all();
+
+        return view('nexus.admin.sessions', [
+            'query' => $query,
+            'state' => $state,
+            'game' => $game,
+            'games' => config('nexus.games', []),
+            'sessions' => $sessions,
+            'bannedUsers' => $bannedUsers,
+            'stats' => $this->sessionStats(),
+        ]);
+    }
+
+    public function revokeSession(Request $request, int $session): RedirectResponse
+    {
+        $row = NexusAuthSession::query()->findOrFail($session);
+        if ($row->revoked_at === null) {
+            $row->forceFill([
+                'revoked_at' => now()->utc()->format('Y-m-d H:i:s'),
+                'revoked_reason' => 'admin',
+            ])->save();
+        }
+
+        return back()->with('status', 'Session revoked.');
+    }
+
     public function updateRegistrations(Request $request, NexusAccessControl $access): RedirectResponse
     {
         $validated = $request->validate([
@@ -253,29 +320,50 @@ class AdminController extends Controller
         ];
     }
 
-    /** @return Collection<int, array{user: NexusUser, last_seen: string}> */
+    /** @return array{active: int, issued_24h: int, revoked_24h: int, expired: int, avg_lifetime: string} */
+    protected function sessionStats(): array
+    {
+        $now = now()->utc()->format('Y-m-d H:i:s');
+        $dayAgo = now()->utc()->subDay()->format('Y-m-d H:i:s');
+        $avgSecs = (int) NexusAuthSession::query()
+            ->whereNotNull('revoked_at')
+            ->where('created_at', '>=', now()->utc()->subDays(30)->format('Y-m-d H:i:s'))
+            ->selectRaw('avg(timestampdiff(second, created_at, revoked_at)) as secs')
+            ->value('secs');
+
+        return [
+            'active' => NexusAuthSession::query()->whereNull('revoked_at')->where('expires_at', '>', $now)->count(),
+            'issued_24h' => NexusAuthSession::query()->where('created_at', '>=', $dayAgo)->count(),
+            'revoked_24h' => NexusAuthSession::query()->where('revoked_at', '>=', $dayAgo)->count(),
+            'expired' => NexusAuthSession::query()->whereNull('revoked_at')->where('expires_at', '<=', $now)->count(),
+            'avg_lifetime' => $avgSecs > 0 ? RelativeTime::duration($avgSecs) : '—',
+        ];
+    }
+
+    /**
+     * Most recently seen first (latest session activity, else account creation).
+     *
+     * @return Collection<int, array{user: NexusUser, last_seen: string}>
+     */
     protected function recentUsers(): Collection
     {
-        $users = NexusUser::query()->orderByDesc('created_at')->limit(100)->get();
-        if ($users->isEmpty()) {
-            return collect();
-        }
-
-        $lastSeenByUser = NexusAuthSession::query()
-            ->whereIn('user_id', $users->pluck('id'))
+        $lastSeen = NexusAuthSession::query()
             ->selectRaw('user_id, max(last_seen_at) as last_seen_at')
-            ->groupBy('user_id')
-            ->pluck('last_seen_at', 'user_id');
+            ->groupBy('user_id');
 
-        return $users->map(function (NexusUser $user) use ($lastSeenByUser) {
-            $raw = $lastSeenByUser->get($user->id);
-            $at = $raw !== null
-                ? Carbon::parse($raw)
-                : $user->created_at;
+        $users = NexusUser::query()
+            ->select('users.*', 'seen.last_seen_at as session_last_seen_at')
+            ->leftJoinSub($lastSeen, 'seen', 'seen.user_id', '=', 'users.id')
+            ->orderByRaw('coalesce(seen.last_seen_at, users.created_at) desc')
+            ->limit(100)
+            ->get();
+
+        return $users->map(function (NexusUser $user) {
+            $raw = $user->getAttribute('session_last_seen_at');
 
             return [
                 'user' => $user,
-                'last_seen' => RelativeTime::ago($at),
+                'last_seen' => RelativeTime::ago($raw !== null ? Carbon::parse($raw) : $user->created_at),
             ];
         });
     }

@@ -106,6 +106,9 @@ Route::group(NexusHosts::routeGroup(), function () {
     Route::post('device/revoke', [NexusDeviceCodeController::class, 'revoke'])
         ->middleware('throttle:nexus-device-revoke')
         ->name('nexus.device.revoke');
+    Route::post('device/session', [NexusDeviceCodeController::class, 'session'])
+        ->middleware('throttle:nexus-device-session')
+        ->name('nexus.device.session');
 
     Route::middleware('guest')->group(function () {
         Route::get('login', [NexusProfileController::class, 'login'])->name('nexus.login');
@@ -131,6 +134,9 @@ Route::group(NexusHosts::routeGroup(), function () {
             Route::get('/', [NexusAdminController::class, 'index'])->name('nexus.admin');
             Route::get('lookup', [NexusAdminController::class, 'lookup'])->name('nexus.admin.lookup');
             Route::get('gatekeeper', [NexusAdminController::class, 'gatekeeper'])->name('nexus.admin.gatekeeper');
+            Route::get('sessions', [NexusAdminController::class, 'sessions'])->name('nexus.admin.sessions');
+            Route::post('sessions/{session}/revoke', [NexusAdminController::class, 'revokeSession'])
+                ->name('nexus.admin.sessions.revoke');
             Route::post('registrations', [NexusAdminController::class, 'updateRegistrations'])
                 ->name('nexus.admin.registrations');
             Route::post('whitelist/mode', [NexusAdminController::class, 'updateWhitelistMode'])

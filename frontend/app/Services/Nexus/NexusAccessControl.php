@@ -174,11 +174,11 @@ class NexusAccessControl
         ])->save();
     }
 
-    public function revokeAllSessions(int $nexusUserId): void
+    public function revokeAllSessions(int $nexusUserId, string $reason = 'ban'): void
     {
         NexusAuthSession::query()
             ->where('user_id', $nexusUserId)
             ->whereNull('revoked_at')
-            ->update(['revoked_at' => now()->utc()->format('Y-m-d H:i:s')]);
+            ->update(['revoked_at' => now()->utc()->format('Y-m-d H:i:s'), 'revoked_reason' => $reason]);
     }
 }

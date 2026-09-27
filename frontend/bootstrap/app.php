@@ -50,9 +50,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 'device/start',
                 'device/poll',
                 'device/revoke',
+                'device/session',
                 'nexus/device/start',
                 'nexus/device/poll',
                 'nexus/device/revoke',
+                'nexus/device/session',
             ],
         ));
 

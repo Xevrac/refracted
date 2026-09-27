@@ -120,6 +120,43 @@ class NexusSessionIssuer
             ->update($update);
     }
 
+    /**
+     * Launcher session check. Bans are checked before revocation: banning revokes every session.
+     *
+     * @return array{status: string, permanent?: bool, until?: ?string, reason?: ?string}
+     */
+    public function statusByToken(string $token): array
+    {
+        $session = NexusAuthSession::query()->where('token_hash', $this->hashToken($token))->first();
+        if ($session === null) {
+            return ['status' => 'unknown'];
+        }
+
+        $user = NexusUser::query()->find($session->user_id);
+        $access = app(NexusAccessControl::class);
+        $ban = $access->activeBanForNexusUser((int) $session->user_id);
+        if ($ban === null && filled($user?->discord_id)) {
+            $ban = $access->activeBanForDiscord((string) $user->discord_id);
+        }
+        if ($ban !== null) {
+            return [
+                'status' => 'banned',
+                'permanent' => $ban->isPermanent(),
+                'until' => $ban->banned_until?->utc()->toIso8601String(),
+                'reason' => filled($ban->reason) ? (string) $ban->reason : null,
+            ];
+        }
+
+        if ($session->revoked_at !== null) {
+            return ['status' => 'revoked'];
+        }
+        if ($session->expires_at !== null && $session->expires_at->isPast()) {
+            return ['status' => 'expired'];
+        }
+
+        return ['status' => 'valid'];
+    }
+
     public function revokeByToken(string $token): void
     {
         if ($token === '') {
@@ -130,7 +167,7 @@ class NexusSessionIssuer
         NexusAuthSession::query()
             ->where('token_hash', $hash)
             ->whereNull('revoked_at')
-            ->update(['revoked_at' => now()->utc()->format('Y-m-d H:i:s')]);
+            ->update(['revoked_at' => now()->utc()->format('Y-m-d H:i:s'), 'revoked_reason' => 'signout']);
     }
 
     public function hashToken(string $token): string
@@ -206,10 +243,7 @@ class NexusSessionIssuer
     protected function nullableGame(mixed $value): ?string
     {
         $value = strtolower(trim((string) $value));
-        if ($value === '' || strlen($value) > 64 || preg_match('/^[a-z0-9_-]+$/', $value) !== 1) {
-            return null;
-        }
 
-        return $value;
+        return array_key_exists($value, (array) config('nexus.games', [])) ? $value : null;
     }
 }

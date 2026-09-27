@@ -82,6 +82,16 @@ class DeviceCodeController extends Controller
             ->with('status', 'Launcher approved. You can close this tab.');
     }
 
+    public function session(Request $request, NexusSessionIssuer $sessions): JsonResponse
+    {
+        $token = (string) $request->input('token', '');
+        if ($token === '' || strlen($token) > 128) {
+            return response()->json(['status' => 'unknown'], 400);
+        }
+
+        return response()->json($sessions->statusByToken($token));
+    }
+
     public function revoke(Request $request, NexusSessionIssuer $sessions): JsonResponse
     {
         $token = (string) $request->input('token', '');

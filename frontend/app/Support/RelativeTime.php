@@ -51,4 +51,24 @@ class RelativeTime
 
         return $years <= 1 ? '1 year ago' : "{$years} years ago";
     }
+
+    /** Compact span: "45s", "12m", "3h 20m", "2d 4h". */
+    public static function duration(int $seconds): string
+    {
+        $seconds = max(0, $seconds);
+        if ($seconds < 60) {
+            return "{$seconds}s";
+        }
+        $mins = intdiv($seconds, 60);
+        if ($mins < 60) {
+            return "{$mins}m";
+        }
+        $hrs = intdiv($mins, 60);
+        if ($hrs < 24) {
+            return $mins % 60 > 0 ? "{$hrs}h ".($mins % 60).'m' : "{$hrs}h";
+        }
+        $days = intdiv($hrs, 24);
+
+        return $hrs % 24 > 0 ? "{$days}d ".($hrs % 24).'h' : "{$days}d";
+    }
 }
