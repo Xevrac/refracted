@@ -230,6 +230,9 @@
                 try {
                     r = JSON.parse(xhr.responseText);
                 } catch (e) { /* ignore */ }
+                if (r && !r.refused && r.identity && window.CncBlazeState && CncBlazeState.applyIdentity) {
+                    CncBlazeState.applyIdentity(r.identity);
+                }
                 if (r && r.refused && window.CncShowAuthRefusal) {
                     done = true;
                     statusFn('');

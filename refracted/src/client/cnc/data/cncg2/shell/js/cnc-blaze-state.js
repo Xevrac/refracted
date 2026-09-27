@@ -215,6 +215,21 @@
                 || res.USER || null;
         },
 
+        /** Signed-in identity */
+        applyIdentity: function (id) {
+            if (!id || typeof id !== 'object') {
+                return;
+            }
+            if (id.displayName) {
+                CncBlazeState.displayName = String(id.displayName);
+            }
+            if (id.personaId != null) {
+                CncBlazeState.personaId = String(id.personaId);
+            }
+            CncBlazeState.persist();
+            CncBlazeState.notifyListeners();
+        },
+
         onShellResult: function (res) {
             if (!res || typeof res !== 'object') {
                 CncBlazeState.notifyListeners();
