@@ -175,7 +175,8 @@ impl IdentityStore {
         let row: Option<(i64,)> = conn
             .exec_first(
                 "SELECT id FROM bans
-                 WHERE user_id = :user_id
+                 WHERE (user_id = :user_id
+                        OR discord_id = (SELECT u.discord_id FROM users u WHERE u.id = :user_id))
                    AND lifted_at IS NULL
                    AND (banned_until IS NULL OR banned_until > :now)
                  LIMIT 1",
@@ -208,7 +209,8 @@ impl IdentityStore {
         let row: Option<(Option<String>,)> = conn
             .exec_first(
                 "SELECT banned_until FROM bans
-                 WHERE user_id = :user_id
+                 WHERE (user_id = :user_id
+                        OR discord_id = (SELECT u.discord_id FROM users u WHERE u.id = :user_id))
                    AND lifted_at IS NULL
                    AND (banned_until IS NULL OR banned_until > :now)
                  ORDER BY banned_until IS NULL DESC, banned_until DESC

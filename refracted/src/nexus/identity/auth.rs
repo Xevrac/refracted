@@ -208,18 +208,18 @@ impl IdentityStore {
         Ok(bound)
     }
 
-    /// Session behind a presented token/JWT, ignoring expiry and bans (refusal reporting only).
+    /// Session behind a presented token/JWT, ignoring expiry, revocation and bans (refusal reporting only).
+    /// Revoked rows count: banning revokes every session, and the ban must still be reported.
     pub fn presented_session(&self, presented: &str) -> Result<Option<BoundSession>, String> {
         let presented = presented.trim();
-        let bound = if presented.matches('.').count() >= 2 {
+        if presented.matches('.').count() >= 2 {
             match jwt_id_from_token(presented) {
-                Some(jti) => self.load_session_by_jwt_id(&jti)?,
-                None => None,
+                Some(jti) => self.load_session_row("s.jwt_id = :key", &jti, true),
+                None => Ok(None),
             }
         } else {
-            self.load_session_by_token_hash(&hash_token(presented))?
-        };
-        Ok(bound)
+            self.load_session_row("s.token_hash = :key", &hash_token(presented), true)
+        }
     }
 
     /// Game client join: presented credential must own the claimed user + persona.
@@ -295,12 +295,22 @@ impl IdentityStore {
     }
 
     fn load_session(&self, where_clause: &str, key: &str) -> Result<Option<BoundSession>, String> {
+        self.load_session_row(where_clause, key, false)
+    }
+
+    fn load_session_row(
+        &self,
+        where_clause: &str,
+        key: &str,
+        include_revoked: bool,
+    ) -> Result<Option<BoundSession>, String> {
+        let live = if include_revoked { "" } else { " AND s.revoked_at IS NULL" };
         let sql = format!(
             "SELECT s.user_id, s.persona_id, u.email, p.display_name, s.expires_at, s.revoked_at
              FROM auth_sessions s
              JOIN users u ON u.id = s.user_id
              JOIN personas p ON p.id = s.persona_id
-             WHERE {where_clause} AND s.revoked_at IS NULL"
+             WHERE {where_clause}{live}"
         );
         let mut conn = self.conn()?;
         let row: Option<(i64, i64, String, String, String, Option<String>)> = conn
@@ -309,7 +319,7 @@ impl IdentityStore {
         let Some((user_id, persona_id, email, display_name, expires_at, revoked_at)) = row else {
             return Ok(None);
         };
-        if revoked_at.is_some() {
+        if revoked_at.is_some() && !include_revoked {
             return Ok(None);
         }
         let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
