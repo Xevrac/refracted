@@ -3,8 +3,6 @@ use mysql::{params, Pool};
 
 use crate::common::app_env::MysqlParams;
 
-use super::migrate::{self, Migration};
-
 #[derive(Debug, Clone)]
 pub struct UserRecord {
     pub id: i64,
@@ -59,59 +57,43 @@ impl IdentityStore {
             .map_err(|e| format!("mysql get_conn: {e}"))
     }
 
-    pub fn migrate(&self) -> Result<(), String> {
-        migrate::apply(self)
-    }
-
-    pub(crate) fn ensure_migrations_table(&self) -> Result<(), String> {
-        let mut conn = self
-            .pool
-            .get_conn()
-            .map_err(|e| format!("mysql get_conn: {e}"))?;
-        conn.query_drop(
-            r#"CREATE TABLE IF NOT EXISTS schema_migrations (
-                version INT NOT NULL PRIMARY KEY,
-                name VARCHAR(128) NOT NULL,
-                applied_at DATETIME NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"#,
-        )
-        .map_err(|e| format!("mysql schema_migrations: {e}"))
-    }
-
-    pub(crate) fn applied_versions(&self) -> Result<Vec<i64>, String> {
-        let mut conn = self
-            .pool
-            .get_conn()
-            .map_err(|e| format!("mysql get_conn: {e}"))?;
-        conn.query("SELECT version FROM schema_migrations")
-            .map_err(|e| format!("mysql select migrations: {e}"))
-    }
-
-    pub(crate) fn apply_migration(&self, migration: &Migration) -> Result<(), String> {
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-        let mut conn = self
-            .pool
-            .get_conn()
-            .map_err(|e| format!("mysql get_conn: {e}"))?;
-        for sql in migration.mysql {
-            conn.query_drop(*sql).map_err(|e| {
-                format!(
-                    "mysql migration {} ({}) : {e}",
-                    migration.version, migration.name
-                )
-            })?;
+    /// Schema is owned by the frontend (`php artisan nexus:migrate`); refuse to boot without it.
+    pub fn verify_schema(&self) -> Result<(), String> {
+        const REQUIRED: &[&str] = &[
+            "users.id",
+            "users.secret_hash",
+            "users.secret_salt",
+            "users.discord_id",
+            "users.web_user_id",
+            "personas.id",
+            "personas.user_id",
+            "auth_sessions.token_hash",
+            "auth_sessions.jwt_id",
+            "auth_sessions.client_ip",
+            "auth_sessions.game_id",
+            "settings.key",
+            "signup_whitelist.discord_id",
+            "bans.discord_id",
+        ];
+        let mut conn = self.conn()?;
+        let present: Vec<String> = conn
+            .query(
+                "SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) FROM information_schema.COLUMNS \
+                 WHERE TABLE_SCHEMA = DATABASE()",
+            )
+            .map_err(|e| format!("mysql schema check: {e}"))?;
+        let missing: Vec<&str> = REQUIRED
+            .iter()
+            .copied()
+            .filter(|col| !present.iter().any(|p| p.eq_ignore_ascii_case(col)))
+            .collect();
+        if missing.is_empty() {
+            return Ok(());
         }
-        conn.exec_drop(
-            "INSERT INTO schema_migrations (version, name, applied_at) VALUES (:version, :name, :applied_at)",
-            params! {
-                "version" => migration.version,
-                "name" => migration.name,
-                "applied_at" => now,
-            },
-        )
-        .map_err(|e| format!("mysql record migration: {e}"))
+        Err(format!(
+            "nexus schema incomplete (missing {}); run `php artisan nexus:migrate --force` on the frontend",
+            missing.join(", ")
+        ))
     }
 
     pub fn user_count(&self) -> Result<i64, String> {
