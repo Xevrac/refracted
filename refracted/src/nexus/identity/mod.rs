@@ -3,7 +3,6 @@
 //! Desktop and headless `datasource=json` use JSON personas. Headless `datasource=mysql`
 //! requires client authentication (login/logout later).
 
-mod migrate;
 mod store;
 mod auth;
 mod handoff;
@@ -60,10 +59,10 @@ pub fn client_join_requires_login() -> bool {
     !json_personas_allowed()
 }
 
-/// Connect to MySQL and run identity migrations.
+/// Connect to MySQL and verify the frontend-owned Nexus schema.
 pub fn init_mysql_identity(env: &AppEnv) -> Result<(), String> {
     let store = IdentityStore::open_mysql(&env.mysql)?;
-    store.migrate()?;
+    store.verify_schema()?;
     let users = store.user_count()?;
     let personas = store.persona_count()?;
     crate::nexus::log_nexus_to_blaze(format!(
