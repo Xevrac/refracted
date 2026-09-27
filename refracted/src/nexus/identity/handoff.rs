@@ -100,14 +100,14 @@ pub fn ensure_bound_from_handoff() -> Option<BoundSession> {
                 network_bps: None,
                 next_message_id: 1160000,
             });
-            crate::nexus::log_nexus_to_blaze("handoff cleared — unbound Nexus session");
+            crate::nexus::log_nexus_to_blaze("Launcher session cleared");
         }
         return None;
     }
     let stamp = match file_stamp(&path) {
         Ok(s) => s,
         Err(e) => {
-            crate::nexus::log_nexus_to_blaze(format!("handoff stamp failed: {e}"));
+            crate::nexus::log_nexus_to_blaze(format!("Launcher session unreadable: {e}"));
             return current_bound_session();
         }
     };
@@ -120,14 +120,14 @@ pub fn ensure_bound_from_handoff() -> Option<BoundSession> {
         Ok((bound, jwt)) => {
             *LAST_BOUND_STAMP.lock() = Some(stamp);
             crate::nexus::log_nexus_to_blaze(format!(
-                "launcher handoff bound user_id={} persona_id={} display={}",
-                bound.user_id, bound.persona_id, bound.display_name
+                "Signed in via launcher: {} (user {}, persona {})",
+                bound.display_name, bound.user_id, bound.persona_id
             ));
             sync_bound_to_session(&bound, jwt);
             Some(bound)
         }
         Err(e) => {
-            crate::nexus::log_nexus_to_blaze(format!("launcher handoff bind failed: {e}"));
+            crate::nexus::log_nexus_to_blaze(format!("Launcher sign-in failed: {e}"));
             current_bound_session()
         }
     }

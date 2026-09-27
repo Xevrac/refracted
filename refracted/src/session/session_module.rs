@@ -143,9 +143,7 @@ pub fn get_user_session() -> UserSession {
         };
     }
     if crate::nexus::identity::client_join_requires_login() {
-        crate::nexus::log_nexus_to_blaze(
-            "get_user_session: mysql mode with no bound session — refusing Xevrac default",
-        );
+        crate::debug_println!("[Nexus] no signed-in session yet; default profile withheld");
         return UserSession {
             user_id: 0,
             persona_id: 0,

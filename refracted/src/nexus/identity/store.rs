@@ -208,7 +208,7 @@ impl IdentityStore {
         let mut conn = self.conn()?;
         let row: Option<(Option<String>,)> = conn
             .exec_first(
-                "SELECT banned_until FROM bans
+                "SELECT CAST(banned_until AS CHAR) FROM bans
                  WHERE (user_id = :user_id
                         OR discord_id = (SELECT u.discord_id FROM users u WHERE u.id = :user_id))
                    AND lifted_at IS NULL

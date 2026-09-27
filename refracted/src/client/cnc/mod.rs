@@ -2119,7 +2119,7 @@ fn refuse_if_nexus_banned() -> BlazeResult<()> {
     match store.is_user_banned(bound.user_id) {
         Ok(true) => {
             crate::nexus::log_nexus_to_blaze(format!(
-                "refusing auth: nexus user_id={} is banned",
+                "Login refused: user {} is banned",
                 bound.user_id
             ));
             crate::nexus::identity::clear_bound_session();
@@ -2127,7 +2127,7 @@ fn refuse_if_nexus_banned() -> BlazeResult<()> {
         }
         Ok(false) => Ok(()),
         Err(e) => {
-            crate::nexus::log_nexus_to_blaze(format!("ban check failed: {e}"));
+            crate::nexus::log_nexus_to_blaze(format!("Ban check failed: {e}"));
             Ok(())
         }
     }
@@ -2155,7 +2155,7 @@ fn debug_auth_override() -> Option<(crate::common::error::BlazeError, Option<i64
     } else {
         return None;
     };
-    crate::nexus::log_nexus_to_blaze(format!("RFR_DEBUG_AUTH={} -- refusing game-client login", raw.trim()));
+    crate::nexus::log_nexus_to_blaze(format!("Login refused by RFR_DEBUG_AUTH={}", raw.trim()));
     Some(refusal)
 }
 
@@ -2190,14 +2190,14 @@ fn note_auth_refusal(
         .map(|s| s.peer)
         .unwrap_or_default();
     crate::nexus::log_nexus_to_blaze(format!(
-        "login refused ({}) key={} peer={} user_id={:?} persona_id={:?} discord_id={:?} until={:?}",
+        "Login refused ({}) from {} user={} persona={} discord={} until={} key={}",
         if banned { "banned" } else { "unauthorized" },
-        key.unwrap_or("-"),
         peer,
-        who.user_id,
-        who.persona_id,
-        who.discord_id,
-        until_unix
+        who.user_id.map_or("-".into(), |v| v.to_string()),
+        who.persona_id.map_or("-".into(), |v| v.to_string()),
+        who.discord_id.as_deref().unwrap_or("-"),
+        until_unix.map_or(if banned { "permanent".into() } else { "-".into() }, |v| v.to_string()),
+        key.unwrap_or("-")
     ));
     let Some(key) = key else {
         return;
@@ -2280,12 +2280,14 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
         use crate::common::error::BlazeError;
         use crate::nexus::identity::ClientLoginRefusal;
         let Some(token) = tokn.as_deref() else {
-            crate::nexus::log_nexus_to_blaze("refusing login: no Nexus token in TOKN (sign in via the launcher)");
+            crate::nexus::log_nexus_to_blaze("Login refused: no session token (not launched from the launcher)");
             note_auth_refusal(key, sid, false, None, RefusedIdentity::default());
             return Err(BlazeError::AuthorizationRequired);
         };
         let bound = crate::nexus::identity::bind_presented_client(token).map_err(|refusal| {
-            crate::nexus::log_nexus_to_blaze(format!("refusing login: {refusal:?}"));
+            if let ClientLoginRefusal::Unauthorized(reason) = &refusal {
+                crate::nexus::log_nexus_to_blaze(format!("Login refused: {reason}"));
+            }
             match refusal {
                 ClientLoginRefusal::Banned { until_unix, user_id, persona_id, discord_id } => {
                     let who = RefusedIdentity {

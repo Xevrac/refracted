@@ -1038,7 +1038,7 @@ impl LsxServer {
         if client_join_requires_login() {
             let Some(bound) = current_bound_session() else {
                 crate::nexus::log_nexus_to_blaze(
-                    "GetProfile blocked: mysql mode with no bound Nexus session",
+                    "Profile request refused: not signed in",
                 );
                 return format!(
                     r#"<LSX>
@@ -1052,7 +1052,7 @@ impl LsxServer {
                 if store.is_user_banned(bound.user_id).unwrap_or(false) {
                     crate::nexus::identity::clear_bound_session();
                     crate::nexus::log_nexus_to_blaze(format!(
-                        "GetProfile blocked: nexus user_id={} banned",
+                        "Profile request refused: user {} is banned",
                         bound.user_id
                     ));
                     return format!(

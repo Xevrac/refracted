@@ -256,16 +256,14 @@ pub fn claim_json_test_client_profile(slot: usize) -> UserProfile {
 /// Push the JSON profile into the Blaze session. No-op on headless mysql.
 pub fn sync_profile_to_session() {
     if !crate::nexus::identity::json_personas_allowed() {
-        crate::nexus::log_nexus_to_blaze(
-            "skipping JSON/manual persona sync (datasource=mysql — clients must authenticate)",
-        );
+        crate::debug_println!("[Nexus] MySQL identity: local persona sync skipped");
         return;
     }
     use crate::session::{set_user_session, UserSession};
     let profile = get_current_profile();
     crate::nexus::log_nexus_to_blaze(format!(
-        "session fields from profile `{}` (persona_id={}, user_id={})",
-        profile.display_name, profile.persona_id, profile.user_id
+        "Local profile: {} (user {}, persona {})",
+        profile.display_name, profile.user_id, profile.persona_id
     ));
     set_user_session(UserSession {
         jwt_token: None,
