@@ -2478,7 +2478,19 @@
                 }
             }
             $scope.allHumansReady = !!data.allReady;
-            var localPid = localPersonaId();
+            if (data.self) {
+                // Server-confirmed identity for this shell's login; overrides stale profile/session ids.
+                if ($scope.team1[0] && $scope.team1[0].isLocal) {
+                    $scope.team1[0].pid = data.self;
+                }
+                if (window.CncBlazeState && String(CncBlazeState.personaId) !== String(data.self)) {
+                    CncBlazeState.personaId = String(data.self);
+                    if (CncBlazeState.persist) {
+                        CncBlazeState.persist();
+                    }
+                }
+            }
+            var localPid = data.self ? Number(data.self) : localPersonaId();
             var players = data.players || [];
             var localStillIn = false;
             var remotes = [];
@@ -2575,7 +2587,9 @@
                 return;
             }
             var gid = $scope.gameId || '1';
-            httpRequest('GET', '/cnc/lobby-roster?gid=' + encodeURIComponent(gid)).then(function (data) {
+            var rosterKey = (window.CncPreLanding && CncPreLanding.getLoginKey) ? CncPreLanding.getLoginKey() : '';
+            httpRequest('GET', '/cnc/lobby-roster?gid=' + encodeURIComponent(gid) +
+                (rosterKey ? '&key=' + encodeURIComponent(rosterKey) : '')).then(function (data) {
                 $timeout(function () {
                     if (data && data.serverLost) {
                         forceServerLostKick(data.message ||

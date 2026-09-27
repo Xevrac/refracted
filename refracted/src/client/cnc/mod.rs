@@ -1541,7 +1541,17 @@ fn handle_cnc_lobby_roster(query: Option<&str>) -> HttpResponse {
             }
         }
     }
-    let body = game_state::lobby_roster_json(gid);
+    let mut body = game_state::lobby_roster_json(gid);
+    // Which roster entry is the requesting shell (login key from its TOKN), so it never renders itself twice.
+    let key = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == "key").then(|| percent_decode_plus(v))
+        })
+    });
+    if let (Some(persona), Some(obj)) = (key.as_deref().and_then(persona_for_login_key), body.as_object_mut()) {
+        obj.insert("self".into(), serde_json::json!(persona));
+    }
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -1733,6 +1743,12 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
     };
 
     let p = crate::common::user_profile::get_current_profile();
+    if !crate::nexus::identity::json_personas_allowed() {
+        // Nexus identity comes from the Blaze login; the local JSON profile would be a different persona.
+        let build = shell_build_info_json(None);
+        let script = format!("<script>window.__CNC_PROFILE={{}};window.__CNC_BUILD={};</script>", build);
+        return insert_head_script(s, &script, html);
+    }
     let json = serde_json::json!({
         "email": p.email,
         "username": p.username,
@@ -1745,7 +1761,10 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
         "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};</script>",
         json, build
     );
+    insert_head_script(s, &script, html)
+}
 
+fn insert_head_script(s: &str, script: &str, html: &[u8]) -> Vec<u8> {
     let lower = s.to_ascii_lowercase();
     let insert_at = lower
         .find("<head>")
@@ -1756,7 +1775,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
         Some(i) => {
             let mut out = String::with_capacity(s.len() + script.len());
             out.push_str(&s[..i]);
-            out.push_str(&script);
+            out.push_str(script);
             out.push_str(&s[i..]);
             out.into_bytes()
         }
@@ -2179,6 +2198,20 @@ struct AuthRefusal {
     at: std::time::Instant,
 }
 
+/// Persona bound by each shell login key (`TOKN = <token>:<key>`), read by `/cnc/lobby-roster?key=`.
+static LOGIN_KEY_PERSONAS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, i64>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+fn note_login_key_persona(key: Option<&str>, persona_id: i64) {
+    if let (Some(key), Ok(mut map)) = (key.filter(|k| !k.is_empty()), LOGIN_KEY_PERSONAS.lock()) {
+        map.insert(key.to_string(), persona_id);
+    }
+}
+
+fn persona_for_login_key(key: &str) -> Option<i64> {
+    LOGIN_KEY_PERSONAS.lock().ok()?.get(key).copied()
+}
+
 /// Last refused Blaze login per shell login key (`TOKN = <token>:<key>`), read by `/cnc/auth-refusal?key=`.
 static AUTH_REFUSALS: std::sync::LazyLock<std::sync::Mutex<HashMap<String, AuthRefusal>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
@@ -2311,6 +2344,7 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
             }
         })?;
         clear_auth_refusal(key);
+        note_login_key_persona(key, bound.persona_id);
         if let Some(sid) = sid {
             crate::session::blaze_sessions::set_client_identity(
                 sid,
@@ -3517,19 +3551,19 @@ fn extract_attr_level(create_request: &[u8]) -> Option<String> {
     pairs.get("_level").filter(|s| !s.is_empty()).cloned()
 }
 
-fn cnc_notify_host_persona_i32() -> i32 {
+/// Host persona for replicated GAME fields; full 64-bit (Nexus persona ids exceed i32).
+fn cnc_notify_host_persona() -> i64 {
     let session = crate::session::get_user_session();
-    let id = if session.persona_id == 0 {
-        1000u64
+    if session.persona_id == 0 {
+        1000
     } else {
-        session.persona_id
-    };
-    id.min(i32::MAX as u64) as i32
+        session.persona_id as i64
+    }
 }
 
 /// Dedicated host persona for GAME topology.
 fn replicated_topology_persona(gid: i64) -> i64 {
-    let uid = cnc_notify_host_persona_i32() as i64;
+    let uid = cnc_notify_host_persona();
     dedicated_pool::host_for_gid(gid)
         .map(|d| d.persona_id)
         .unwrap_or(uid)
@@ -3573,8 +3607,7 @@ fn build_client_replicated_game_data(
     gid: i64,
 ) -> BlazeResult<Vec<u8>> {
     let session = crate::session::get_user_session();
-    let uid_i32 = cnc_notify_host_persona_i32();
-    let uid = uid_i32 as i64;
+    let uid = cnc_notify_host_persona();
     let dedicated = dedicated_pool::host_for_gid(gid);
     let topology_persona = dedicated.map(|d| d.persona_id).unwrap_or(uid);
     let _display_name = if session.display_name.is_empty() {
@@ -3877,8 +3910,7 @@ fn build_replicated_game_data_fields(gid: i64) -> Vec<u8> {
 
 fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     let session = crate::session::get_user_session();
-    let uid_i32 = cnc_notify_host_persona_i32();
-    let uid = uid_i32 as i64;
+    let uid = cnc_notify_host_persona();
     let dedicated = dedicated_pool::host_for_gid(gid);
     let topology_persona = replicated_topology_persona(gid);
 

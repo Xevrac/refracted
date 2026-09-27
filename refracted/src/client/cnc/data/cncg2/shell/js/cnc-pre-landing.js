@@ -304,6 +304,7 @@
     }
 
     window.CncPreLanding = {
+        getLoginKey: getLoginKey,
         getTagline: getTagline,
         getInitialStatus: getInitialStatus,
         hasShell: hasShell,
