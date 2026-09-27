@@ -29,6 +29,10 @@
             return null;
         }
         var local = s.substring(0, at);
+        var mark = local.indexOf('~rk~');
+        if (mark >= 0) {
+            local = local.substring(0, mark);
+        }
         return nonEmptyString(local);
     }
 

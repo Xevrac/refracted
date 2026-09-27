@@ -141,16 +141,44 @@
         }
     }
 
+    var LOGIN_KEY_STORAGE = 'cnc_login_key';
+
+    /** Per-launch key: rides the login email to Prism (TOKN suffix) and scopes /cnc/auth-refusal. */
+    function getLoginKey() {
+        var key = null;
+        try {
+            key = sessionStorage.getItem(LOGIN_KEY_STORAGE);
+        } catch (e) { /* empty */ }
+        if (key) {
+            return key;
+        }
+        key = '';
+        for (var i = 0; i < 24; i++) {
+            key += Math.floor(Math.random() * 16).toString(16);
+        }
+        try {
+            sessionStorage.setItem(LOGIN_KEY_STORAGE, key);
+        } catch (e2) { /* empty */ }
+        return key;
+    }
+
+    function emailWithLoginKey(email, key) {
+        var s = String(email || '');
+        var at = s.indexOf('@');
+        return at > 0 ? s.substring(0, at) + '~rk~' + key + s.substring(at) : s;
+    }
+
     function chainShellSteps(ctx, statusFn, onComplete) {
         if (!hasShell() || !window.CncBlazeState) {
             onComplete();
             return;
         }
 
-        var main = { text: 'Communicating with Refracted...', url: '/blaze/authenticate?email=' + ctx.email + '&password=' + ctx.password };
+        var key = getLoginKey();
+        var main = { text: 'Communicating with Refracted...', url: '/blaze/authenticate?email=' + emailWithLoginKey(ctx.email, key) + '&password=' + ctx.password };
         statusFn(main.text);
         runShellStep(main, function () {
-            checkAuthRefusal(statusFn, onComplete);
+            checkAuthRefusal(key, statusFn, onComplete);
         }, AUTH_STEP_MS);
     }
 
@@ -185,8 +213,8 @@
         };
     }
 
-    /** Refracted records a refused Blaze login per client; a refusal blocks the shell behind a Quit-only modal. */
-    function checkAuthRefusal(statusFn, onComplete) {
+    /** Refracted records a refused Blaze login under this launch's key; a refusal blocks the shell behind a Quit-only modal. */
+    function checkAuthRefusal(key, statusFn, onComplete) {
         var done = false;
         var proceed = function () {
             if (!done) {
@@ -196,7 +224,7 @@
         };
         try {
             var xhr = new XMLHttpRequest();
-            xhr.open('GET', '/cnc/auth-refusal', true);
+            xhr.open('GET', '/cnc/auth-refusal?key=' + encodeURIComponent(key), true);
             xhr.onload = function () {
                 var r = null;
                 try {

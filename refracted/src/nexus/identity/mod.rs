@@ -100,7 +100,12 @@ pub fn bind_mysql_client(
 #[derive(Debug, Clone)]
 pub enum ClientLoginRefusal {
     /// `until_unix`: `None` = permanent.
-    Banned { until_unix: Option<i64> },
+    Banned {
+        until_unix: Option<i64>,
+        user_id: i64,
+        persona_id: i64,
+        discord_id: Option<String>,
+    },
     Unauthorized(String),
 }
 
@@ -114,13 +119,16 @@ pub fn bind_presented_client(presented: &str) -> Result<BoundSession, ClientLogi
     let store = current_identity_store()
         .ok_or_else(|| ClientLoginRefusal::Unauthorized("mysql identity store is not ready".into()))?;
     let bound = store.resolve_presented(presented).map_err(|e| {
-        let ban = store
-            .presented_user_id(presented)
-            .ok()
-            .flatten()
-            .and_then(|uid| store.active_ban_until(uid).ok().flatten());
-        match ban {
-            Some(until_unix) => ClientLoginRefusal::Banned { until_unix },
+        let Some(session) = store.presented_session(presented).ok().flatten() else {
+            return ClientLoginRefusal::Unauthorized(e);
+        };
+        match store.active_ban_until(session.user_id).ok().flatten() {
+            Some(until_unix) => ClientLoginRefusal::Banned {
+                until_unix,
+                user_id: session.user_id,
+                persona_id: session.persona_id,
+                discord_id: store.user_discord_id(session.user_id).ok().flatten(),
+            },
             None => ClientLoginRefusal::Unauthorized(e),
         }
     })?;
