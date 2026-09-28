@@ -143,12 +143,41 @@
 
     var LOGIN_KEY_STORAGE = 'cnc_login_key';
 
+    /**
+     * Also kept in a session cookie (no expiry = lives as long as the game process). Returning
+     * from a match reloads the front end with empty sessionStorage; a fresh key is unknown to
+     * Refracted, so /cnc/auth-refusal returned no identity and the shell showed Guest.
+     */
+    function readLoginKeyCookie() {
+        try {
+            var m = /(?:^|;\s*)cnc_login_key=([0-9a-f]{24})/.exec(document.cookie || '');
+            return m ? m[1] : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function storeLoginKey(key) {
+        try {
+            sessionStorage.setItem(LOGIN_KEY_STORAGE, key);
+        } catch (e) { /* empty */ }
+        try {
+            document.cookie = LOGIN_KEY_STORAGE + '=' + key + '; path=/';
+        } catch (e2) { /* empty */ }
+    }
+
     /** Per-launch key: rides the login email to Prism (TOKN suffix) and scopes /cnc/auth-refusal. */
     function getLoginKey() {
         var key = null;
         try {
             key = sessionStorage.getItem(LOGIN_KEY_STORAGE);
         } catch (e) { /* empty */ }
+        if (!key) {
+            key = readLoginKeyCookie();
+            if (key) {
+                storeLoginKey(key);
+            }
+        }
         if (key) {
             return key;
         }
@@ -156,9 +185,7 @@
         for (var i = 0; i < 24; i++) {
             key += Math.floor(Math.random() * 16).toString(16);
         }
-        try {
-            sessionStorage.setItem(LOGIN_KEY_STORAGE, key);
-        } catch (e2) { /* empty */ }
+        storeLoginKey(key);
         return key;
     }
 
@@ -249,6 +276,28 @@
         }
     }
 
+    /** Front end reloaded without a login (return from a match): re-read this launch's identity. */
+    function restoreIdentity() {
+        if (!window.CncBlazeState || CncBlazeState.getPersonaId() !== 0) {
+            return;
+        }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/auth-refusal?key=' + encodeURIComponent(getLoginKey()), true);
+            xhr.onload = function () {
+                var r = null;
+                try {
+                    r = JSON.parse(xhr.responseText);
+                } catch (e) { /* ignore */ }
+                if (r && !r.refused && r.identity) {
+                    CncBlazeState.applyIdentity(r.identity);
+                }
+            };
+            xhr.timeout = 3000;
+            xhr.send(null);
+        } catch (e2) { /* empty */ }
+    }
+
     function shouldAnimateStatus(line) {
         return typeof line === 'string' && /communicating with refracted/i.test(line);
     }
@@ -327,6 +376,7 @@
             }
 
             if (!shouldRunPreLanding()) {
+                restoreIdentity();
                 statusAnimator.stop();
                 onDone();
                 return;

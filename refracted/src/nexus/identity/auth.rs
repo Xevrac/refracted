@@ -247,6 +247,32 @@ impl IdentityStore {
         .map_err(|e| format!("mysql revoke session: {e}"))
     }
 
+    /// Stamp the running title on the presented session
+    pub fn record_session_game(&self, presented: &str, game_id: &str) -> Result<(), String> {
+        let presented = presented.trim();
+        let game_id = game_id.trim().to_ascii_lowercase();
+        if presented.is_empty() || game_id.is_empty() {
+            return Ok(());
+        }
+        let (clause, key) = if presented.matches('.').count() >= 2 {
+            ("jwt_id = :key", jwt_id_from_token(presented).ok_or("invalid jwt")?)
+        } else {
+            ("token_hash = :key", hash_token(presented))
+        };
+        let now = chrono::Utc::now()
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        let mut conn = self.conn()?;
+        conn.exec_drop(
+            format!(
+                "UPDATE auth_sessions SET game_id = :game, last_seen_at = :now \
+                 WHERE {clause} AND revoked_at IS NULL"
+            ),
+            params! { "game" => game_id, "now" => now, "key" => key },
+        )
+        .map_err(|e| format!("mysql record session game: {e}"))
+    }
+
     /// Why a presented opaque token matched no live session; diagnostic only
     fn explain_miss(&self, presented: &str) -> String {
         if presented.matches('.').count() >= 2 {
