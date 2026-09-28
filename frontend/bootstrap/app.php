@@ -16,9 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $trusted = env('TRUSTED_PROXIES');
-        // Avoid app()->isProduction() here — env is not bound yet during middleware config.
-        $isProd = env('APP_ENV', 'production') === 'production';
-        if ($trusted === '*' || ($trusted === null && ! $isProd)) {
+        if ($trusted === null || $trusted === '*') {
             $middleware->trustProxies(at: '*');
         } elseif (is_string($trusted) && $trusted !== '') {
             $middleware->trustProxies(at: array_values(array_filter(array_map(

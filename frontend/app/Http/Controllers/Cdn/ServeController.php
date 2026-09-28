@@ -112,6 +112,9 @@ class ServeController extends Controller
         }
 
         $this->metrics->record('file', 200, (int) $artifact->size_bytes, $title, $channel);
+        if ($request->isMethod('GET')) {
+            $this->metrics->recordDownload($package, $artifact->path, (int) $artifact->size_bytes);
+        }
 
         return response()->file($artifact->absolutePath(), [
             'Content-Type' => $artifact->content_type ?: 'application/octet-stream',

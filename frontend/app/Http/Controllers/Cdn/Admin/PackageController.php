@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cdn\CdnPackage;
 use App\Services\Cdn\CdnArtifactGuard;
 use App\Services\Cdn\CdnCatalog;
+use App\Services\Cdn\CdnMetrics;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -15,14 +16,22 @@ class PackageController extends Controller
 {
     public function __construct(private readonly CdnCatalog $catalog) {}
 
-    public function index(): View
+    public function index(Request $request, CdnMetrics $metrics): View
     {
         $packages = CdnPackage::query()
             ->withCount('artifacts')
             ->orderByDesc('updated_at')
-            ->paginate(30);
+            ->paginate(30)
+            ->withQueryString();
 
-        return view('cdn.admin.packages.index', compact('packages'));
+        $range = CdnMetrics::normalizeRange($request->query('range'));
+        $ids = $packages->pluck('id')->all();
+        $downloads = [
+            'range' => $metrics->downloadsByPackage($ids, CdnMetrics::rangeStart($range)),
+            'all_time' => $metrics->downloadsByPackage($ids),
+        ];
+
+        return view('cdn.admin.packages.index', compact('packages', 'range', 'downloads'));
     }
 
     public function create(): View
@@ -58,11 +67,17 @@ class PackageController extends Controller
             ->with('status', 'Package draft created (revision '.$package->revision.').');
     }
 
-    public function show(CdnPackage $package): View
+    public function show(Request $request, CdnPackage $package, CdnMetrics $metrics): View
     {
         $package->load('artifacts');
 
-        return view('cdn.admin.packages.show', compact('package'));
+        $range = CdnMetrics::normalizeRange($request->query('range'));
+        $downloads = [
+            'range' => $metrics->downloadsByPath($package->id, CdnMetrics::rangeStart($range)),
+            'all_time' => $metrics->downloadsByPath($package->id),
+        ];
+
+        return view('cdn.admin.packages.show', compact('package', 'range', 'downloads'));
     }
 
     public function edit(CdnPackage $package): View

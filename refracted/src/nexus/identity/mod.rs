@@ -89,6 +89,7 @@ pub fn bind_mysql_client(
     }
     let store = current_identity_store().ok_or("mysql identity store is not ready")?;
     let bound = store.bind_client(presented, claimed_user, claimed_persona)?;
+    record_bound_game(&store, presented);
     *BOUND_SESSION.lock() = Some(bound.clone());
     crate::nexus::log_nexus_to_blaze(format!(
         "Signed in: {} (user {}, persona {})",
@@ -133,12 +134,21 @@ pub fn bind_presented_client(presented: &str) -> Result<BoundSession, ClientLogi
             None => ClientLoginRefusal::Unauthorized(e),
         }
     })?;
+    record_bound_game(&store, presented);
     *BOUND_SESSION.lock() = Some(bound.clone());
     crate::nexus::log_nexus_to_blaze(format!(
         "Signed in: {} (user {}, persona {})",
         bound.display_name, bound.user_id, bound.persona_id
     ));
     Ok(bound)
+}
+
+/// A failed stamp must not refuse an otherwise valid login.
+fn record_bound_game(store: &IdentityStore, presented: &str) {
+    let game = crate::common::game::get_current_game_id();
+    if let Err(e) = store.record_session_game(presented, &game) {
+        tracing::warn!("nexus session game stamp failed: {e}");
+    }
 }
 
 /// Active bound Nexus session for this process (mysql only).

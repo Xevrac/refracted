@@ -10,7 +10,12 @@
                 Status <strong>{{ $package->status }}</strong>
                 @if ($package->is_latest) · latest for channel @endif
                 @if ($package->published_at) · published {{ $package->published_at->diffForHumans() }} @endif
+                · {{ number_format(array_sum($downloads['range'])) }} downloads ({{ $range }})
+                · {{ number_format(array_sum($downloads['all_time'])) }} all time
             </p>
+            <div class="mt-4">
+                @include('cdn.admin.partials.range')
+            </div>
         </div>
         <div class="flex flex-wrap gap-2">
             <a href="{{ route('cdn.admin.packages.edit', $package) }}" class="border border-grit-line px-3 py-2 text-sm hover:border-signal/40">Edit</a>
@@ -105,6 +110,8 @@
                     <p class="font-medium">{{ $artifact->path }}</p>
                     <p class="mt-1 text-xs text-grit-mist">
                         {{ number_format($artifact->size_bytes) }} bytes · sha256 {{ \Illuminate\Support\Str::limit($artifact->sha256, 16) }}
+                        · {{ number_format($downloads['range'][$artifact->path] ?? 0) }} downloads ({{ $range }})
+                        · {{ number_format($downloads['all_time'][$artifact->path] ?? 0) }} all time
                     </p>
                 </div>
                 <form method="POST" action="{{ route('cdn.admin.packages.artifacts.destroy', [$package, $artifact]) }}" onsubmit="return confirm('Remove artifact?')">

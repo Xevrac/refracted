@@ -142,7 +142,7 @@ class GameReport
 
         if ($data === '') {
             foreach ($fields as $key => $value) {
-                if (in_array($key, ['title', 'type', 'description'], true)) {
+                if (in_array($key, ['title', 'type', 'description', 'prismlog'], true)) {
                     continue;
                 }
 

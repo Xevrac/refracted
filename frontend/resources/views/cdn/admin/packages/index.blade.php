@@ -13,17 +13,23 @@
         </a>
     </div>
 
-    <div class="mt-8 space-y-3">
+    <div class="mt-6">
+        @include('cdn.admin.partials.range')
+    </div>
+
+    <div class="mt-6 space-y-3">
         @forelse ($packages as $package)
             <article class="ref-panel flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>
-                    <a href="{{ route('cdn.admin.packages.show', $package) }}" class="font-display text-lg font-semibold text-signal-soft underline decoration-signal/30">
+                    <a href="{{ route('cdn.admin.packages.show', [$package, 'range' => $range]) }}" class="font-display text-lg font-semibold text-signal-soft underline decoration-signal/30">
                         {{ $package->displayName() }}
                     </a>
                     <p class="mt-1 text-xs uppercase tracking-[0.12em] text-grit-mist">
                         {{ $package->status }}
                         @if ($package->is_latest) · latest @endif
                         · {{ $package->artifacts_count }} files
+                        · {{ number_format($downloads['range'][$package->id] ?? 0) }} downloads ({{ $range }})
+                        · {{ number_format($downloads['all_time'][$package->id] ?? 0) }} all time
                     </p>
                 </div>
                 <a href="{{ route('cdn.admin.packages.edit', $package) }}" class="text-sm text-grit-mist underline">Edit</a>
