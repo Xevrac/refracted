@@ -89,6 +89,7 @@
                               ng-repeat="sp in mapStartpoints()"
                               ng-style="startPipStyle(sp)"
                               ng-class="{taken: startpointOwner(sp.id), mine: startpointOwner(sp.id) && startpointOwner(sp.id).isLocal}"
+                              ng-click="pickStartpointOnMap(sp.id, $event)"
                               title="Start {{ sp.id }}">{{ startPipLabel(sp) }}</span>
                     </div>
                 </div>
@@ -96,14 +97,16 @@
             <div class="cc-lobby__chat cc-lobby__chat--bar">
                 <div class="cc-lobby__chat-log">
                     <div class="cc-lobby__chat-line" ng-repeat="msg in lobbyChat">
-                        <span class="cc-lobby__chat-user">{{ msg.user }}</span>{{ msg.text }}
+                        <span class="cc-lobby__chat-user" ng-class="chatUserClass(msg)">{{ msg.user }}</span>{{ msg.text }}
                     </div>
                     <div class="cc-lobby__chat-empty" ng-show="!lobbyChat.length">MESSAGE THE LOBBY</div>
                 </div>
+                <div class="cc-lobby__chat-typing" ng-show="typingLabel()">{{ typingLabel() }}{{ typingDots }}</div>
                 <form class="cc-lobby__chat-form" action="javascript:void(0)"
                       ng-submit="sendLobbyChat($event)" ng-click="$event.stopPropagation()">
                     <input type="text" class="cc-lobby__chat-input"
                            ng-model="lobbyChatDraft"
+                           ng-change="noteLobbyTyping()"
                            maxlength="200"
                            autocomplete="off"
                            placeholder="SAY SOMETHING">
@@ -175,7 +178,7 @@
                             <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
                             <div class="cc-lobby__names">
                                 <div class="cc-lobby__codename">{{ slot.codename }}</div>
-                                <div class="cc-lobby__player" ng-if="!slot.isAi">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="{'lobby-name--dev': isDevName(slot.displayName)}">{{ slot.displayName }}</div>
                                 <div class="cc-lobby__ai" ng-if="slot.isAi">
                                     <span>AI:</span>
                                     <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
@@ -183,9 +186,11 @@
                             </div>
                         </div>
                     </div>
-                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(1) && canAddPlayers()">
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-click="inviteFriend(1)">INVITE FRIEND</button>
-                        <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-click="addAi(1)">ADD AI</button>
+                    <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(1)}" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="isLobbyHost()" ng-click="inviteFriend(1)">INVITE FRIEND</button>
+                        <span class="cc-lobby__soon" ng-show="!isLobbyHost()" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(1)" ng-click="swapTeam(1)">SWAP</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(1)">ADD AI</button>
                     </div>
                 </div>
 
@@ -255,7 +260,7 @@
                             <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
                             <div class="cc-lobby__names">
                                 <div class="cc-lobby__codename">{{ slot.codename }}</div>
-                                <div class="cc-lobby__player" ng-if="!slot.isAi">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="{'lobby-name--dev': isDevName(slot.displayName)}">{{ slot.displayName }}</div>
                                 <div class="cc-lobby__ai" ng-if="slot.isAi">
                                     <span>AI:</span>
                                     <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
@@ -263,20 +268,22 @@
                             </div>
                         </div>
                     </div>
-                    <div class="cc-lobby__team-actions" ng-show="teamHasEmpty(2) && canAddPlayers()">
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-click="inviteFriend(2)">INVITE FRIEND</button>
-                        <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-click="addAi(2)">ADD AI</button>
+                    <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(2)}" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="isLobbyHost()" ng-click="inviteFriend(2)">INVITE FRIEND</button>
+                        <span class="cc-lobby__soon" ng-show="!isLobbyHost()" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(2)" ng-click="swapTeam(2)">SWAP</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(2)">ADD AI</button>
                     </div>
                 </div>
             </div>
 
             <div class="cc-lobby__actions">
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="leaveGameRoom()">LEAVE</button>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="toggleReady()"
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse cc-lobby__btn--ready" ng-click="toggleReady()"
                         ng-show="!isLobbyHost()"
                         ng-class="{ready: localReady}">{{ localReady ? 'UNREADY' : 'READY' }}</button>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startBattle()"
-                        ng-show="isLobbyHost()" ng-disabled="!canStartBattle()">START BATTLE</button>
+                        ng-show="isLobbyHost()" ng-disabled="_starting">START BATTLE</button>
             </div>
         </div>
 
@@ -373,28 +380,28 @@
                             <div class="cc-lobby__options-cell-head">
                                 <span>TWEAKS</span>
                             </div>
-                            <label class="cc-lobby__options-check"
+                            <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
                                    data-tip-pos="below"
-                                   data-tip="Enable general special abilities">
+                                   data-tip="Coming soon!">
                                 <input type="checkbox"
                                        ng-model="lobbyOptions.enableSpecialAbilities"
-                                       ng-change="applyLobbyMatchOptions()">
+                                       ng-disabled="true">
                                 SPECIAL ABILITIES
                             </label>
-                                <label class="cc-lobby__options-check"
+                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
                                        data-tip-pos="below"
-                                       data-tip="Require structure build prerequisites">
+                                       data-tip="Coming soon!">
                                     <input type="checkbox"
                                            ng-model="lobbyOptions.enableTechTree"
-                                           ng-change="applyLobbyMatchOptions()">
+                                           ng-disabled="true">
                                     TECH TREE
                                 </label>
-                                <label class="cc-lobby__options-check"
+                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
                                        data-tip-pos="below"
-                                       data-tip="Unlock all faction units">
+                                       data-tip="Coming soon!">
                                     <input type="checkbox"
                                            ng-model="lobbyOptions.enableUnlockFullFactionRoster"
-                                           ng-change="applyLobbyMatchOptions()">
+                                           ng-disabled="true">
                                     FACTIONS ONLY
                                 </label>
                                 <label class="cc-lobby__options-check"

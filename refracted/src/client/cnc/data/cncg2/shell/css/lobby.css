@@ -1151,13 +1151,17 @@
     padding: 0 !important;
     line-height: 37px;
     font-size: 0;
+    position: relative;
 }
 
 .cc-lobby__password-clear svg {
-    display: inline-block;
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
     width: 16px;
     height: 16px;
-    vertical-align: middle;
+    margin: -8px 0 0 -8px;
 }
 
 .cc-lobby__options-grid {
@@ -1557,6 +1561,10 @@
     background-image: url('../view/image/btn_bg_01.png');
 }
 
+.cc-lobby__btn--ready {
+    width: 280px;
+}
+
 .cc-lobby__btn--browse:hover {
     background-image: url('../view/image/btn_bg_01_over.png');
 }
@@ -1765,13 +1773,13 @@
     position: relative;
     width: 9px;
     height: 7px;
-    margin-top: 5px;
+    margin-top: 15px;
     border: 1.5px solid #c9a227;
     border-radius: 1px;
     background: rgba(201, 162, 39, 0.28);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    vertical-align: middle;
+    vertical-align: top;
 }
 .cc-lobby-browser__padlock:before {
     content: '';
@@ -1806,27 +1814,35 @@
     background: rgba(0, 0, 0, 0.6);
 }
 .cc-lobby-browser__pw-box {
-    width: 340px;
-    margin: 120px auto 0;
-    padding: 18px 20px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 400px;
+    margin: 0;
+    padding: 22px 26px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
     background: #1a1a16;
     border: 1px solid #5a5238;
     color: #e8e0c8;
 }
 .cc-lobby-browser__pw-box h3 {
     margin: 0 0 8px;
-    font-size: 14px;
+    font-size: 15px;
     letter-spacing: 0.08em;
 }
 .cc-lobby-browser__pw-box p {
     margin: 0 0 12px;
-    font-size: 12px;
+    font-size: 13px;
     color: #a89a78;
 }
 .cc-lobby-browser__pw-input {
     width: 100%;
     box-sizing: border-box;
-    padding: 8px 10px;
+    padding: 9px 11px;
+    font-size: 14px;
     border: 1px solid #5a5238;
     background: #0e0e0c;
     color: #e8e0c8;
@@ -1834,7 +1850,7 @@
 .cc-lobby-browser__pw-err {
     margin-top: 8px;
     color: #d06050;
-    font-size: 12px;
+    font-size: 13px;
 }
 .cc-lobby-browser__pw-actions {
     margin-top: 14px;
@@ -2505,4 +2521,46 @@
 
 .cc-lobby__hue-picker .cnc-hue-picker__hint {
     color: #8a7a50;
+}
+
+.cc-lobby__map-frame--look .cc-lobby__pip {
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.cc-lobby__chat-user.chat-user--system {
+    color: #e53935;
+}
+
+.cc-lobby__chat-user.chat-user--dev,
+.cc-lobby__player.lobby-name--dev {
+    color: #6f50a5;
+    font-weight: bold;
+}
+
+.cc-lobby__chat-typing {
+    height: 14px;
+    padding: 0 6px;
+    color: #888;
+    font-size: 10px;
+    line-height: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.cc-lobby__team-actions--three .cc-lobby__act {
+    width: 31%;
+}
+
+.cc-lobby__soon {
+    display: inline-block;
+    width: 47%;
+    margin: 0 1%;
+}
+
+.cc-lobby__soon .cc-lobby__act {
+    width: 100%;
+    margin: 0;
+    opacity: 0.45;
+    cursor: default;
 }

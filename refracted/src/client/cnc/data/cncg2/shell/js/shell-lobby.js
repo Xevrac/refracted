@@ -604,8 +604,8 @@
         $scope.mapForcesTutorial = !!$scope.selectedMap.forceTutorialGeneral;
         $timeout(function () {
             syncMapToServer();
-            if ($scope.team1[0]) {
-                syncPlayerAttrsToServer($scope.team1[0]);
+            if (localSlot()) {
+                syncPlayerAttrsToServer(localSlot());
             }
         }, 0);
         $scope.mapMenuOpen = false;
@@ -1206,6 +1206,12 @@
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
+            var me = localSlot();
+            if (!me || !$scope.canChangeStartpoint(me)) {
+                return;
+            }
+            var want = parseStartId(id);
+            $scope.setStartpoint(me, Number(me.startpoint) === want ? 0 : want);
         };
 
         function applyTutorialConstraints() {
@@ -1236,6 +1242,9 @@
 
         $scope.selectMap = function (map, $event) {
             if (!map || (map.comingSoon && !($event && $event.shiftKey))) {
+                return;
+            }
+            if ($scope._joinedGameroom && !$scope.isLobbyHost() && !$scope._adoptingMap) {
                 return;
             }
             $scope.selectedMap = map;
@@ -1381,11 +1390,96 @@
             if (!data || data.ok === false || !data.messages) {
                 return;
             }
+            var mine = String((localSlot() && localSlot().displayName) || '').toLowerCase();
+            var typing = [];
+            var ti;
+            for (ti = 0; ti < (data.typing || []).length; ti++) {
+                if (String(data.typing[ti]).toLowerCase() !== mine) {
+                    typing.push(data.typing[ti]);
+                }
+            }
+            $scope.lobbyTyping = typing;
+            runTypingDots();
             if (!data.messages.length) {
                 return;
             }
             $scope.lobbyChat = data.messages;
             scrollLobbyChat();
+        }
+
+        var DEV_NAMES = { 'nemoskal_modded': true, 'xevrac': true };
+        var TYPING_DOTS = ['...', '..', '.', '..'];
+        $scope.lobbyTyping = [];
+        $scope.typingDots = '...';
+
+        $scope.isDevName = function (name) {
+            return !!DEV_NAMES[String(name || '').toLowerCase()];
+        };
+
+        $scope.chatUserClass = function (msg) {
+            if (msg && msg.system) {
+                return 'chat-user--system';
+            }
+            return msg && $scope.isDevName(msg.user) ? 'chat-user--dev' : '';
+        };
+
+        $scope.typingLabel = function () {
+            var list = $scope.lobbyTyping || [];
+            if (!list.length) {
+                return '';
+            }
+            return list.join(', ') + (list.length > 1 ? ' are typing' : ' is typing');
+        };
+
+        function runTypingDots() {
+            if ($scope._typingDotsTimer || !($scope.lobbyTyping && $scope.lobbyTyping.length)) {
+                return;
+            }
+            var step = 0;
+            function tick() {
+                if (!($scope.lobbyTyping && $scope.lobbyTyping.length)) {
+                    $scope._typingDotsTimer = null;
+                    $scope.typingDots = '...';
+                    return;
+                }
+                $scope.typingDots = TYPING_DOTS[step % TYPING_DOTS.length];
+                step += 1;
+                $scope._typingDotsTimer = $timeout(tick, 400);
+            }
+            tick();
+        }
+
+        $scope.noteLobbyTyping = function () {
+            if (!$scope._joinedGameroom || !$scope.lobbyChatDraft) {
+                return;
+            }
+            var now = Date.now();
+            if (($scope._typingSentAt || 0) + 2000 > now) {
+                return;
+            }
+            $scope._typingSentAt = now;
+            var gid = lobbyGid();
+            httpRequest('POST', withKey('/cnc/lobby-chat?gid=' + encodeURIComponent(gid)), {
+                gid: gid,
+                typing: true
+            });
+        };
+
+        function requestStartFromGuests() {
+            var now = Date.now();
+            if (($scope._startRequestAt || 0) + 5000 > now) {
+                return;
+            }
+            $scope._startRequestAt = now;
+            var gid = lobbyGid();
+            httpRequest('POST', withKey('/cnc/lobby-chat?gid=' + encodeURIComponent(gid)), {
+                gid: gid,
+                requestStart: true
+            }).then(function (data) {
+                $timeout(function () {
+                    applyLobbyChat(data);
+                });
+            });
         }
 
         function pollLobbyChat() {
@@ -1411,12 +1505,13 @@
                 return false;
             }
             $scope.lobbyChatDraft = '';
-            var user = ($scope.team1[0] && $scope.team1[0].displayName) ||
+            var user = (localSlot() && localSlot().displayName) ||
                 $rootScope.playerName || 'Player';
             $scope.lobbyChat = ($scope.lobbyChat || []).concat([{ user: user, text: text }]);
             scrollLobbyChat();
+            $scope._typingSentAt = 0;
             var gid = lobbyGid();
-            httpRequest('POST', '/cnc/lobby-chat?gid=' + encodeURIComponent(gid), {
+            httpRequest('POST', withKey('/cnc/lobby-chat?gid=' + encodeURIComponent(gid)), {
                 gid: gid,
                 user: user,
                 text: text
@@ -1805,7 +1900,12 @@
         function applyMapFromBrowserGame(g) {
             var map = findMapEntryForBrowserGame(g);
             if (map) {
-                $scope.selectMap(map);
+                $scope._adoptingMap = true;
+                try {
+                    $scope.selectMap(map);
+                } finally {
+                    $scope._adoptingMap = false;
+                }
             }
         }
 
@@ -1902,8 +2002,36 @@
             $scope.selectedBrowserGame = found || (list.length ? list[0] : null);
         }
 
+        function localSlot() {
+            var teams = [$scope.team1, $scope.team2];
+            var t;
+            var i;
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    if (teams[t][i] && teams[t][i].isLocal) {
+                        return teams[t][i];
+                    }
+                }
+            }
+            return $scope.team1[0];
+        }
+        $scope.localSlot = localSlot;
+
+        function loginKey() {
+            return (window.CncPreLanding && CncPreLanding.getLoginKey)
+                ? (CncPreLanding.getLoginKey() || '') : '';
+        }
+
+        function withKey(url) {
+            var k = loginKey();
+            if (!k) {
+                return url;
+            }
+            return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(k);
+        }
+
         function localPersonaId() {
-            var pid = ($scope.team1[0] && $scope.team1[0].pid) || 0;
+            var pid = (localSlot() && localSlot().pid) || 0;
             if (!pid && window.CncBlazeState) {
                 if (CncBlazeState.getPersonaId) {
                     pid = CncBlazeState.getPersonaId() || 0;
@@ -1915,8 +2043,8 @@
         }
 
         function localDisplayName() {
-            if ($scope.team1[0] && $scope.team1[0].displayName) {
-                return String($scope.team1[0].displayName).toLowerCase();
+            if (localSlot() && localSlot().displayName) {
+                return String(localSlot().displayName).toLowerCase();
             }
             if (window.CncBlazeState && CncBlazeState.getPlayerName) {
                 return String(CncBlazeState.getPlayerName() || '').toLowerCase();
@@ -2256,10 +2384,10 @@
         });
 
         $scope.$on('cnc:lobbyDefaultsSaved', function () {
-            if ($scope.team1[0] && $scope.team1[0].isLocal && !$scope._joinedGameroom) {
-                applyLobbyDefaultsToSlot($scope.team1[0], $scope.selectedMap);
+            if (localSlot() && localSlot().isLocal && !$scope._joinedGameroom) {
+                applyLobbyDefaultsToSlot(localSlot(), $scope.selectedMap);
                 if (!$scope.mapForcesTutorial) {
-                    syncPlayerAttrsToServer($scope.team1[0]);
+                    syncPlayerAttrsToServer(localSlot());
                 }
             }
         });
@@ -2317,19 +2445,214 @@
                 sessionStorage.removeItem('cnc_match_gid');
                 sessionStorage.removeItem('cnc_match_pid');
             } catch (e) { /* ignore */ }
-            if ($scope.team1[0]) {
-                $scope.team1[0].isHost = false;
-                $scope.team1[0].ready = false;
-                if ($scope.team1[0].isLocal) {
-                    applyLobbyDefaultsToSlot($scope.team1[0], $scope.selectedMap);
+            if (localSlot()) {
+                localSlot().isHost = false;
+                localSlot().ready = false;
+                if (localSlot().isLocal) {
+                    applyLobbyDefaultsToSlot(localSlot(), $scope.selectedMap);
                 }
             }
             clearRemoteHumanSlots();
+            clearRemoteAiSlots();
+            restoreLocalSeat();
+            $scope.lobbyTyping = [];
             if (window.CncProbe) {
                 CncProbe._inBlazeGame = false;
                 CncProbe._matchWatchArmed = false;
             }
         }
+
+        function adoptRosterMap(data) {
+            if (!data || !data.map || $scope.isLobbyHost()) {
+                return;
+            }
+            var current = ($scope.selectedMap && $scope.selectedMap.path) || '';
+            if (String(current).toLowerCase() === String(data.map).toLowerCase()) {
+                return;
+            }
+            var map = findMapEntryForBrowserGame({ mapPath: data.map });
+            if (map) {
+                $scope._adoptingMap = true;
+                try {
+                    $scope.selectMap(map);
+                } finally {
+                    $scope._adoptingMap = false;
+                }
+            }
+        }
+
+        function updateSlotFromRoster(s, p) {
+            s.occupied = true;
+            s.isLocal = false;
+            s.isAi = !!p.isAi;
+            s.invitePending = false;
+            s.ready = !!p.ready;
+            s.isHost = !!p.isHost;
+            s.pid = p.pid || s.pid || 0;
+            if (!p.isAi) {
+                s.displayName = p.name || s.displayName;
+            }
+            if (p.difficulty) {
+                s.difficulty = p.difficulty;
+            }
+            if (p.startpoint != null) {
+                s.startpoint = clampStartIdToMap(p.startpoint);
+            }
+            if (p.color) {
+                s.color = cssHouseColor(p.color);
+            } else if (!s.color) {
+                s.color = unusedColor(s);
+            }
+            var faction = p.faction ? normalizeFaction(p.faction)
+                : (s.faction || defaultFactionForMap($scope.selectedMap));
+            var general = p.general ? (Number(p.general) || 0) : 0;
+            if (!general) {
+                general = (s.faction === faction && s.general)
+                    ? s.general : defaultGeneralId(faction, $scope.selectedMap);
+            }
+            if (s.faction !== faction || Number(s.general) !== Number(general) || !s.avatar) {
+                s.faction = faction;
+                s.general = general;
+                s.codename = codenameForSlot(s);
+                s.avatar = avatarForSlot(s);
+            }
+        }
+
+        // Server order is the seat order for every participant; slot objects are reused so rows never re-render.
+        function arrangeFromRoster(players, localPid) {
+            var local = localSlot();
+            var hostOwnsAi = $scope.isLobbyHost();
+            var size = $scope.team1.length;
+            var existing = {};
+            var spare = { 1: [], 2: [] };
+            var next = { 1: [], 2: [] };
+            var keep = { 1: [], 2: [] };
+            var placedLocal = false;
+            var t;
+            var i;
+            var teams = [$scope.team1, $scope.team2];
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    var cur = teams[t][i];
+                    var curTeam = t + 1;
+                    if (!cur || cur.isLocal) {
+                        continue;
+                    }
+                    if (cur.invitePending || (cur.occupied && cur.isAi && hostOwnsAi)) {
+                        keep[curTeam].push(cur);
+                    } else if (cur.occupied && cur.pid) {
+                        existing[String(cur.pid)] = cur;
+                    } else if (!cur.occupied) {
+                        spare[curTeam].push(cur);
+                    }
+                }
+            }
+            for (i = 0; i < players.length; i++) {
+                var p = players[i];
+                if (!p) {
+                    continue;
+                }
+                var teamNum = Number(p.team) === 2 ? 2 : 1;
+                var slot;
+                if (!p.isAi && rosterEntryIsLocal(p, localPid)) {
+                    if (placedLocal) {
+                        continue;
+                    }
+                    slot = local;
+                    placedLocal = true;
+                } else if (p.isAi && hostOwnsAi) {
+                    continue;
+                } else {
+                    slot = existing[String(p.pid)] || emptySlot();
+                    delete existing[String(p.pid)];
+                    updateSlotFromRoster(slot, p);
+                }
+                if (next[teamNum].length >= size) {
+                    continue;
+                }
+                slot.teamNum = teamNum;
+                next[teamNum].push(slot);
+            }
+            if (!placedLocal && local) {
+                next[Number(local.teamNum) === 2 ? 2 : 1].unshift(local);
+            }
+            for (t = 1; t <= 2; t++) {
+                var arr = next[t].concat(keep[t]);
+                var target = t === 1 ? $scope.team1 : $scope.team2;
+                for (i = 0; i < size; i++) {
+                    var seat = arr[i];
+                    if (!seat) {
+                        seat = spare[t].length ? spare[t].shift() : emptySlot();
+                        seat.teamNum = t;
+                        seat.startpoint = 0;
+                    }
+                    if (target[i] !== seat) {
+                        target[i] = seat;
+                    }
+                }
+            }
+        }
+
+        function restoreLocalSeat() {
+            var local = localSlot();
+            if (!local || $scope.team1[0] === local) {
+                return;
+            }
+            var teams = [$scope.team1, $scope.team2];
+            var t;
+            var i;
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    if (teams[t][i] === local) {
+                        teams[t][i] = $scope.team1[0];
+                        teams[t][i].teamNum = t + 1;
+                    }
+                }
+            }
+            $scope.team1[0] = local;
+            local.teamNum = 1;
+        }
+
+        $scope.canSwapTo = function (team) {
+            var me = localSlot();
+            if (!me || $scope.isSoloMap()) {
+                return false;
+            }
+            return Number(me.teamNum || 1) !== Number(team) && $scope.teamHasEmpty(team);
+        };
+
+        $scope.swapTeam = function (team) {
+            var me = localSlot();
+            if (!$scope.canSwapTo(team)) {
+                return;
+            }
+            if (!$scope._joinedGameroom) {
+                var target = Number(team) === 2 ? $scope.team2 : $scope.team1;
+                var from = Number(me.teamNum) === 2 ? $scope.team2 : $scope.team1;
+                var i;
+                for (i = 0; i < target.length; i++) {
+                    if (!target[i].occupied) {
+                        var idx = from.indexOf(me);
+                        var freed = target[i];
+                        target[i] = me;
+                        freed.teamNum = Number(me.teamNum) === 2 ? 2 : 1;
+                        from[idx] = freed;
+                        me.teamNum = Number(team);
+                        syncPlayerAttrsToServer(me);
+                        return;
+                    }
+                }
+                return;
+            }
+            var gid = $scope.gameId || '1';
+            httpRequest('POST', withKey('/cnc/player-attrs?gid=' + encodeURIComponent(gid) +
+                '&pid=' + encodeURIComponent(localPersonaId() || 0) +
+                '&team=' + encodeURIComponent(team) + '&isai=0')).then(function () {
+                $timeout(function () {
+                    startRosterPoll();
+                });
+            });
+        };
 
         function clearRemoteHumanSlots() {
             function wipe(slots) {
@@ -2346,72 +2669,20 @@
             wipe($scope.team2);
         }
 
-        function placeRemoteHuman(p) {
-            if (!p || p.isAi) {
+        function clearRemoteAiSlots() {
+            if ($scope.isLobbyHost()) {
                 return;
             }
-            if (rosterEntryIsLocal(p, localPersonaId())) {
-                return;
-            }
-            var team = Number(p.team) === 2 ? $scope.team2 : $scope.team1;
-            var teamNum = Number(p.team) === 2 ? 2 : 1;
+            var teams = [$scope.team1, $scope.team2];
+            var t;
             var i;
-            for (i = 0; i < team.length; i++) {
-                if (team[i] && team[i].occupied && !team[i].isLocal && !team[i].isAi &&
-                        Number(team[i].pid) === Number(p.pid)) {
-                    team[i].ready = !!p.ready;
-                    team[i].isHost = !!p.isHost;
-                    team[i].displayName = p.name || team[i].displayName;
-                    if (p.startpoint != null) {
-                        team[i].startpoint = clampStartIdToMap(p.startpoint);
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    if (teams[t][i] && teams[t][i].occupied && teams[t][i].isAi) {
+                        teams[t][i] = emptySlot();
+                        teams[t][i].teamNum = t + 1;
+                        teams[t][i].startpoint = 0;
                     }
-                    if (p.color) {
-                        team[i].color = cssHouseColor(p.color);
-                    }
-                    if (p.faction) {
-                        team[i].faction = normalizeFaction(p.faction);
-                        team[i].general = p.general
-                            ? Number(p.general) || team[i].general
-                            : defaultGeneralId(team[i].faction, $scope.selectedMap);
-                        team[i].codename = codenameForSlot(team[i]);
-                        team[i].avatar = avatarForSlot(team[i]);
-                    }
-                    return;
-                }
-            }
-            for (i = 0; i < team.length; i++) {
-                if (team[i] && !team[i].occupied) {
-                    var s = emptySlot();
-                    s.occupied = true;
-                    s.isLocal = false;
-                    s.isAi = false;
-                    s.ready = !!p.ready;
-                    s.isHost = !!p.isHost;
-                    s.pid = p.pid || 0;
-                    s.displayName = p.name || ('Player' + (i + 1));
-                    s.faction = defaultFactionForMap($scope.selectedMap);
-                    s.general = defaultGeneralId(s.faction, $scope.selectedMap);
-                    s.codename = codenameForSlot(s);
-                    s.avatar = avatarForSlot(s);
-                    s.teamNum = teamNum;
-                    s.startpoint = (p.startpoint != null)
-                        ? clampStartIdToMap(p.startpoint)
-                        : 0;
-                    if (p.color) {
-                        s.color = cssHouseColor(p.color);
-                    } else {
-                        s.color = unusedColor(s);
-                    }
-                    if (p.faction) {
-                        s.faction = normalizeFaction(p.faction);
-                        s.general = p.general
-                            ? Number(p.general) || defaultGeneralId(s.faction, $scope.selectedMap)
-                            : defaultGeneralId(s.faction, $scope.selectedMap);
-                        s.codename = codenameForSlot(s);
-                        s.avatar = avatarForSlot(s);
-                    }
-                    team[i] = s;
-                    return;
                 }
             }
         }
@@ -2423,17 +2694,17 @@
             var next = !$scope.localReady;
             var gid = $scope.gameId || '1';
             var localPid = localPersonaId();
-            httpRequest('POST', '/cnc/player-ready?gid=' + encodeURIComponent(gid) +
+            httpRequest('POST', withKey('/cnc/player-ready?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0) +
-                '&ready=' + (next ? '1' : '0')).then(function (data) {
+                '&ready=' + (next ? '1' : '0'))).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
                         return;
                     }
                     $scope.localReady = !!data.ready;
                     $scope.allHumansReady = !!data.allReady;
-                    if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                        $scope.team1[0].ready = $scope.localReady;
+                    if (localSlot() && localSlot().isLocal) {
+                        localSlot().ready = $scope.localReady;
                     }
                     if (data.admin) {
                         $scope.lobbyAdminPersona = data.admin;
@@ -2480,8 +2751,8 @@
             $scope.allHumansReady = !!data.allReady;
             if (data.self) {
                 // Server-confirmed identity for this shell's login; overrides stale profile/session ids.
-                if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                    $scope.team1[0].pid = data.self;
+                if (localSlot() && localSlot().isLocal) {
+                    localSlot().pid = data.self;
                 }
                 if (window.CncBlazeState && String(CncBlazeState.personaId) !== String(data.self)) {
                     CncBlazeState.personaId = String(data.self);
@@ -2503,34 +2774,34 @@
                 if (rosterEntryIsLocal(p, localPid)) {
                     localStillIn = true;
                     $scope._rosterSawSelf = true;
-                    if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                        $scope.team1[0].isHost = !!p.isHost || $scope._localIsLobbyHost;
+                    if (localSlot() && localSlot().isLocal) {
+                        localSlot().isHost = !!p.isHost || $scope._localIsLobbyHost;
                         if (p.pid) {
-                            $scope.team1[0].pid = p.pid;
+                            localSlot().pid = p.pid;
                             localPid = Number(p.pid) || localPid;
                         }
                     }
                     var asHost = !!(p.isHost || $scope._localIsLobbyHost ||
                         ($scope.isLobbyHost && $scope.isLobbyHost()));
                     $scope.localReady = asHost ? true : !!p.ready;
-                    if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                        $scope.team1[0].ready = $scope.localReady;
-                        $scope.team1[0].isHost = asHost || !!p.isHost;
+                    if (localSlot() && localSlot().isLocal) {
+                        localSlot().ready = $scope.localReady;
+                        localSlot().isHost = asHost || !!p.isHost;
                         if (p.startpoint != null && Date.now() >= ($scope._startpointHoldUntil || 0)) {
                             var serverSp = clampStartIdToMap(p.startpoint);
-                            var localSp = parseStartId($scope.team1[0].startpoint);
+                            var localSp = parseStartId(localSlot().startpoint);
                             if (!isValidStartpointForMap(localSp)) {
                                 localSp = 0;
-                                $scope.team1[0].startpoint = 0;
+                                localSlot().startpoint = 0;
                             }
                             if (serverSp > 0 || localSp <= 0) {
-                                $scope.team1[0].startpoint = serverSp;
+                                localSlot().startpoint = serverSp;
                             } else if (localSp > 0 && serverSp === 0) {
-                                maybeResyncStartpoint($scope.team1[0]);
+                                maybeResyncStartpoint(localSlot());
                             }
                         }
                         if (p.color && Date.now() >= ($scope._colorHoldUntil || 0)) {
-                            $scope.team1[0].color = cssHouseColor(p.color);
+                            localSlot().color = cssHouseColor(p.color);
                         }
                     }
                 } else {
@@ -2546,18 +2817,16 @@
             } else if (localStillIn) {
                 $scope._rosterMissSelf = 0;
             }
-            clearRemoteHumanSlots();
-            for (i = 0; i < remotes.length; i++) {
-                placeRemoteHuman(remotes[i]);
+            adoptRosterMap(data);
+            arrangeFromRoster(players, localPid);
+            if (localSlot() && localSlot().isLocal && $scope.lobbyAdminPersona) {
+                var pid = localSlot().pid || localPid;
+                localSlot().isHost = Number(pid) === Number($scope.lobbyAdminPersona) ||
+                    (!localSlot().pid && $scope._localIsLobbyHost);
             }
-            if ($scope.team1[0] && $scope.team1[0].isLocal && $scope.lobbyAdminPersona) {
-                var pid = $scope.team1[0].pid || localPid;
-                $scope.team1[0].isHost = Number(pid) === Number($scope.lobbyAdminPersona) ||
-                    (!$scope.team1[0].pid && $scope._localIsLobbyHost);
-            }
-            if ($scope.team1[0] && $scope.team1[0].isLocal && $scope.isLobbyHost()) {
-                $scope.team1[0].ready = true;
-                $scope.team1[0].isHost = true;
+            if (localSlot() && localSlot().isLocal && $scope.isLobbyHost()) {
+                localSlot().ready = true;
+                localSlot().isHost = true;
                 $scope.localReady = true;
             }
             if ($scope.isLobbyHost()) {
@@ -2661,6 +2930,9 @@
         };
 
         function syncMapToServer() {
+            if ($scope._joinedGameroom && !$scope.isLobbyHost()) {
+                return httpRequest('GET', '/cnc/online-count');
+            }
             var level = ($scope.selectedMap && $scope.selectedMap.path) || $scope.mapPath ||
                 (MAPS[0] && MAPS[0].path) || '';
             $scope.mapPath = level;
@@ -2674,7 +2946,7 @@
                 CncProbe.log('select-map → gid=' + $scope.gameId + ' path=' + level +
                     ' label=' + (($scope.selectedMap && $scope.selectedMap.label) || ''));
             }
-            return httpRequest('POST', url);
+            return httpRequest('POST', withKey(url));
         }
 
         function ensureAiPersonaId(slot) {
@@ -2711,6 +2983,9 @@
             if (!slot || !slot.occupied || slot.invitePending) {
                 return httpRequest('GET', '/cnc/online-count');
             }
+            if ($scope._joinedGameroom && !slot.isLocal && !(slot.isAi && $scope.isLobbyHost())) {
+                return httpRequest('GET', '/cnc/online-count');
+            }
             var pid = slot.isAi ? ensureAiPersonaId(slot) : (slot.pid || 0);
             var colorWire = houseColorWire(slot.color);
             var q = '/cnc/player-attrs?gid=' + encodeURIComponent($scope.gameId) +
@@ -2735,7 +3010,21 @@
             if (slot.difficulty) {
                 q += '&difficulty=' + encodeURIComponent(difficultyAttrValue(slot.difficulty));
             }
-            return httpRequest('POST', q, colorWire ? { color: colorWire } : null);
+            var req = httpRequest('POST', withKey(q), colorWire ? { color: colorWire } : null);
+            return {
+                then: function (resolve) {
+                    req.then(function (data) {
+                        if (data && data.rejected && data.rejected.length && $scope._joinedGameroom) {
+                            $timeout(function () {
+                                $scope._startpointHoldUntil = 0;
+                                $scope._colorHoldUntil = 0;
+                                startRosterPoll();
+                            });
+                        }
+                        resolve(data);
+                    });
+                }
+            };
         }
 
         function aiSlots() {
@@ -2765,7 +3054,7 @@
                 return;
             }
             if ($scope._joinedGameroom && !$scope.canStartBattle()) {
-                $scope._startError = 'All players must be ready before starting.';
+                requestStartFromGuests();
                 return;
             }
             if ($scope._starting) {
@@ -2787,7 +3076,7 @@
             resolveExclusiveStartpoints();
             assignRandomStartpoints();
 
-            var host = $scope.team1[0];
+            var host = localSlot();
             var gname = (host && host.displayName) || 'Player1';
             var ais = aiSlots();
             var occupied = 0;
@@ -3167,21 +3456,21 @@
                 }
             } catch (e) { /* ignore */ }
             applyMapFromBrowserGame(g);
-            if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                applyLobbyDefaultsToSlot($scope.team1[0], $scope.selectedMap);
-                $scope.team1[0].ready = !!$scope._localIsLobbyHost;
-                $scope.team1[0].isHost = !!$scope._localIsLobbyHost;
+            if (localSlot() && localSlot().isLocal) {
+                applyLobbyDefaultsToSlot(localSlot(), $scope.selectedMap);
+                localSlot().ready = !!$scope._localIsLobbyHost;
+                localSlot().isHost = !!$scope._localIsLobbyHost;
                 if (window.CncBlazeState && CncBlazeState.getPersonaId) {
                     var blazePid = CncBlazeState.getPersonaId();
                     if (blazePid) {
-                        $scope.team1[0].pid = blazePid;
+                        localSlot().pid = blazePid;
                     }
                 }
             }
             syncMapToServer();
             applyTutorialConstraints();
-            if ($scope.team1[0]) {
-                syncPlayerAttrsToServer($scope.team1[0]);
+            if (localSlot()) {
+                syncPlayerAttrsToServer(localSlot());
             }
             if (CncProbe.log) {
                 CncProbe.log('Lobby JOIN: game ' + gid + ' server=' + ($scope.serverName) +
@@ -3210,15 +3499,15 @@
                             $timeout(function () {
                                 if (data.games[i].admin) {
                                     $scope.lobbyAdminPersona = data.games[i].admin;
-                                    if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                                        var lp = $scope.team1[0].pid ||
+                                    if (localSlot() && localSlot().isLocal) {
+                                        var lp = localSlot().pid ||
                                             (window.CncBlazeState && CncBlazeState.getPersonaId &&
                                                 CncBlazeState.getPersonaId()) || 0;
-                                        $scope.team1[0].isHost =
+                                        localSlot().isHost =
                                             Number(lp) === Number(data.games[i].admin) ||
                                             $scope._localIsLobbyHost;
-                                        if ($scope.team1[0].isHost) {
-                                            $scope.team1[0].ready = true;
+                                        if (localSlot().isHost) {
+                                            localSlot().ready = true;
                                             $scope.localReady = true;
                                         }
                                     }
@@ -3269,7 +3558,7 @@
                 '&pid=' + encodeURIComponent(localPid || 0), { password: pwd }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
-                        $scope._joinPasswordError = (data && data.error) || 'Wrong password';
+                        $scope._joinPasswordError = (data && data.error) || 'Wrong password, please try again.';
                         return;
                     }
                     $scope.cancelJoinPassword();
@@ -3385,8 +3674,8 @@
         $scope.$watch(function () {
             return $rootScope.playerName;
         }, function (name) {
-            if ($scope.team1[0] && $scope.team1[0].isLocal) {
-                $scope.team1[0].displayName = name || 'UnknownPlayer';
+            if (localSlot() && localSlot().isLocal) {
+                localSlot().displayName = name || 'UnknownPlayer';
             }
         });
     });

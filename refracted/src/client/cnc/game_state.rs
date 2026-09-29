@@ -56,9 +56,36 @@ const JOIN_PASSWORD_AUTH_TTL: Duration = Duration::from_secs(120);
 struct LobbyChatLine {
     user: String,
     text: String,
+    system: bool,
 }
 
 static LOBBY_CHAT: OnceLock<Mutex<HashMap<i64, Vec<LobbyChatLine>>>> = OnceLock::new();
+static LOBBY_TYPING: OnceLock<Mutex<HashMap<i64, HashMap<String, Instant>>>> = OnceLock::new();
+const LOBBY_TYPING_TTL: Duration = Duration::from_secs(4);
+pub const LOBBY_TEAM_CAPACITY: usize = 3;
+
+fn lobby_typing() -> &'static Mutex<HashMap<i64, HashMap<String, Instant>>> {
+    LOBBY_TYPING.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+pub fn lobby_chat_note_typing(gid: i64, user: &str) {
+    let user: String = user.chars().take(32).collect();
+    if user.is_empty() {
+        return;
+    }
+    lobby_typing().lock().entry(gid).or_default().insert(user, Instant::now());
+}
+
+fn lobby_typing_names(gid: i64) -> Vec<String> {
+    let mut m = lobby_typing().lock();
+    let Some(by_user) = m.get_mut(&gid) else {
+        return Vec::new();
+    };
+    by_user.retain(|_, at| at.elapsed() < LOBBY_TYPING_TTL);
+    let mut names: Vec<String> = by_user.keys().cloned().collect();
+    names.sort();
+    names
+}
 
 fn lobby_chat() -> &'static Mutex<HashMap<i64, Vec<LobbyChatLine>>> {
     LOBBY_CHAT.get_or_init(|| Mutex::new(HashMap::new()))
@@ -76,20 +103,33 @@ pub fn lobby_chat_json(gid: i64) -> serde_json::Value {
         "messages": lines.iter().map(|l| serde_json::json!({
             "user": l.user,
             "text": l.text,
+            "system": l.system,
         })).collect::<Vec<_>>(),
+        "typing": lobby_typing_names(gid),
     })
 }
 
 pub fn lobby_chat_push(gid: i64, user: &str, text: &str) -> serde_json::Value {
+    lobby_chat_push_line(gid, user, text, false)
+}
+
+pub fn lobby_chat_push_system(gid: i64, text: &str) -> serde_json::Value {
+    lobby_chat_push_line(gid, "System", text, true)
+}
+
+fn lobby_chat_push_line(gid: i64, user: &str, text: &str, system: bool) -> serde_json::Value {
     let user: String = user.chars().take(32).collect();
     let text: String = text.chars().take(200).collect();
     if text.trim().is_empty() {
         return lobby_chat_json(gid);
     }
+    if let Some(by_user) = lobby_typing().lock().get_mut(&gid) {
+        by_user.remove(&user);
+    }
     {
         let mut m = lobby_chat().lock();
         let list = m.entry(gid).or_default();
-        list.push(LobbyChatLine { user, text });
+        list.push(LobbyChatLine { user, text, system });
         if list.len() > 80 {
             let extra = list.len() - 80;
             list.drain(0..extra);
@@ -1161,7 +1201,7 @@ pub fn verify_game_password(gid: i64, persona_id: i64, password: &str) -> serde_
     if password.trim() != expected {
         return serde_json::json!({
             "ok": false,
-            "error": "wrong password",
+            "error": "Wrong password, please try again.",
             "gid": gid,
             "passwordProtected": true,
         });
@@ -1969,13 +2009,13 @@ fn strip_poisoned_host_ai_pending(gid: i64) {
     }
 }
 
-fn merge_pending_into_player(gid: i64, player: &mut CncPlayer, map_path: &str) {
-    // Overlay pid=0 (pre-auth host) then exact persona. Do not copy `_isai=1` onto a human.
+fn merge_pending_into_player(gid: i64, player: &mut CncPlayer, map_path: &str, is_host: bool) {
+    // Overlay pid=0 (pre-auth host) for the host only, then exact persona. Do not copy `_isai=1` onto a human.
     let overlays = {
         let pending = pending_player_attrs().lock();
         let mut layers = Vec::new();
         if let Some(by_pid) = pending.get(&gid) {
-            if let Some(a) = by_pid.get(&0) {
+            if let Some(a) = by_pid.get(&0).filter(|_| is_host) {
                 if !attrs_mark_ai(a) || player.is_ai {
                     layers.push(a.clone());
                 }
@@ -2462,7 +2502,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         custom_data: IndexMap::new(),
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
-    merge_pending_into_player(gid, &mut host_player, map_for_defaults);
+    merge_pending_into_player(gid, &mut host_player, map_for_defaults, true);
     let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = games()
         .lock()
         .get(&gid)
@@ -2531,7 +2571,7 @@ pub fn seed_from_join(gid: i64) {
         custom_data: IndexMap::new(),
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
-    merge_pending_into_player(gid, &mut host_player, map_for_defaults);
+    merge_pending_into_player(gid, &mut host_player, map_for_defaults, true);
     assign_unique_house_color(&mut host_player, &[], None);
     let mut m = games().lock();
     if m.contains_key(&gid) {
@@ -3069,6 +3109,15 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
                     .map(|h| css_house_color(&h))
                     .unwrap_or_else(|| css_house_color(SELECTABLE_HOUSE_COLORS[0])),
                 "isAi": p.is_ai,
+                "difficulty": if p.is_ai {
+                    match p.attribs.get("_difficulty").map(|d| d.as_str()) {
+                        Some("0") => "EASY",
+                        Some("1") => "MEDIUM",
+                        _ => "HARD",
+                    }
+                } else {
+                    ""
+                },
                 "ready": p.ready || p.is_ai || is_host,
                 "isHost": is_host,
             })
@@ -3089,9 +3138,20 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableInstantSelling": game.enable_instant_selling,
         "enableRebuildableDerricks": game.enable_rebuildable_derricks,
         "allReady": all_ready,
+        "map": if game.map_path.is_empty() { get_map_path_locked(gid) } else { game.map_path.clone() },
+        "startCount": game.start_count,
         "players": players,
         "serverLost": false,
     })
+}
+
+fn get_map_path_locked(gid: i64) -> String {
+    PENDING_MAPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .get(&gid)
+        .map(|info| info.path.clone())
+        .unwrap_or_default()
 }
 
 /// GID for resetDedicatedServer when the wire omits RGID (pool lobby 10xxx).
@@ -3291,6 +3351,64 @@ fn parse_add_queued_gid(payload: &[u8]) -> i64 {
         .unwrap_or(1)
 }
 
+fn team_size(players: &[CncPlayer], team: i32, except_persona: i64) -> usize {
+    players
+        .iter()
+        .filter(|p| p.team == team && p.persona_id != except_persona)
+        .count()
+}
+
+/// Joining human goes to the side with fewer seats taken (ties to team 1), never a full side.
+fn balanced_join_team(players: &[CncPlayer]) -> i32 {
+    let t1 = team_size(players, 1, 0);
+    let t2 = team_size(players, 2, 0);
+    let pick = if t2 < t1 { 2 } else { 1 };
+    let other = 3 - pick;
+    if team_size(players, pick, 0) >= LOBBY_TEAM_CAPACITY
+        && team_size(players, other, 0) < LOBBY_TEAM_CAPACITY
+    {
+        other
+    } else {
+        pick
+    }
+}
+
+pub fn team_has_room(gid: i64, persona_id: i64, team: i32) -> bool {
+    let m = games().lock();
+    let Some(game) = m.get(&gid) else {
+        return true;
+    };
+    if game
+        .players
+        .iter()
+        .any(|p| p.persona_id == persona_id && p.team == team)
+    {
+        return true;
+    }
+    team_size(&game.players, team, persona_id) < LOBBY_TEAM_CAPACITY
+}
+
+pub fn startpoint_taken_by_other(gid: i64, persona_id: i64, startpoint: i32) -> bool {
+    if startpoint <= 0 {
+        return false;
+    }
+    let Some(game) = get_game(gid) else {
+        return false;
+    };
+    game.players
+        .iter()
+        .filter(|p| p.persona_id != persona_id)
+        .any(|p| effective_startpoint_for_player(gid, p) == startpoint)
+}
+
+pub fn is_lobby_host(gid: i64, persona_id: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.host_persona != 0 && g.host_persona == persona_id)
+        .unwrap_or(false)
+}
+
 fn next_free_slot(players: &[CncPlayer]) -> i32 {
     let used: std::collections::HashSet<i32> = players.iter().map(|p| p.slot).collect();
     for slot in 0..8 {
@@ -3375,10 +3493,13 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
             .iter()
             .position(|p| p.persona_id == persona_id)
         {
+            let existing_is_host =
+                game.host_persona == 0 || game.host_persona == persona_id;
             merge_pending_into_player(
                 gid,
                 &mut game.players[existing_idx],
                 &map_for_merge,
+                existing_is_host,
             );
             let others = game.players.clone();
             assign_unique_house_color(&mut game.players[existing_idx], &others, None);
@@ -3395,6 +3516,7 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
         }
         let is_host = game.host_persona == persona_id;
         let slot = next_free_slot(&game.players);
+        let team = if is_host { 1 } else { balanced_join_team(&game.players) };
         let map_path = if !game.map_path.is_empty() {
             game.map_path.clone()
         } else {
@@ -3419,14 +3541,17 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
                 display_name.to_string()
             },
             slot,
-            team: 1,
+            team,
             is_ai: false,
             ready: is_host,
-            attribs: default_human_attribs_for_map(&map_for_defaults, slot, 1),
+            attribs: default_human_attribs_for_map(&map_for_defaults, slot, team),
             custom_data: IndexMap::new(),
             stat: PROS_STAT_ACTIVE_CONNECTING,
         };
-        merge_pending_into_player(gid, &mut player, &map_for_defaults);
+        merge_pending_into_player(gid, &mut player, &map_for_defaults, is_host);
+        if !is_host {
+            apply_attr_to_player(&mut player, "_team", &team.to_string());
+        }
         let mut m = games().lock();
         let game = m.get_mut(&gid)?;
         if game.players.iter().any(|p| p.persona_id == persona_id) {
@@ -3438,6 +3563,11 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
         }
         assign_unique_house_color(&mut player, &game.players, None);
         game.players.push(player.clone());
+        if !is_host {
+            let mut balanced = IndexMap::new();
+            balanced.insert("_team".to_string(), player.team.to_string());
+            write_pending_player_attrs(gid, persona_id, &balanced);
+        }
         player
     };
     // refresh_pros_wire_for_gid locks GAMES itself; release the mutation lock first.
