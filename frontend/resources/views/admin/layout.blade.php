@@ -34,10 +34,6 @@
                 @if (auth()->user()?->isAdmin() && (\App\Support\AdminHosts::localDashboard() || request()->getHost() === \App\Support\AdminHosts::siteHost()))
                     <a href="{{ \App\Support\AdminHosts::gamesUrl() }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">Games</a>
                 @endif
-                @if (auth()->user()?->isAdmin())
-                    <a href="{{ \App\Support\CdnHosts::adminUrl() }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">CDN</a>
-                @endif
-                <a href="{{ config('app.url') }}" class="text-grit-mist underline decoration-grit-line underline-offset-2 hover:text-grit-text">View site</a>
                 <form method="POST" action="{{ Route::has('admin.logout') ? route('admin.logout') : route('site.admin.logout') }}">
                     @csrf
                     <button type="submit" class="text-signal-soft underline decoration-signal/30 underline-offset-2 hover:text-signal">Log out</button>
