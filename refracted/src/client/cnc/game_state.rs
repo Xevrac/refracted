@@ -1362,7 +1362,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_infinite_resource_centers: false,
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
-            enable_rebuildable_derricks: false,
+            enable_rebuildable_derricks: true,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -1407,7 +1407,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_infinite_resource_centers = false;
     game.enable_unlock_full_faction_roster = false;
     game.enable_instant_selling = false;
-    game.enable_rebuildable_derricks = false;
+    game.enable_rebuildable_derricks = true;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -2558,7 +2558,7 @@ pub fn seed_from_join(gid: i64) {
             enable_infinite_resource_centers: false,
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
-            enable_rebuildable_derricks: false,
+            enable_rebuildable_derricks: true,
             replicated_wire: None,
             pros_wire: None,
         },

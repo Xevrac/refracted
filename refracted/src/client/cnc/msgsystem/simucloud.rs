@@ -47,7 +47,7 @@ pub const CREATE_GAME_OPTIONS_INFINITE_RESOURCE_CENTERS: u32 = 0x100;
 pub const CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER: u32 = 0x200;
 /// Structure sell completes in ~0.01s. Default off (retail 10s).
 pub const CREATE_GAME_OPTIONS_INSTANT_SELLING: u32 = 0x400;
-/// Destroyed oil derricks can be rebuilt (husk cleared, oil well restored). Default off.
+/// Destroyed oil derricks can be rebuilt (husk cleared, oil well restored). Default on.
 pub const CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS: u32 = 0x800;
 
 fn create_game_options(

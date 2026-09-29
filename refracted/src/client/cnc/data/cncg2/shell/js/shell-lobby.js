@@ -631,7 +631,7 @@
             enableInfiniteResourceCenters: false,
             enableUnlockFullFactionRoster: false,
             enableInstantSelling: false,
-            enableRebuildableDerricks: false
+            enableRebuildableDerricks: true
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -2311,7 +2311,7 @@
             $scope.lobbyOptions.enableInfiniteResourceCenters = false;
             $scope.lobbyOptions.enableUnlockFullFactionRoster = false;
             $scope.lobbyOptions.enableInstantSelling = false;
-            $scope.lobbyOptions.enableRebuildableDerricks = false;
+            $scope.lobbyOptions.enableRebuildableDerricks = true;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
