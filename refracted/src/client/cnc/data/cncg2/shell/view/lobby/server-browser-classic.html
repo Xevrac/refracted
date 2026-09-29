@@ -21,7 +21,7 @@
     <div class="cc-lobby-browser__body">
         <div class="cc-lobby-browser__list">
             <div class="cc-lobby-browser__row cc-lobby-browser__row--head">
-                <span class="cc-lobby-browser__col cc-lobby-browser__col--lock" title="Password"></span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--lock" data-tip="Password"></span>
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--server">Server</span>
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--map">Map</span>
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--players">Players</span>
@@ -35,7 +35,7 @@
                         ng-class="{on: isBrowserGameSelected(g), disabled: g.joinable === false}"
                         ng-click="selectBrowserGame(g)">
                     <span class="cc-lobby-browser__col cc-lobby-browser__col--lock">
-                        <span class="cc-lobby-browser__padlock" ng-show="g.passwordProtected" title="Password protected"></span>
+                        <span class="cc-lobby-browser__padlock" ng-show="g.passwordProtected" data-tip="Password protected"></span>
                     </span>
                     <span class="cc-lobby-browser__col cc-lobby-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
                     <span class="cc-lobby-browser__col cc-lobby-browser__col--map">{{ browserMapLabel(g) }}</span>
@@ -82,7 +82,7 @@
             <h3>PASSWORD REQUIRED</h3>
             <p>This server is password protected.</p>
             <input type="password" class="cc-lobby-browser__pw-input"
-                   ng-model="_joinPasswordValue"
+                   ng-model="$parent._joinPasswordValue"
                    placeholder="Enter password"
                    ng-keydown="$event.keyCode == 13 && confirmJoinPassword()">
             <div class="cc-lobby-browser__pw-err" ng-show="_joinPasswordError">{{ _joinPasswordError }}</div>

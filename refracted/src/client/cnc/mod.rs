@@ -525,6 +525,23 @@ fn handle_cnc_utfwin(base: &str) -> HttpResponse {
     HttpResponse::new(404, "text/plain", b"Not Found".to_vec())
 }
 
+/// Shell login key (`key=` query or JSON `key`) -> the persona that shell signed in as.
+fn request_identity(query: Option<&str>, body: &[u8]) -> Option<(i64, String)> {
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == "key").then(|| percent_decode_plus(v))
+        })
+    });
+    let key = from_query.filter(|k| !k.is_empty()).or_else(|| {
+        serde_json::from_slice::<serde_json::Value>(body)
+            .ok()
+            .and_then(|v| v.get("key").and_then(|k| k.as_str()).map(|k| k.to_string()))
+            .filter(|k| !k.is_empty())
+    })?;
+    identity_for_login_key(&key).filter(|(pid, _)| *pid > 0)
+}
+
 fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
     let mut gid: i64 = 1;
@@ -573,6 +590,12 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
             "application/json",
             br#"{"ok":false,"error":"missing path"}"#.to_vec(),
         );
+    }
+    if let Some((persona, _)) = request_identity(query, body) {
+        if game_state::get_game(gid).is_some() && !game_state::is_lobby_host(gid, persona) {
+            let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
+            return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
+        }
     }
     game_state::set_map_selection(gid, &path, start_count);
     tracing::info!(
@@ -731,6 +754,38 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         );
     }
 
+    let is_ai_attrs = attrs
+        .get("_isai")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if let Some((persona, _)) = request_identity(query, body) {
+        if !is_ai_attrs {
+            pid = persona;
+        } else if game_state::get_game(gid).is_some() && !game_state::is_lobby_host(gid, persona) {
+            let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
+            return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
+        }
+    }
+    let mut rejected: Vec<&str> = Vec::new();
+    if pid != 0 {
+        if let Some(team) = attrs.get("_team").and_then(|t| t.parse::<i32>().ok()) {
+            if !game_state::team_has_room(gid, pid, team) {
+                attrs.shift_remove("_team");
+                rejected.push("team_full");
+            }
+        }
+        if let Some(sp) = attrs.get("_startpoint").and_then(|t| t.parse::<i32>().ok()) {
+            if game_state::startpoint_taken_by_other(gid, pid, sp) {
+                attrs.shift_remove("_startpoint");
+                rejected.push("startpoint_taken");
+            }
+        }
+    }
+    if attrs.is_empty() || (!rejected.is_empty() && attrs.keys().all(|k| k == "_isai")) {
+        let body = serde_json::json!({ "ok": false, "gid": gid, "pid": pid, "rejected": rejected });
+        return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
+    }
+
     crate::debug_println!(
         "[CNC] /cnc/player-attrs gid={} pid={} attrs={:?}",
         gid,
@@ -763,6 +818,7 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         "gid": gid,
         "pid": pid,
         "attrs": attrs,
+        "rejected": rejected,
         "probe": probe,
     });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
@@ -1373,6 +1429,9 @@ fn handle_cnc_player_ready(query: Option<&str>) -> HttpResponse {
             }
         }
     }
+    if let Some((persona, _)) = request_identity(query, &[]) {
+        pid = persona;
+    }
     if pid <= 0 {
         let (persona, _) = cnc_game_client_identity();
         pid = if persona == 0 { 1000 } else { persona as i64 };
@@ -1406,7 +1465,11 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
     }
     let mut user = String::new();
     let mut text = String::new();
+    let mut typing = false;
+    let mut request_start = false;
     if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
+        typing = v.get("typing").and_then(|t| t.as_bool()).unwrap_or(false);
+        request_start = v.get("requestStart").and_then(|t| t.as_bool()).unwrap_or(false);
         if let Some(g) = v.get("gid").and_then(|g| {
             g.as_i64()
                 .or_else(|| g.as_u64().map(|n| n as i64))
@@ -1421,6 +1484,25 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
             text = t.to_string();
         }
     }
+    let identity = request_identity(query, body);
+    if let Some((_, name)) = identity.as_ref().filter(|(_, n)| !n.is_empty()) {
+        user = name.clone();
+    }
+    if request_start {
+        let is_host = identity
+            .as_ref()
+            .map(|(pid, _)| game_state::is_lobby_host(gid, *pid))
+            .unwrap_or(false);
+        if !is_host {
+            let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
+            return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
+        }
+        let json = game_state::lobby_chat_push_system(
+            gid,
+            "Lobby host has requested to Start Battle! Ready up.",
+        );
+        return HttpResponse::new(200, "application/json", json.to_string().into_bytes());
+    }
     if user.is_empty() {
         let (_, name) = cnc_game_client_identity();
         user = if name.is_empty() {
@@ -1428,6 +1510,14 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
         } else {
             name
         };
+    }
+    if user.eq_ignore_ascii_case("system") {
+        user = "Player".to_string();
+    }
+    if typing {
+        game_state::lobby_chat_note_typing(gid, &user);
+        let json = game_state::lobby_chat_json(gid);
+        return HttpResponse::new(200, "application/json", json.to_string().into_bytes());
     }
     let json = game_state::lobby_chat_push(gid, &user, &text);
     HttpResponse::new(200, "application/json", json.to_string().into_bytes())

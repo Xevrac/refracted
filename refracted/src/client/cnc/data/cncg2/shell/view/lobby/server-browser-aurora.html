@@ -27,7 +27,7 @@
             <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
             <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
             <div class="au-lobby-browser__row au-lobby-browser__row--head">
-                <span class="au-lobby-browser__col au-lobby-browser__col--lock" title="Password"></span>
+                <span class="au-lobby-browser__col au-lobby-browser__col--lock" data-tip="Password"></span>
                 <span class="au-lobby-browser__col au-lobby-browser__col--server">Server</span>
                 <span class="au-lobby-browser__col au-lobby-browser__col--map">Map</span>
                 <span class="au-lobby-browser__col au-lobby-browser__col--players">Players</span>
@@ -41,7 +41,7 @@
                         ng-class="{on: isBrowserGameSelected(g), disabled: g.joinable === false}"
                         ng-click="selectBrowserGame(g)">
                     <span class="au-lobby-browser__col au-lobby-browser__col--lock">
-                        <span class="au-lobby-browser__padlock" ng-show="g.passwordProtected" title="Password protected"></span>
+                        <span class="au-lobby-browser__padlock" ng-show="g.passwordProtected" data-tip="Password protected"></span>
                     </span>
                     <span class="au-lobby-browser__col au-lobby-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
                     <span class="au-lobby-browser__col au-lobby-browser__col--map">{{ browserMapLabel(g) }}</span>
@@ -93,7 +93,7 @@
             <h3>Password required</h3>
             <p>This server is password protected.</p>
             <input type="password" class="au-lobby-browser__pw-input"
-                   ng-model="_joinPasswordValue"
+                   ng-model="$parent._joinPasswordValue"
                    placeholder="Enter password"
                    ng-keydown="$event.keyCode == 13 && confirmJoinPassword()">
             <div class="au-lobby-browser__pw-err" ng-show="_joinPasswordError">{{ _joinPasswordError }}</div>
