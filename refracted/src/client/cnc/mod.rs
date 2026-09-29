@@ -370,10 +370,6 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
         let _ = body;
         return Some(handle_cnc_utfwin(base));
     }
-    // GET|POST /cnc/open-url?url=… — open allowlisted support links in the OS browser.
-    if base == "cnc/open-url" {
-        return Some(handle_cnc_open_url(query, body));
-    }
     if !is_post {
         return None;
     }
@@ -428,99 +424,6 @@ fn percent_decode_plus(s: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
-}
-
-/// Allowlisted support URLs only.
-const CNC_OPEN_URL_ALLOWLIST: &[&str] = &[
-    "https://www.patreon.com/cw/refracted_",
-    "https://patreon.com/cw/refracted_",
-    "https://www.patreon.com/refracted_",
-    "https://patreon.com/refracted_",
-];
-
-fn cnc_open_url_allowed(url: &str) -> bool {
-    let trimmed = url.trim();
-    CNC_OPEN_URL_ALLOWLIST
-        .iter()
-        .any(|allowed| trimmed.eq_ignore_ascii_case(allowed))
-}
-
-fn open_url_in_system_browser(url: &str) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(url)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(url)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-}
-
-/// GET|POST `/cnc/open-url` — OS browser for allowlisted links.
-fn handle_cnc_open_url(query: Option<&str>, body: &[u8]) -> HttpResponse {
-    let mut url = String::new();
-    if let Some(q) = query {
-        for pair in q.split('&') {
-            if let Some((k, v)) = pair.split_once('=') {
-                if k == "url" {
-                    url = percent_decode_plus(v);
-                }
-            }
-        }
-    }
-    if url.is_empty() {
-        if let Ok(v) = serde_json::from_slice::<serde_json::Value>(body) {
-            if let Some(u) = v.get("url").and_then(|u| u.as_str()) {
-                url = u.to_string();
-            }
-        }
-    }
-    if url.is_empty() {
-        return HttpResponse::new(
-            400,
-            "application/json",
-            br#"{"ok":false,"error":"missing url"}"#.to_vec(),
-        );
-    }
-    if !cnc_open_url_allowed(&url) {
-        tracing::warn!(target: "cnc", "[CNC] open-url rejected (not allowlisted): {}", url);
-        return HttpResponse::new(
-            403,
-            "application/json",
-            br#"{"ok":false,"error":"url not allowlisted"}"#.to_vec(),
-        );
-    }
-    match open_url_in_system_browser(url.trim()) {
-        Ok(()) => {
-            tracing::info!(target: "cnc", "[CNC] open-url ok: {}", url.trim());
-            HttpResponse::new(
-                200,
-                "application/json",
-                br#"{"ok":true}"#.to_vec(),
-            )
-        }
-        Err(e) => {
-            tracing::warn!(target: "cnc", "[CNC] open-url failed: {} ({})", url.trim(), e);
-            let body = serde_json::json!({ "ok": false, "error": e });
-            HttpResponse::new(500, "application/json", body.to_string().into_bytes())
-        }
-    }
 }
 
 /// Lobby HUD: authenticated Blaze presence (`GET /cnc/online-count`).
