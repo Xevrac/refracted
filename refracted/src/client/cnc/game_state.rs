@@ -1440,6 +1440,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.phase = GamePhase::PreGame;
     game.map_path.clear();
     game.start_count = 0;
+    let had_password = !game.password.is_empty();
     game.password.clear();
     game.enable_special_abilities = true;
     game.enable_tech_tree = true;
@@ -1456,6 +1457,21 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     clear_blaze_push_flags(gid);
     drop(m);
     clear_join_auth_for_gid(gid);
+    clear_lobby_room_state(gid);
+    if had_password {
+        publish_password_attribs(gid, false, None, 0, dedicated_sid, 0);
+    }
+}
+
+/// Recycle: nothing a previous lobby left behind (chat, typing, map, player/AI attrs) survives.
+fn clear_lobby_room_state(gid: i64) {
+    lobby_chat().lock().remove(&gid);
+    lobby_typing().lock().remove(&gid);
+    pending_player_attrs().lock().remove(&gid);
+    PENDING_MAPS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .remove(&gid);
 }
 
 pub fn force_standby_reset(gid: i64) {
@@ -2058,11 +2074,7 @@ fn merge_pending_into_player(gid: i64, player: &mut CncPlayer, map_path: &str, i
 }
 
 fn ensure_general_attr(player: &mut CncPlayer, map_path: &str) {
-    let map = if map_path.is_empty() {
-        DEFAULT_MAP_PATH
-    } else {
-        map_path
-    };
+    let map = map_path;
     let faction = player
         .attribs
         .get("_faction")
@@ -2103,11 +2115,7 @@ fn write_pending_player_attrs(gid: i64, persona_id: i64, attrs: &IndexMap<String
 
 fn apply_pending_attrs_to_live_game(gid: i64, persona_id: i64, attrs: &IndexMap<String, String>) {
     let map = get_map_path(gid);
-    let map_path = if map.is_empty() {
-        DEFAULT_MAP_PATH
-    } else {
-        map.as_str()
-    };
+    let map_path = map.as_str();
     let mut m = games().lock();
     let Some(game) = m.get_mut(&gid) else {
         return;
@@ -2627,6 +2635,9 @@ pub fn destroy_game(gid: i64) {
     games().lock().remove(&gid);
     clear_pending_map(gid);
     clear_blaze_push_flags(gid);
+    lobby_chat().lock().remove(&gid);
+    lobby_typing().lock().remove(&gid);
+    clear_join_auth_for_gid(gid);
 }
 
 pub fn destroy_games_for_dedicated(dedicated_session_id: u64) {
@@ -3407,6 +3418,15 @@ pub fn is_lobby_host(gid: i64, persona_id: i64) -> bool {
         .get(&gid)
         .map(|g| g.host_persona != 0 && g.host_persona == persona_id)
         .unwrap_or(false)
+}
+
+/// Host, or nobody has claimed the lobby yet (a pool lobby before its first joiner).
+pub fn may_act_as_lobby_host(gid: i64, persona_id: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.host_persona == 0 || g.host_persona == persona_id)
+        .unwrap_or(true)
 }
 
 fn next_free_slot(players: &[CncPlayer]) -> i32 {

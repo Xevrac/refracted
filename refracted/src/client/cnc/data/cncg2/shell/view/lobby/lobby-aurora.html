@@ -212,8 +212,7 @@
                         </div>
                     </div>
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
-                        <button type="button" class="au-btn au-btn--ghost" ng-show="isLobbyHost()" ng-click="inviteFriend(1)">Invite</button>
-                        <span class="au-lobby__soon" ng-show="!isLobbyHost()" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
+                        <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
                         <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(1)" ng-click="swapTeam(1)">Swap</button>
                         <button type="button" class="au-btn au-btn--primary" ng-show="canAddPlayers()" ng-click="addAi(1)">Add AI</button>
                     </div>
@@ -294,8 +293,7 @@
                         </div>
                     </div>
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
-                        <button type="button" class="au-btn au-btn--ghost" ng-show="isLobbyHost()" ng-click="inviteFriend(2)">Invite</button>
-                        <span class="au-lobby__soon" ng-show="!isLobbyHost()" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
+                        <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
                         <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(2)" ng-click="swapTeam(2)">Swap</button>
                         <button type="button" class="au-btn au-btn--primary" ng-show="canAddPlayers()" ng-click="addAi(2)">Add AI</button>
                     </div>

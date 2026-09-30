@@ -1241,7 +1241,7 @@
         assignDefaultStartpoints();
 
         $scope.selectMap = function (map, $event) {
-            if (!map || (map.comingSoon && !($event && $event.shiftKey))) {
+            if (!map || (map.comingSoon && !($event && $event.shiftKey) && !$scope._adoptingMap)) {
                 return;
             }
             if ($scope._joinedGameroom && !$scope.isLobbyHost() && !$scope._adoptingMap) {
@@ -1883,7 +1883,7 @@
             var leaf = g.map || (path ? path.split('/').pop() : '');
             var i;
             for (i = 0; i < MAPS.length; i++) {
-                if (path && MAPS[i].path === path) {
+                if (path && MAPS[i].path && String(MAPS[i].path).toLowerCase() === String(path).toLowerCase()) {
                     return MAPS[i];
                 }
                 if (leaf && MAPS[i].path && MAPS[i].path.split('/').pop() === leaf) {
@@ -2072,10 +2072,13 @@
             if (!$scope._joinedGameroom) {
                 return true;
             }
+            var localPid = localPersonaId();
+            if ($scope._rosterSawSelf && $scope.lobbyAdminPersona > 0 && localPid) {
+                return Number($scope.lobbyAdminPersona) === Number(localPid);
+            }
             if ($scope._localIsLobbyHost) {
                 return true;
             }
-            var localPid = localPersonaId();
             if ($scope.lobbyAdminPersona && localPid) {
                 return Number($scope.lobbyAdminPersona) === Number(localPid);
             }
@@ -2262,7 +2265,7 @@
             var joinable = [];
             var i;
             for (i = 0; i < games.length; i++) {
-                if (gameHasRoom(games[i])) {
+                if (gameHasRoom(games[i]) && !games[i].passwordProtected) {
                     joinable.push(games[i]);
                 }
             }
@@ -2482,6 +2485,7 @@
         }
 
         function updateSlotFromRoster(s, p) {
+            s.fromRoster = true;
             s.occupied = true;
             s.isLocal = false;
             s.isAi = !!p.isAi;
@@ -2670,15 +2674,12 @@
         }
 
         function clearRemoteAiSlots() {
-            if ($scope.isLobbyHost()) {
-                return;
-            }
             var teams = [$scope.team1, $scope.team2];
             var t;
             var i;
             for (t = 0; t < teams.length; t++) {
                 for (i = 0; i < teams[t].length; i++) {
-                    if (teams[t][i] && teams[t][i].occupied && teams[t][i].isAi) {
+                    if (teams[t][i] && teams[t][i].occupied && teams[t][i].isAi && teams[t][i].fromRoster) {
                         teams[t][i] = emptySlot();
                         teams[t][i].teamNum = t + 1;
                         teams[t][i].startpoint = 0;

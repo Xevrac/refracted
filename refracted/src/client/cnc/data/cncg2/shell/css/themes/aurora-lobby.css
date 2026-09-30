@@ -279,7 +279,7 @@
 
 .au-lobby__chat-user {
     margin-right: 6px;
-    color: #7eb8ff;
+    color: #8b9aab;
     font-weight: bold;
 }
 
@@ -2223,8 +2223,14 @@
 }
 
 .au-lobby__chat-typing {
+    position: absolute;
+    right: 0;
+    bottom: 33px;
+    left: 0;
+    z-index: 2;
     height: 14px;
-    padding: 0 8px;
+    padding: 0 10px;
+    background: rgba(12, 15, 13, 0.85);
     color: #8b9aab;
     font-size: 10px;
     line-height: 14px;
