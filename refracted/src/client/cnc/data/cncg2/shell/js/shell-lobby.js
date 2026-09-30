@@ -1252,7 +1252,9 @@
             $scope.mapForcesTutorial = !!map.forceTutorialGeneral;
             $scope.mapMenuOpen = false;
             $scope.mapPickerOpen = false;
-            $scope.lobbySubTab = 'GENERALS';
+            if (!$scope._adoptingMap) {
+                $scope.lobbySubTab = 'GENERALS';
+            }
             if (map.slots) {
                 $scope.matchmakeMaxPlayers = Number(map.slots) === 1
                     ? 1
@@ -2751,7 +2753,7 @@
             }
             $scope.allHumansReady = !!data.allReady;
             if (data.self) {
-                // Server-confirmed identity for this shell's login; overrides stale profile/session ids.
+                // Server-confirmed identity 
                 if (localSlot() && localSlot().isLocal) {
                     localSlot().pid = data.self;
                 }
@@ -2764,6 +2766,9 @@
             }
             var localPid = data.self ? Number(data.self) : localPersonaId();
             var players = data.players || [];
+            if (data.self && Number(data.admin) > 0) {
+                $scope._localIsLobbyHost = Number(data.admin) === Number(data.self);
+            }
             var localStillIn = false;
             var remotes = [];
             var i;
