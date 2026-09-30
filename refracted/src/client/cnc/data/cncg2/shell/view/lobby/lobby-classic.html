@@ -187,8 +187,7 @@
                         </div>
                     </div>
                     <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(1)}" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="isLobbyHost()" ng-click="inviteFriend(1)">INVITE FRIEND</button>
-                        <span class="cc-lobby__soon" ng-show="!isLobbyHost()" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
+                        <span class="cc-lobby__soon" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
                         <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(1)" ng-click="swapTeam(1)">SWAP</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(1)">ADD AI</button>
                     </div>
@@ -269,8 +268,7 @@
                         </div>
                     </div>
                     <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(2)}" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="isLobbyHost()" ng-click="inviteFriend(2)">INVITE FRIEND</button>
-                        <span class="cc-lobby__soon" ng-show="!isLobbyHost()" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
+                        <span class="cc-lobby__soon" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
                         <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(2)" ng-click="swapTeam(2)">SWAP</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(2)">ADD AI</button>
                     </div>

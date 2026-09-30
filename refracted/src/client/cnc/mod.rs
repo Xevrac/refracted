@@ -592,7 +592,8 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
         );
     }
     if let Some((persona, _)) = request_identity(query, body) {
-        if game_state::get_game(gid).is_some() && !game_state::is_lobby_host(gid, persona) {
+        if !game_state::may_act_as_lobby_host(gid, persona) {
+            crate::console_println!("[CNC] select-map refused gid={} persona={} (not lobby host)", gid, persona);
             let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
         }
@@ -758,10 +759,14 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         .get("_isai")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
-    if let Some((persona, _)) = request_identity(query, body) {
+    let identity = request_identity(query, body);
+    if identity.is_none() {
+        crate::console_println!("[CNC] player-attrs gid={} pid={} without a known login key", gid, pid);
+    }
+    if let Some((persona, _)) = identity {
         if !is_ai_attrs {
             pid = persona;
-        } else if game_state::get_game(gid).is_some() && !game_state::is_lobby_host(gid, persona) {
+        } else if !game_state::may_act_as_lobby_host(gid, persona) {
             let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
         }
@@ -782,15 +787,17 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         }
     }
     if attrs.is_empty() || (!rejected.is_empty() && attrs.keys().all(|k| k == "_isai")) {
+        crate::console_println!("[CNC] player-attrs gid={} pid={} rejected={:?}", gid, pid, rejected);
         let body = serde_json::json!({ "ok": false, "gid": gid, "pid": pid, "rejected": rejected });
         return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
     }
 
-    crate::debug_println!(
-        "[CNC] /cnc/player-attrs gid={} pid={} attrs={:?}",
+    crate::console_println!(
+        "[CNC] player-attrs gid={} pid={} attrs={:?} rejected={:?}",
         gid,
         pid,
-        attrs
+        attrs,
+        rejected
     );
     game_state::set_pending_player_attrs(gid, pid, attrs.clone());
     if attrs.contains_key("color")
