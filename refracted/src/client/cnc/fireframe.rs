@@ -126,22 +126,15 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     Ok(out)
 }
 
-/// Other lobby players already have the pool game from joinGame. Same in-place reset as the host.
+/// Other lobby players already have the pool game from joinGame.
+/// A second Setup (create or reset) is rejected and they leave; mesh-advance only.
 pub fn pushes_lobby_player_after_reset(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     super::game_state::refresh_pros_wire_for_gid(gid);
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup(reset) lobby player handoff (gid={})",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: mesh-advance lobby player handoff (no Setup, gid={})",
         gid
     );
-
-    let setup = super::build_game_manager_notify_game_setup(&[], gid)?;
-    let mut out = vec![setup_push(
-        setup,
-        "NotifyGameSetup lobby player handoff",
-        "lobby player handoff",
-    )];
-    out.extend(match_advance_after_setup(gid)?);
-    Ok(out)
+    match_advance_after_setup(gid)
 }
 
 fn setup_push(setup: bytes::Bytes, label: &'static str, log_why: &str) -> OutgoingPush {
@@ -847,20 +840,17 @@ mod reset_push_tests {
     }
 
     #[test]
-    fn lobby_player_reset_updates_in_place() {
+    fn lobby_player_reset_skips_setup() {
         let pushes = pushes_lobby_player_after_reset(1).expect("encode");
         assert!(
             !pushes.iter().any(|p| p.command == 0x0010),
-            "lobby players already have the local game; Removed+create is rejected"
+            "lobby players already have the local game; Removed tears it down"
         );
-        assert!(pushes.iter().any(|p| p.command == 0x0014));
-        assert!(pushes.iter().any(|p| p.command == 0x0016));
-        let reas_tag = TdfEncoder::make_tag("REAS");
-        let reset_needle = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x01];
-        let setup = pushes.iter().find(|p| p.command == 0x0014).unwrap();
         assert!(
-            setup.tdf_body.windows(5).any(|w| w == reset_needle),
-            "lobby player Setup must use reset union member 1"
+            !pushes.iter().any(|p| p.command == 0x0014),
+            "second Setup is rejected and the joiner leaves"
         );
+        assert!(pushes.iter().any(|p| p.command == 0x0016));
+        assert!(pushes.iter().any(|p| p.command == 0x0064));
     }
 }

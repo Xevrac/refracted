@@ -620,7 +620,7 @@ fn player_mesh_live() -> &'static Mutex<HashSet<(i64, i64)>> {
     PLAYER_MESH_LIVE.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-/// Other lobby players get the same in-place reset Setup as the host; never the host's JoinCompleted.
+/// Other lobby players keep the lobby game (no second Setup); never the host's JoinCompleted.
 fn enqueue_player_handoff(gid: i64, client_sid: u64, _base: &[super::fireframe::OutgoingPush]) {
     player_mesh_live().lock().retain(|&(g, _)| g != gid);
     let players = lobby_player_sessions(gid, client_sid);
