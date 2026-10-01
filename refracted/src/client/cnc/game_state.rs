@@ -620,7 +620,7 @@ fn player_mesh_live() -> &'static Mutex<HashSet<(i64, i64)>> {
     PLAYER_MESH_LIVE.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-/// Other lobby players receive the same reset bundle as the resetting client (NotifyGameReset → InitiateConnections).
+/// Other lobby players get the same cmd 20 roster + cmd 22 mesh start; never the host's JoinCompleted.
 fn enqueue_player_handoff(gid: i64, client_sid: u64, base: &[super::fireframe::OutgoingPush]) {
     player_mesh_live().lock().retain(|&(g, _)| g != gid);
     let players = lobby_player_sessions(gid, client_sid);
@@ -628,7 +628,11 @@ fn enqueue_player_handoff(gid: i64, client_sid: u64, base: &[super::fireframe::O
         return;
     }
     for (pid, sid) in players {
-        let mut pushes = base.to_vec();
+        let mut pushes: Vec<_> = base
+            .iter()
+            .filter(|p| p.command != 0x001E)
+            .cloned()
+            .collect();
         for p in &mut pushes {
             p.blaze_send_label = "lobby player handoff after resetDedicatedServer";
         }
@@ -4110,6 +4114,7 @@ pub fn build_pros_entry(player: &CncPlayer, gid: i64) -> Vec<u8> {
 fn pros_entries_from_game(game: &CncGame) -> Vec<Vec<u8>> {
     game.players
         .iter()
+        .filter(|p| p.persona_id != 0)
         .map(|p| build_notify_pros_entry(p, game.gid))
         .collect()
 }
@@ -4631,6 +4636,11 @@ pub fn plst_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
 mod lobby_handoff_tests {
     use super::*;
 
+    fn exclusive() -> parking_lot::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock()
+    }
+
     fn other_player(pid: i64) -> CncPlayer {
         CncPlayer {
             persona_id: pid,
@@ -4647,6 +4657,7 @@ mod lobby_handoff_tests {
 
     #[test]
     fn reset_keeps_lobby_players() {
+        let _lock = exclusive();
         let gid = 987_601;
         seed_from_join(gid);
         let host = host_persona_for_gid(gid);
@@ -4661,6 +4672,7 @@ mod lobby_handoff_tests {
 
     #[test]
     fn leave_with_non_member_pid_keeps_last_human() {
+        let _lock = exclusive();
         let gid = 987_602;
         seed_from_join(gid);
         let host = host_persona_for_gid(gid);
@@ -4672,6 +4684,7 @@ mod lobby_handoff_tests {
 
     #[test]
     fn reset_copies_ai_and_host_scratch_lobby() {
+        let _lock = exclusive();
         let pool = 987_603;
         let scratch = 987_604;
         seed_from_join(pool);
@@ -4703,5 +4716,21 @@ mod lobby_handoff_tests {
         assert!(players.iter().any(|p| p.persona_id == ai_pid && p.is_ai));
         destroy_game(pool);
         destroy_game(scratch);
+    }
+
+    #[test]
+    fn joining_player_takes_smaller_team() {
+        let _lock = exclusive();
+        let gid = 987_605;
+        seed_from_join(gid);
+        let host = host_persona_for_gid(gid);
+        let other_pid = host + 7_000_005;
+        let joined = ensure_client_player(gid, other_pid, "Player").expect("join");
+        assert_eq!(joined.team, 2);
+        assert_eq!(
+            joined.attribs.get("_team").map(String::as_str),
+            Some("2")
+        );
+        destroy_game(gid);
     }
 }

@@ -3962,7 +3962,14 @@ fn build_replicated_game_data_fields(gid: i64) -> Vec<u8> {
 
 fn build_replicated_game_data_fields_fallback(gid: i64) -> Vec<u8> {
     let session = crate::session::get_user_session();
-    let uid = cnc_notify_host_persona();
+    let uid = {
+        let host = game_state::host_persona_for_gid(gid);
+        if host != 0 {
+            host
+        } else {
+            cnc_notify_host_persona()
+        }
+    };
     let dedicated = dedicated_pool::host_for_gid(gid);
     let topology_persona = replicated_topology_persona(gid);
 
@@ -4081,6 +4088,7 @@ pub fn build_game_manager_notify_game_setup_join(gid: i64) -> BlazeResult<Bytes>
     // Rebuild GAME fields so join does not reuse a stale host persona.
     let game = build_replicated_game_data_fields_fallback(gid);
     game_state::set_replicated_wire_fields(gid, game.clone());
+    game_state::refresh_pros_wire_for_gid(gid);
     let pros = game_state::pros_entries_for_gid(gid);
     let mut response = Vec::new();
     response.extend_from_slice(&TdfEncoder::encode_struct("GAME", &game));

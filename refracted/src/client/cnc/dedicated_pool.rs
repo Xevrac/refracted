@@ -1464,37 +1464,6 @@ pub fn orchestrate_client_reset(
         .map(|p| p as i64)
         .or_else(|| dedicated_identity_for_session(dedicated_sid).map(|(p, _)| p as i64))
         .unwrap_or(host.persona_id);
-    // Setup before Reset/Joining so the dedicated has this GID.
-    match super::build_dedicated_host_notify_game_setup(
-        gid,
-        host_persona,
-        host.inip_ip,
-        host.inip_port,
-        host.exip_ip,
-        host.exip_port,
-        dedicated_sid,
-        request_payload,
-    ) {
-        Ok(setup) => {
-            ded_pushes.push(super::fireframe::OutgoingPush {
-                wire: super::fireframe::notification_envelope(0x0004, 0x0014, &setup),
-                component: 0x0004,
-                command: 0x0014,
-                tdf_body: setup.to_vec(),
-                blaze_send_label: "NotifyGameSetup (dedicated host)",
-                info_log_line: format!(
-                    "[Blaze→Server] Match setup sent to dedicated (game {gid})"
-                ),
-            });
-        }
-        Err(e) => {
-            crate::debug_println!(
-                "\x1b[38;2;255;120;120m[Dedicated pool]\x1b[0m host NotifyGameSetup build failed gid={}: {:?}",
-                gid,
-                e
-            );
-        }
-    }
     match super::build_dedicated_host_notify_game_reset(
         gid,
         host_persona,
