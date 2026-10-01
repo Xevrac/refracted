@@ -2701,7 +2701,8 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
             .cloned();
 
         if let Some(leaving) = leaving_human {
-            if human_count > 1 {
+            // AI takeover for live match only lobby leaver just frees the seat
+            if human_count > 1 && game.phase == GamePhase::InGame {
                 let slot = leaving.slot;
                 let team = leaving.team.max(1);
                 let faction = leaving
@@ -2778,6 +2779,26 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
         refresh_pros_wire_for_gid(gid);
     }
     Some((humans, converted))
+}
+
+/// Host removed an AI seat in the lobby: drop the player and its pending attrs so guests stop seeing it
+pub fn remove_lobby_ai(gid: i64, persona_id: i64) -> bool {
+    let removed = {
+        let mut m = games().lock();
+        let Some(game) = m.get_mut(&gid) else {
+            return false;
+        };
+        let before = game.players.len();
+        game.players.retain(|p| !(p.is_ai && p.persona_id == persona_id));
+        game.players.len() != before
+    };
+    if let Some(by_pid) = pending_player_attrs().lock().get_mut(&gid) {
+        by_pid.remove(&persona_id);
+    }
+    if removed {
+        refresh_pros_wire_for_gid(gid);
+    }
+    removed
 }
 
 pub fn is_standby_game(gid: i64) -> bool {
