@@ -312,6 +312,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/player-attrs" && is_post {
         return Some(handle_cnc_player_attrs(query, body));
     }
+    if base == "cnc/remove-ai" && is_post {
+        return Some(handle_cnc_remove_ai(query, body));
+    }
     // GET /cnc/player-probe?gid= -- validate map + player lobby/CreateGame fields.
     if base == "cnc/player-probe" && is_get {
         return Some(handle_cnc_player_probe(query));
@@ -828,6 +831,30 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         "rejected": rejected,
         "probe": probe,
     });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+/// `POST /cnc/remove-ai?gid=&pid=<negative AI id>&key=` — lobby host only.
+fn handle_cnc_remove_ai(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    use crate::client::cnc::game_state;
+    let gid = query_i64(query, "gid");
+    let pid = query_i64(query, "pid");
+    if gid <= 0 || pid >= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"gid and AI pid required"}"#.to_vec(),
+        );
+    }
+    if let Some((persona, _)) = request_identity(query, body) {
+        if !game_state::may_act_as_lobby_host(gid, persona) {
+            let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
+            return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
+        }
+    }
+    let removed = game_state::remove_lobby_ai(gid, pid);
+    crate::console_println!("[CNC] remove-ai gid={} pid={} removed={}", gid, pid, removed);
+    let body = serde_json::json!({ "ok": true, "gid": gid, "pid": pid, "removed": removed });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 

@@ -500,74 +500,101 @@
         return t;
     }
 
+    // Sends immediately; then() only subscribes, so fire-and-forget callers still reach the server.
     function httpRequest(method, url, bodyObj) {
-        return {
-            then: function (resolve) {
-                var payload = null;
-                var contentType = null;
-                if (bodyObj != null) {
-                    try {
-                        payload = window.JSON ? JSON.stringify(bodyObj) : null;
-                        contentType = 'application/json';
-                    } catch (je) {
-                        payload = null;
-                    }
-                }
+        var settled = false;
+        var result;
+        var waiters = [];
+        function resolve(value) {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            result = value;
+            var i;
+            for (i = 0; i < waiters.length; i++) {
+                waiters[i](value);
+            }
+            waiters = [];
+        }
+        (function send() {
+            var payload = null;
+            var contentType = null;
+            if (bodyObj != null) {
                 try {
-                    if (window.jQuery && jQuery.ajax) {
-                        jQuery.ajax({
-                            url: url,
-                            type: method,
-                            dataType: 'json',
-                            cache: false,
-                            data: payload,
-                            contentType: contentType || 'application/x-www-form-urlencoded; charset=UTF-8',
-                            processData: false,
-                            timeout: 8000,
-                            success: function (body) { resolve(body); },
-                            error: function (xhr) {
-                                if (xhr && xhr.responseText) {
-                                    try {
-                                        resolve(window.JSON ? JSON.parse(xhr.responseText) : false);
-                                        return;
-                                    } catch (pe) { /* fall through */ }
-                                }
-                                resolve(false);
+                    payload = window.JSON ? JSON.stringify(bodyObj) : null;
+                    contentType = 'application/json';
+                } catch (je) {
+                    payload = null;
+                }
+            }
+            try {
+                if (window.jQuery && jQuery.ajax) {
+                    jQuery.ajax({
+                        url: url,
+                        type: method,
+                        dataType: 'json',
+                        cache: false,
+                        data: payload,
+                        contentType: contentType || 'application/x-www-form-urlencoded; charset=UTF-8',
+                        processData: false,
+                        timeout: 8000,
+                        success: function (body) { resolve(body); },
+                        error: function (xhr) {
+                            if (xhr && xhr.responseText) {
+                                try {
+                                    resolve(window.JSON ? JSON.parse(xhr.responseText) : false);
+                                    return;
+                                } catch (pe) { /* fall through */ }
                             }
-                        });
+                            resolve(false);
+                        }
+                    });
+                    return;
+                }
+            } catch (e) { /* fall through */ }
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open(method, url, true);
+                if (contentType) {
+                    xhr.setRequestHeader('Content-Type', contentType);
+                }
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) {
                         return;
                     }
-                } catch (e) { /* fall through */ }
-                try {
-                    var xhr = new XMLHttpRequest();
-                    xhr.open(method, url, true);
-                    if (contentType) {
-                        xhr.setRequestHeader('Content-Type', contentType);
-                    }
-                    xhr.onreadystatechange = function () {
-                        if (xhr.readyState !== 4) {
-                            return;
-                        }
-                        if (xhr.status < 200 || xhr.status >= 300) {
-                            try {
-                                resolve(window.JSON ? JSON.parse(xhr.responseText) : false);
-                            } catch (pe2) {
-                                resolve(false);
-                            }
-                            return;
-                        }
+                    if (xhr.status < 200 || xhr.status >= 300) {
                         try {
-                            resolve(window.JSON ? JSON.parse(xhr.responseText) : true);
-                        } catch (pe) {
-                            resolve(true);
+                            resolve(window.JSON ? JSON.parse(xhr.responseText) : false);
+                        } catch (pe2) {
+                            resolve(false);
                         }
-                    };
-                    xhr.send(payload);
-                } catch (e2) {
-                    resolve(false);
+                        return;
+                    }
+                    try {
+                        resolve(window.JSON ? JSON.parse(xhr.responseText) : true);
+                    } catch (pe) {
+                        resolve(true);
+                    }
+                };
+                xhr.send(payload);
+            } catch (e2) {
+                resolve(false);
+            }
+        })();
+        return {
+            then: function (cb) {
+                if (settled) {
+                    cb(result);
+                } else {
+                    waiters.push(cb);
                 }
             }
         };
+    }
+
+    function settledRequest(value) {
+        return { then: function (cb) { cb(value); } };
     }
 
     function whenAll(tasks, onOk, onFail) {
@@ -1597,6 +1624,7 @@
             slot.faction = normalizeFaction(code);
             slot.general = defaultGeneralId(slot.faction, $scope.selectedMap);
             slot.codename = codenameForSlot(slot);
+            syncPlayerAttrsToServer(slot);
         };
 
         $scope.setGeneral = function (slot, generalId, $event) {
@@ -1610,6 +1638,7 @@
                 ? tutorialGeneralId(slot.faction)
                 : (Number(generalId) || 0);
             slot.codename = codenameForSlot(slot);
+            syncPlayerAttrsToServer(slot);
             $scope.slotMenu = null;
             closeColorPicker();
         };
@@ -1744,6 +1773,10 @@
             if (!slot || slot.isLocal) {
                 return;
             }
+            if ($scope._joinedGameroom && slot.isAi && Number(slot.pid) < 0 && $scope.isLobbyHost()) {
+                httpRequest('POST', withKey('/cnc/remove-ai?gid=' + encodeURIComponent(lobbyGid()) +
+                    '&pid=' + encodeURIComponent(slot.pid)));
+            }
             var cleared = emptySlot();
             cleared.teamNum = team;
             cleared.startpoint = 0;
@@ -1755,6 +1788,7 @@
         $scope.setDifficulty = function (slot, diff) {
             if (slot && slot.isAi) {
                 slot.difficulty = diff;
+                syncPlayerAttrsToServer(slot);
             }
         };
 
@@ -2468,11 +2502,22 @@
         }
 
         function adoptRosterMap(data) {
-            if (!data || !data.map || $scope.isLobbyHost()) {
+            if (!data) {
                 return;
             }
             var current = ($scope.selectedMap && $scope.selectedMap.path) || '';
-            if (String(current).toLowerCase() === String(data.map).toLowerCase()) {
+            if (String(current).toLowerCase() === String(data.map || '').toLowerCase()) {
+                return;
+            }
+            if ($scope.isLobbyHost()) {
+                var now = Date.now();
+                if (current && ($scope._mapResyncAt || 0) <= now) {
+                    $scope._mapResyncAt = now + 3000;
+                    syncMapToServer();
+                }
+                return;
+            }
+            if (!data.map) {
                 return;
             }
             var map = findMapEntryForBrowserGame({ mapPath: data.map });
@@ -2809,6 +2854,12 @@
                         if (p.color && Date.now() >= ($scope._colorHoldUntil || 0)) {
                             localSlot().color = cssHouseColor(p.color);
                         }
+                        var generalDrift = p.general && Number(p.general) !== Number(localSlot().general);
+                        var factionDrift = p.faction && normalizeFaction(p.faction) !== localSlot().faction;
+                        if ((generalDrift || factionDrift) && ($scope._attrsResyncAt || 0) <= Date.now()) {
+                            $scope._attrsResyncAt = Date.now() + 3000;
+                            syncPlayerAttrsToServer(localSlot());
+                        }
                     }
                 } else {
                     remotes.push(p);
@@ -2937,13 +2988,13 @@
 
         function syncMapToServer() {
             if ($scope._joinedGameroom && !$scope.isLobbyHost()) {
-                return httpRequest('GET', '/cnc/online-count');
+                return settledRequest(true);
             }
             var level = ($scope.selectedMap && $scope.selectedMap.path) || $scope.mapPath ||
                 (MAPS[0] && MAPS[0].path) || '';
             $scope.mapPath = level;
             if (!level) {
-                return httpRequest('GET', '/cnc/online-count');
+                return settledRequest(true);
             }
             var url = '/cnc/select-map?gid=' + encodeURIComponent($scope.gameId) +
                 '&path=' + encodeURIComponent(level) +
@@ -2987,10 +3038,10 @@
 
         function syncPlayerAttrsToServer(slot, includeStartpoint) {
             if (!slot || !slot.occupied || slot.invitePending) {
-                return httpRequest('GET', '/cnc/online-count');
+                return settledRequest(true);
             }
             if ($scope._joinedGameroom && !slot.isLocal && !(slot.isAi && $scope.isLobbyHost())) {
-                return httpRequest('GET', '/cnc/online-count');
+                return settledRequest(true);
             }
             var pid = slot.isAi ? ensureAiPersonaId(slot) : (slot.pid || 0);
             var colorWire = houseColorWire(slot.color);
@@ -3477,6 +3528,13 @@
             applyTutorialConstraints();
             if (localSlot()) {
                 syncPlayerAttrsToServer(localSlot());
+            }
+            if ($scope._localIsLobbyHost) {
+                var hostAis = aiSlots();
+                var ai;
+                for (ai = 0; ai < hostAis.length; ai++) {
+                    syncPlayerAttrsToServer(hostAis[ai], true);
+                }
             }
             if (CncProbe.log) {
                 CncProbe.log('Lobby JOIN: game ' + gid + ' server=' + ($scope.serverName) +
