@@ -636,9 +636,10 @@ fn enqueue_player_handoff(gid: i64, client_sid: u64, _base: &[super::fireframe::
         let Ok(pushes) = super::fireframe::pushes_lobby_player_after_reset(gid) else {
             continue;
         };
+        let cmds: Vec<u16> = pushes.iter().map(|p| p.command).collect();
         super::fireframe::enqueue_pending_pushes(sid, pushes);
         super::msgsystem::log::log_orch_milestone(&format!(
-            "Lobby player handoff queued (game {gid}, persona {pid}, client #{sid})"
+            "Lobby player mesh-advance queued (no Setup, game {gid}, persona {pid}, client #{sid}, cmds={cmds:?})"
         ));
         schedule_synthetic_player_mesh(gid, sid, pid);
     }
@@ -673,8 +674,12 @@ fn enqueue_to_lobby_players(gid: i64, pushes: &[super::fireframe::OutgoingPush])
     if players.is_empty() {
         return;
     }
+    let pushes = super::fireframe::without_local_game_create(pushes.to_vec());
+    if pushes.is_empty() {
+        return;
+    }
     for (_, sid) in players {
-        super::fireframe::enqueue_pending_pushes(sid, pushes.to_vec());
+        super::fireframe::enqueue_pending_pushes(sid, pushes.clone());
     }
     let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
 }

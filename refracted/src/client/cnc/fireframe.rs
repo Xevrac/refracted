@@ -127,14 +127,32 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
 }
 
 /// Other lobby players already have the pool game from joinGame.
-/// A second Setup (create or reset) is rejected and they leave; mesh-advance only.
+/// A second Setup is rejected (no reset job) and they leave; mesh-advance only.
 pub fn pushes_lobby_player_after_reset(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     super::game_state::refresh_pros_wire_for_gid(gid);
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: mesh-advance lobby player handoff (no Setup, gid={})",
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: mesh-advance lobby player (no Setup, gid={})",
         gid
     );
-    match_advance_after_setup(gid)
+    Ok(without_local_game_create(match_advance_after_setup(gid)?))
+}
+
+/// Cmd 20/16 tear down a joiner that already holds the lobby game.
+pub fn without_local_game_create(pushes: Vec<OutgoingPush>) -> Vec<OutgoingPush> {
+    pushes
+        .into_iter()
+        .filter(|p| p.command != 0x0014 && p.command != 0x0010)
+        .map(|mut p| {
+            if p.command == 0x0016 {
+                p.blaze_send_label = "NotifyJoiningPlayerInitiateConnections lobby player (no Setup)";
+                p.info_log_line = format!(
+                    "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0 (lobby player mesh, no Setup)",
+                    p.wire.len()
+                );
+            }
+            p
+        })
+        .collect()
 }
 
 fn setup_push(setup: bytes::Bytes, label: &'static str, log_why: &str) -> OutgoingPush {
@@ -852,5 +870,15 @@ mod reset_push_tests {
         );
         assert!(pushes.iter().any(|p| p.command == 0x0016));
         assert!(pushes.iter().any(|p| p.command == 0x0064));
+        let stripped = without_local_game_create({
+            let mut mixed = pushes_client_join_after_reset(&[], 1).expect("host");
+            mixed.extend(pushes.clone());
+            mixed
+        });
+        assert!(
+            !stripped.iter().any(|p| p.command == 0x0014 || p.command == 0x0010),
+            "joiner fanout must drop Setup/Removed even if host pushes leak in"
+        );
+        assert!(stripped.iter().any(|p| p.command == 0x0016));
     }
 }
