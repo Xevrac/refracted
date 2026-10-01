@@ -2770,6 +2770,9 @@
             if (!data || !data.ok) {
                 return;
             }
+            if (data.starting) {
+                $scope._starting = true;
+            }
             if (data.admin != null) {
                 $scope.lobbyAdminPersona = data.admin;
             }

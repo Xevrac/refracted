@@ -1697,6 +1697,7 @@ impl BlazeProtocolServer {
                                 crate::client::cnc::game_state::seed_from_join(gid);
                             } else {
                                 crate::client::cnc::game_state::seed_from_reset(&packet.payload, gid);
+                                crate::client::cnc::game_state::mark_match_starting(gid);
                             }
 
                             // resetDedicatedServer: defer client join notifies until dedicated host
