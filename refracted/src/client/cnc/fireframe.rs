@@ -108,47 +108,77 @@ pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<O
 }
 
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    // Lobby join already stands up a local game; a second cmd 20 is rejected.
-    // Tear it down, then cmd 20 with the live roster (local player included).
+    // Host already has the lobby game. Reset REAS updates it in place; Removed+Setup is rejected.
     super::game_state::refresh_pros_wire_for_gid(gid);
-    let replace_local = super::game_state::blaze_join_setup_already_pushed(gid)
-        || super::game_state::client_local_game_active(gid);
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: {}NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
-        if replace_local {
-            "NotifyGameRemoved + "
-        } else {
-            ""
-        },
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup(reset) + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
         gid
     );
 
-    let mut out = Vec::new();
-    if replace_local {
-        let removed = super::build_game_manager_notify_game_removed(
-            gid,
-            super::GAME_REMOVAL_REASON_GAME_DESTROYED,
-        )?;
-        let wire_removed = notification_envelope(0x0004, 0x0010, &removed);
-        let pl = wire_removed.len();
-        out.push(OutgoingPush {
-            wire: wire_removed,
-            component: 0x0004,
-            command: 0x0010,
-            tdf_body: removed.to_vec(),
-            blaze_send_label: "NotifyGameRemoved after resetDedicatedServer",
-            info_log_line: format!(
-                "[Blaze→Client] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl
-            ),
-        });
-    }
-
     let setup = super::build_game_manager_notify_game_setup(request, gid)?;
-    let wire_setup = notification_envelope(0x0004, 0x0014, &setup);
-    let pl0 = wire_setup.len();
     super::game_state::clear_blaze_join_setup_pushed(gid);
+    let mut out = vec![setup_push(
+        setup,
+        "NotifyGameSetup after resetDedicatedServer",
+        "after resetDedicatedServer",
+    )];
+    out.extend(match_advance_after_setup(gid)?);
+    Ok(out)
+}
 
+/// Other lobby players: tear down the pool lobby game, then join Setup with themselves on PROS.
+pub fn pushes_lobby_player_after_reset(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    super::game_state::refresh_pros_wire_for_gid(gid);
+    let removed = super::build_game_manager_notify_game_removed(
+        gid,
+        super::GAME_REMOVAL_REASON_GAME_DESTROYED,
+    )?;
+    let setup = super::build_game_manager_notify_game_setup_join(gid)?;
+    let mut out = vec![
+        removed_push(removed, "NotifyGameRemoved lobby player handoff"),
+        setup_push(
+            setup,
+            "NotifyGameSetup lobby player handoff",
+            "lobby player handoff",
+        ),
+    ];
+    out.extend(match_advance_after_setup(gid)?);
+    Ok(out)
+}
+
+fn removed_push(removed: bytes::Bytes, label: &'static str) -> OutgoingPush {
+    let wire = notification_envelope(0x0004, 0x0010, &removed);
+    let pl = wire.len();
+    OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x0010,
+        tdf_body: removed.to_vec(),
+        blaze_send_label: label,
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    }
+}
+
+fn setup_push(setup: bytes::Bytes, label: &'static str, log_why: &str) -> OutgoingPush {
+    let wire = notification_envelope(0x0004, 0x0014, &setup);
+    let pl = wire.len();
+    OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x0014,
+        tdf_body: setup.to_vec(),
+        blaze_send_label: label,
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0 ({log_why})",
+            pl
+        ),
+    }
+}
+
+fn match_advance_after_setup(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_INITIALIZING)?;
     let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
     let pl_gstate = wire_gstate.len();
@@ -161,18 +191,7 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
     let pl_initiate = wire_initiate.len();
 
-    let tail = vec![
-        OutgoingPush {
-            wire: wire_setup,
-            component: 0x0004,
-            command: 0x0014,
-            tdf_body: setup.to_vec(),
-            blaze_send_label: "NotifyGameSetup after resetDedicatedServer",
-            info_log_line: format!(
-                "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl0
-            ),
-        },
+    Ok(vec![
         OutgoingPush {
             wire: wire_gstate,
             component: 0x0004,
@@ -206,9 +225,7 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
                 pl_initiate
             ),
         },
-    ];
-    out.extend(tail);
-    Ok(out)
+    ])
 }
 
 pub fn pushes_after_join_game(request: &[u8]) -> BlazeResult<Vec<OutgoingPush>> {
@@ -822,4 +839,42 @@ pub fn pushes_after_get_game_list_snapshot() -> BlazeResult<Vec<OutgoingPush>> {
             pl
         ),
     }])
+}
+
+#[cfg(test)]
+mod reset_push_tests {
+    use super::*;
+    use crate::blaze::tdf::TdfEncoder;
+
+    #[test]
+    fn host_reset_setup_has_no_removed() {
+        let pushes = pushes_client_join_after_reset(&[], 1).expect("encode");
+        assert!(
+            !pushes.iter().any(|p| p.command == 0x0010),
+            "host must not receive NotifyGameRemoved; the lobby game is already local"
+        );
+        assert!(pushes.iter().any(|p| p.command == 0x0014));
+        assert!(pushes.iter().any(|p| p.command == 0x0016));
+        let reas_tag = TdfEncoder::make_tag("REAS");
+        let reset_needle = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x01];
+        let setup = pushes.iter().find(|p| p.command == 0x0014).unwrap();
+        assert!(
+            setup.tdf_body.windows(5).any(|w| w == reset_needle),
+            "host Setup must use reset union member 1"
+        );
+    }
+
+    #[test]
+    fn lobby_player_reset_tears_down_then_join_setup() {
+        let pushes = pushes_lobby_player_after_reset(1).expect("encode");
+        assert_eq!(pushes[0].command, 0x0010);
+        assert_eq!(pushes[1].command, 0x0014);
+        assert!(pushes.iter().any(|p| p.command == 0x0016));
+        let reas_tag = TdfEncoder::make_tag("REAS");
+        let join_needle = [reas_tag[0], reas_tag[1], reas_tag[2], 0x06, 0x00];
+        assert!(
+            pushes[1].tdf_body.windows(5).any(|w| w == join_needle),
+            "lobby player Setup must use join union member 0"
+        );
+    }
 }

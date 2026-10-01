@@ -2086,9 +2086,7 @@ fn json_test_client_is_secondary() -> bool {
 /// Human on this Blaze thread (JSON extra client or primary). Dedicated falls back to the global profile.
 pub fn cnc_game_client_identity() -> (u64, String) {
     if let Some(sid) = crate::session::session_module::current_blaze_session_id() {
-        if dedicated_pool::dedicated_identity_for_session(sid).is_none()
-            && crate::session::blaze_sessions::session_identity_bound(sid)
-        {
+        if dedicated_pool::dedicated_identity_for_session(sid).is_none() {
             if let Some(sess) = crate::session::blaze_sessions::get_session(sid) {
                 if let Some(pid) = sess.persona_id.filter(|&p| p != 0) {
                     let name = sess
@@ -4143,15 +4141,30 @@ fn encode_reas_dataless_join() -> Bytes {
 }
 
 fn encode_reas_dataless(dctx: i32) -> Bytes {
-    encode_union_struct("REAS", 0, |body| {
+    encode_reas_union(0, |body| {
         body.extend_from_slice(&TdfEncoder::encode_int("DCTX", dctx));
     })
 }
 
 fn encode_reas_reset_dedicated() -> Bytes {
-    encode_union_struct("REAS", 1, |body| {
+    encode_reas_union(1, |body| {
         body.extend_from_slice(&TdfEncoder::encode_int("ERR ", 0));
     })
+}
+
+/// GameSetupReason is a union of named structs (DCTX / ERR), not a NetworkAddress VALU wrapper.
+/// CNC prints `union : 127` (unset) when the member payload is tagged VALU instead of the inner fields.
+fn encode_reas_union(member: u8, build_fields: impl FnOnce(&mut Vec<u8>)) -> Bytes {
+    let mut out = Vec::new();
+    let tag = TdfEncoder::make_tag("REAS");
+    out.push(tag[0]);
+    out.push(tag[1]);
+    out.push(tag[2]);
+    out.push(0x06);
+    out.push(member);
+    build_fields(&mut out);
+    out.push(0x00);
+    Bytes::from(out)
 }
 
 fn encode_union_struct(
@@ -4638,6 +4651,31 @@ mod notify_game_setup_tests {
             !payload.windows(dctx_needle.len()).any(|w| w == dctx_needle),
             "reset REAS must not use dataless DCTX=CREATE member 0"
         );
+    }
+
+    #[test]
+    fn notify_setup_reas_has_no_valu_wrapper() {
+        let reset = build_game_manager_notify_game_setup(&[], 1).expect("encode");
+        let join = build_game_manager_notify_game_setup_join(1).expect("encode");
+        let dedicated = build_dedicated_host_notify_game_setup(
+            700005,
+            1000,
+            0x7f000001,
+            25200,
+            0x7f000001,
+            25200,
+            42,
+            &[],
+        )
+        .expect("encode");
+        for payload in [&reset, &join, &dedicated] {
+            let tree = TdfTreeParser::parse_packet(payload).expect("parse");
+            let reas = find_tag(&tree, "REAS").expect("REAS");
+            assert!(
+                find_tag(&reas.children, "VALU").is_none(),
+                "GameSetupReason fields are untagged; VALU wrapper makes CNC print union 127"
+            );
+        }
     }
 
     #[test]
