@@ -620,22 +620,22 @@ fn player_mesh_live() -> &'static Mutex<HashSet<(i64, i64)>> {
     PLAYER_MESH_LIVE.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-/// Other lobby players get the same cmd 20 roster + cmd 22 mesh start; never the host's JoinCompleted.
-fn enqueue_player_handoff(gid: i64, client_sid: u64, base: &[super::fireframe::OutgoingPush]) {
+/// Other lobby players get Removed + join Setup (self on PROS) + cmd 22; never the host's JoinCompleted.
+fn enqueue_player_handoff(gid: i64, client_sid: u64, _base: &[super::fireframe::OutgoingPush]) {
     player_mesh_live().lock().retain(|&(g, _)| g != gid);
     let players = lobby_player_sessions(gid, client_sid);
     if players.is_empty() {
         return;
     }
     for (pid, sid) in players {
-        let mut pushes: Vec<_> = base
-            .iter()
-            .filter(|p| p.command != 0x001E)
-            .cloned()
-            .collect();
-        for p in &mut pushes {
-            p.blaze_send_label = "lobby player handoff after resetDedicatedServer";
-        }
+        let name = crate::session::blaze_sessions::get_session(sid)
+            .and_then(|s| s.display_name)
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| "Player".to_string());
+        let _ = ensure_client_player(gid, pid, &name);
+        let Ok(pushes) = super::fireframe::pushes_lobby_player_after_reset(gid) else {
+            continue;
+        };
         super::fireframe::enqueue_pending_pushes(sid, pushes);
         super::msgsystem::log::log_orch_milestone(&format!(
             "Lobby player handoff queued (game {gid}, persona {pid}, client #{sid})"
@@ -4086,7 +4086,7 @@ fn append_pros_core_fields(out: &mut Vec<u8>, player: &CncPlayer, gid: i64, gfgd
     out.extend_from_slice(&TdfEncoder::encode_int("SLOT", player.slot));
     out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
     out.extend_from_slice(&TdfEncoder::encode_int("TIDX", 0xFFFF));
-    out.extend_from_slice(&TdfEncoder::encode_time("TIME", player.persona_id));
+    out.extend_from_slice(&TdfEncoder::encode_int("TIME", 0));
     if gfgd {
         out.extend_from_slice(&TdfEncoder::encode_object_id("UGID", 0, 0, 0));
     }
@@ -4166,28 +4166,33 @@ pub fn build_replicated_player(player: &CncPlayer, gid: i64) -> Vec<u8> {
 }
 
 pub fn pros_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
-    if let Some(cached) = pros_wire_fields(gid) {
-        return cached;
-    }
-    games()
+    let live = games()
         .lock()
         .get(&gid)
-        .map(|g| g.players.iter().map(|p| build_notify_pros_entry(p, gid)).collect())
-        .unwrap_or_else(|| {
-            let host = host_persona();
-            let p = CncPlayer {
-                persona_id: host,
-                display_name: host_display_name(),
-                slot: 0,
-                team: 1,
-                is_ai: false,
-            ready: false,
-                attribs: default_human_attribs(0, 1),
-                custom_data: IndexMap::new(),
-                stat: PROS_STAT_ACTIVE_CONNECTING,
-            };
-            vec![build_notify_pros_entry(&p, gid)]
-        })
+        .map(pros_entries_from_game)
+        .unwrap_or_default();
+    if !live.is_empty() {
+        set_pros_wire_fields(gid, live.clone());
+        return live;
+    }
+    if let Some(cached) = pros_wire_fields(gid) {
+        if !cached.is_empty() {
+            return cached;
+        }
+    }
+    let host = host_persona();
+    let p = CncPlayer {
+        persona_id: host,
+        display_name: host_display_name(),
+        slot: 0,
+        team: 1,
+        is_ai: false,
+        ready: false,
+        attribs: default_human_attribs(0, 1),
+        custom_data: IndexMap::new(),
+        stat: PROS_STAT_ACTIVE_CONNECTING,
+    };
+    vec![build_notify_pros_entry(&p, gid)]
 }
 
 /// `ListGameData::mGameRoster` for `getFullGameData` -- extended rows (not cached notify wire).
