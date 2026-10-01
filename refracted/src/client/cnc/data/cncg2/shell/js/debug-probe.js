@@ -54,12 +54,11 @@
                             res: res
                         });
                     }
-                } else if (!noIdle && (res.success === true || res.status === 0)
+                } else if (CncProbe._pendingBlazeCreate
+                    && !noIdle && (res.success === true || res.status === 0)
                     && !res.error && res.errorCode == null) {
-                    if (CncProbe._pendingBlazeCreate) {
-                        CncProbe._inBlazeGame = true;
-                        CncProbe._pendingBlazeCreate = false;
-                    }
+                    CncProbe._inBlazeGame = true;
+                    CncProbe._pendingBlazeCreate = false;
                     if (typeof CncProbe.onLobbyStartResult === 'function') {
                         CncProbe.onLobbyStartResult({ ok: true, res: res });
                     }

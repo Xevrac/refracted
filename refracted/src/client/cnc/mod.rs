@@ -2940,6 +2940,17 @@ pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
         return Ok(Bytes::from(Vec::new()));
     }
 
+    let orch = game_state::has_orchestration(gid);
+    let host = game_state::host_persona_for_gid(gid);
+    if orch && (pid <= 0 || pid == host) {
+        crate::debug_println!(
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m removePlayer skipped — match orchestration in progress (gid={} pid={})",
+            gid,
+            pid
+        );
+        return Ok(Bytes::from(Vec::new()));
+    }
+
     let remaining_humans = if pid > 0 {
         game_state::remove_player_ex(gid, pid)
     } else {

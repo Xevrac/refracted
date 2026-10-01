@@ -1564,6 +1564,24 @@ pub fn orchestrate_client_reset(
             );
         }
     }
+    for player in super::game_state::players_for_gid(gid)
+        .into_iter()
+        .filter(|p| !p.is_ai && p.persona_id > 0 && p.persona_id != client_persona && p.persona_id != host_persona)
+    {
+        let player_pid = player.persona_id;
+        if let Ok(pj) = super::build_game_manager_notify_player_joining(&player, gid) {
+            ded_pushes.push(super::fireframe::OutgoingPush {
+                wire: super::fireframe::notification_envelope(0x0004, 0x0015, &pj),
+                component: 0x0004,
+                command: 0x0015,
+                tdf_body: pj.to_vec(),
+                blaze_send_label: "NotifyPlayerJoining (lobby player -> dedicated roster)",
+                info_log_line: format!(
+                    "[Blaze→Server] Lobby player join sent to dedicated roster (game {gid}, persona {player_pid})"
+                ),
+            });
+        }
+    }
     let recycle_wait = recycle_cmd220_wait_secs(&dedicated);
     if recycle_wait > 0 {
         crate::debug_println!(

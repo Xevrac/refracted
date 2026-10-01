@@ -685,6 +685,7 @@
         $scope.localReady = false;
         $scope._findingMatch = false;
         $scope._matchError = '';
+        $scope._joinStatus = '';
         $scope.matchmakeMinPlayers = 2;
         $scope.matchmakeMaxPlayers = 8;
         $scope.team1 = makeTeam(3, 1);
@@ -1494,7 +1495,7 @@
             });
         };
 
-        function requestStartFromGuests() {
+        function requestStartFromPlayers() {
             var now = Date.now();
             if (($scope._startRequestAt || 0) + 5000 > now) {
                 return;
@@ -2147,6 +2148,7 @@
             $scope._startError = '';
             $scope._findingMatch = false;
             $scope._matchError = '';
+            $scope._joinStatus = '';
             $scope._joinedGameroom = false;
             stopMatchLostPoll();
             stopRosterPoll();
@@ -2386,6 +2388,7 @@
                                     ' humans=' + (target.humans || 0));
                             }
                             $scope._findingMatch = false;
+                            $scope._joinStatus = 'Match found, joining..';
                             $scope.joinBrowserGame(target);
                             return;
                         }
@@ -2405,6 +2408,7 @@
                                 ' idlePool=' + idlePool);
                         }
                         $scope._findingMatch = false;
+                        $scope._joinStatus = 'Match found, joining..';
                         $scope.joinBrowserGame(target);
                     });
                 });
@@ -2457,6 +2461,7 @@
                     }));
                 } catch (e) { /* shell route may not exist yet */ }
             }
+            $scope._joinStatus = '';
             $scope._joinedGameroom = false;
             $scope.lobbyChat = [];
             $scope.lobbyChatDraft = '';
@@ -2865,7 +2870,8 @@
                     remotes.push(p);
                 }
             }
-            if ($scope._rosterSawSelf && !localStillIn && $scope._joinedGameroom) {
+            if ($scope._rosterSawSelf && !localStillIn && $scope._joinedGameroom
+                && !$scope._starting && !(window.CncProbe && CncProbe._inBlazeGame)) {
                 $scope._rosterMissSelf = ($scope._rosterMissSelf || 0) + 1;
                 if ($scope._rosterMissSelf >= 3) {
                     forceServerLostKick('Server connection lost.');
@@ -2876,6 +2882,9 @@
             }
             adoptRosterMap(data);
             arrangeFromRoster(players, localPid);
+            if ($scope._joinStatus && (localStillIn || Date.now() >= ($scope._joinDeadline || 0))) {
+                finishJoinHandshake();
+            }
             if (localSlot() && localSlot().isLocal && $scope.lobbyAdminPersona) {
                 var pid = localSlot().pid || localPid;
                 localSlot().isHost = Number(pid) === Number($scope.lobbyAdminPersona) ||
@@ -2887,14 +2896,14 @@
                 $scope.localReady = true;
             }
             if ($scope.isLobbyHost()) {
-                var guestBlock = false;
+                var playerNotReady = false;
                 for (i = 0; i < remotes.length; i++) {
                     if (remotes[i] && !remotes[i].ready && !remotes[i].isHost) {
-                        guestBlock = true;
+                        playerNotReady = true;
                         break;
                     }
                 }
-                if (!guestBlock) {
+                if (!playerNotReady) {
                     $scope.allHumansReady = true;
                 }
             }
@@ -2922,9 +2931,13 @@
                             'Server connection lost.');
                         return;
                     }
+                    var nextPoll = $scope._joinStatus ? 300 : 1500;
+                    if ($scope._joinStatus && Date.now() >= ($scope._joinDeadline || 0)) {
+                        finishJoinHandshake();
+                    }
                     if (data && data.ok === false) {
                         if ($scope._joinedGameroom && !$scope._starting) {
-                            $scope._rosterPoll = $timeout(pollLobbyRoster, 1500);
+                            $scope._rosterPoll = $timeout(pollLobbyRoster, nextPoll);
                         }
                         return;
                     }
@@ -2933,7 +2946,7 @@
                         pollLobbyChat();
                     }
                     if ($scope._joinedGameroom && !$scope._starting) {
-                        $scope._rosterPoll = $timeout(pollLobbyRoster, 1500);
+                        $scope._rosterPoll = $timeout(pollLobbyRoster, nextPoll);
                     }
                 });
             });
@@ -3111,7 +3124,7 @@
                 return;
             }
             if ($scope._joinedGameroom && !$scope.canStartBattle()) {
-                requestStartFromGuests();
+                requestStartFromPlayers();
                 return;
             }
             if ($scope._starting) {
@@ -3206,13 +3219,10 @@
                     }
                     if (info && info.ok) {
                         clearStartTimer();
-                        $scope._starting = false;
                         CncProbe._inBlazeGame = true;
                         CncProbe._matchWatchArmed = true;
                         startMatchLostPoll();
-                        $scope._joinedGameroom = false;
                         $rootScope.serverLostError = '';
-                        stopRosterPoll();
                         try {
                             sessionStorage.setItem('cnc_match_gid', String($scope.gameId || '1'));
                             var pid = localPersonaId();
@@ -3221,12 +3231,6 @@
                             }
                         } catch (e) { /* ignore */ }
                         CncProbe.onLobbyStartResult = null;
-                        if ($rootScope.exitLobby) {
-                            $rootScope.exitLobby();
-                        } else {
-                            $rootScope.lobbyOpen = false;
-                        }
-                        pollNoDedicated(12);
                         return;
                     }
                     if (info && info.noIdle) {
@@ -3485,13 +3489,19 @@
         }
         restoreLostModalIfNeeded();
 
+        // Joining modal stays up until the server roster lists us and its map is applied.
+        function finishJoinHandshake() {
+            $scope._joinStatus = '';
+            $scope._joinDeadline = 0;
+        }
+
         function doJoinBrowserGame(g) {
-            if (!g || g.joinable === false) {
+            if (!g || g.joinable === false || !window.CncProbe || !CncProbe.runBlazeUrl) {
+                finishJoinHandshake();
                 return;
             }
-            if (!window.CncProbe || !CncProbe.runBlazeUrl) {
-                return;
-            }
+            $scope._joinStatus = $scope._joinStatus || 'Joining lobby..';
+            $scope._joinDeadline = Date.now() + 10000;
             var gid = g.gid != null ? g.gid : 1;
             var localPid = localPersonaId();
             $scope.gameId = String(gid);
@@ -3593,6 +3603,7 @@
             }
             var needsPassword = !!g.passwordProtected && (g.humans > 0);
             if (needsPassword) {
+                $scope._joinStatus = '';
                 $scope._joinPasswordTarget = g;
                 $scope._joinPasswordValue = '';
                 $scope._joinPasswordError = '';
