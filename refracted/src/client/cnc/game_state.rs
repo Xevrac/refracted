@@ -1084,6 +1084,7 @@ pub struct CncGame {
     /// Structure sell completes in ~0.01s. Default off (retail 10s).
     pub enable_instant_selling: bool,
     pub enable_rebuildable_derricks: bool,
+    pub starting: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
     /// `PROS` roster rows last sent in `NotifyGameSetup` (reused for `getFullGameData`).
@@ -1483,6 +1484,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
+            starting: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -2638,12 +2640,28 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_unlock_full_faction_roster,
         enable_instant_selling,
         enable_rebuildable_derricks,
+        starting: false,
         replicated_wire: None,
         pros_wire: None,
     };
     games().lock().insert(gid, game);
     reapply_all_pending_attrs(gid);
     destroy_orphan_host_lobbies(Some(gid));
+}
+
+pub fn mark_match_starting(gid: i64) {
+    let mut map = games().lock();
+    let host = map.get(&gid).map(|g| g.host_persona);
+    if let Some(game) = map.get_mut(&gid) {
+        game.starting = true;
+    }
+    if let Some(host) = host {
+        for game in map.values_mut() {
+            if game.host_persona == host {
+                game.starting = true;
+            }
+        }
+    }
 }
 
 /// Humans + AI other than the resetting host. Also pulls the host's scratch
@@ -2806,6 +2824,7 @@ pub fn seed_from_join(gid: i64) {
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
+            starting: false,
             replicated_wire: None,
             pros_wire: None,
         },
@@ -3377,6 +3396,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "allReady": all_ready,
         "map": if game.map_path.is_empty() { get_map_path_locked(gid) } else { game.map_path.clone() },
         "startCount": game.start_count,
+        "starting": game.starting,
         "players": players,
         "serverLost": false,
     })

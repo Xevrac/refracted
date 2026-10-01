@@ -2817,6 +2817,7 @@ pub fn handle_game_manager_reset_dedicated_server(payload: &[u8]) -> BlazeResult
         );
     }
     game_state::seed_from_reset(payload, gid);
+    game_state::mark_match_starting(gid);
     // Include GSID/SRVR even if pool assignment has not run yet.
     let gsid = dedicated_pool::host_for_gid(gid)
         .map(|d| d.blaze_session_id as i64)
