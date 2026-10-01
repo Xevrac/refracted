@@ -2929,7 +2929,13 @@ impl BlazeProtocolServer {
                             if s.persona_id == 0 { 1000 } else { s.persona_id as i64 }
                         };
                         crate::session::session_module::set_current_blaze_session_id(Some(sid));
-                        match crate::client::cnc::game_state::on_client_mesh_update(gid, local_pid) {
+                        let mesh_result = match crate::client::cnc::game_state::is_lobby_player_session(gid, sid) {
+                            Some(player_pid) => crate::client::cnc::game_state::MeshUpdateResult::Push(
+                                crate::client::cnc::game_state::on_player_mesh_update(gid, player_pid),
+                            ),
+                            None => crate::client::cnc::game_state::on_client_mesh_update(gid, local_pid),
+                        };
+                        match mesh_result {
                             crate::client::cnc::game_state::MeshUpdateResult::DeferredUntilHostReady => {
                                 crate::debug_println!(
                                     "\x1b[38;2;100;200;255m[CNC]\x1b[0m mesh ACTIVE_CONNECTED -- holding until dedicated host ready (gid={})",

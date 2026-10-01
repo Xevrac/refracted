@@ -545,6 +545,28 @@ pub fn pushes_player_join_completed(gid: i64) -> BlazeResult<Vec<OutgoingPush>> 
     }])
 }
 
+/// Lobby player mesh: ACTIVE_CONNECTED + NotifyPlayerJoinCompleted for `pid` (not the host).
+pub fn pushes_player_mesh_connected(gid: i64, pid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    let mut out = pushes_after_update_mesh_connection(gid, pid)?;
+    let mut body = Vec::new();
+    body.extend_from_slice(&crate::blaze::tdf::TdfEncoder::encode_long("GID ", gid));
+    body.extend_from_slice(&crate::blaze::tdf::TdfEncoder::encode_long("PID ", pid));
+    let wire = notification_envelope(0x0004, 0x001E, &body);
+    let pl = wire.len();
+    out.push(OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x001E,
+        tdf_body: body,
+        blaze_send_label: "NotifyPlayerJoinCompleted (lobby player)",
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    });
+    Ok(out)
+}
+
 pub fn pushes_host_state_advance_for_client(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: host finalizeGameCreation -- defer PRE_GAME/IN_GAME until after GameReady (gid={})",

@@ -430,6 +430,7 @@ fn game_ready_and_state_advance_pushes(
             // Blaze GSTA IN_GAME is the session notify, not RTS/match start.
             // Keep CncGame phase PreGame (browser "Lobby") until Start Battle.
         }
+        enqueue_to_lobby_players(gid, &out);
     }
     Some(out)
 }
@@ -502,11 +503,19 @@ fn enqueue_game_ready_to_dedicated(gid: i64) {
 
     let mut ded_pushes = Vec::new();
     if client_pid != 0 {
-        if let Ok(auth) = super::fireframe::pushes_auth_token_custom_data(gid, client_pid) {
-            for mut p in auth {
-                p.blaze_send_label = "NotifyPlayerAttrib/CDAT AuthToken -> dedicated joining client";
-                p.info_log_line = p.info_log_line.replace("[Blaze→Client]", "[Blaze→Server]");
-                ded_pushes.push(p);
+        let mut auth_pids = vec![client_pid];
+        for p in players_for_gid(gid) {
+            if !p.is_ai && p.persona_id > 0 && p.persona_id != host_pid && !auth_pids.contains(&p.persona_id) {
+                auth_pids.push(p.persona_id);
+            }
+        }
+        for pid in auth_pids {
+            if let Ok(auth) = super::fireframe::pushes_auth_token_custom_data(gid, pid) {
+                for mut p in auth {
+                    p.blaze_send_label = "NotifyPlayerAttrib/CDAT AuthToken -> dedicated joining client";
+                    p.info_log_line = p.info_log_line.replace("[Blaze→Client]", "[Blaze→Server]");
+                    ded_pushes.push(p);
+                }
             }
         }
     } else {
@@ -585,6 +594,7 @@ fn finish_client_join_release(
     mut out: Vec<super::fireframe::OutgoingPush>,
     pending_mesh_pid: Option<i64>,
 ) -> (u64, Vec<super::fireframe::OutgoingPush>) {
+    enqueue_player_handoff(gid, client_sid, &out);
     if let Ok(host_pushes) = super::fireframe::pushes_host_state_advance_for_client(gid) {
         out.extend(host_pushes);
     }
@@ -602,6 +612,67 @@ fn finish_client_join_release(
         schedule_synthetic_client_mesh_if_needed(gid, client_sid, pid);
     }
     (client_sid, out)
+}
+
+static PLAYER_MESH_LIVE: OnceLock<Mutex<HashSet<(i64, i64)>>> = OnceLock::new();
+
+fn player_mesh_live() -> &'static Mutex<HashSet<(i64, i64)>> {
+    PLAYER_MESH_LIVE.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Other lobby players receive the same reset bundle as the resetting client (NotifyGameReset → InitiateConnections).
+fn enqueue_player_handoff(gid: i64, client_sid: u64, base: &[super::fireframe::OutgoingPush]) {
+    player_mesh_live().lock().retain(|&(g, _)| g != gid);
+    let players = lobby_player_sessions(gid, client_sid);
+    if players.is_empty() {
+        return;
+    }
+    for (pid, sid) in players {
+        let mut pushes = base.to_vec();
+        for p in &mut pushes {
+            p.blaze_send_label = "lobby player handoff after resetDedicatedServer";
+        }
+        super::fireframe::enqueue_pending_pushes(sid, pushes);
+        super::msgsystem::log::log_orch_milestone(&format!(
+            "Lobby player handoff queued (game {gid}, persona {pid}, client #{sid})"
+        ));
+        schedule_synthetic_player_mesh(gid, sid, pid);
+    }
+    let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+}
+
+/// Player `updateMeshConnection` (or synthetic): ACTIVE_CONNECTED + JoinCompleted for that persona only.
+pub fn on_player_mesh_update(gid: i64, pid: i64) -> Vec<super::fireframe::OutgoingPush> {
+    if !player_mesh_live().lock().insert((gid, pid)) {
+        return Vec::new();
+    }
+    super::fireframe::pushes_player_mesh_connected(gid, pid).unwrap_or_default()
+}
+
+fn schedule_synthetic_player_mesh(gid: i64, sid: u64, pid: i64) {
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let pushes = on_player_mesh_update(gid, pid);
+        if !pushes.is_empty() {
+            super::fireframe::enqueue_pending_pushes(sid, pushes);
+            let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+        }
+    });
+}
+
+fn enqueue_to_lobby_players(gid: i64, pushes: &[super::fireframe::OutgoingPush]) {
+    if pushes.is_empty() {
+        return;
+    }
+    let client_sid = client_session_for_gid(gid).unwrap_or(0);
+    let players = lobby_player_sessions(gid, client_sid);
+    if players.is_empty() {
+        return;
+    }
+    for (_, sid) in players {
+        super::fireframe::enqueue_pending_pushes(sid, pushes.to_vec());
+    }
+    let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
 }
 
 fn resolve_joining_client_pid(gid: i64, client_sid: u64) -> i64 {
@@ -2511,6 +2582,16 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         stat: PROS_STAT_ACTIVE_CONNECTING,
     };
     merge_pending_into_player(gid, &mut host_player, map_for_defaults, true);
+    let mut players = vec![host_player];
+    players.extend(lobby_occupants_for_handoff(gid, host));
+    materialize_pending_humans(gid, host, map_for_defaults, &mut players);
+    let human_n = players.iter().filter(|p| !p.is_ai).count();
+    let ai_n = players.iter().filter(|p| p.is_ai).count();
+    tracing::info!(
+        target: "cnc",
+        "[CNC] seed_from_reset gid={gid} host={host} humans={human_n} ai={ai_n} pids={:?}",
+        players.iter().map(|p| p.persona_id).collect::<Vec<_>>()
+    );
     let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = games()
         .lock()
         .get(&gid)
@@ -2533,7 +2614,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         name: gnam,
         host_persona: host,
         max_players: 8,
-        players: vec![host_player],
+        players,
         uuid,
         phase: GamePhase::Resetable,
         map_path,
@@ -2554,6 +2635,115 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
     games().lock().insert(gid, game);
     reapply_all_pending_attrs(gid);
     destroy_orphan_host_lobbies(Some(gid));
+}
+
+/// Humans + AI other than the resetting host. Also pulls the host's scratch
+/// lobby (gid=1) so a pool game (10xxx) that never listed other players still hands them off.
+fn lobby_occupants_for_handoff(gid: i64, host: i64) -> Vec<CncPlayer> {
+    let extra: Vec<i64> = games()
+        .lock()
+        .iter()
+        .filter(|(g, game)| **g != gid && game.host_persona == host)
+        .map(|(g, _)| *g)
+        .collect();
+    let mut source = vec![gid];
+    source.extend(extra);
+    let mut seen = HashSet::from([host]);
+    let mut out = Vec::new();
+    for src in source {
+        let Some(game) = games().lock().get(&src).cloned() else {
+            continue;
+        };
+        for mut p in game.players {
+            if p.persona_id == 0 || p.persona_id == host {
+                continue;
+            }
+            if !seen.insert(p.persona_id) {
+                continue;
+            }
+            p.stat = PROS_STAT_ACTIVE_CONNECTING;
+            out.push(p);
+        }
+    }
+    out
+}
+
+fn materialize_pending_humans(
+    gid: i64,
+    host: i64,
+    map_path: &str,
+    players: &mut Vec<CncPlayer>,
+) {
+    let extra: Vec<i64> = games()
+        .lock()
+        .iter()
+        .filter(|(g, game)| **g != gid && game.host_persona == host)
+        .map(|(g, _)| *g)
+        .collect();
+    let mut source = vec![gid];
+    source.extend(extra);
+    let pending = pending_player_attrs().lock();
+    let mut rows: Vec<(i64, IndexMap<String, String>)> = Vec::new();
+    for src in source {
+        if let Some(by_pid) = pending.get(&src) {
+            for (pid, attrs) in by_pid {
+                rows.push((*pid, attrs.clone()));
+            }
+        }
+    }
+    drop(pending);
+    for (pid, attrs) in rows {
+        if pid <= 0 || pid == host || attrs_mark_ai(&attrs) {
+            continue;
+        }
+        if players.iter().any(|p| p.persona_id == pid) {
+            continue;
+        }
+        let slot = next_free_slot(players);
+        let team = attrs
+            .get("_team")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or_else(|| balanced_join_team(players));
+        let mut player = CncPlayer {
+            persona_id: pid,
+            display_name: format!("Player{}", slot + 1),
+            slot,
+            team,
+            is_ai: false,
+            ready: false,
+            attribs: default_human_attribs_for_map(map_path, slot, team),
+            custom_data: IndexMap::new(),
+            stat: PROS_STAT_ACTIVE_CONNECTING,
+        };
+        merge_pending_into_player(gid, &mut player, map_path, false);
+        players.push(player);
+    }
+}
+
+/// Other human players (pid, Blaze session) in `gid`, excluding the orchestrating client session.
+pub fn lobby_player_sessions(gid: i64, exclude_sid: u64) -> Vec<(i64, u64)> {
+    let host = host_persona_for_gid(gid);
+    players_for_gid(gid)
+        .into_iter()
+        .filter(|p| !p.is_ai && p.persona_id > 0 && p.persona_id != host)
+        .filter_map(|p| {
+            sessions_for_persona(p.persona_id)
+                .into_iter()
+                .find(|&sid| sid != exclude_sid)
+                .map(|sid| (p.persona_id, sid))
+        })
+        .collect()
+}
+
+pub fn is_lobby_player_session(gid: i64, sid: u64) -> Option<i64> {
+    let orch_sid = client_session_for_gid(gid).unwrap_or(0);
+    if sid == orch_sid {
+        return None;
+    }
+    lobby_player_sessions(gid, orch_sid)
+        .into_iter()
+        .find(|&(_, s)| s == sid)
+        .map(|(pid, _)| pid)
 }
 
 pub fn seed_from_join(gid: i64) {
@@ -2781,7 +2971,7 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
     Some((humans, converted))
 }
 
-/// Host removed an AI seat in the lobby: drop the player and its pending attrs so guests stop seeing it
+/// Host removed an AI seat in the lobby: drop the player and its pending attrs so other players stop seeing it
 pub fn remove_lobby_ai(gid: i64, persona_id: i64) -> bool {
     let removed = {
         let mut m = games().lock();
@@ -2817,6 +3007,18 @@ pub fn dedicated_session_id_for_gid(gid: i64) -> Option<u64> {
 }
 
 pub fn reclaim_after_empty_humans(gid: i64) -> serde_json::Value {
+    if has_orchestration(gid) {
+        tracing::info!(
+            target: "cnc",
+            "[CNC] reclaim skipped — match orchestration in progress (gid={gid})"
+        );
+        return serde_json::json!({
+            "ok": true,
+            "gid": gid,
+            "humans": 0,
+            "orchHeld": true,
+        });
+    }
     if crate::client::cnc::dedicated_pool::reclaim_notify_recent_for_gid(gid) {
         crate::debug_println!(
             "\x1b[38;2;100;200;255m[CNC]\x1b[0m reclaim after empty humans skipped — notify already sent (gid={})",
@@ -2946,21 +3148,23 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
             .collect()
     };
     if humans_snapshot.is_empty() {
-        if session_pid > 0 {
-            crate::client::cnc::fireframe::request_client_local_game_teardown(
-                gid,
-                session_pid,
-                crate::client::cnc::PLAYER_REMOVED_REASON_PLAYER_LEFT,
-            );
-        }
         return reclaim_after_empty_humans(gid);
     }
 
-    let resolved_pid = if persona_id > 0 && humans_snapshot.iter().any(|&h| h == persona_id) {
+    if persona_id > 0 && !humans_snapshot.iter().any(|&h| h == persona_id) {
+        return serde_json::json!({
+            "ok": true,
+            "gid": gid,
+            "pid": persona_id,
+            "member": false,
+            "remaining": humans_snapshot.len(),
+        });
+    }
+    let resolved_pid = if persona_id > 0 {
         persona_id
     } else if session_pid > 0 && humans_snapshot.iter().any(|&h| h == session_pid) {
         session_pid
-    } else if humans_snapshot.len() == 1 {
+    } else if humans_snapshot.len() == 1 && force_clear && !has_orchestration(gid) {
         humans_snapshot[0]
     } else if force_clear {
         0
@@ -2976,6 +3180,22 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
             "humans": humans_snapshot.len(),
         });
     };
+
+    if has_orchestration(gid) && (resolved_pid == 0 || resolved_pid == host_persona_for_gid(gid))
+    {
+        tracing::info!(
+            target: "cnc",
+            "[CNC] leave skipped — match orchestration in progress (gid={gid} pid={resolved_pid})"
+        );
+        return serde_json::json!({
+            "ok": true,
+            "gid": gid,
+            "pid": resolved_pid,
+            "member": false,
+            "remaining": humans_snapshot.len(),
+            "orchHeld": true,
+        });
+    }
 
     let was_standby = is_standby_game(gid);
     let (remaining, converted) = if force_clear && resolved_pid == 0 {
@@ -2998,18 +3218,6 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
     };
     match remaining {
         Some(0) if was_standby => {
-            let teardown_pid = if resolved_pid > 0 {
-                resolved_pid
-            } else {
-                session_pid
-            };
-            if teardown_pid > 0 {
-                crate::client::cnc::fireframe::request_client_local_game_teardown(
-                    gid,
-                    teardown_pid,
-                    crate::client::cnc::PLAYER_REMOVED_REASON_PLAYER_LEFT,
-                );
-            }
             let mut body = reclaim_after_empty_humans(gid);
             if let Some(obj) = body.as_object_mut() {
                 obj.insert("pid".into(), serde_json::json!(resolved_pid));
@@ -3017,18 +3225,6 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
             body
         }
         Some(0) => {
-            let teardown_pid = if resolved_pid > 0 {
-                resolved_pid
-            } else {
-                session_pid
-            };
-            if teardown_pid > 0 {
-                crate::client::cnc::fireframe::request_client_local_game_teardown(
-                    gid,
-                    teardown_pid,
-                    crate::client::cnc::PLAYER_REMOVED_REASON_PLAYER_LEFT,
-                );
-            }
             let mut body = reclaim_after_empty_humans(gid);
             if let Some(obj) = body.as_object_mut() {
                 obj.insert("pid".into(), serde_json::json!(resolved_pid));
@@ -4429,4 +4625,83 @@ pub fn plst_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
             };
             vec![build_plst_entry(&p)]
         })
+}
+
+#[cfg(test)]
+mod lobby_handoff_tests {
+    use super::*;
+
+    fn other_player(pid: i64) -> CncPlayer {
+        CncPlayer {
+            persona_id: pid,
+            display_name: "Player".to_string(),
+            slot: 1,
+            team: 2,
+            is_ai: false,
+            ready: true,
+            attribs: default_human_attribs(1, 2),
+            custom_data: IndexMap::new(),
+            stat: PROS_STAT_ACTIVE_CONNECTING,
+        }
+    }
+
+    #[test]
+    fn reset_keeps_lobby_players() {
+        let gid = 987_601;
+        seed_from_join(gid);
+        let host = host_persona_for_gid(gid);
+        let other_pid = host + 7_000_001;
+        games().lock().get_mut(&gid).unwrap().players.push(other_player(other_pid));
+        seed_from_reset(&[], gid);
+        let players = players_for_gid(gid);
+        assert!(players.iter().any(|p| p.persona_id == host && !p.is_ai));
+        assert!(players.iter().any(|p| p.persona_id == other_pid && !p.is_ai));
+        destroy_game(gid);
+    }
+
+    #[test]
+    fn leave_with_non_member_pid_keeps_last_human() {
+        let gid = 987_602;
+        seed_from_join(gid);
+        let host = host_persona_for_gid(gid);
+        let body = leave_gameroom_ex(gid, host + 7_000_002, true);
+        assert_eq!(body.get("member").and_then(|v| v.as_bool()), Some(false));
+        assert!(players_for_gid(gid).iter().any(|p| p.persona_id == host && !p.is_ai));
+        destroy_game(gid);
+    }
+
+    #[test]
+    fn reset_copies_ai_and_host_scratch_lobby() {
+        let pool = 987_603;
+        let scratch = 987_604;
+        seed_from_join(pool);
+        let host = host_persona_for_gid(pool);
+        let other_pid = host + 7_000_004;
+        let ai_pid = -1001;
+        {
+            let mut m = games().lock();
+            let mut lobby = m.get(&pool).cloned().unwrap();
+            lobby.gid = scratch;
+            lobby.players.push(other_player(other_pid));
+            lobby.players.push(CncPlayer {
+                persona_id: ai_pid,
+                display_name: "AI".into(),
+                slot: 2,
+                team: 2,
+                is_ai: true,
+                ready: true,
+                attribs: default_ai_attribs(2, 2, "GLA"),
+                custom_data: IndexMap::new(),
+                stat: PROS_STAT_ACTIVE_CONNECTING,
+            });
+            m.insert(scratch, lobby);
+        }
+        seed_from_reset(&[], pool);
+        let players = players_for_gid(pool);
+        assert!(players.iter().any(|p| p.persona_id == host && !p.is_ai));
+        assert!(players.iter().any(|p| p.persona_id == other_pid && !p.is_ai));
+        assert!(players.iter().any(|p| p.persona_id == ai_pid && p.is_ai));
+        destroy_game(pool);
+        destroy_game(scratch);
+    }
 }

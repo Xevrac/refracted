@@ -42,9 +42,10 @@
                 <button type="button" class="au-btn au-btn--primary" ng-click="findMatch()"
                         ng-disabled="_findingMatch">{{ _findingMatch ? 'Finding…' : 'Find Match' }}</button>
             </div>
-            <div class="au-lobby__modal" ng-show="_findingMatch || _matchError">
+            <div class="au-lobby__modal" ng-show="_findingMatch || _matchError || _joinStatus">
                 <div class="au-lobby__modal-box">
                     <div ng-show="_findingMatch && !_matchError">Finding match..</div>
+                    <div ng-show="_joinStatus && !_findingMatch && !_matchError">{{ _joinStatus }}</div>
                     <div ng-show="_matchError">{{ _matchError }}</div>
                     <button type="button" class="au-btn au-btn--primary" ng-show="_matchError"
                             ng-click="dismissMatchError()">OK</button>
@@ -528,6 +529,11 @@
                     <div class="au-lobby__options-actions">
                         <button type="button" class="au-btn au-btn--primary" ng-click="closeStartModal()">Done</button>
                     </div>
+                </div>
+            </div>
+            <div class="au-lobby__modal" ng-show="_joinStatus && !_starting && !serverLostError">
+                <div class="au-lobby__modal-box">
+                    <div>{{ _joinStatus }}</div>
                 </div>
             </div>
             <div class="au-lobby__modal" ng-show="_starting || _startError">

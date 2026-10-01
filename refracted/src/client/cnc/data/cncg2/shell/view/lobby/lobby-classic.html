@@ -34,9 +34,10 @@
         <aside class="cc-lobby__rail">
             <div class="cc-sidebar cc-lobby__sidebar" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
         </aside>
-        <div class="cc-lobby__modal" ng-show="_findingMatch || _matchError">
+        <div class="cc-lobby__modal" ng-show="_findingMatch || _matchError || _joinStatus">
             <div class="cc-lobby__modal-box">
                 <div ng-show="_findingMatch && !_matchError">Finding match..</div>
+                <div ng-show="_joinStatus && !_findingMatch && !_matchError">{{ _joinStatus }}</div>
                 <div ng-show="_matchError">{{ _matchError }}</div>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-show="_matchError"
                         ng-click="dismissMatchError()">OK</button>
@@ -500,6 +501,11 @@
                 <div class="cc-lobby__options-actions">
                     <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="closeStartModal()">DONE</button>
                 </div>
+            </div>
+        </div>
+        <div class="cc-lobby__modal" ng-show="_joinStatus && !_starting && !serverLostError">
+            <div class="cc-lobby__modal-box">
+                <div>{{ _joinStatus }}</div>
             </div>
         </div>
         <div class="cc-lobby__modal" ng-show="_starting || _startError">
