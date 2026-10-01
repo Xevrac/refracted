@@ -3063,7 +3063,7 @@
             if (slot.faction) {
                 q += '&faction=' + encodeURIComponent(slot.faction);
             }
-            if (slot.teamNum != null) {
+            if (slot.teamNum != null && (!$scope._joinedGameroom || $scope._rosterSawSelf)) {
                 q += '&team=' + encodeURIComponent(slot.teamNum);
             }
             var sp = parseStartId(slot.startpoint);

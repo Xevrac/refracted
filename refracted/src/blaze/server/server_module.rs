@@ -1677,9 +1677,8 @@ impl BlazeProtocolServer {
                                                 gid
                                             );
                                             // Wake the dedicated's session handler so it flushes
-                                            // cmd 220 + NotifyGameSetup + Reset immediately instead of
-                                            // waiting for the 15-second idle timeout or an
-                                            // incoming Blaze message from the dedicated.
+                                            // cmd 220 + Reset immediately instead of waiting
+                                            // on idle timeout or an inbound dedicated packet.
                                             let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
                                         }
                                         None => crate::debug_println!(

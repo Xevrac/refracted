@@ -108,59 +108,46 @@ pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<O
 }
 
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    let promote_reset = super::game_state::blaze_join_setup_already_pushed(gid)
+    // Lobby join already stands up a local game; a second cmd 20 is rejected.
+    // Tear it down, then cmd 20 with the live roster (local player included).
+    super::game_state::refresh_pros_wire_for_gid(gid);
+    let replace_local = super::game_state::blaze_join_setup_already_pushed(gid)
         || super::game_state::client_local_game_active(gid);
-    // Skip InitiateConnections when the mesh is already live.
-    let skip_initiate = super::game_state::client_mesh_already_connected(gid);
-    let setup_label = if promote_reset {
-        "NotifyGameReset after resetDedicatedServer"
-    } else {
-        "NotifyGameSetup after resetDedicatedServer"
-    };
     crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: {} + NotifyGameStateChange + NotifyPlatformHostInitialized + {} after resetDedicatedServer (gid={})",
-        if promote_reset {
-            "NotifyGameReset"
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: {}NotifyGameSetup + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",
+        if replace_local {
+            "NotifyGameRemoved + "
         } else {
-            "NotifyGameSetup"
-        },
-        if skip_initiate {
-            "NotifyPlayerJoinCompleted (mesh already live; skip InitiateConnections)"
-        } else {
-            "NotifyJoiningPlayerInitiateConnections"
+            ""
         },
         gid
     );
 
-    let (setup, setup_cmd, setup_log) = if promote_reset {
-        let reset = super::build_game_manager_notify_game_reset(request, gid)?;
-        let wire = notification_envelope(0x0004, 0x0070, &reset);
-        let pl = wire.len();
-        (
-            reset,
-            0x0070,
-            format!(
-                "[Blaze→Client] GameManager.NotifyGameReset Component=4, Command=112, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+    let mut out = Vec::new();
+    if replace_local {
+        let removed = super::build_game_manager_notify_game_removed(
+            gid,
+            super::GAME_REMOVAL_REASON_GAME_DESTROYED,
+        )?;
+        let wire_removed = notification_envelope(0x0004, 0x0010, &removed);
+        let pl = wire_removed.len();
+        out.push(OutgoingPush {
+            wire: wire_removed,
+            component: 0x0004,
+            command: 0x0010,
+            tdf_body: removed.to_vec(),
+            blaze_send_label: "NotifyGameRemoved after resetDedicatedServer",
+            info_log_line: format!(
+                "[Blaze→Client] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl
             ),
-        )
-    } else {
-        let setup = super::build_game_manager_notify_game_setup(request, gid)?;
-        let wire = notification_envelope(0x0004, 0x0014, &setup);
-        let pl = wire.len();
-        (
-            setup,
-            0x0014,
-            format!(
-                "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-                pl
-            ),
-        )
-    };
-    let wire_setup = notification_envelope(0x0004, setup_cmd, &setup);
-    if promote_reset {
-        super::game_state::clear_blaze_join_setup_pushed(gid);
+        });
     }
+
+    let setup = super::build_game_manager_notify_game_setup(request, gid)?;
+    let wire_setup = notification_envelope(0x0004, 0x0014, &setup);
+    let pl0 = wire_setup.len();
+    super::game_state::clear_blaze_join_setup_pushed(gid);
 
     let gstate = super::build_game_manager_notify_game_state_change(gid, super::GSTA_INITIALIZING)?;
     let wire_gstate = notification_envelope(0x0004, 0x0064, &gstate);
@@ -170,14 +157,21 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
     let wire_phost = notification_envelope(0x0004, 0x0047, &phost);
     let pl_phost = wire_phost.len();
 
-    let mut out = vec![
+    let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;
+    let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
+    let pl_initiate = wire_initiate.len();
+
+    let tail = vec![
         OutgoingPush {
             wire: wire_setup,
             component: 0x0004,
-            command: setup_cmd,
+            command: 0x0014,
             tdf_body: setup.to_vec(),
-            blaze_send_label: setup_label,
-            info_log_line: setup_log,
+            blaze_send_label: "NotifyGameSetup after resetDedicatedServer",
+            info_log_line: format!(
+                "[Blaze→Client] GameManager.NotifyGameSetup Component=4, Command=20, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                pl0
+            ),
         },
         OutgoingPush {
             wire: wire_gstate,
@@ -201,20 +195,7 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
                 pl_phost
             ),
         },
-    ];
-
-    if skip_initiate {
-        super::game_state::mark_orch_mesh_already_connected(gid);
-        let mut join_done = pushes_player_join_completed(gid)?;
-        for p in &mut join_done {
-            p.blaze_send_label = "NotifyPlayerJoinCompleted after resetDedicatedServer (mesh already live)";
-        }
-        out.extend(join_done);
-    } else {
-        let initiate = super::build_game_manager_notify_joining_player_initiate_connections(gid)?;
-        let wire_initiate = notification_envelope(0x0004, 0x0016, &initiate);
-        let pl_initiate = wire_initiate.len();
-        out.push(OutgoingPush {
+        OutgoingPush {
             wire: wire_initiate,
             component: 0x0004,
             command: 0x0016,
@@ -224,9 +205,9 @@ pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<V
                 "[Blaze→Client] GameManager.NotifyJoiningPlayerInitiateConnections Component=4, Command=22, Size={}, MsgType=NOTIFICATION, MsgNum=0",
                 pl_initiate
             ),
-        });
-    }
-
+        },
+    ];
+    out.extend(tail);
     Ok(out)
 }
 
