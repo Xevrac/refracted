@@ -1,5 +1,7 @@
 /**
  * In-game chat panel. Empty Enter hides. Esc hides.
+ * Lines go to the match server (shell route /prism/chat/send -> RequestRPC)
+ * (always / active / never).
  */
 var CCApp = angular.module('CCApp', []);
 
@@ -11,6 +13,50 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
 
     var chatUiOpen = false;
     var ignoreEnterUntil = 0;
+    var VISIBILITY_KEY = 'cnc_ingame_chat_visibility';
+    var ACTIVE_SHOW_MS = 5000;
+    var POLL_MS = 1000;
+    var lastSeq = -1;
+    var activeHideTimer = null;
+    var shownByActivity = false;
+
+    function visibilityMode() {
+        var v = null;
+        try {
+            v = localStorage.getItem(VISIBILITY_KEY);
+        } catch (e) { /* ignore */ }
+        return (v === 'always' || v === 'never') ? v : 'active';
+    }
+
+    function executeShell(resource, payload, done) {
+        try {
+            if (typeof shellaccesslayer === 'undefined' || !shellaccesslayer
+                || typeof shellaccesslayer.execute !== 'function') {
+                return false;
+            }
+            var req = payload || {};
+            req._resource = resource;
+            if (done) {
+                req._response = function (res) {
+                    var data = res;
+                    if (typeof data === 'string') {
+                        try {
+                            data = JSON.parse(data);
+                        } catch (e) {
+                            data = null;
+                        }
+                    }
+                    $timeout(function () {
+                        done(data);
+                    }, 0);
+                };
+            }
+            shellaccesslayer.execute(req);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
 
     function runGame(line) {
         try {
@@ -97,6 +143,80 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
 
     $scope.playerName = resolvePlayerName();
 
+    function hideAfterActivity() {
+        if (activeHideTimer) {
+            $timeout.cancel(activeHideTimer);
+        }
+        activeHideTimer = $timeout(function () {
+            activeHideTimer = null;
+            if (shownByActivity && !chatUiOpen && visibilityMode() === 'active') {
+                shownByActivity = false;
+                runGame('SetChatVisibility false');
+            }
+        }, ACTIVE_SHOW_MS);
+    }
+
+    // Shown without focus: the game keeps the keyboard until the player opens the chat.
+    function showForActivity() {
+        var mode = visibilityMode();
+        if (mode === 'never' || chatUiOpen) {
+            return;
+        }
+        runGame('SetChatVisibility true');
+        if (mode === 'active') {
+            shownByActivity = true;
+            hideAfterActivity();
+        }
+    }
+
+    // Each line: "seq|channel|sender|name|text" (text last, may contain '|').
+    function applyLines(data) {
+        if (!data || data.status !== 0 || typeof data.lines !== 'string') {
+            return;
+        }
+        var firstPoll = lastSeq < 0;
+        var maxSeq = lastSeq;
+        var fresh = 0;
+        var mine = String(resolvePlayerName()).toLowerCase();
+        var rows = data.lines.split('\n');
+        for (var i = 0; i < rows.length; i++) {
+            var parts = rows[i].split('|');
+            if (parts.length < 5) {
+                continue;
+            }
+            var seq = Number(parts[0]) || 0;
+            if (seq <= maxSeq) {
+                continue;
+            }
+            maxSeq = seq;
+            var from = parts[3];
+            var text = parts.slice(4).join('|');
+            var kind = from.toLowerCase() === mine ? 'self' : 'msg';
+            $scope.messages.push({
+                from: from,
+                text: text,
+                kind: kind,
+                channel: parts[1] === '1' ? 'team' : 'all'
+            });
+            if ($scope.messages.length > 80) {
+                $scope.messages.shift();
+            }
+            ++fresh;
+        }
+        lastSeq = maxSeq < 0 ? 0 : maxSeq;
+        if (fresh > 0) {
+            scrollHistory();
+            if (!firstPoll) {
+                showForActivity();
+            }
+        }
+    }
+
+    function pollServer() {
+        executeShell('/prism/chat/poll', { since: lastSeq < 0 ? 0 : lastSeq }, applyLines);
+        $timeout(pollServer, POLL_MS);
+    }
+
     $scope.setChannel = function (ch) {
         if (ch !== 'all' && ch !== 'team') {
             return;
@@ -108,8 +228,11 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
 
     $scope.closeChat = function () {
         chatUiOpen = false;
+        shownByActivity = false;
         releaseChatFocus();
-        runGame('SetChatVisibility false');
+        if (visibilityMode() !== 'always') {
+            runGame('SetChatVisibility false');
+        }
     };
 
     $scope.openChat = function () {
@@ -135,13 +258,22 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }
 
         $scope.playerName = resolvePlayerName();
-        pushLine($scope.playerName, text, 'self');
         $scope.draft = '';
         if (input) {
             input.value = '';
         }
 
-        runGame('ServerPlayer.Chat ' + text);
+        // The server relays the line back to this player too, so it is not pushed here.
+        var sent = executeShell('/prism/chat/send',
+            { channel: $scope.channel, user: $scope.playerName, text: text },
+            function (data) {
+                if (!data || data.status !== 0) {
+                    pushLine('', 'Message not sent (no match server connection).', 'system');
+                }
+            });
+        if (!sent) {
+            pushLine('', 'Message not sent (chat unavailable).', 'system');
+        }
         ignoreEnterUntil = Date.now() + 400;
         $timeout(focusChatInput, 0);
     };
@@ -183,6 +315,11 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
             scheduleFocus();
         }, false);
     } catch (e) { /* ignore */ }
+
+    if (visibilityMode() === 'always') {
+        runGame('SetChatVisibility true');
+    }
+    pollServer();
 
     $timeout(function () {
         var input = chatInputEl();
