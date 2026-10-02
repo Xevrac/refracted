@@ -4107,8 +4107,8 @@ fn append_pros_core_fields(out: &mut Vec<u8>, player: &CncPlayer, gid: i64, gfgd
     }
     out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));
     out.extend_from_slice(&encode_empty_pnet_network_address());
-    out.extend_from_slice(&TdfEncoder::encode_int("SID ", 255));
-    out.extend_from_slice(&TdfEncoder::encode_int("SLOT", player.slot));
+    out.extend_from_slice(&TdfEncoder::encode_int("SID ", player.slot));
+    out.extend_from_slice(&TdfEncoder::encode_int("SLOT", 0));
     out.extend_from_slice(&TdfEncoder::encode_int("STAT", player.stat));
     out.extend_from_slice(&TdfEncoder::encode_int("TIDX", 0xFFFF));
     out.extend_from_slice(&TdfEncoder::encode_int("TIME", 0));

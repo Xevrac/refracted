@@ -2716,6 +2716,7 @@ impl BlazeProtocolServer {
                                     "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame ? GameRoom lobby notifies (FireFrame, gid={})",
                                     gid
                                 );
+                                crate::client::cnc::enqueue_player_joining_to_members(gid, sid);
                                 match crate::client::cnc::fireframe::pushes_after_join_game_lobby(
                                     &payload, true,
                                 ) {

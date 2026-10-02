@@ -178,7 +178,7 @@
                                     data-tip="Pick faction and colour"
                                     ng-if="!slot.invitePending"
                                     ng-click="toggleSlotMenu(1, $index, $event)"
-                                    ng-disabled="lockedByReady(slot)"
+                                    ng-disabled="slotLocked(slot)"
                                     ng-class="{open: slotMenu == slotMenuKey(1, $index)}">
                                 <span class="au-lobby__chevron"></span>
                             </button>
@@ -260,7 +260,7 @@
                                     data-tip="Pick faction and colour"
                                     ng-if="!slot.invitePending"
                                     ng-click="toggleSlotMenu(2, $index, $event)"
-                                    ng-disabled="lockedByReady(slot)"
+                                    ng-disabled="slotLocked(slot)"
                                     ng-class="{open: slotMenu == slotMenuKey(2, $index)}">
                                 <span class="au-lobby__chevron"></span>
                             </button>

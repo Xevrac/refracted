@@ -146,7 +146,7 @@
                                         data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(1, $index, $event)"
-                                        ng-disabled="lockedByReady(slot)"
+                                        ng-disabled="slotLocked(slot)"
                                         ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
                                         data-tip="Pick faction and colour"></button>
                             </div>
@@ -228,7 +228,7 @@
                                         data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(2, $index, $event)"
-                                        ng-disabled="lockedByReady(slot)"
+                                        ng-disabled="slotLocked(slot)"
                                         ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
                                         data-tip="Pick faction and colour"></button>
                             </div>
