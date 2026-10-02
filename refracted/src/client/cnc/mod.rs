@@ -618,7 +618,15 @@ fn enqueue_native_house_color_attr(gid: i64) {
     use crate::client::cnc::game_state;
     use indexmap::IndexMap;
 
-    for p in game_state::players_for_gid(gid) {
+    // Every member needs every seat's colour: RtsBlazeAddHouseColorMessage (A9FED0) keys the
+    // RtsClient house-colour map by persona, and a seat missing from it renders black.
+    let players = game_state::players_for_gid(gid);
+    let members: Vec<u64> = players
+        .iter()
+        .filter(|p| !p.is_ai)
+        .map(|p| p.persona_id as u64)
+        .collect();
+    for p in players {
         if p.is_ai {
             continue;
         }
@@ -639,7 +647,7 @@ fn enqueue_native_house_color_attr(gid: i64) {
         };
         let sessions = crate::session::blaze_sessions::list_sessions();
         for s in &sessions {
-            if s.persona_id != Some(p.persona_id as u64) {
+            if !s.persona_id.map_or(false, |id| members.contains(&id)) {
                 continue;
             }
             if dedicated_pool::is_dedicated_blaze_session(s.id) {
