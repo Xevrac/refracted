@@ -613,6 +613,54 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
+/// `NotifyPlayerJoining` for a joiner to every member who already holds the game
+pub fn enqueue_player_joining_to_members(gid: i64, joiner_sid: u64) {
+    use crate::client::cnc::game_state;
+
+    let Some(joiner_pid) = crate::session::blaze_sessions::get_session(joiner_sid)
+        .and_then(|s| s.persona_id)
+        .filter(|&p| p != 0)
+    else {
+        return;
+    };
+    let players = game_state::players_for_gid(gid);
+    let Some(joiner) = players.iter().find(|p| p.persona_id == joiner_pid as i64) else {
+        return;
+    };
+    let Ok(pj) = build_game_manager_notify_player_joining(joiner, gid) else {
+        return;
+    };
+    let members: Vec<u64> = players
+        .iter()
+        .filter(|p| !p.is_ai && p.persona_id != joiner.persona_id)
+        .map(|p| p.persona_id as u64)
+        .collect();
+    let push = fireframe::OutgoingPush {
+        wire: fireframe::notification_envelope(0x0004, 0x0015, &pj),
+        component: 0x0004,
+        command: 0x0015,
+        tdf_body: pj.to_vec(),
+        blaze_send_label: "NotifyPlayerJoining (joiner -> lobby members)",
+        info_log_line: format!(
+            "[Blaze→Client] NotifyPlayerJoining game {gid} persona {joiner_pid} -> lobby members"
+        ),
+    };
+    let mut sent = false;
+    for s in crate::session::blaze_sessions::list_sessions() {
+        if s.id == joiner_sid || !s.persona_id.map_or(false, |id| members.contains(&id)) {
+            continue;
+        }
+        if dedicated_pool::is_dedicated_blaze_session(s.id) {
+            continue;
+        }
+        fireframe::enqueue_pending_pushes(s.id, vec![push.clone()]);
+        sent = true;
+    }
+    if sent {
+        let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+    }
+}
+
 /// Player ATTR `color=` while the frontend RtsClient is still alive.
 fn enqueue_native_house_color_attr(gid: i64) {
     use crate::client::cnc::game_state;

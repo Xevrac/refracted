@@ -820,15 +820,22 @@
         }
         $scope.lockedByReady = lockedByReady;
 
+        // Only the local player's card (and the host's AI cards) can be edited; ready players stay locked.
+        function slotLocked(slot) {
+            var owns = !!(slot && (slot.isLocal || (slot.isAi && $scope.isLobbyHost && $scope.isLobbyHost())));
+            return !owns || lockedByReady(slot);
+        }
+        $scope.slotLocked = slotLocked;
+
         $scope.canChangeGeneral = function (slot) {
-            if (lockedByReady(slot)) {
+            if (slotLocked(slot)) {
                 return false;
             }
             return !$scope.mapForcesTutorial;
         };
 
         $scope.canChangeFaction = function (slot) {
-            if (lockedByReady(slot)) {
+            if (slotLocked(slot)) {
                 return false;
             }
             if (!$scope.mapForcesTutorial) {
@@ -954,13 +961,10 @@
         }
 
         $scope.canChangeColor = function (slot) {
-            if (!slot || !slot.occupied || slot.invitePending || lockedByReady(slot)) {
+            if (!slot || !slot.occupied || slot.invitePending || slotLocked(slot)) {
                 return false;
             }
-            if ($scope.isLobbyHost && $scope.isLobbyHost()) {
-                return true;
-            }
-            return !!slot.isLocal;
+            return true;
         };
 
         function takenStartpoints(exceptSlot) {
@@ -1135,13 +1139,10 @@
         };
 
         $scope.canChangeStartpoint = function (slot) {
-            if (!slot || !slot.occupied || slot.invitePending || lockedByReady(slot)) {
+            if (!slot || !slot.occupied || slot.invitePending || slotLocked(slot)) {
                 return false;
             }
-            if ($scope.isLobbyHost && $scope.isLobbyHost()) {
-                return true;
-            }
-            return !!slot.isLocal;
+            return true;
         };
 
         $scope.setStartpoint = function (slot, id, $event) {
@@ -1616,7 +1617,7 @@
             }
             var slots = team === 2 ? $scope.team2 : $scope.team1;
             var slot = slots[index];
-            if (!slot || !slot.occupied || slot.invitePending || lockedByReady(slot)) {
+            if (!slot || !slot.occupied || slot.invitePending || slotLocked(slot)) {
                 return;
             }
             var key = $scope.slotMenuKey(team, index);
