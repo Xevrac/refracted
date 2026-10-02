@@ -77,38 +77,81 @@ pub fn pushes_after_reset_dedicated_server(
     pushes_client_join_after_reset(request, gid)
 }
 
-pub fn pushes_rematch_teardown_before_reset_reply(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    if !super::game_state::blaze_pregame_already_pushed(gid) {
+pub fn pushes_rematch_teardown_before_reset_reply(
+    gid: i64,
+    client_sid: Option<u64>,
+) -> BlazeResult<Vec<OutgoingPush>> {
+    let rematch = super::game_state::blaze_pregame_already_pushed(gid);
+    let lobby = super::game_state::blaze_join_setup_already_pushed(gid);
+    if !rematch && !lobby {
         return Ok(Vec::new());
     }
+    // H349: the requester already holds a local game for this gid (lobby join or last match),
+    // so the reset Setup hit createLocalGame's duplicate branch. NotifyGameRemoved is dropped
+    // for a game the local player is a member of; removing the local player is what destroys
+    // the local game. Sent before the reply, so no reset job is keyed to the gid yet.
+    let Some(pid) = client_sid
+        .and_then(crate::session::blaze_sessions::get_session)
+        .and_then(|s| s.persona_id)
+        .filter(|&p| p != 0)
+    else {
+        return Ok(Vec::new());
+    };
     crate::debug_println!(
-        "\x1b[38;2;100;200;255m[CNC]\x1b[0m rematch teardown before resetDedicatedServer gid={}",
-        gid
+        "\x1b[38;2;100;200;255m[CNC]\x1b[0m {} teardown before resetDedicatedServer gid={} persona={}",
+        if rematch { "rematch" } else { "lobby" },
+        gid,
+        pid
     );
-    super::game_state::clear_blaze_join_and_push_flags(gid);
+    if rematch {
+        super::game_state::clear_blaze_join_and_push_flags(gid);
+    }
 
-    let removed = super::build_game_manager_notify_game_removed(
+    let removed = super::build_game_manager_notify_player_removed(
+        gid,
+        pid as i64,
+        super::PLAYER_REMOVED_REASON_PLAYER_LEFT,
+    )?;
+    let wire_removed = notification_envelope(0x0004, 0x0028, &removed);
+    let removed_pl = wire_removed.len();
+
+    // A local game the player is no longer a member of is only destroyed by NotifyGameRemoved;
+    // after the PlayerRemoved above it is already gone and this one is dropped.
+    let game_removed = super::build_game_manager_notify_game_removed(
         gid,
         super::GAME_REMOVAL_REASON_GAME_DESTROYED,
     )?;
-    let wire_removed = notification_envelope(0x0004, 0x0010, &removed);
-    let removed_pl = wire_removed.len();
+    let wire_game_removed = notification_envelope(0x0004, 0x0010, &game_removed);
+    let game_removed_pl = wire_game_removed.len();
 
-    Ok(vec![OutgoingPush {
-        wire: wire_removed,
-        component: 0x0004,
-        command: 0x0010,
-        tdf_body: removed.to_vec(),
-        blaze_send_label: "NotifyGameRemoved before resetDedicatedServer (rematch)",
-        info_log_line: format!(
-            "[Blaze→Client] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
-            removed_pl
-        ),
-    }])
+    Ok(vec![
+        OutgoingPush {
+            wire: wire_removed,
+            component: 0x0004,
+            command: 0x0028,
+            tdf_body: removed.to_vec(),
+            blaze_send_label: "NotifyPlayerRemoved (local) before resetDedicatedServer",
+            info_log_line: format!(
+                "[Blaze→Client] GameManager.NotifyPlayerRemoved Component=4, Command=40, Size={}, MsgType=NOTIFICATION, MsgNum=0 (local game teardown before reset)",
+                removed_pl
+            ),
+        },
+        OutgoingPush {
+            wire: wire_game_removed,
+            component: 0x0004,
+            command: 0x0010,
+            tdf_body: game_removed.to_vec(),
+            blaze_send_label: "NotifyGameRemoved before resetDedicatedServer",
+            info_log_line: format!(
+                "[Blaze→Client] GameManager.NotifyGameRemoved Component=4, Command=16, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+                game_removed_pl
+            ),
+        },
+    ])
 }
 
 pub fn pushes_client_join_after_reset(request: &[u8], gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    // Host already has the lobby game. Reset REAS updates it in place; Removed+Setup is rejected.
+    // The requester's local game was removed before the reply (H349); Setup creates it fresh.
     super::game_state::refresh_pros_wire_for_gid(gid);
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyGameSetup(reset) + NotifyGameStateChange + NotifyPlatformHostInitialized + NotifyJoiningPlayerInitiateConnections after resetDedicatedServer (gid={})",

@@ -1410,7 +1410,7 @@ impl BlazeProtocolServer {
                                 && (packet.header.command == 0x0019 || packet.header.command == 0x0016)
                             {
                                 let gid = crate::client::cnc::cnc_extract_reset_game_id(&packet.payload);
-                                if let Ok(teardown) = crate::client::cnc::fireframe::pushes_rematch_teardown_before_reset_reply(gid)
+                                if let Ok(teardown) = crate::client::cnc::fireframe::pushes_rematch_teardown_before_reset_reply(gid, state.blaze_session_id)
                                 {
                                     for push in teardown {
                                         capture_packet(CapturedPacket {
@@ -2644,7 +2644,7 @@ impl BlazeProtocolServer {
                 {
                     let gid = crate::client::cnc::cnc_extract_reset_game_id(&payload);
                     if let Ok(teardown) =
-                        crate::client::cnc::fireframe::pushes_rematch_teardown_before_reset_reply(gid)
+                        crate::client::cnc::fireframe::pushes_rematch_teardown_before_reset_reply(gid, state.blaze_session_id)
                     {
                         for push in teardown {
                             capture_packet(CapturedPacket {

@@ -196,10 +196,9 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         anisotropicfilter: 2,
         vsyncenabled: false,
         motionblurenabled: false,
-        // Native PostProcess.UIBrightnessNorm default is full (1.0). Int bridge used to
-        // truncate mid values to 0 — factory UI default matches retail full brightness.
-        brightness: 1.0,
-        brightnessPercent: 100,
+        // Aurora default 30% (Prism seeds the same until a value is saved).
+        brightness: 0.3,
+        brightnessPercent: 30,
         shellUiTheme: (window.CncShellTheme && CncShellTheme.get) ? CncShellTheme.get() : 'aurora',
         shellUiThemeDefault: (window.CncShellTheme && CncShellTheme.getDefault)
             ? CncShellTheme.getDefault()
@@ -227,6 +226,26 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         ? angular.copy(CncLobbyDefaults.get())
         : { random: false, faction: 'APA', general: 2914080600, color: '#3a7bd5' };
     $scope.lobbyDefaultsMode = $scope.lobbyDefaults.random ? 'random' : 'fixed';
+
+    // Read by ingame-chat.js from the same WebKit profile localStorage.
+    var CHAT_VISIBILITY_KEY = 'cnc_ingame_chat_visibility';
+    $scope.chatVisibilityOptions = [
+        { id: 'always', label: 'Show Always' },
+        { id: 'active', label: 'Active' },
+        { id: 'never', label: 'Never' }
+    ];
+    $scope.chatVisibility = 'active';
+    try {
+        var savedChatVisibility = localStorage.getItem(CHAT_VISIBILITY_KEY);
+        if (savedChatVisibility === 'always' || savedChatVisibility === 'never') {
+            $scope.chatVisibility = savedChatVisibility;
+        }
+    } catch (e) { /* ignore */ }
+    $scope.onChatVisibilityChange = function () {
+        try {
+            localStorage.setItem(CHAT_VISIBILITY_KEY, $scope.chatVisibility);
+        } catch (e) { /* ignore */ }
+    };
     // Placeholder defaults must never be applied/saved until /usersettings hydrates.
     $scope.settingsReady = false;
     $scope.settingsLoadError = false;
@@ -519,7 +538,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             // Engine Settings store these as 0/1 (DefaultValues / Graphics.lua).
             vsyncenabled: $scope.settings.vsyncenabled ? 1 : 0,
             motionblurenabled: $scope.settings.motionblurenabled ? 1 : 0,
-            brightness: Math.max(0.01, Math.min(1, Number($scope.settings.brightness) || 1.0))
+            brightness: Math.max(0.01, Math.min(1, Number($scope.settings.brightness) || 0.3))
         };
     }
 

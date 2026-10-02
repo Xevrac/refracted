@@ -160,6 +160,14 @@
                                 ng-disabled="!settingsReady"></select>
                         <p class="opt-hint">{{ shellThemeHint }} Applies now and on the next shell start.</p>
                     </div>
+                    <div class="opt-group">
+                        <label class="opt-label-main">In-Game Chat</label>
+                        <select class="opt-select"
+                                ng-model="chatVisibility"
+                                ng-options="m.id as m.label for m in chatVisibilityOptions"
+                                ng-change="onChatVisibilityChange()"></select>
+                        <p class="opt-hint">Show Always keeps the chat on screen. Active opens it for a few seconds whenever anyone chats. Never shows it only when you open it (Enter).</p>
+                    </div>
                     <div class="opt-group opt-group--lobby-defaults">
                         <label class="opt-label-main">Lobby Defaults</label>
                         <p class="opt-hint">Set your preferred defaults when starting a lobby.</p>
