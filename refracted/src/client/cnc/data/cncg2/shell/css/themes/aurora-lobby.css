@@ -1091,7 +1091,8 @@
     color: #fff;
 }
 
-.au-lobby__start-badge:disabled {
+.au-lobby__start-badge:disabled,
+.au-lobby__menu-btn:disabled {
     opacity: 0.45;
     cursor: default;
 }

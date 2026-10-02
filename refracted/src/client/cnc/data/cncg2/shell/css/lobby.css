@@ -795,7 +795,9 @@
     box-sizing: border-box;
 }
 
-.cc-lobby__start-badge:disabled {
+.cc-lobby__start-badge:disabled,
+.cc-lobby__arrow:disabled,
+.cc-lobby__act:disabled {
     opacity: 0.45;
     cursor: default;
 }

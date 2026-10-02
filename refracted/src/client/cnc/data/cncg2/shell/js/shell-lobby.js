@@ -813,11 +813,24 @@
             return tutorial;
         };
 
-        $scope.canChangeGeneral = function () {
+        // A ready non-host player keeps spot, faction, general, colour and team until they unready.
+        function lockedByReady(slot) {
+            return !!(slot && slot.isLocal && $scope.localReady &&
+                !($scope.isLobbyHost && $scope.isLobbyHost()));
+        }
+        $scope.lockedByReady = lockedByReady;
+
+        $scope.canChangeGeneral = function (slot) {
+            if (lockedByReady(slot)) {
+                return false;
+            }
             return !$scope.mapForcesTutorial;
         };
 
-        $scope.canChangeFaction = function () {
+        $scope.canChangeFaction = function (slot) {
+            if (lockedByReady(slot)) {
+                return false;
+            }
             if (!$scope.mapForcesTutorial) {
                 return true;
             }
@@ -941,7 +954,7 @@
         }
 
         $scope.canChangeColor = function (slot) {
-            if (!slot || !slot.occupied || slot.invitePending) {
+            if (!slot || !slot.occupied || slot.invitePending || lockedByReady(slot)) {
                 return false;
             }
             if ($scope.isLobbyHost && $scope.isLobbyHost()) {
@@ -1122,7 +1135,7 @@
         };
 
         $scope.canChangeStartpoint = function (slot) {
-            if (!slot || !slot.occupied || slot.invitePending) {
+            if (!slot || !slot.occupied || slot.invitePending || lockedByReady(slot)) {
                 return false;
             }
             if ($scope.isLobbyHost && $scope.isLobbyHost()) {
@@ -1603,7 +1616,7 @@
             }
             var slots = team === 2 ? $scope.team2 : $scope.team1;
             var slot = slots[index];
-            if (!slot || !slot.occupied || slot.invitePending) {
+            if (!slot || !slot.occupied || slot.invitePending || lockedByReady(slot)) {
                 return;
             }
             var key = $scope.slotMenuKey(team, index);
@@ -1616,7 +1629,7 @@
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
-            if (!slot || slot.invitePending || !$scope.canChangeFaction()) {
+            if (!slot || slot.invitePending || !$scope.canChangeFaction(slot)) {
                 return;
             }
             if ($scope.mapForcesTutorial && $scope.selectedMap && $scope.selectedMap.forceFaction) {
@@ -1632,7 +1645,7 @@
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
-            if (!slot || slot.invitePending || !$scope.canChangeGeneral()) {
+            if (!slot || slot.invitePending || !$scope.canChangeGeneral(slot)) {
                 return;
             }
             slot.general = $scope.mapForcesTutorial
@@ -2677,9 +2690,13 @@
             return Number(me.teamNum || 1) !== Number(team) && $scope.teamHasEmpty(team);
         };
 
+        $scope.swapLocked = function () {
+            return lockedByReady(localSlot());
+        };
+
         $scope.swapTeam = function (team) {
             var me = localSlot();
-            if (!$scope.canSwapTo(team)) {
+            if (!$scope.canSwapTo(team) || lockedByReady(me)) {
                 return;
             }
             if (!$scope._joinedGameroom) {
@@ -2747,6 +2764,11 @@
             var next = !$scope.localReady;
             var gid = $scope.gameId || '1';
             var localPid = localPersonaId();
+            if (next) {
+                $scope.slotMenu = null;
+                $scope.startModalSlot = null;
+                closeColorPicker();
+            }
             httpRequest('POST', withKey('/cnc/player-ready?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0) +
                 '&ready=' + (next ? '1' : '0'))).then(function (data) {

@@ -146,17 +146,18 @@
                                         data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(1, $index, $event)"
+                                        ng-disabled="lockedByReady(slot)"
                                         ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
                                         data-tip="Pick faction and colour"></button>
                             </div>
                             <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
-                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction()}">
+                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
                                     <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
                                 </li>
                                 <li class="cc-lobby__menu-label">General</li>
                                 <li ng-repeat="g in availableGenerals(slot)"
-                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral()}">
+                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral(slot)}">
                                     <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
                                 </li>
                                 <li class="cc-lobby__menu-label">Color</li>
@@ -189,7 +190,7 @@
                     </div>
                     <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(1)}" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="cc-lobby__soon" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(1)" ng-click="swapTeam(1)">SWAP</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">SWAP</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(1)">ADD AI</button>
                     </div>
                 </div>
@@ -227,17 +228,18 @@
                                         data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
                                 <button type="button" class="cc-lobby__arrow"
                                         ng-click="toggleSlotMenu(2, $index, $event)"
+                                        ng-disabled="lockedByReady(slot)"
                                         ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
                                         data-tip="Pick faction and colour"></button>
                             </div>
                             <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
-                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction()}">
+                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
                                     <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
                                 </li>
                                 <li class="cc-lobby__menu-label">General</li>
                                 <li ng-repeat="g in availableGenerals(slot)"
-                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral()}">
+                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral(slot)}">
                                     <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
                                 </li>
                                 <li class="cc-lobby__menu-label">Color</li>
@@ -270,7 +272,7 @@
                     </div>
                     <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(2)}" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="cc-lobby__soon" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(2)" ng-click="swapTeam(2)">SWAP</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">SWAP</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(2)">ADD AI</button>
                     </div>
                 </div>
