@@ -169,7 +169,8 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }
     }
 
-    // Each line: "seq|channel|sender|name|text" (text last, may contain '|').
+    // Lines are comma-joined, each percent-encoded (H372): "seq|channel|sender|name|text"
+    // once decoded (text last, may contain '|').
     function applyLines(data) {
         if (!data || data.status !== 0 || typeof data.lines !== 'string') {
             return;
@@ -178,9 +179,15 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         var maxSeq = lastSeq;
         var fresh = 0;
         var mine = String(resolvePlayerName()).toLowerCase();
-        var rows = data.lines.split('\n');
+        var rows = data.lines ? data.lines.split(',') : [];
         for (var i = 0; i < rows.length; i++) {
-            var parts = rows[i].split('|');
+            var row;
+            try {
+                row = decodeURIComponent(rows[i]);
+            } catch (e) {
+                continue;
+            }
+            var parts = row.split('|');
             if (parts.length < 5) {
                 continue;
             }

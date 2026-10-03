@@ -2995,7 +2995,7 @@ pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
         return Ok(Bytes::from(Vec::new()));
     }
 
-    let orch = game_state::has_orchestration(gid);
+    let orch = game_state::orchestration_holds_leave(gid);
     let host = game_state::host_persona_for_gid(gid);
     if orch && (pid <= 0 || pid == host) {
         crate::debug_println!(
