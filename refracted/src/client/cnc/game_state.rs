@@ -561,6 +561,12 @@ pub fn has_orchestration(gid: i64) -> bool {
     orchestration().lock().contains_key(&gid)
 }
 
+/// H382: the join handshake holds leave/reclaim only until the match is InGame. The
+/// orchestration entry stays for the whole match, so the host leaving a running game was skipped.
+pub fn orchestration_holds_leave(gid: i64) -> bool {
+    has_orchestration(gid) && get_phase(gid) != GamePhase::InGame
+}
+
 pub fn has_deferred_join_pushes(gid: i64) -> bool {
     orchestration()
         .lock()
@@ -3035,7 +3041,7 @@ pub fn dedicated_session_id_for_gid(gid: i64) -> Option<u64> {
 }
 
 pub fn reclaim_after_empty_humans(gid: i64) -> serde_json::Value {
-    if has_orchestration(gid) {
+    if orchestration_holds_leave(gid) {
         tracing::info!(
             target: "cnc",
             "[CNC] reclaim skipped — match orchestration in progress (gid={gid})"
@@ -3209,7 +3215,8 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
         });
     };
 
-    if has_orchestration(gid) && (resolved_pid == 0 || resolved_pid == host_persona_for_gid(gid))
+    if orchestration_holds_leave(gid)
+        && (resolved_pid == 0 || resolved_pid == host_persona_for_gid(gid))
     {
         tracing::info!(
             target: "cnc",
