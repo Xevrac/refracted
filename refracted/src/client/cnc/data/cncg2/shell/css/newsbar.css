@@ -21,6 +21,10 @@
 }
 .news-globe-icon { width: 16px; height: 16px; vertical-align: middle; margin-right: 8px; margin-top: -2px;}
 .news-title { color: #fff; font-weight: bold; font-style: italic; font-size: 15px; vertical-align: middle; font-family: 'Eurostile-Hea', 'Eurostile-Med', sans-serif; }
+.news-refresh { float: right; width: 16px; height: 16px; margin-top: 9px; padding: 0; border: 0; background: none; cursor: pointer; opacity: 0.5; outline: none; }
+.news-refresh img { display: block; width: 16px; height: 16px; }
+.news-refresh:hover { opacity: 0.9; }
+.news-refresh.is-cooling, .news-refresh.is-cooling:hover { opacity: 0.2; cursor: default; }
 
 .news-subheader {
     color: #d8d8d8;

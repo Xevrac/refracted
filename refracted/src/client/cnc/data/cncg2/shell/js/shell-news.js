@@ -6,6 +6,7 @@
 
     var POLL_MS = 5 * 60 * 1000;
     var TIMEOUT_MS = 10000;
+    var REFRESH_COOLDOWN_MS = 30000;
     var CACHE_PREFIX = 'cnc_news_v1_';
     var MAX_ARTICLES = 20;
     var MAX_BLOCKS = 40;
@@ -15,6 +16,7 @@
     var articles = null;
     var timer = null;
     var inFlight = false;
+    var lastManualRefresh = 0;
 
     function config() {
         var c = window.__CNC_NEWS;
@@ -223,7 +225,17 @@
     window.CncNews = {
         realm: realm,
         normalize: normalize,
-        refresh: poll,
+        refreshCooldownMs: REFRESH_COOLDOWN_MS,
+        /** Manual refresh; false while the cooldown is running (the site also rate-limits per IP). */
+        refresh: function () {
+            var now = new Date().getTime();
+            if (now - lastManualRefresh < REFRESH_COOLDOWN_MS) {
+                return false;
+            }
+            lastManualRefresh = now;
+            poll();
+            return true;
+        },
         /** Calls fn(articles) now (if loaded) and on every update; returns an unsubscribe. */
         subscribe: function (fn) {
             listeners.push(fn);
