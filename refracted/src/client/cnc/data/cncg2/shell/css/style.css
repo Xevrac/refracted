@@ -936,6 +936,16 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
     color: #e8e8e8;
     text-align: center;
 }
+.alert-popup-credits {
+    margin: 10px 0 0 0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.35);
+    font-family: 'Eurostile-Med', Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #c8c8c8;
+    text-align: center;
+}
 
 /* Yellow coming-soon / info tip */
 .cc-info-tip {

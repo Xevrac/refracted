@@ -578,6 +578,25 @@ html.cnc-playtest body.cc-theme--aurora .cc-pre-landing {
     bottom: 0;
     left: 0;
 }
+body.cc-theme--aurora .btn-back-to-main {
+    border-radius: 0;
+    padding: 8px 16px;
+    border: 1px solid #1c2a32;
+    background: transparent;
+    color: #e6edf5;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-weight: bold;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    -webkit-transition: none;
+    transition: none;
+}
+body.cc-theme--aurora .btn-back-to-main:hover {
+    border-color: #3aa0ff;
+    color: #fff;
+    background: transparent;
+}
 .au-subnav { margin: 0 0 12px 0; }
 .au-subnav a {
     display: inline-block;

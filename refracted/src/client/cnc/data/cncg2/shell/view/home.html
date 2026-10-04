@@ -138,9 +138,10 @@
     
     <button class="btn-cnc-credits" ng-click="openCredits()"></button>
     <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-show="showDebugTools" ng-click="openDebug()"></button>
-    <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-click="toggleAlertPopup()"></button>
+    <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" data-tip="About this build" ng-click="toggleAlertPopup()"></button>
     <div class="alert-popup-box" ng-show="alertPopupOpen">
         <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator. All functions, features, visuals and gameplay elements are subject to change.</p>
+        <p class="alert-popup-credits">Credits to Xevrac and Nemo for reviving Command &amp; Conquer (2013).</p>
     </div>
     
 </div>
