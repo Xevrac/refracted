@@ -645,7 +645,7 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
             }
             applyBuildInfo(body);
         }
-        // Client Prism rewrites this to /cnc/build-info?prism=<PRISM_VERSION>.
+        // Client Prism rewrites this to /cnc/build-info?prism=<prism.core.dll file version>.
         var buildUrl = '/cnc/build-info';
         try {
             if (window.jQuery && jQuery.ajax) {

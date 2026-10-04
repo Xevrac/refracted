@@ -468,8 +468,8 @@ fn handle_cnc_build_info(query: Option<&str>) -> HttpResponse {
 
 const CNC_RL_BUILD: &str = "150805";
 
-/// Prism version is owned by the client process (Prism DLL). The backend only
-/// echoes a value the client attached to this request — never reads player disks.
+/// Prism version is the prism.core.dll file version, attached by the client.
+/// The backend only echoes that query value — never reads player disks.
 fn client_reported_prism_version(query: Option<&str>) -> Option<String> {
     let q = query?;
     for pair in q.split('&') {
