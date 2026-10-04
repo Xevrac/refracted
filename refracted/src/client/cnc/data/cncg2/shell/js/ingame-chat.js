@@ -17,6 +17,8 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     var ACTIVE_SHOW_MS = 3000;
     // In-process shell route; a 1 s poll added up to a second to every line.
     var POLL_MS = 100;
+    var POLL_STALL_MS = 2000;
+    var pollSerial = 0;
     var lastSeq = -1;
     var activeHideTimer = null;
     var shownByActivity = false;
@@ -337,9 +339,23 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }
     }
 
+    // One poll in flight; the next starts after the reply (or after POLL_STALL_MS without one).
     function pollServer() {
-        executeShell('/prism/chat/poll', { since: lastSeq < 0 ? 0 : lastSeq }, applyLines);
-        setTimeout(pollServer, POLL_MS);
+        var serial = ++pollSerial;
+        function again() {
+            if (serial === pollSerial) {
+                ++pollSerial;
+                setTimeout(pollServer, POLL_MS);
+            }
+        }
+        if (!executeShell('/prism/chat/poll', { since: lastSeq < 0 ? 0 : lastSeq }, function (data) {
+            applyLines(data);
+            again();
+        })) {
+            again();
+            return;
+        }
+        setTimeout(again, POLL_STALL_MS);
     }
 
     $scope.setChannel = function (ch) {
