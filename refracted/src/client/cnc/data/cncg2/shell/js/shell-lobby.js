@@ -186,8 +186,43 @@
         }
     ];
 
+    var PLAYTEST_FACTIONS = [{ code: 'EU', label: 'EU' }];
+    var playtestGenerals = null;
+
+    function playtestOn() {
+        return !!(window.CncPlaytest && CncPlaytest.on && CncPlaytest.on());
+    }
+
+    function playtestGeneralList() {
+        var list;
+        var i;
+        if (playtestGenerals) {
+            return playtestGenerals;
+        }
+        playtestGenerals = [];
+        list = generalsForFaction('EU');
+        for (i = 0; i < list.length; i++) {
+            if (list[i].key === 'EU_ClassicGeneral') {
+                playtestGenerals.push(list[i]);
+            }
+        }
+        return playtestGenerals;
+    }
+
+    function mapBlockedByPlaytest(map) {
+        return playtestOn() && CncPlaytest.mapBlocked(map);
+    }
+
     function firstAvailableMap() {
-        for (var i = 0; i < MAPS.length; i++) {
+        var i;
+        if (playtestOn()) {
+            for (i = 0; i < MAPS.length; i++) {
+                if (CncPlaytest.isSmalltown(MAPS[i])) {
+                    return MAPS[i];
+                }
+            }
+        }
+        for (i = 0; i < MAPS.length; i++) {
             if (!MAPS[i].comingSoon) {
                 return MAPS[i];
             }
@@ -472,6 +507,9 @@
             slot.faction = defaultFactionForMap(map);
             slot.general = defaultGeneralId(slot.faction, map);
         }
+        if (playtestOn()) {
+            CncPlaytest.coerceSlot(slot);
+        }
         slot.codename = codenameForSlot(slot);
         slot.avatar = avatarForSlot(slot);
     }
@@ -626,6 +664,10 @@
 
     CCApp.controller('ShellLobbyController', function ($scope, $rootScope, $timeout) {
         $scope.maps = MAPS;
+        $scope.playtest = playtestOn();
+        $scope.mapPlaytestBlocked = function (map) {
+            return mapBlockedByPlaytest(map);
+        };
         $scope.selectedMap = firstAvailableMap();
         $scope.mapPath = $scope.selectedMap.path;
         $scope.mapForcesTutorial = !!$scope.selectedMap.forceTutorialGeneral;
@@ -782,6 +824,9 @@
         };
 
         $scope.availableFactions = function () {
+            if (playtestOn()) {
+                return PLAYTEST_FACTIONS;
+            }
             if ($scope.mapForcesTutorial && $scope.selectedMap && $scope.selectedMap.forceFaction) {
                 var forced = normalizeFaction($scope.selectedMap.forceFaction);
                 var out = [];
@@ -801,6 +846,9 @@
                 return [];
             }
             var list = generalsForFaction(slot.faction);
+            if (playtestOn()) {
+                return playtestGeneralList();
+            }
             if (!$scope.mapForcesTutorial) {
                 return list;
             }
@@ -1283,7 +1331,10 @@
         assignDefaultStartpoints();
 
         $scope.selectMap = function (map, $event) {
-            if (!map || (map.comingSoon && !($event && $event.shiftKey) && !$scope._adoptingMap)) {
+            if (!map || mapBlockedByPlaytest(map)) {
+                return;
+            }
+            if (map.comingSoon && !($event && $event.shiftKey) && !$scope._adoptingMap) {
                 return;
             }
             if ($scope._joinedGameroom && !$scope.isLobbyHost() && !$scope._adoptingMap) {
@@ -1387,7 +1438,10 @@
         };
 
         $scope.previewMapInPicker = function (map, $event) {
-            if (!map || (map.comingSoon && !($event && $event.shiftKey))) {
+            if (!map || mapBlockedByPlaytest(map)) {
+                return;
+            }
+            if (map.comingSoon && !($event && $event.shiftKey)) {
                 return;
             }
             $scope.mapPickerFocus = map;
@@ -1633,11 +1687,15 @@
             if (!slot || slot.invitePending || !$scope.canChangeFaction(slot)) {
                 return;
             }
-            if ($scope.mapForcesTutorial && $scope.selectedMap && $scope.selectedMap.forceFaction) {
+            if (playtestOn()) {
+                code = 'EU';
+            } else if ($scope.mapForcesTutorial && $scope.selectedMap && $scope.selectedMap.forceFaction) {
                 code = $scope.selectedMap.forceFaction;
             }
             slot.faction = normalizeFaction(code);
-            slot.general = defaultGeneralId(slot.faction, $scope.selectedMap);
+            slot.general = playtestOn()
+                ? CncPlaytest.euClassicId
+                : defaultGeneralId(slot.faction, $scope.selectedMap);
             slot.codename = codenameForSlot(slot);
             syncPlayerAttrsToServer(slot);
         };
@@ -1649,9 +1707,13 @@
             if (!slot || slot.invitePending || !$scope.canChangeGeneral(slot)) {
                 return;
             }
-            slot.general = $scope.mapForcesTutorial
-                ? tutorialGeneralId(slot.faction)
-                : (Number(generalId) || 0);
+            if (playtestOn()) {
+                slot.general = CncPlaytest.euClassicId;
+            } else {
+                slot.general = $scope.mapForcesTutorial
+                    ? tutorialGeneralId(slot.faction)
+                    : (Number(generalId) || 0);
+            }
             slot.codename = codenameForSlot(slot);
             syncPlayerAttrsToServer(slot);
             $scope.slotMenu = null;
@@ -1726,9 +1788,13 @@
                     slot.isAi = true;
                     slot.faction = faction;
                     slot.general = defaultGeneralId(faction, $scope.selectedMap);
-                    slot.codename = codenameForSlot(slot);
                     slot.displayName = 'AI';
                     slot.difficulty = 'HARD';
+                    if (playtestOn()) {
+                        CncPlaytest.coerceSlot(slot);
+                    }
+                    slot.codename = codenameForSlot(slot);
+                    slot.avatar = avatarForSlot(slot);
                     slot.color = unusedColor(slot);
                     slot.teamNum = team;
                     slot.startpoint = unusedStartpoint(slot);
@@ -2443,11 +2509,31 @@
         $scope.$on('cnc:lobbyDefaultsSaved', function () {
             if (localSlot() && localSlot().isLocal && !$scope._joinedGameroom) {
                 applyLobbyDefaultsToSlot(localSlot(), $scope.selectedMap);
+                if (playtestOn()) {
+                    CncPlaytest.coerceSlot(localSlot());
+                    localSlot().codename = codenameForSlot(localSlot());
+                    localSlot().avatar = avatarForSlot(localSlot());
+                }
                 if (!$scope.mapForcesTutorial) {
                     syncPlayerAttrsToServer(localSlot());
                 }
             }
         });
+
+        if (playtestOn()) {
+            var playtestWatch = $timeout(function playtestTick() {
+                var slot = localSlot();
+                if (slot && slot.isLocal && CncPlaytest.coerceSlot(slot)) {
+                    slot.codename = codenameForSlot(slot);
+                    slot.avatar = avatarForSlot(slot);
+                    syncPlayerAttrsToServer(slot);
+                }
+                playtestWatch = $timeout(playtestTick, 1000);
+            }, 1000);
+            $scope.$on('$destroy', function () {
+                $timeout.cancel(playtestWatch);
+            });
+        }
 
         function postLeaveGameRoom() {
             if (!$scope._joinedGameroom) {
@@ -3685,6 +3771,9 @@
         };
 
         $scope.applyRoomPassword = function () {
+            if (playtestOn()) {
+                return;
+            }
             if (!$scope.isLobbyHost || !$scope.isLobbyHost()) {
                 return;
             }

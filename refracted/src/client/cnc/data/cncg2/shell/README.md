@@ -28,6 +28,24 @@ These are client-side only. Refracted does not write shell prefs to its host fil
 Legacy id `cnc-alpha` maps to `classic`.
 CSS: `css/themes/` (+ `aurora-layout.css` for the Aurora root).
 
+## News (NEWS panel)
+
+Articles come from the Aurora site (`refracted_cnc/frontend`, admin page `/news`), not from this
+folder. `js/shell-news.js` polls `GET {news_url}/api/shell/news/{realm}` every 5 minutes and keeps
+the last good feed in `localStorage` (`cnc_news_v1_{realm}`) for offline starts.
+
+| Realm | Page | Picked by |
+|-------|------|-----------|
+| `prod` | `index.html` / rmtWrapper | default |
+| `dev` | `devWrapper.html` | `window.__CNC_PLAYTEST === true` |
+
+Refracted injects `window.__CNC_NEWS = { url, devKey? }` into served HTML from `refracted.env`
+`news_url` / `news_dev_key` (or `CNC_NEWS_URL` / `CNC_NEWS_DEV_KEY`). `devKey` is only injected into
+`devWrapper.html`; set it on the playtest server only. No `news_url` = no polling, cached feed only.
+
+Articles are typed blocks (`paragraph`, `heading`, `list` with one nested level, `divider`), never
+HTML; `view/newsbar.html` renders them with text bindings only.
+
 ## Test browser
 
 **Chrome 15.0.875.0** lives under:

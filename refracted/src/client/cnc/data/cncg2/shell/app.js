@@ -28,6 +28,8 @@ CCApp.run(function ($rootScope) {
         window.CncPreLanding && CncPreLanding.hasShell && CncPreLanding.hasShell();
     $rootScope.preLandingUseArt = false;
     $rootScope.allowShellThemeSelect = true;
+    $rootScope.playtest = !!(window.CncPlaytest && CncPlaytest.on && CncPlaytest.on());
+    $rootScope.showDebugTools = false;
     $rootScope.lobbyOpen = false;
     $rootScope.lobbyView = 'matchmake';
 
@@ -390,7 +392,22 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     $scope.activeTab = 'LIVE'; 
     $scope.activeSubTab = '';
 
+    var PLAYTEST_LOCKED_TABS = {
+        PROFILE: 1,
+        CUSTOMIZE: 1,
+        WATCH: 1,
+        LEARN: 1,
+        SUPPORT: 1
+    };
+
+    $scope.playtestNavLocked = function (tabName) {
+        return !!($rootScope.playtest && PLAYTEST_LOCKED_TABS[tabName]);
+    };
+
     $scope.setTab = function(tabName) {
+        if ($scope.playtestNavLocked(tabName)) {
+            return;
+        }
         $scope.activeTab = tabName;
         if (tabName === 'PROFILE') { $scope.activeSubTab = 'OVERVIEW'; } 
         else if (tabName === 'CUSTOMIZE') { $scope.activeSubTab = 'MODIFY GENERALS'; } 
@@ -423,7 +440,8 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     // ==========================================
     // LIVE TAB LOGIC (Slideshow & News)
     // ==========================================
-    $scope.liveImages = [
+    var playtestHero = "images/aurora-early-access.jpg";
+    $scope.liveImages = $rootScope.playtest ? [playtestHero] : [
         "images/cnc_background.png",
         "view/image/franchise_site_bg_c_dark.jpg",
         "view/image/blue_tex1.jpg",
@@ -458,18 +476,43 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
             $scope.currentLiveImageIndex = index;
             $scope.currentLiveImage = $scope.liveImages[index];
             $scope.isFading = true; 
-            startLiveSlideshow(); 
+            if (!$rootScope.playtest) {
+                startLiveSlideshow();
+            }
         }, 50);
     };
 
-    startLiveSlideshow();
+    if (!$rootScope.playtest) {
+        startLiveSlideshow();
+    }
 
-    // RESTORED: News Entries for Live Tab Sidebar
-    $scope.newsEntries = [
-        { id: 1, title: "July Patch is awaiting you!", hasImage: true, date: "Tue Oct 15 2013", content: "Good news, we have just updated the game with a small mid-month patch!" },
-        { id: 2, title: "Patch 2.0 is live", hasImage: false, date: "Mon Sep 02 2013", content: "Patch 2.0 brings major overhauls to the unit pathing AI..." }
-    ];
-    
+    // News: the realm's feed from the Aurora site (js/shell-news.js), administered on its
+    // News admin page. An open article is re-pointed at its updated copy, or closed if it
+    // was withdrawn.
+    $scope.newsEntries = [];
+    if (window.CncNews) {
+        var stopNews = window.CncNews.subscribe(function (articles) {
+            var apply = function () {
+                $scope.newsEntries = articles;
+                if ($scope.activeNewsArticle) {
+                    var open = null;
+                    for (var n = 0; n < articles.length; n++) {
+                        if (articles[n].id === $scope.activeNewsArticle.id) {
+                            open = articles[n];
+                        }
+                    }
+                    $scope.activeNewsArticle = open;
+                }
+            };
+            if ($scope.$$phase || ($scope.$root && $scope.$root.$$phase)) {
+                apply();
+            } else {
+                $scope.$apply(apply);
+            }
+        });
+        $scope.$on('$destroy', stopNews);
+    }
+
     $scope.activeNewsArticle = null;
     $scope.openArticle = function(article) { $scope.activeNewsArticle = article; $scope.mapOpen = false; };
     $scope.closeArticle = function() { $scope.activeNewsArticle = null; };
@@ -478,7 +521,12 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     // SIDEBAR LOGIC (Feeds, Chat, Friends)
     // ==========================================
     $scope.sidebarActiveTab = 'FRIENDS'; 
-    $scope.setSidebarTab = function(tabName) { $scope.sidebarActiveTab = tabName; };
+    $scope.setSidebarTab = function(tabName) {
+        if ($rootScope.playtest) {
+            return;
+        }
+        $scope.sidebarActiveTab = tabName;
+    };
 
     // Sidebar: Feeds
     $scope.feedsData = [ 
@@ -562,6 +610,9 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         var cnc = body.cnc_rl || body.cnc;
         if (cnc) {
             $scope.buildCnc = cnc;
+        }
+        if (body.debugDll === true || body.debugDll === 1 || body.debugDll === '1') {
+            $rootScope.showDebugTools = true;
         }
     }
 

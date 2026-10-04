@@ -204,6 +204,56 @@ body.cc-theme {
    BLOCK-SPECIFIC FORMATION
    ========================================================================= */
 
+html.cnc-playtest body {
+    padding-top: 32px;
+}
+
+html.cnc-playtest body.cc-theme--aurora {
+    padding-top: 0;
+}
+
+html.cnc-playtest .cc-pre-landing {
+    top: 32px;
+}
+
+html.cnc-playtest .cc-playtest-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 20000;
+    height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    background: #ffe14a;
+    color: #1a1400;
+    border-bottom: 2px solid #c9a000;
+    font-family: 'Eurostile-Hea', Arial, sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.14em;
+    line-height: 32px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.au-rail__item--locked,
+.au-rail__item--locked:hover,
+.au-rail__item--locked:focus {
+    color: #5c6770;
+    border-color: transparent;
+    background: transparent;
+    cursor: default;
+    opacity: 0.4;
+}
+
+.cc-main-nav li.cc-nav--locked a,
+.cc-main-nav li.cc-nav--locked a:hover {
+    color: #6a6a6a;
+    cursor: default;
+    opacity: 0.4;
+}
+
 /* TOP BAR — Support Us (replaces retail VP/CP pay rail) */
 .cc-top-bar { position: absolute; top: 16px; left: 20px; right: 20px; height: 56px; z-index: 100;}
 .cc-support-us {
@@ -756,20 +806,23 @@ button.btn-alert-marker:focus { outline: none; }
 /* element + 2 classes so `color` beats `button.btn-alert-marker` and shows when not hovering */
 button.btn-alert-marker.btn-alert-marker--wop {
     right: 444px;
-    border-color: #3fbf4a;
-    color: #8dff96;
-    background: rgba(8, 26, 12, 0.92);
-    -webkit-box-shadow: 0 0 5px rgba(63, 191, 74, 0.8);
-    box-shadow: 0 0 5px rgba(63, 191, 74, 0.8);
-    -webkit-animation: alertBlink 2.4s infinite ease-in-out;
-    animation: alertBlink 2.4s infinite ease-in-out;
+    width: 14px;
+    height: 20px;
+    border: none;
+    border-radius: 0;
+    color: #0088ff;
+    background: transparent;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+    -webkit-animation: infoBlink 2.4s infinite ease-in-out;
+    animation: infoBlink 2.4s infinite ease-in-out;
 }
 button.btn-alert-marker.btn-alert-marker--wop:hover {
-    color: #b4ffba;
-    border-color: #5fd868;
-    background: rgba(12, 34, 16, 0.95);
-    -webkit-box-shadow: 0 0 7px rgba(95, 216, 104, 0.9);
-    box-shadow: 0 0 7px rgba(95, 216, 104, 0.9);
+    color: #3aa0ff;
+    border: none;
+    background: transparent;
+    -webkit-box-shadow: none;
+    box-shadow: none;
 }
 
 button.btn-alert-marker.btn-alert-marker--debug {
@@ -790,20 +843,31 @@ button.btn-alert-marker.btn-alert-marker--debug:hover {
 
 #cnc-footer-wop::before,
 button.btn-alert-marker.btn-alert-marker--wop::before {
-    content: "!";
+    content: "i";
     position: absolute;
     left: 50%;
     top: 50%;
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
     display: block;
+    font-family: Arial, sans-serif;
+    font-style: normal;
+    font-weight: bold;
     font-size: 13px;
     line-height: 1;
-    color: #8dff96;
+    color: #0088ff;
     pointer-events: none;
 }
 button.btn-alert-marker.btn-alert-marker--wop:hover::before {
-    color: #b4ffba;
+    color: #3aa0ff;
+}
+
+html.cnc-playtest .au-side,
+html.cnc-playtest .au-lobby__side,
+html.cnc-playtest .cc-lobby__sidebar,
+html.cnc-playtest .cc-content-area > .cc-sidebar {
+    opacity: 0.4;
+    pointer-events: none;
 }
 
 #cnc-footer-debug::before,
@@ -827,6 +891,17 @@ button.btn-alert-marker.btn-alert-marker--debug::before {
 button.btn-alert-marker.btn-alert-marker--debug:hover::before {
     -webkit-filter: brightness(1.2);
     filter: brightness(1.2);
+}
+
+@-webkit-keyframes infoBlink {
+    0% { opacity: 1; }
+    50% { opacity: 0.42; }
+    100% { opacity: 1; }
+}
+@keyframes infoBlink {
+    0% { opacity: 1; }
+    50% { opacity: 0.42; }
+    100% { opacity: 1; }
 }
 
 @-webkit-keyframes alertBlink {

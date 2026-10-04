@@ -449,7 +449,10 @@ fn handle_cnc_online_count() -> HttpResponse {
 }
 
 fn handle_cnc_build_info(query: Option<&str>) -> HttpResponse {
-    let body = shell_build_info_json(client_reported_prism_version(query));
+    let body = shell_build_info_json(
+        client_reported_prism_version(query),
+        client_reported_debug_dll(query),
+    );
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -475,7 +478,21 @@ fn client_reported_prism_version(query: Option<&str>) -> Option<String> {
     None
 }
 
-fn shell_build_info_json(client_prism: Option<String>) -> serde_json::Value {
+fn client_reported_debug_dll(query: Option<&str>) -> bool {
+    let Some(q) = query else {
+        return false;
+    };
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == "debugDll" && (v == "1" || v == "true") {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn shell_build_info_json(client_prism: Option<String>, debug_dll: bool) -> serde_json::Value {
     let rfr = env!("CARGO_PKG_VERSION").to_string();
     serde_json::json!({
         "ok": true,
@@ -483,6 +500,7 @@ fn shell_build_info_json(client_prism: Option<String>) -> serde_json::Value {
         "prism": client_prism,
         "cnc": CNC_RL_BUILD,
         "cnc_rl": CNC_RL_BUILD,
+        "debugDll": debug_dll,
     })
 }
 
@@ -1855,7 +1873,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
     let p = crate::common::user_profile::get_current_profile();
     if !crate::nexus::identity::json_personas_allowed() {
         // Nexus identity comes from the Blaze login; the local JSON profile would be a different persona.
-        let build = shell_build_info_json(None);
+        let build = shell_build_info_json(None, false);
         let script = format!("<script>window.__CNC_PROFILE={{}};window.__CNC_BUILD={};</script>", build);
         return insert_head_script(s, &script, html);
     }
@@ -1866,7 +1884,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
         "personaId": p.persona_id,
         "userId": p.user_id,
     });
-    let build = shell_build_info_json(None);
+    let build = shell_build_info_json(None, false);
     let script = format!(
         "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};</script>",
         json, build

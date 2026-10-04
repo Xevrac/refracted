@@ -53,11 +53,11 @@
         <div class="cc-nav-centered-wrapper">
             <ul class="cc-main-nav">
                 <li ng-class="{'active': activeTab == 'LIVE'}"><a href="" ng-click="setTab('LIVE')">LIVE</a></li>
-                <li ng-class="{'active': activeTab == 'PROFILE'}"><a href="" ng-click="setTab('PROFILE')">PROFILE</a></li>
-                <li ng-class="{'active': activeTab == 'CUSTOMIZE'}"><a href="" ng-click="setTab('CUSTOMIZE')">CUSTOMIZE</a></li>
-                <li ng-class="{'active': activeTab == 'WATCH'}"><a href="" ng-click="setTab('WATCH')">WATCH</a></li>
-                <li ng-class="{'active': activeTab == 'LEARN'}"><a href="" ng-click="setTab('LEARN')">LEARN</a></li>
-                <li ng-class="{'active': activeTab == 'SUPPORT'}"><a href="" ng-click="setTab('SUPPORT')">SUPPORT</a></li>
+                <li ng-class="{'active': activeTab == 'PROFILE', 'cc-nav--locked': playtestNavLocked('PROFILE')}"><a href="" ng-click="setTab('PROFILE')">PROFILE</a></li>
+                <li ng-class="{'active': activeTab == 'CUSTOMIZE', 'cc-nav--locked': playtestNavLocked('CUSTOMIZE')}"><a href="" ng-click="setTab('CUSTOMIZE')">CUSTOMIZE</a></li>
+                <li ng-class="{'active': activeTab == 'WATCH', 'cc-nav--locked': playtestNavLocked('WATCH')}"><a href="" ng-click="setTab('WATCH')">WATCH</a></li>
+                <li ng-class="{'active': activeTab == 'LEARN', 'cc-nav--locked': playtestNavLocked('LEARN')}"><a href="" ng-click="setTab('LEARN')">LEARN</a></li>
+                <li ng-class="{'active': activeTab == 'SUPPORT', 'cc-nav--locked': playtestNavLocked('SUPPORT')}"><a href="" ng-click="setTab('SUPPORT')">SUPPORT</a></li>
             </ul>
         </div>
     </div>
@@ -137,7 +137,7 @@
 <div class="cc-footer">
     
     <button class="btn-cnc-credits" ng-click="openCredits()"></button>
-    <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-click="openDebug()"></button>
+    <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-show="showDebugTools" ng-click="openDebug()"></button>
     <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-click="toggleAlertPopup()"></button>
     <div class="alert-popup-box" ng-show="alertPopupOpen">
         <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator. All functions, features, visuals and gameplay elements are subject to change.</p>

@@ -13,13 +13,14 @@
         <li class="news-item clearfix" ng-repeat="news in newsEntries" ng-click="openArticle(news)">
             
             <div class="news-item-thumb" ng-if="news.hasImage">
-                <img src="view/image/light_gray_tex.jpg" alt="">
+                <img ng-src="{{ news.image }}" alt="">
             </div>
             
             <div class="news-item-text" ng-class="{'has-thumb': news.hasImage}">
-                {{ news.title }}
+                <span class="news-item-pin" ng-if="news.pinned">&#9650;</span>{{ news.title }}
             </div>
         </li>
+        <li class="news-item news-item--empty" ng-hide="newsEntries.length">No news right now.</li>
     </ul>
 </div>
 
@@ -27,25 +28,26 @@
     
     <h1 class="article-title">{{ activeNewsArticle.title }}</h1>
     <h4 class="article-date">{{ activeNewsArticle.date }}</h4>
+
+    <img class="article-image" ng-if="activeNewsArticle.hasImage" ng-src="{{ activeNewsArticle.image }}" alt="">
     
     <div class="article-content">
-        <p>{{ activeNewsArticle.content }}</p>
-        
-        <p><span style="text-decoration: underline;">Balance Changes</span><br>
-        A significant amount of the abilities and upgrades have been updated, changing a lot of the abilities to now be available as soon as the unit is produced.</p>
-        
-        <ul style="color: #888;">
-            <li>APA
-                <ul>
-                    <li>Urban Assault Team<br>Gun Emplacement is no longer an upgrade.</li>
-                </ul>
-            </li>
-            <li>EU
-                <ul>
-                    <li>Recon Squad<br>Entrench is no longer an upgrade and is available by default.</li>
-                </ul>
-            </li>
-        </ul>
+        <p class="article-summary" ng-show="activeNewsArticle.summary">{{ activeNewsArticle.summary }}</p>
+
+        <div ng-repeat="block in activeNewsArticle.blocks" ng-switch="block.type">
+            <div ng-switch-when="paragraph">
+                <p class="article-paragraph" ng-repeat="para in block.paragraphs">{{ para }}</p>
+            </div>
+            <p ng-switch-when="heading"><span class="article-heading">{{ block.text }}</span></p>
+            <ul ng-switch-when="list" class="article-list">
+                <li ng-repeat="item in block.items">{{ item.text }}
+                    <ul ng-show="item.children.length">
+                        <li ng-repeat="child in item.children">{{ child }}</li>
+                    </ul>
+                </li>
+            </ul>
+            <hr ng-switch-when="divider" class="article-divider">
+        </div>
     </div>
 
     <button class="btn-back-to-main" ng-click="closeArticle()">BACK TO MAIN</button>
