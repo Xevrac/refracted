@@ -471,6 +471,9 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     super::super::game_state::clear_match_connection_lost(gid);
     super::super::game_state::seed_from_join(gid);
     super::super::game_state::resolve_startpoints_before_create(gid);
+    // Resolved `_startpoint` (including random `?` picks) has to reach every
+    // human, not only the lobby host's setPlayerAttributes echo.
+    super::super::game_state::broadcast_resolved_startpoints(gid);
     log_sim_debug(&format!("CreateGame roster ready gid={gid}"));
     let game = match super::super::game_state::get_game(gid) {
         Some(g) => g,
@@ -494,9 +497,6 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         log_sim_debug(&format!("Empty roster for gid={gid}; skipping CreateGame"));
         return Ok(());
     }
-    // CreateGame already has resolved picks; clear lobby attrs so rematch does not reuse them.
-    super::super::game_state::flush_lobby_startpoints(gid);
-
     let game_id = uuid_to_guid_bytes(&game.uuid);
     let upstream = crate::client::cnc::dedicated_pool::simucloud_upstream_for_gid(gid);
     let deadline = Instant::now() + CONNECT_BUDGET;

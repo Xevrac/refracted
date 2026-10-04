@@ -353,6 +353,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/lobby-roster" && is_get {
         return Some(handle_cnc_lobby_roster(query));
     }
+    if base == "cnc/identity" && is_get {
+        return Some(handle_cnc_identity(query));
+    }
     if base == "cnc/lobby-chat" {
         return Some(handle_cnc_lobby_chat(is_post, query, body));
     }
@@ -824,7 +827,13 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     }
     if let Some((persona, _)) = identity {
         if !is_ai_attrs {
-            pid = persona;
+            let host_sets_start = pid > 0
+                && pid != persona
+                && game_state::may_act_as_lobby_host(gid, persona)
+                && attrs.keys().all(|k| k == "_startpoint");
+            if !host_sets_start {
+                pid = persona;
+            }
         } else if !game_state::may_act_as_lobby_host(gid, persona) {
             let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
@@ -1611,6 +1620,24 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
     }
     let json = game_state::lobby_chat_push(gid, &user, &text);
     HttpResponse::new(200, "application/json", json.to_string().into_bytes())
+}
+
+/// Login-key persona plus the in-game roster DSNM when that player is seated.
+fn handle_cnc_identity(query: Option<&str>) -> HttpResponse {
+    let Some((pid, login_name)) = request_identity(query, &[]) else {
+        return HttpResponse::new(
+            401,
+            "application/json",
+            br#"{"ok":false}"#.to_vec(),
+        );
+    };
+    let display_name = game_state::roster_display_name(pid).unwrap_or(login_name);
+    let body = serde_json::json!({
+        "ok": true,
+        "personaId": pid,
+        "displayName": display_name,
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
 fn handle_cnc_lobby_roster(query: Option<&str>) -> HttpResponse {

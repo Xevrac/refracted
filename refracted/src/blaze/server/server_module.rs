@@ -2832,6 +2832,15 @@ impl BlazeProtocolServer {
                             );
                         }
 
+                        if attrs.contains_key("_startpoint") {
+                            crate::client::cnc::game_state::fanout_player_attrib_change(
+                                gid,
+                                pid,
+                                &attrs,
+                                state.blaze_session_id,
+                            );
+                        }
+
                         // already in PRE_GAME. Working CNC stays INITIALIZING through GameReady /
                         // ClientConnect; advancing here early regresses that path.
                         // Do not emit cmd 0x70 -- that is NotifyGameReset on CNC.

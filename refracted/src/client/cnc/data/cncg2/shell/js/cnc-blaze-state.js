@@ -205,6 +205,14 @@
                     personaId: CncBlazeState.personaId
                 }));
             } catch (e) { /* empty */ }
+            try {
+                if (CncBlazeState.displayName) {
+                    localStorage.setItem(SS_DSNM, String(CncBlazeState.displayName));
+                }
+                if (CncBlazeState.personaId != null && CncBlazeState.personaId !== '') {
+                    localStorage.setItem(SS_PID, String(CncBlazeState.personaId));
+                }
+            } catch (e2) { /* empty */ }
         },
 
         pickUser: function (res) {
