@@ -159,6 +159,25 @@ body.ingame-aurora.cc-theme--aurora:before {
     box-sizing: border-box;
     background: rgba(0, 0, 0, 0.10);
 }
+.chat-history::-webkit-scrollbar {
+    width: 8px;
+}
+.chat-history::-webkit-scrollbar-track {
+    background: rgba(12, 15, 13, 0.9);
+    border-left: 1px solid #1c2a32;
+}
+.chat-history::-webkit-scrollbar-thumb {
+    background: #2a4a62;
+    border: 1px solid #1c2a32;
+}
+.chat-history::-webkit-scrollbar-thumb:hover {
+    background: #3a6a8a;
+}
+.chat-history::-webkit-scrollbar-button {
+    display: none;
+    height: 0;
+    width: 0;
+}
 
 .chat-line {
     margin: 0 0 5px 0;

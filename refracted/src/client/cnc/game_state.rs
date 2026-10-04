@@ -2028,6 +2028,101 @@ pub fn resolve_startpoints_before_create(gid: i64) {
     );
 }
 
+/// `NotifyPlayerAttribChange` for every resolved `_startpoint`, to every human
+/// in the match. The host's own setPlayerAttributes echo does not reach them.
+pub fn broadcast_resolved_startpoints(gid: i64) {
+    let players = players_for_gid(gid);
+    let members: Vec<u64> = players
+        .iter()
+        .filter(|p| !p.is_ai && p.persona_id > 0)
+        .map(|p| p.persona_id as u64)
+        .collect();
+    if members.is_empty() {
+        return;
+    }
+    let mut sent = false;
+    for player in &players {
+        let sp = startpoint_from_attrs(&player.attribs);
+        if sp <= 0 {
+            continue;
+        }
+        let mut attrs = IndexMap::new();
+        attrs.insert("_startpoint".to_string(), sp.to_string());
+        if fanout_player_attrib(gid, player.persona_id, &attrs, &members, None) {
+            sent = true;
+        }
+    }
+    if sent {
+        let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+        tracing::info!(
+            target: "cnc",
+            "[CNC] startpoints fired to {} player(s) gid={gid}",
+            members.len()
+        );
+    }
+}
+
+/// Echo one player's attrs to the other humans. `except_session` already got the packet inline.
+pub fn fanout_player_attrib_change(
+    gid: i64,
+    pid: i64,
+    attrs: &IndexMap<String, String>,
+    except_session: Option<u64>,
+) -> bool {
+    if !attrs.contains_key("_startpoint") {
+        return false;
+    }
+    let members: Vec<u64> = players_for_gid(gid)
+        .into_iter()
+        .filter(|p| !p.is_ai && p.persona_id > 0)
+        .map(|p| p.persona_id as u64)
+        .collect();
+    let sent = fanout_player_attrib(gid, pid, attrs, &members, except_session);
+    if sent {
+        let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+    }
+    sent
+}
+
+fn fanout_player_attrib(
+    gid: i64,
+    pid: i64,
+    attrs: &IndexMap<String, String>,
+    members: &[u64],
+    except_session: Option<u64>,
+) -> bool {
+    let Ok(pushes) = super::fireframe::pushes_after_set_player_attributes(gid, pid, attrs) else {
+        return false;
+    };
+    let mut sent = false;
+    for session in crate::session::blaze_sessions::list_sessions() {
+        if except_session == Some(session.id) {
+            continue;
+        }
+        if !session.persona_id.map_or(false, |id| members.contains(&id)) {
+            continue;
+        }
+        if super::dedicated_pool::is_dedicated_blaze_session(session.id) {
+            continue;
+        }
+        super::fireframe::enqueue_pending_pushes(session.id, pushes.clone());
+        sent = true;
+    }
+    sent
+}
+
+/// In-game roster DSNM for a persona, when they are seated in a match.
+pub fn roster_display_name(persona_id: i64) -> Option<String> {
+    if persona_id <= 0 {
+        return None;
+    }
+    games().lock().values().find_map(|game| {
+        game.players.iter().find_map(|p| {
+            (p.persona_id == persona_id && !p.display_name.is_empty()).then(|| p.display_name.clone())
+        })
+    })
+}
+
 /// Clear lobby `_startpoint` picks after CreateGame has snapshotted the roster.
 pub fn flush_lobby_startpoints(gid: i64) {
     {

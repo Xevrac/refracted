@@ -9,12 +9,12 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     $scope.channel = 'all';
     $scope.draft = '';
     $scope.messages = [];
-    $scope.playerName = 'You';
+    $scope.playerName = '';
 
     var chatUiOpen = false;
     var ignoreEnterUntil = 0;
     var VISIBILITY_KEY = 'cnc_ingame_chat_visibility';
-    var ACTIVE_SHOW_MS = 5000;
+    var ACTIVE_SHOW_MS = 3000;
     var POLL_MS = 1000;
     var lastSeq = -1;
     var activeHideTimer = null;
@@ -88,16 +88,108 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         scrollHistory();
     }
 
-    function resolvePlayerName() {
+    function nonEmpty(value) {
+        if (value == null) {
+            return '';
+        }
+        var s = String(value).replace(/^\s+|\s+$/g, '');
+        return s;
+    }
+
+    function readLoginKey() {
         try {
-            if (window.__CNC_PROFILE && window.__CNC_PROFILE.persona) {
-                return String(window.__CNC_PROFILE.persona);
-            }
-            if (window.__CNC_BLAZE && window.__CNC_BLAZE.persona) {
-                return String(window.__CNC_BLAZE.persona);
+            var stored = sessionStorage.getItem('cnc_login_key');
+            if (stored) {
+                return stored;
             }
         } catch (e) { /* ignore */ }
-        return 'You';
+        try {
+            var match = /(?:^|;\s*)cnc_login_key=([0-9a-f]{24})/.exec(document.cookie || '');
+            return match ? match[1] : '';
+        } catch (e2) {
+            return '';
+        }
+    }
+
+    // DSNM lives on the Refracted roster (Blaze persona), not in this page.
+    function resolvePlayerName() {
+        if (nonEmpty($scope.playerName) && $scope.playerName !== 'You') {
+            return $scope.playerName;
+        }
+        try {
+            var prof = window.__CNC_PROFILE;
+            var fromProf = prof && (nonEmpty(prof.displayName) || nonEmpty(prof.DSNM));
+            if (fromProf) {
+                return fromProf;
+            }
+            var blaze = window.__CNC_BLAZE;
+            var fromBlaze = blaze && (nonEmpty(blaze.displayName) || nonEmpty(blaze.DSNM));
+            if (fromBlaze) {
+                return fromBlaze;
+            }
+            var cached = localStorage.getItem('cnc_blaze_dsnm');
+            if (nonEmpty(cached)) {
+                return nonEmpty(cached);
+            }
+            var raw = sessionStorage.getItem('cnc_blaze_session');
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && nonEmpty(parsed.displayName)) {
+                    return nonEmpty(parsed.displayName);
+                }
+            }
+        } catch (e) { /* ignore */ }
+        return '';
+    }
+
+    function identityNameSync() {
+        var key = readLoginKey();
+        if (!key || typeof XMLHttpRequest === 'undefined') {
+            return '';
+        }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/identity?key=' + encodeURIComponent(key), false);
+            xhr.send();
+            if (xhr.status !== 200) {
+                return '';
+            }
+            var data = JSON.parse(xhr.responseText);
+            return data && nonEmpty(data.displayName);
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function refreshIdentity() {
+        var key = readLoginKey();
+        if (!key || typeof XMLHttpRequest === 'undefined') {
+            $scope.playerName = resolvePlayerName();
+            return;
+        }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/identity?key=' + encodeURIComponent(key), true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || xhr.status !== 200) {
+                    return;
+                }
+                var data = null;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    return;
+                }
+                var name = data && nonEmpty(data.displayName);
+                if (!name) {
+                    return;
+                }
+                $timeout(function () {
+                    $scope.playerName = name;
+                });
+            };
+            xhr.send();
+        } catch (e) { /* ignore */ }
     }
 
     function chatInputEl() {
@@ -142,6 +234,31 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     }
 
     $scope.playerName = resolvePlayerName();
+    refreshIdentity();
+
+    // All = messages sent to every player. Team = this team only.
+    $scope.messageVisible = function (m) {
+        if (!m) {
+            return false;
+        }
+        if (m.kind === 'system') {
+            return true;
+        }
+        if ($scope.channel === 'team') {
+            return m.channel === 'team';
+        }
+        return m.channel !== 'team';
+    };
+
+    $scope.hasVisible = function () {
+        var i;
+        for (i = 0; i < $scope.messages.length; i++) {
+            if ($scope.messageVisible($scope.messages[i])) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     function hideAfterActivity() {
         if (activeHideTimer) {
@@ -264,7 +381,10 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
             text = text.substring(0, 180);
         }
 
-        $scope.playerName = resolvePlayerName();
+        var named = identityNameSync() || resolvePlayerName();
+        if (named) {
+            $scope.playerName = named;
+        }
         $scope.draft = '';
         if (input) {
             input.value = '';

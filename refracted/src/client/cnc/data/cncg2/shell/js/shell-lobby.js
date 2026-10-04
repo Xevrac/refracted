@@ -3079,10 +3079,26 @@
             if (!slot || !slot.occupied || slot.invitePending) {
                 return settledRequest(true);
             }
+            // Match start assigns leftover `?` seats. The host publishes those
+            // startpoints for every human; other attrs stay owner-only.
+            var remoteStartOnly = $scope._joinedGameroom && !slot.isLocal && !slot.isAi
+                && includeStartpoint && $scope.isLobbyHost();
             if ($scope._joinedGameroom && !slot.isLocal && !(slot.isAi && $scope.isLobbyHost())) {
-                return settledRequest(true);
+                if (!remoteStartOnly) {
+                    return settledRequest(true);
+                }
             }
             var pid = slot.isAi ? ensureAiPersonaId(slot) : (slot.pid || 0);
+            if (remoteStartOnly) {
+                var remoteSp = parseStartId(slot.startpoint);
+                if (!(remoteSp > 0) || !(pid > 0)) {
+                    return settledRequest(true);
+                }
+                var startUrl = '/cnc/player-attrs?gid=' + encodeURIComponent($scope.gameId) +
+                    '&pid=' + encodeURIComponent(pid) +
+                    '&startpoint=' + encodeURIComponent(remoteSp);
+                return httpRequest('POST', withKey(startUrl));
+            }
             var colorWire = houseColorWire(slot.color);
             var q = '/cnc/player-attrs?gid=' + encodeURIComponent($scope.gameId) +
                 '&pid=' + encodeURIComponent(pid);
