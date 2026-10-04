@@ -32,7 +32,7 @@ token_pepper=
 
 # in-game news: Aurora site base URL the shell polls (api/shell/news/{prod|dev})
 news_url=
-# playtest server only: SHELL_NEWS_DEV_KEY on the site, handed to devWrapper.html
+# playtest server only: SHELL_NEWS_DEV_KEY on the site (sent by Refracted's news proxy)
 news_dev_key=
 ";
 

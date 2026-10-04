@@ -5,6 +5,7 @@ pub mod dedicated_pool;
 pub mod fireframe;
 pub mod game_state;
 pub mod msgsystem;
+mod news_proxy;
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -292,6 +293,15 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     let base = base.trim_start_matches('/');
     if base == "cnc/auth-refusal" && is_get {
         return Some(handle_cnc_auth_refusal(query));
+    }
+    // GET /cnc/news/{prod|dev}, /cnc/news-image?u= -- in-game news via the Aurora site.
+    if is_get {
+        if let Some(realm) = base.strip_prefix("cnc/news/") {
+            return Some(news_proxy::handle_feed(realm));
+        }
+        if base == "cnc/news-image" {
+            return Some(news_proxy::handle_image(query));
+        }
     }
     if base == "cnc/online-count" && is_get {
         let _ = body;
@@ -1830,11 +1840,7 @@ fn try_read_http_file(root: &Path, rel: &Path, is_head: bool, rewrite_host: &str
             let body = if is_head {
                 Vec::new()
             } else if ct == "text/html" {
-                let is_dev_page = candidate
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.eq_ignore_ascii_case("devWrapper.html"));
-                inject_profile_script(&bytes, is_dev_page)
+                inject_profile_script(&bytes)
             } else if is_cfg {
                 let rewritten = rewrite_loopback_urls(&bytes, rewrite_host);
                 if rewritten != bytes {
@@ -1868,7 +1874,7 @@ fn try_read_http_file(root: &Path, rel: &Path, is_head: bool, rewrite_host: &str
 
 /// Templates the active Refracted user profile into served HTML so the JS shell
 /// can authenticate as the chosen persona instead of a hardcoded placeholder.
-fn inject_profile_script(html: &[u8], is_dev_page: bool) -> Vec<u8> {
+fn inject_profile_script(html: &[u8]) -> Vec<u8> {
     let s = match std::str::from_utf8(html) {
         Ok(s) => s,
         Err(_) => return html.to_vec(),
@@ -1878,11 +1884,7 @@ fn inject_profile_script(html: &[u8], is_dev_page: bool) -> Vec<u8> {
     if !crate::nexus::identity::json_personas_allowed() {
         // Nexus identity comes from the Blaze login; the local JSON profile would be a different persona.
         let build = shell_build_info_json(None, false);
-        let script = format!(
-            "<script>window.__CNC_PROFILE={{}};window.__CNC_BUILD={};{}</script>",
-            build,
-            news_config_script(is_dev_page)
-        );
+        let script = format!("<script>window.__CNC_PROFILE={{}};window.__CNC_BUILD={};</script>", build);
         return insert_head_script(s, &script, html);
     }
     let json = serde_json::json!({
@@ -1894,28 +1896,10 @@ fn inject_profile_script(html: &[u8], is_dev_page: bool) -> Vec<u8> {
     });
     let build = shell_build_info_json(None, false);
     let script = format!(
-        "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};{}</script>",
-        json,
-        build,
-        news_config_script(is_dev_page)
+        "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};</script>",
+        json, build
     );
     insert_head_script(s, &script, html)
-}
-
-/// `window.__CNC_NEWS` for js/shell-news.js: the Aurora site base URL (`CNC_NEWS_URL`), plus the
-/// dev-feed key (`CNC_NEWS_DEV_KEY`) on devWrapper.html only. Empty when no URL is configured.
-fn news_config_script(is_dev_page: bool) -> String {
-    let non_empty = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let Some(url) = non_empty("CNC_NEWS_URL") else {
-        return String::new();
-    };
-    let mut cfg = serde_json::json!({ "url": url.trim() });
-    if is_dev_page {
-        if let Some(key) = non_empty("CNC_NEWS_DEV_KEY") {
-            cfg["devKey"] = serde_json::Value::String(key.trim().to_string());
-        }
-    }
-    format!("window.__CNC_NEWS={};", cfg.to_string().replace("</", "<\\/"))
 }
 
 fn insert_head_script(s: &str, script: &str, html: &[u8]) -> Vec<u8> {
