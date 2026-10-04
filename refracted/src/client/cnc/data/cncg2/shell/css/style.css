@@ -806,23 +806,20 @@ button.btn-alert-marker:focus { outline: none; }
 /* element + 2 classes so `color` beats `button.btn-alert-marker` and shows when not hovering */
 button.btn-alert-marker.btn-alert-marker--wop {
     right: 444px;
-    width: 14px;
-    height: 20px;
-    border: none;
-    border-radius: 0;
+    border-color: #0088ff;
     color: #0088ff;
-    background: transparent;
-    -webkit-box-shadow: none;
-    box-shadow: none;
+    background: rgba(6, 18, 36, 0.92);
+    -webkit-box-shadow: 0 0 5px rgba(0, 136, 255, 0.8);
+    box-shadow: 0 0 5px rgba(0, 136, 255, 0.8);
     -webkit-animation: infoBlink 2.4s infinite ease-in-out;
     animation: infoBlink 2.4s infinite ease-in-out;
 }
 button.btn-alert-marker.btn-alert-marker--wop:hover {
     color: #3aa0ff;
-    border: none;
-    background: transparent;
-    -webkit-box-shadow: none;
-    box-shadow: none;
+    border-color: #3aa0ff;
+    background: rgba(10, 28, 52, 0.95);
+    -webkit-box-shadow: 0 0 7px rgba(58, 160, 255, 0.9);
+    box-shadow: 0 0 7px rgba(58, 160, 255, 0.9);
 }
 
 button.btn-alert-marker.btn-alert-marker--debug {
@@ -894,14 +891,14 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
 }
 
 @-webkit-keyframes infoBlink {
-    0% { opacity: 1; }
-    50% { opacity: 0.42; }
-    100% { opacity: 1; }
+    0% { opacity: 1; -webkit-box-shadow: 0 0 5px rgba(0, 136, 255, 0.8); }
+    50% { opacity: 0.42; -webkit-box-shadow: 0 0 1px rgba(0, 136, 255, 0.2); }
+    100% { opacity: 1; -webkit-box-shadow: 0 0 5px rgba(0, 136, 255, 0.8); }
 }
 @keyframes infoBlink {
-    0% { opacity: 1; }
-    50% { opacity: 0.42; }
-    100% { opacity: 1; }
+    0% { opacity: 1; box-shadow: 0 0 5px rgba(0, 136, 255, 0.8); }
+    50% { opacity: 0.42; box-shadow: 0 0 1px rgba(0, 136, 255, 0.2); }
+    100% { opacity: 1; box-shadow: 0 0 5px rgba(0, 136, 255, 0.8); }
 }
 
 @-webkit-keyframes alertBlink {
