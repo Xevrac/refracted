@@ -3,10 +3,11 @@
     <div class="news-header">
         <img src="images/icon_globe.svg" alt="" class="news-globe-icon">
         <span class="news-title">NEWS</span>
+        <button type="button" class="news-refresh" ng-class="{'is-cooling': newsRefreshCooling}" ng-click="refreshNews()" title="Refresh"><img src="images/icon_refresh.svg" alt="Refresh"></button>
     </div>
     
     <div class="news-subheader">
-        The Latest in the world of C&C
+        Catch up on the latest with Project Aurora.
     </div>
 
     <ul class="news-list">

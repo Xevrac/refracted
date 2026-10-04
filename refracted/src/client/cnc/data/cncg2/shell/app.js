@@ -513,6 +513,17 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         $scope.$on('$destroy', stopNews);
     }
 
+    $scope.newsRefreshCooling = false;
+    $scope.refreshNews = function () {
+        if (!window.CncNews || !window.CncNews.refresh()) {
+            return;
+        }
+        $scope.newsRefreshCooling = true;
+        window.setTimeout(function () {
+            $scope.$apply(function () { $scope.newsRefreshCooling = false; });
+        }, window.CncNews.refreshCooldownMs);
+    };
+
     $scope.activeNewsArticle = null;
     $scope.openArticle = function(article) { $scope.activeNewsArticle = article; $scope.mapOpen = false; };
     $scope.closeArticle = function() { $scope.activeNewsArticle = null; };
