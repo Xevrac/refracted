@@ -1,11 +1,11 @@
 <div class="au-dash" ng-controller="DashboardController">
     <div class="au-rail">
         <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'LIVE'}" ng-click="setTab('LIVE')">Live</button>
-        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'PROFILE'}" ng-click="setTab('PROFILE')">Profile</button>
-        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'CUSTOMIZE'}" ng-click="setTab('CUSTOMIZE')">Customize</button>
-        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'WATCH'}" ng-click="setTab('WATCH')">Watch</button>
-        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'LEARN'}" ng-click="setTab('LEARN')">Learn</button>
-        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'SUPPORT'}" ng-click="setTab('SUPPORT')">Support</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'PROFILE', 'au-rail__item--locked': playtestNavLocked('PROFILE')}" ng-disabled="playtestNavLocked('PROFILE')" ng-click="setTab('PROFILE')">Profile</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'CUSTOMIZE', 'au-rail__item--locked': playtestNavLocked('CUSTOMIZE')}" ng-disabled="playtestNavLocked('CUSTOMIZE')" ng-click="setTab('CUSTOMIZE')">Customize</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'WATCH', 'au-rail__item--locked': playtestNavLocked('WATCH')}" ng-disabled="playtestNavLocked('WATCH')" ng-click="setTab('WATCH')">Watch</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'LEARN', 'au-rail__item--locked': playtestNavLocked('LEARN')}" ng-disabled="playtestNavLocked('LEARN')" ng-click="setTab('LEARN')">Learn</button>
+        <button type="button" class="au-rail__item" ng-class="{'au-rail__item--on': activeTab == 'SUPPORT', 'au-rail__item--locked': playtestNavLocked('SUPPORT')}" ng-disabled="playtestNavLocked('SUPPORT')" ng-click="setTab('SUPPORT')">Support</button>
         <button type="button" class="au-rail__item au-rail__item--play" ng-click="openLobby()">Play</button>
         <button type="button" class="au-rail__item" ng-click="openConfirmQuit()">quit</button>
         <div class="au-rail__grow"></div>
@@ -124,9 +124,9 @@
 
     <div class="au-foot">
         <button class="btn-cnc-credits" ng-click="openCredits()"></button>
-        <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-click="openDebug()"></button>
-        <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-click="toggleAlertPopup()"></button>
-        <div class="alert-popup-box" ng-show="alertPopupOpen">
+        <button type="button" class="btn-alert-marker btn-alert-marker--debug" id="cnc-footer-debug" title="Open debug" ng-show="showDebugTools" ng-click="openDebug()"></button>
+        <button type="button" class="btn-alert-marker btn-alert-marker--wop" id="cnc-footer-wop" title="About this build" ng-class="{'au-foot-marker--shift': showDebugTools}" ng-click="toggleAlertPopup()"></button>
+        <div class="alert-popup-box" ng-class="{'au-foot-popup--shift': showDebugTools}" ng-show="alertPopupOpen">
             <p class="alert-popup-text">Powered by Refracted, a work in progress service layer emulator. All functions, features, visuals and gameplay elements are subject to change.</p>
         </div>
     </div>

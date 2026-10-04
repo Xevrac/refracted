@@ -2103,6 +2103,20 @@
     text-transform: uppercase;
 }
 
+.cc-lobby__map-card-status {
+    position: absolute;
+    top: 30px;
+    right: 8px;
+    z-index: 3;
+    padding: 2px 7px;
+    border: 1px solid rgba(212, 180, 90, 0.62);
+    background: rgba(44, 38, 20, 0.9);
+    color: #d4b45a;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+}
+
 .cc-lobby__map-card-name {
     position: absolute;
     left: 12px;

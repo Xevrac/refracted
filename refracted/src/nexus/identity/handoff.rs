@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 use super::{bind_mysql_client, current_bound_session, BoundSession};
 
 const HANDOFF_ENTROPY: &[u8] = b"Refracted.Nexus.Handoff.v1";
-const HANDOFF_FILE: &str = "nexus-bound-session.bin";
+const HANDOFF_FILE: &str = "session.bin";
 
 #[derive(Debug, serde::Deserialize)]
 struct HandoffPayload {

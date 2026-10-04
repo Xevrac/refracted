@@ -180,7 +180,7 @@
     function resolvePrefsForLobby(map) {
         var stored = readLocalPrefs();
         if (stored.random) {
-            return rollRandomPrefs(map);
+            return applyPlaytestRoster(rollRandomPrefs(map));
         }
 
         var prefs = {
@@ -194,6 +194,16 @@
             prefs.faction = forcedFaction;
             prefs.general = defaultGeneralForMap(prefs.faction, map);
         }
+        return applyPlaytestRoster(prefs);
+    }
+
+    function applyPlaytestRoster(prefs) {
+        if (!prefs || !global.CncPlaytest || !CncPlaytest.on || !CncPlaytest.on()) {
+            return prefs;
+        }
+        prefs.faction = 'EU';
+        prefs.general = CncPlaytest.euClassicId;
+        prefs.random = false;
         return prefs;
     }
 

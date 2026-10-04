@@ -28,6 +28,15 @@ body.cc-theme--aurora .cc-shell-root--aurora {
     box-sizing: border-box;
 }
 
+html.cnc-playtest body.cc-theme--aurora .cc-shell-root--aurora {
+    top: 32px;
+    height: auto;
+}
+
+html.cnc-playtest body.cc-theme--aurora .cc-pre-landing {
+    top: 32px;
+}
+
 /* Top chrome */
 .au-top {
     position: absolute;
@@ -668,13 +677,19 @@ body.cc-theme--aurora .overview-stats-small {
     pointer-events: auto;
 }
 .au-foot button.btn-alert-marker.btn-alert-marker--wop {
-    right: 36px;
+    right: 12px;
     top: 8px;
     z-index: 121;
     pointer-events: auto;
 }
-.au-foot .alert-popup-box {
+.au-foot button.btn-alert-marker.btn-alert-marker--wop.au-foot-marker--shift {
     right: 36px;
+}
+.au-foot .alert-popup-box.au-foot-popup--shift {
+    right: 36px;
+}
+.au-foot .alert-popup-box {
+    right: 12px;
     bottom: 40px;
     left: auto;
     z-index: 122;

@@ -29,6 +29,11 @@ pass=
 
 # must match NEXUS_TOKEN_PEPPER on the frontend
 token_pepper=
+
+# in-game news: Aurora site base URL the shell polls (api/shell/news/{prod|dev})
+news_url=
+# playtest server only: SHELL_NEWS_DEV_KEY on the site, handed to devWrapper.html
+news_dev_key=
 ";
 
 static CURRENT_ENV: Mutex<Option<AppEnv>> = Mutex::new(None);
@@ -110,6 +115,8 @@ pub struct AppEnv {
     pub data_dir: Option<PathBuf>,
     pub log_level: Option<String>,
     pub token_pepper: Option<String>,
+    pub news_url: Option<String>,
+    pub news_dev_key: Option<String>,
 }
 
 impl AppEnv {
@@ -128,6 +135,16 @@ impl AppEnv {
         if let Some(pepper) = &self.token_pepper {
             if std::env::var_os("NEXUS_TOKEN_PEPPER").is_none() {
                 std::env::set_var("NEXUS_TOKEN_PEPPER", pepper);
+            }
+        }
+        if let Some(url) = &self.news_url {
+            if std::env::var_os("CNC_NEWS_URL").is_none() {
+                std::env::set_var("CNC_NEWS_URL", url);
+            }
+        }
+        if let Some(key) = &self.news_dev_key {
+            if std::env::var_os("CNC_NEWS_DEV_KEY").is_none() {
+                std::env::set_var("CNC_NEWS_DEV_KEY", key);
             }
         }
     }
@@ -227,6 +244,14 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         .get("token_pepper")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
+    let news_url = map
+        .get("news_url")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let news_dev_key = map
+        .get("news_dev_key")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     Ok(AppEnv {
         path,
@@ -239,6 +264,8 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         data_dir,
         log_level,
         token_pepper,
+        news_url,
+        news_dev_key,
     })
 }
 

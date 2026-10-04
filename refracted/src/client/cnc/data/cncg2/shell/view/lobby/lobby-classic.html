@@ -10,12 +10,13 @@
                 <button type="button"
                         class="cc-lobby__map-card"
                         ng-repeat="m in maps"
-                        ng-class="{on: m.id == selectedMap.id}"
+                        ng-class="{on: m.id == selectedMap.id, disabled: mapPlaytestBlocked(m)}"
                         ng-click="selectMap(m)">
                     <span class="cc-lobby__map-card-veil" aria-hidden="true"></span>
                     <span class="cc-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
                     <span class="cc-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
                     <span class="cc-lobby__map-card-name">{{ m.label }}</span>
+                    <span class="cc-lobby__map-card-status" ng-if="mapPlaytestBlocked(m)">Not Available</span>
                     <span class="cc-lobby__map-card-check" ng-show="m.id == selectedMap.id" aria-hidden="true"></span>
                 </button>
             </div>
@@ -304,13 +305,16 @@
                             <div class="cc-lobby__options-password-field">
                                 <input type="password" class="cc-lobby__password-input"
                                        ng-model="roomPasswordDraft"
-                                       placeholder="Optional — blank = open">
+                                       ng-disabled="playtest"
+                                       placeholder="{{ playtest ? '(Unavailable during playtest)' : 'Optional — blank = open' }}">
                             </div>
                             <div class="cc-lobby__options-password-actions">
                             <button type="button" class="cc-lobby__btn cc-lobby__password-apply"
+                                    ng-disabled="playtest"
                                     ng-click="applyRoomPassword()">{{ passwordProtected ? 'UPDATE' : 'SET' }}</button>
                             <button type="button" class="cc-lobby__btn cc-lobby__password-clear"
                                     ng-show="passwordProtected"
+                                    ng-disabled="playtest"
                                     ng-click="clearRoomPassword()">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                                     <path fill="none" stroke="#e8e0c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -456,10 +460,11 @@
                         <div class="cc-lobby__maps-list">
                             <div class="cc-lobby__maps-row"
                                  ng-repeat="m in maps"
-                                 ng-class="{on: m.id == pickerMap().id}"
+                                 ng-class="{on: m.id == pickerMap().id, disabled: mapPlaytestBlocked(m)}"
                                  ng-click="previewMapInPicker(m)">
                                 <span class="cc-lobby__maps-row-name">{{ m.label }}</span>
                                 <span class="cc-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
+                                <span class="cc-lobby__map-card-status" ng-if="mapPlaytestBlocked(m)">Not Available</span>
                             </div>
                         </div>
                     </div>
@@ -483,7 +488,7 @@
                 </div>
                 <div class="cc-lobby__options-actions">
                     <button type="button" class="cc-lobby__btn" ng-click="closeMapPicker()">CANCEL</button>
-                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="confirmMapPicker()">SELECT</button>
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-disabled="mapPlaytestBlocked(pickerMap())" ng-click="confirmMapPicker()">SELECT</button>
                 </div>
             </div>
         </div>
