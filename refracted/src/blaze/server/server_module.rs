@@ -2539,6 +2539,11 @@ impl BlazeProtocolServer {
                             blaze_error = crate::common::error::error_module::AUTH_ERR_INVALID_TOKEN as u16;
                             Bytes::new()
                         }
+                        // joinGame on a lobby with no free seat: GAMEMANAGER_ERR_GAME_FULL, keep the session.
+                        Err(BlazeError::GameFull) if component == 0x0004 => {
+                            blaze_error = crate::common::error::error_module::GAMEMANAGER_ERR_GAME_FULL as u16;
+                            Bytes::new()
+                        }
                         Err(e) => return Err(e),
                     };
 

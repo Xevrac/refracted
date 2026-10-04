@@ -36,6 +36,8 @@ pub async fn try_connect_upstream_to(upstream: SocketAddr) -> Option<TcpStream> 
         attempts += 1;
         match timeout(UPSTREAM_CONNECT_TIMEOUT, TcpStream::connect(upstream)).await {
             Ok(Ok(stream)) => {
+                // MsgSys frames are small and latency-bound; Nagle + delayed ACK stalls each hop.
+                let _ = stream.set_nodelay(true);
                 log_rts_system(
                     upstream,
                     &format!("upstream server connected after {attempts} attempt(s)"),

@@ -15,7 +15,8 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     var ignoreEnterUntil = 0;
     var VISIBILITY_KEY = 'cnc_ingame_chat_visibility';
     var ACTIVE_SHOW_MS = 3000;
-    var POLL_MS = 1000;
+    // In-process shell route; a 1 s poll added up to a second to every line.
+    var POLL_MS = 100;
     var lastSeq = -1;
     var activeHideTimer = null;
     var shownByActivity = false;
@@ -338,7 +339,7 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
 
     function pollServer() {
         executeShell('/prism/chat/poll', { since: lastSeq < 0 ? 0 : lastSeq }, applyLines);
-        $timeout(pollServer, POLL_MS);
+        setTimeout(pollServer, POLL_MS);
     }
 
     $scope.setChannel = function (ch) {

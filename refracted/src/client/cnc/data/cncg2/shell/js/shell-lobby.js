@@ -1505,7 +1505,7 @@
             scrollLobbyChat();
         }
 
-        var DEV_NAMES = { 'nemoskal_modded': true, 'xevrac': true };
+        var DEV_NAMES = { 'nemo': true, 'xevrac': true };
         var TYPING_DOTS = ['...', '..', '.', '..'];
         $scope.lobbyTyping = [];
         $scope.typingDots = '...';
@@ -1856,6 +1856,10 @@
             }
             if ($scope._joinedGameroom && slot.isAi && Number(slot.pid) < 0 && $scope.isLobbyHost()) {
                 httpRequest('POST', withKey('/cnc/remove-ai?gid=' + encodeURIComponent(lobbyGid()) +
+                    '&pid=' + encodeURIComponent(slot.pid)));
+            }
+            if ($scope._joinedGameroom && slot.occupied && !slot.isAi && Number(slot.pid) > 0 && $scope.isLobbyHost()) {
+                httpRequest('POST', withKey('/cnc/kick-player?gid=' + encodeURIComponent(lobbyGid()) +
                     '&pid=' + encodeURIComponent(slot.pid)));
             }
             var cleared = emptySlot();
@@ -2338,10 +2342,16 @@
             if (!g || g.joinable === false || !(g.gid > 0)) {
                 return false;
             }
-            var humans = Number(g.humans) || 0;
+            var seated = Number(g.players) || Number(g.humans) || 0;
             var max = Number(g.maxPlayers) || 8;
-            return humans < max;
+            return seated < max;
         }
+
+        var LOBBY_FULL_MESSAGE = 'Lobby full - No player slots available.';
+
+        $scope.dismissLobbyFull = function () {
+            $scope._lobbyFullError = '';
+        };
 
         function mapMatchesSelected(g) {
             var wantPath = $scope.mapPath || '';
@@ -2931,7 +2941,18 @@
             if (data.self && Number(data.admin) > 0) {
                 $scope._localIsLobbyHost = Number(data.admin) === Number(data.self);
             }
+            if (data.kicked && localPid > 0) {
+                var k;
+                for (k = 0; k < data.kicked.length; k++) {
+                    if (Number(data.kicked[k]) === Number(localPid)) {
+                        forceServerLostKick('You were removed from the lobby by the host.');
+                        return;
+                    }
+                }
+            }
             var localStillIn = false;
+            // Local resync runs after arrangeFromRoster so it never re-sends the pre-roster team.
+            var resyncLocal = null;
             var remotes = [];
             var i;
             for (i = 0; i < players.length; i++) {
@@ -2965,7 +2986,7 @@
                             if (serverSp > 0 || localSp <= 0) {
                                 localSlot().startpoint = serverSp;
                             } else if (localSp > 0 && serverSp === 0) {
-                                maybeResyncStartpoint(localSlot());
+                                resyncLocal = 'startpoint';
                             }
                         }
                         if (p.color && Date.now() >= ($scope._colorHoldUntil || 0)) {
@@ -2975,7 +2996,7 @@
                         var factionDrift = p.faction && normalizeFaction(p.faction) !== localSlot().faction;
                         if ((generalDrift || factionDrift) && ($scope._attrsResyncAt || 0) <= Date.now()) {
                             $scope._attrsResyncAt = Date.now() + 3000;
-                            syncPlayerAttrsToServer(localSlot());
+                            resyncLocal = 'attrs';
                         }
                     }
                 } else {
@@ -2994,6 +3015,11 @@
             }
             adoptRosterMap(data);
             arrangeFromRoster(players, localPid);
+            if (resyncLocal === 'attrs') {
+                syncPlayerAttrsToServer(localSlot());
+            } else if (resyncLocal === 'startpoint') {
+                maybeResyncStartpoint(localSlot());
+            }
             if ($scope._joinStatus && (localStillIn || Date.now() >= ($scope._joinDeadline || 0))) {
                 finishJoinHandshake();
             }
@@ -3727,6 +3753,10 @@
 
         $scope.joinBrowserGame = function (g) {
             if (!g || g.joinable === false) {
+                return;
+            }
+            if ((Number(g.humans) || 0) > 0 && !gameHasRoom(g)) {
+                $scope._lobbyFullError = LOBBY_FULL_MESSAGE;
                 return;
             }
             var needsPassword = !!g.passwordProtected && (g.humans > 0);

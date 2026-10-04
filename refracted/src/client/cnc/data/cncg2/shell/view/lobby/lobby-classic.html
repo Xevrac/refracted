@@ -510,6 +510,12 @@
                 </div>
             </div>
         </div>
+        <div class="cc-lobby__modal" ng-show="_lobbyFullError">
+            <div class="cc-lobby__modal-box">
+                <div>{{ _lobbyFullError }}</div>
+                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-click="dismissLobbyFull()">OK</button>
+            </div>
+        </div>
         <div class="cc-lobby__modal" ng-show="_joinStatus && !_starting && !serverLostError">
             <div class="cc-lobby__modal-box">
                 <div>{{ _joinStatus }}</div>

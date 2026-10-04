@@ -103,6 +103,7 @@ pub async fn accept_loop(
                 continue;
             }
         };
+        let _ = stream.set_nodelay(true);
         tokio::spawn(async move {
             if let Err(e) = handle_conn(stream, peer, pinned_serverhost).await {
                 warn!("{RTS_TAG} {peer} conn ended: {e}");

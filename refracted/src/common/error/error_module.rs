@@ -108,6 +108,10 @@ pub enum BlazeError {
     // Authorization Errors
     #[error("Authorization required")]
     AuthorizationRequired,
+
+    // GameManager Errors
+    #[error("No player slots available")]
+    GameFull,
 }
 
 pub type BlazeResult<T> = Result<T, BlazeError>;
@@ -150,6 +154,9 @@ pub const AUTH_ERR_INVALID_TOKEN: u32 = 13;
 // Authorization Error Codes
 pub const ERR_AUTHORIZATION_REQUIRED: u32 = 1074266112;
 
+// GameManager Error Codes
+pub const GAMEMANAGER_ERR_GAME_FULL: u32 = 4;
+
 impl BlazeError {
     /// Convert BlazeError to its corresponding error code
     pub fn to_error_code(&self) -> u32 {
@@ -191,6 +198,7 @@ impl BlazeError {
 
             // Authorization Errors
             BlazeError::AuthorizationRequired => ERR_AUTHORIZATION_REQUIRED,
+            BlazeError::GameFull => GAMEMANAGER_ERR_GAME_FULL,
 
             BlazeError::UnknownCommand(_, _) => 0,
             // Generic errors (use 0 for unknown)

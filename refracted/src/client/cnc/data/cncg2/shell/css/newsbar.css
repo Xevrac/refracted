@@ -176,7 +176,7 @@ body.cc-theme--aurora .cc-news-full-panel::-webkit-scrollbar-thumb:hover {
 /* =========================================================================
    3. FEED CONTENT (js/shell-news.js blocks)
    ========================================================================= */
-.news-item-pin { color: #d99525; font-size: 10px; margin-right: 6px; vertical-align: middle; }
+.news-item-pin { color: #d99525; font-size: 10px; margin-right: 6px; vertical-align: middle; position: relative; top: -2px; }
 .news-item--empty { cursor: default; color: #8a8a8a; }
 .news-item--empty:hover { background: none; color: #8a8a8a; }
 

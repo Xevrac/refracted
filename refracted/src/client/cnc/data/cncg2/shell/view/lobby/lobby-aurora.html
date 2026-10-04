@@ -541,6 +541,13 @@
                     </div>
                 </div>
             </div>
+            <div class="au-lobby__modal" ng-show="_lobbyFullError">
+                <div class="au-lobby__modal-box">
+                    <div>{{ _lobbyFullError }}</div>
+                    <button type="button" class="au-btn au-btn--primary"
+                            ng-click="dismissLobbyFull()">OK</button>
+                </div>
+            </div>
             <div class="au-lobby__modal" ng-show="_joinStatus && !_starting && !serverLostError">
                 <div class="au-lobby__modal-box">
                     <div>{{ _joinStatus }}</div>

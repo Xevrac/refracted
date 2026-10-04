@@ -325,6 +325,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/remove-ai" && is_post {
         return Some(handle_cnc_remove_ai(query, body));
     }
+    if base == "cnc/kick-player" && is_post {
+        return Some(handle_cnc_kick_player(query, body));
+    }
     // GET /cnc/player-probe?gid= -- validate map + player lobby/CreateGame fields.
     if base == "cnc/player-probe" && is_get {
         return Some(handle_cnc_player_probe(query));
@@ -867,6 +870,11 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
         }
     }
+    if pid > 0 && !is_ai_attrs && game_state::lobby_full_for(gid, pid) {
+        // Pending attrs for an unseated persona would be materialised into the match.
+        let body = serde_json::json!({ "ok": false, "gid": gid, "pid": pid, "rejected": ["lobby_full"] });
+        return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
+    }
     let mut rejected: Vec<&str> = Vec::new();
     if pid != 0 {
         if let Some(team) = attrs.get("_team").and_then(|t| t.parse::<i32>().ok()) {
@@ -948,6 +956,32 @@ fn handle_cnc_remove_ai(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let removed = game_state::remove_lobby_ai(gid, pid);
     crate::console_println!("[CNC] remove-ai gid={} pid={} removed={}", gid, pid, removed);
     let body = serde_json::json!({ "ok": true, "gid": gid, "pid": pid, "removed": removed });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+/// Host kicks a human from the lobby: same teardown as a self-leave (`removePlayer`).
+fn handle_cnc_kick_player(query: Option<&str>, body: &[u8]) -> HttpResponse {
+    use crate::client::cnc::game_state;
+    let gid = query_i64(query, "gid");
+    let pid = query_i64(query, "pid");
+    if gid <= 0 || pid <= 0 {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"gid and human pid required"}"#.to_vec(),
+        );
+    }
+    let Some((persona, _)) = request_identity(query, body) else {
+        return HttpResponse::new(401, "application/json", br#"{"ok":false,"error":"no_identity"}"#.to_vec());
+    };
+    if persona == pid || !game_state::is_lobby_host(gid, persona) {
+        let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
+        return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
+    }
+    game_state::mark_kicked(gid, pid);
+    remove_player_from_game(gid, pid, PLAYER_REMOVED_REASON_PLAYER_LEFT);
+    crate::console_println!("[CNC] kick-player gid={} pid={} by={}", gid, pid, persona);
+    let body = serde_json::json!({ "ok": true, "gid": gid, "pid": pid });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -2857,6 +2891,14 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
         );
         return Err(crate::common::error::BlazeError::AuthorizationRequired);
     }
+    if game_state::lobby_full_for(gid, pid) {
+        crate::debug_println!(
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (lobby full: no player slots available)",
+            gid,
+            pid
+        );
+        return Err(crate::common::error::BlazeError::GameFull);
+    }
     if let Some(player) = game_state::ensure_client_player(gid, pid, &name) {
         game_state::clear_match_connection_lost(gid);
         crate::debug_println!(
@@ -3050,6 +3092,13 @@ pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
         return Ok(Bytes::from(Vec::new()));
     }
 
+    remove_player_from_game(gid, pid, reason);
+    Ok(Bytes::from(Vec::new()))
+}
+
+/// Lobby leave or host kick: drop the seat, tear down the leaver's local game and
+/// tell every remaining member so their GameManager roster drops the player too.
+pub fn remove_player_from_game(gid: i64, pid: i64, reason: i32) {
     let orch = game_state::orchestration_holds_leave(gid);
     let host = game_state::host_persona_for_gid(gid);
     if orch && (pid <= 0 || pid == host) {
@@ -3058,9 +3107,14 @@ pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
             gid,
             pid
         );
-        return Ok(Bytes::from(Vec::new()));
+        return;
     }
 
+    let members: Vec<i64> = game_state::players_for_gid(gid)
+        .iter()
+        .filter(|p| !p.is_ai && p.persona_id != pid)
+        .map(|p| p.persona_id)
+        .collect();
     let remaining_humans = if pid > 0 {
         game_state::remove_player_ex(gid, pid)
     } else {
@@ -3069,6 +3123,7 @@ pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
 
     if pid > 0 {
         fireframe::request_client_local_game_teardown(gid, pid, reason);
+        enqueue_player_removed_to_members(gid, pid, &members);
     }
 
     match remaining_humans {
@@ -3098,8 +3153,34 @@ pub fn handle_game_manager_remove_player(payload: &[u8]) -> BlazeResult<Bytes> {
             );
         }
     }
+}
 
-    Ok(Bytes::from(Vec::new()))
+/// `NotifyPlayerRemoved` for a leaver to every remaining member's client (not the dedicated).
+fn enqueue_player_removed_to_members(gid: i64, pid: i64, members: &[i64]) {
+    if members.is_empty() {
+        return;
+    }
+    let Ok(pushes) = fireframe::pushes_notify_player_removed(gid, pid, PLAYER_REMOVED_REASON_PLAYER_LEFT)
+    else {
+        return;
+    };
+    let mut sent = false;
+    for s in crate::session::blaze_sessions::list_sessions() {
+        let Some(member) = s.persona_id.map(|id| id as i64) else {
+            continue;
+        };
+        if member == pid || !members.contains(&member) {
+            continue;
+        }
+        if dedicated_pool::is_dedicated_blaze_session(s.id) {
+            continue;
+        }
+        fireframe::enqueue_pending_pushes(s.id, pushes.clone());
+        sent = true;
+    }
+    if sent {
+        let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+    }
 }
 
 /// `GameManager.advanceGameState` (0x0004::0x0003) -- client requests state transition from pre-game to in-game.

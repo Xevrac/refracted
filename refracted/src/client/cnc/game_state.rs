@@ -41,6 +41,8 @@ static PENDING_MAPS: OnceLock<Mutex<HashMap<i64, PendingMapInfo>>> = OnceLock::n
 static PENDING_PLAYER_ATTRS: OnceLock<Mutex<HashMap<i64, HashMap<i64, IndexMap<String, String>>>>> =
     OnceLock::new();
 static BLAZE_PREGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
+/// (gid, persona) kicked by the lobby host; the kicked shell reads it from lobby state.
+static KICKED_PLAYERS: OnceLock<Mutex<HashSet<(i64, i64)>>> = OnceLock::new();
 static BLAZE_JOIN_SETUP_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static BLAZE_INGAME_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
 static GAME_READY_PUSHED: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
@@ -3094,10 +3096,61 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
             (remaining, false)
         }
     };
-    if converted {
-        refresh_pros_wire_for_gid(gid);
+    if !converted {
+        // A freed seat must not be re-materialised from pending attrs at match start.
+        if let Some(by_pid) = pending_player_attrs().lock().get_mut(&gid) {
+            by_pid.remove(&persona_id);
+        }
     }
+    refresh_pros_wire_for_gid(gid);
     Some((humans, converted))
+}
+
+/// Seats a lobby can hold: the map's start points once known, else the game cap.
+fn lobby_capacity(gid: i64, game: &CncGame) -> usize {
+    let starts = if game.start_count > 0 {
+        game.start_count
+    } else {
+        pending_start_count(gid)
+    };
+    let cap = if starts > 0 {
+        starts.min(game.max_players.max(1))
+    } else {
+        game.max_players.max(1)
+    };
+    cap as usize
+}
+
+/// A new (not yet seated) persona cannot join: every seat, human or AI, is taken.
+pub fn lobby_full_for(gid: i64, persona_id: i64) -> bool {
+    let m = games().lock();
+    let Some(game) = m.get(&gid) else {
+        return false;
+    };
+    if game.is_standby || game.players.iter().any(|p| p.persona_id == persona_id) {
+        return false;
+    }
+    game.players.len() >= lobby_capacity(gid, game)
+}
+
+pub fn mark_kicked(gid: i64, persona_id: i64) {
+    KICKED_PLAYERS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .insert((gid, persona_id));
+}
+
+fn clear_kicked(gid: i64, persona_id: i64) {
+    if let Some(k) = KICKED_PLAYERS.get() {
+        k.lock().remove(&(gid, persona_id));
+    }
+}
+
+fn kicked_for_gid(gid: i64) -> Vec<i64> {
+    KICKED_PLAYERS
+        .get()
+        .map(|k| k.lock().iter().filter(|(g, _)| *g == gid).map(|(_, p)| *p).collect())
+        .unwrap_or_default()
 }
 
 /// Host removed an AI seat in the lobby: drop the player and its pending attrs so other players stop seeing it
@@ -3500,6 +3553,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "startCount": game.start_count,
         "starting": game.starting,
         "players": players,
+        "kicked": kicked_for_gid(gid),
         "serverLost": false,
     })
 }
@@ -3841,6 +3895,7 @@ pub fn take_last_add_queued() -> Option<(i64, CncPlayer)> {
 
 /// Add the joining client to the roster if missing.
 pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Option<CncPlayer> {
+    clear_kicked(gid, persona_id);
     let is_standby = games().lock().get(&gid).map(|g| g.is_standby).unwrap_or(false);
     if !is_standby {
         seed_from_join(gid);
@@ -4469,7 +4524,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "mapPath": game.map_path,
             "players": total,
             "humans": humans,
-            "maxPlayers": game.max_players,
+            "maxPlayers": lobby_capacity(gid, game),
             "admin": game.host_persona,
             "phase": phase_label,
             "phaseCode": game.phase.as_gsta(),
