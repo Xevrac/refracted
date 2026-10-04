@@ -18,30 +18,18 @@
     var inFlight = false;
     var lastManualRefresh = 0;
 
-    function config() {
-        var c = window.__CNC_NEWS;
-        return (c && typeof c === 'object') ? c : {};
-    }
-
     function realm() {
-        var r = config().realm;
-        if (r === 'prod' || r === 'dev') {
-            return r;
-        }
         return window.__CNC_PLAYTEST === true ? 'dev' : 'prod';
     }
 
+    /** Same-origin: Refracted fetches the Aurora site (EAWebKit cannot do its TLS). */
     function feedUrl(r) {
-        var base = config().url;
-        if (typeof base !== 'string' || !/^https?:\/\//i.test(base)) {
-            return null;
-        }
-        var url = base.replace(/\/+$/, '') + '/api/shell/news/' + r;
-        var key = config().devKey;
-        if (r === 'dev' && typeof key === 'string' && key) {
-            url += '?key=' + encodeURIComponent(key);
-        }
-        return url;
+        return '/cnc/news/' + r;
+    }
+
+    function imageUrl(v) {
+        var url = httpUrl(v);
+        return url ? '/cnc/news-image?u=' + encodeURIComponent(url) : null;
     }
 
     function str(v, max) {
@@ -127,7 +115,7 @@
             if (!title) {
                 continue;
             }
-            var image = httpUrl(a.image);
+            var image = imageUrl(a.image);
             out.push({
                 id: (typeof a.id === 'number') ? a.id : i + 1,
                 title: title,
