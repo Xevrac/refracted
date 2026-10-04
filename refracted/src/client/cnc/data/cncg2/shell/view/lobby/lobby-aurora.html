@@ -24,7 +24,7 @@
                     <span class="au-lobby__map-card-badges">
                         <span class="au-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
                         <span class="au-lobby__map-card-status" ng-if="mapPlaytestBlocked(m)"
-                              title="Not Available">Not Available</span>
+                              data-tip="Not Available">Not Available</span>
                         <span class="au-lobby__map-card-status" ng-if="!mapPlaytestBlocked(m) && m.comingSoon"
                               title="Coming soon">SOON</span>
                     </span>
@@ -491,7 +491,7 @@
                                     <span class="au-lobby__maps-row-name">{{ m.label }}</span>
                                     <span class="au-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
                                     <span class="au-lobby__maps-row-status" ng-if="mapPlaytestBlocked(m)"
-                                          title="Not Available">Not Available</span>
+                                          data-tip="Not Available">Not Available</span>
                                     <span class="au-lobby__maps-row-status" ng-if="!mapPlaytestBlocked(m) && m.comingSoon"
                                           title="Coming soon">SOON</span>
                                 </div>
