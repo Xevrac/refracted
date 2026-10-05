@@ -23,7 +23,6 @@ Client redirect / local routing uses **Prism**, a companion project. Source is p
 |------|--------|
 | **Command & Conquer** | In progress — Aurora |
 | **Battlefield 3 (Alpha / Beta)** | Planned |
-| **Battlefield Labs** | Future Planned / Parked |
 
 More titles get added as local work lands and is promoted into the catalogue. See [refracted.au](https://refracted.au/) for what's live.
 
