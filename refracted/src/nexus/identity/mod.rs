@@ -7,7 +7,7 @@ mod store;
 mod auth;
 mod handoff;
 
-pub use store::{BoundSession, IdentityStore, PersonaRecord, UserRecord};
+pub use store::{BoundSession, IdentityStore, MatchStats, PersonaRecord, UserRecord};
 pub use auth::{assert_bound_identity, IssuedCredentials};
 pub use handoff::{
     ensure_bound_from_handoff, handoff_file_present, handoff_path, try_bind_launcher_handoff,
@@ -159,6 +159,26 @@ pub fn current_bound_session() -> Option<BoundSession> {
 /// Clear the in-process bound session (logout / revoke locally).
 pub fn clear_bound_session() {
     *BOUND_SESSION.lock() = None;
+}
+
+pub fn persona_match_stats(persona_id: i64) -> Result<MatchStats, String> {
+    let store = current_identity_store().ok_or("mysql identity store is not ready")?;
+    store.match_stats(persona_id)
+}
+
+pub fn record_persona_match(persona_id: i64, victory: bool) -> Result<MatchStats, String> {
+    let store = current_identity_store().ok_or("mysql identity store is not ready")?;
+    let stats = store.record_match_outcome(persona_id, victory)?;
+    tracing::info!(
+        persona = stats.persona_id,
+        result = if victory { "win" } else { "loss" },
+        wins = stats.wins,
+        losses = stats.losses,
+        win_streak = stats.win_streak,
+        loss_streak = stats.loss_streak,
+        "persona record"
+    );
+    Ok(stats)
 }
 
 pub fn log_headless_identity_policy(env: &AppEnv) {

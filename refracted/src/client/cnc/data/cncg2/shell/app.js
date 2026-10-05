@@ -344,6 +344,58 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
     }
     restoreLostModalIfNeeded();
 
+    $rootScope.matchRecord = { wins: 0, losses: 0, winStreak: 0, lossStreak: 0 };
+    function loadMatchRecord() {
+        var key = '';
+        try {
+            if (window.CncPreLanding && CncPreLanding.getLoginKey) {
+                key = CncPreLanding.getLoginKey() || '';
+            }
+        } catch (e) { /* ignore */ }
+        var url = '/cnc/match-record';
+        if (key) {
+            url += '?key=' + encodeURIComponent(key);
+        } else {
+            var pid = localShellPersonaId();
+            if (pid) {
+                url += '?pid=' + encodeURIComponent(String(pid));
+            }
+        }
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || xhr.status !== 200) {
+                    return;
+                }
+                var data = null;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (pe) { /* ignore */ }
+                if (!data || !data.ok) {
+                    return;
+                }
+                var apply = function () {
+                    $rootScope.matchRecord = {
+                        wins: data.wins || 0,
+                        losses: data.losses || 0,
+                        winStreak: data.winStreak || 0,
+                        lossStreak: data.lossStreak || 0
+                    };
+                };
+                if ($rootScope.$$phase) {
+                    apply();
+                } else {
+                    $rootScope.$apply(apply);
+                }
+            };
+            xhr.send(null);
+        } catch (e2) { /* ignore */ }
+    }
+    $rootScope.refreshMatchRecord = loadMatchRecord;
+    $timeout(loadMatchRecord, 0);
+    $timeout(loadMatchRecord, 2000);
+
     // Global Context Menu Logic (Mouse Tracking)
     $scope.friendContextMenu = { open: false, x: 0, y: 0, friend: null };
 
@@ -383,8 +435,17 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
 CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     
     // 1. Core User Info (Header) -- $rootScope.playerName from Blaze + UnknownPlayer fallback
-    $scope.wins = 2;
-    $scope.losses = 1;
+    $scope.wins = 0;
+    $scope.losses = 0;
+    function applyMatchRecord(rec) {
+        if (!rec) {
+            return;
+        }
+        $scope.wins = rec.wins || 0;
+        $scope.losses = rec.losses || 0;
+    }
+    applyMatchRecord($rootScope.matchRecord);
+    $rootScope.$watch('matchRecord', applyMatchRecord, true);
     $scope.premiumDays = 90;
     $scope.selectedMode = "PVE";
     
@@ -409,6 +470,9 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
             return;
         }
         $scope.activeTab = tabName;
+        if ($rootScope.refreshMatchRecord) {
+            $rootScope.refreshMatchRecord();
+        }
         if (tabName === 'PROFILE') { $scope.activeSubTab = 'OVERVIEW'; } 
         else if (tabName === 'CUSTOMIZE') { $scope.activeSubTab = 'MODIFY GENERALS'; } 
         else if (tabName === 'SUPPORT') { $scope.activeSubTab = 'FAQ'; } 

@@ -18,6 +18,15 @@ pub struct PersonaRecord {
 }
 
 /// Session row after token/JWT lookup.
+#[derive(Debug, Clone, Copy)]
+pub struct MatchStats {
+    pub persona_id: i64,
+    pub wins: i32,
+    pub losses: i32,
+    pub win_streak: i32,
+    pub loss_streak: i32,
+}
+
 #[derive(Debug, Clone)]
 pub struct BoundSession {
     pub user_id: i64,
@@ -225,6 +234,84 @@ impl IdentityStore {
                     .map(|dt| dt.and_utc().timestamp())
             })
         }))
+    }
+
+    pub fn match_stats(&self, persona_id: i64) -> Result<MatchStats, String> {
+        self.ensure_match_stats()?;
+        let mut conn = self.conn()?;
+        let row: Option<(i32, i32, i32, i32)> = conn
+            .exec_first(
+                "SELECT wins, losses, win_streak, loss_streak
+                 FROM persona_match_stats WHERE persona_id = :id",
+                params! { "id" => persona_id },
+            )
+            .map_err(|e| format!("mysql match stats: {e}"))?;
+        Ok(match row {
+            Some((wins, losses, win_streak, loss_streak)) => MatchStats {
+                persona_id,
+                wins,
+                losses,
+                win_streak,
+                loss_streak,
+            },
+            None => MatchStats {
+                persona_id,
+                wins: 0,
+                losses: 0,
+                win_streak: 0,
+                loss_streak: 0,
+            },
+        })
+    }
+
+    pub fn record_match_outcome(&self, persona_id: i64, victory: bool) -> Result<MatchStats, String> {
+        if persona_id <= 0 {
+            return Err("persona id is required".into());
+        }
+        self.ensure_match_stats()?;
+        let now = chrono::Utc::now()
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        let win_inc: i32 = if victory { 1 } else { 0 };
+        let loss_inc: i32 = if victory { 0 } else { 1 };
+        let mut conn = self.conn()?;
+        conn.exec_drop(
+            "INSERT INTO persona_match_stats
+                (persona_id, wins, losses, win_streak, loss_streak, updated_at)
+             VALUES (:id, :wins, :losses, :win_streak, :loss_streak, :updated_at)
+             ON DUPLICATE KEY UPDATE
+                wins = wins + :wins,
+                losses = losses + :losses,
+                win_streak = IF(:victory = 1, win_streak + 1, 0),
+                loss_streak = IF(:victory = 1, 0, loss_streak + 1),
+                updated_at = :updated_at",
+            params! {
+                "id" => persona_id,
+                "wins" => win_inc,
+                "losses" => loss_inc,
+                "win_streak" => win_inc,
+                "loss_streak" => loss_inc,
+                "victory" => win_inc,
+                "updated_at" => now,
+            },
+        )
+        .map_err(|e| format!("mysql match record: {e}"))?;
+        self.match_stats(persona_id)
+    }
+
+    fn ensure_match_stats(&self) -> Result<(), String> {
+        let mut conn = self.conn()?;
+        conn.query_drop(
+            "CREATE TABLE IF NOT EXISTS persona_match_stats (
+                persona_id BIGINT NOT NULL PRIMARY KEY,
+                wins INT NOT NULL DEFAULT 0,
+                losses INT NOT NULL DEFAULT 0,
+                win_streak INT NOT NULL DEFAULT 0,
+                loss_streak INT NOT NULL DEFAULT 0,
+                updated_at DATETIME NOT NULL
+            )",
+        )
+        .map_err(|e| format!("mysql persona_match_stats: {e}"))
     }
 
     fn count(&self, sql: &str) -> Result<i64, String> {

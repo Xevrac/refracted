@@ -81,6 +81,32 @@ CCApp.controller('ProfileController', function($scope, $rootScope) {
     $rootScope.$watch("playerName", syncLocalPlayerOnLeaderboard);
     syncLocalPlayerOnLeaderboard($rootScope.playerName);
 
+    function applyMatchRecord(rec) {
+        if (!rec) {
+            return;
+        }
+        var wins = rec.wins || 0;
+        var losses = rec.losses || 0;
+        $scope.profileOverview.wins = wins;
+        var factions = ['apa', 'gla', 'eu'];
+        for (var i = 0; i < factions.length; i++) {
+            var row = $scope.factionStats[factions[i]];
+            if (row) {
+                row.wins = wins;
+                row.losses = losses;
+            }
+        }
+        for (var j = 0; j < $scope.leaderboardNearMe.length; j++) {
+            if ($scope.leaderboardNearMe[j].isMe) {
+                $scope.leaderboardNearMe[j].wins = wins;
+                $scope.leaderboardNearMe[j].losses = losses;
+                break;
+            }
+        }
+    }
+    applyMatchRecord($rootScope.matchRecord);
+    $rootScope.$watch('matchRecord', applyMatchRecord, true);
+
     $scope.leaderboardTop = [];
     var mockTopNames = ["edi211188", "Dabrifa", "ZxGanon_the_Boss", "Brossea", "ORBIT_Hexis", "CYC_FuryDE"];
     for (var i = 1; i <= 50; i++) {

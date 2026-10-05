@@ -3,6 +3,7 @@
 
 pub mod dedicated_pool;
 pub mod fireframe;
+pub mod game_reporting;
 pub mod game_state;
 pub mod msgsystem;
 mod news_proxy;
@@ -368,6 +369,9 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     }
     if base == "cnc/identity" && is_get {
         return Some(handle_cnc_identity(query));
+    }
+    if base == "cnc/match-record" && is_get {
+        return Some(handle_cnc_match_record(query));
     }
     if base == "cnc/lobby-chat" {
         return Some(handle_cnc_lobby_chat(is_post, query, body));
@@ -1685,6 +1689,49 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
 }
 
 /// Login-key persona plus the in-game roster DSNM when that player is seated.
+fn match_stats_json(stats: crate::nexus::identity::MatchStats) -> HttpResponse {
+    let body = serde_json::json!({
+        "ok": true,
+        "personaId": stats.persona_id,
+        "wins": stats.wins,
+        "losses": stats.losses,
+        "winStreak": stats.win_streak,
+        "lossStreak": stats.loss_streak,
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+fn match_record_persona(query: Option<&str>) -> Option<i64> {
+    if let Some((pid, _)) = request_identity(query, &[]) {
+        return Some(pid);
+    }
+    let pid = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == "pid").then(|| percent_decode_plus(v))
+        })
+    });
+    if let Some(pid) = pid.and_then(|s| s.parse::<i64>().ok()).filter(|id| *id > 0) {
+        return Some(pid);
+    }
+    crate::nexus::identity::current_bound_session()
+        .map(|s| s.persona_id)
+        .filter(|id| *id > 0)
+}
+
+fn handle_cnc_match_record(query: Option<&str>) -> HttpResponse {
+    let Some(pid) = match_record_persona(query) else {
+        return HttpResponse::new(401, "application/json", br#"{"ok":false}"#.to_vec());
+    };
+    match crate::nexus::identity::persona_match_stats(pid) {
+        Ok(stats) => match_stats_json(stats),
+        Err(err) => {
+            tracing::warn!("match record read failed persona={pid}: {err}");
+            HttpResponse::new(503, "application/json", br#"{"ok":false}"#.to_vec())
+        }
+    }
+}
+
 fn handle_cnc_identity(query: Option<&str>) -> HttpResponse {
     let Some((pid, login_name)) = request_identity(query, &[]) else {
         return HttpResponse::new(
@@ -2043,6 +2090,10 @@ pub fn handle_packet_fields(
         (0x0005, 0x0001) => Some(handle_redirector_get_server_instance(payload)),
         // UtilComponent::preAuth
         (0x0009, 0x0007) => Some(handle_util_preauth(payload)),
+        // GameReportingComponent (0x1C): submit, trusted end report, and history queries.
+        (0x001C, cmd) if (1..=13).contains(&cmd) || cmd == 100 || cmd == 101 => {
+            Some(game_reporting::handle(cmd, payload))
+        }
         // Blaze::Rooms -- hub assigns component id at runtime (~`0x7800` segment). Extend when discovery captures `(id,opcode)`.
         _ => None,
     }
