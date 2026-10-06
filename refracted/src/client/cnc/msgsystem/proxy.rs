@@ -15,7 +15,7 @@ use super::log::{
 };
 use super::messages::{
     decode_client_hello, decode_load_map_id, ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID,
-    LOAD_MAP_TYPE_ID, PLACED_BUILD_COMPLETED_TYPE_ID,
+    LOAD_MAP_TYPE_ID, PLACED_BUILD_COMPLETED_TYPE_ID, START_GAME_TYPE_ID,
 };
 use super::wire::SimpleFrame;
 
@@ -130,6 +130,7 @@ pub async fn relay_pair(
             &mut server_write,
             client_peer,
             RelayLog::ClientToServer,
+            None,
         )
         .await
     };
@@ -140,6 +141,7 @@ pub async fn relay_pair(
             &mut client_write,
             upstream_peer,
             RelayLog::ServerToClient,
+            match_gid,
         )
         .await;
         // Upstream died — close the client side.
@@ -184,6 +186,7 @@ async fn relay_direction<R, W>(
     write: &mut W,
     peer: SocketAddr,
     direction: RelayLog,
+    start_gid: Option<i64>,
 ) -> std::io::Result<()>
 where
     R: AsyncReadExt + Unpin,
@@ -203,6 +206,12 @@ where
 
         parse_buf.extend_from_slice(&chunk[..n]);
         while let Ok(Some((frame, consumed))) = SimpleFrame::try_read(&parse_buf) {
+            // (H415) Dedicated→client StartGame is the match start; lobby phase leaves PreGame here
+            if frame.type_id == START_GAME_TYPE_ID {
+                if let Some(gid) = start_gid.filter(|g| *g > 0) {
+                    super::super::game_state::note_match_started(gid);
+                }
+            }
             let extra = if frame.type_id == LOAD_MAP_TYPE_ID {
                 decode_load_map_id(&frame.payload)
                     .map(|m| format!("LoadMap \"{m}\""))

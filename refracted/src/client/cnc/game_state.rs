@@ -1528,6 +1528,8 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.players.clear();
     game.host_persona = 0;
     game.phase = GamePhase::PreGame;
+    // (H415) the Start Battle latch must not survive recycle
+    game.starting = false;
     game.map_path.clear();
     game.start_count = 0;
     let had_password = !game.password.is_empty();
@@ -2944,6 +2946,27 @@ pub fn get_phase(gid: i64) -> GamePhase {
         .get(&gid)
         .map(|g| g.phase)
         .unwrap_or(GamePhase::Resetable)
+}
+
+/// (H415) retail 'StartGame' (wire 215) relayed Dedicated→client. The resetDedicated flow keeps the
+/// lobby phase PreGame through GameReady
+pub fn note_match_started(gid: i64) {
+    let changed = {
+        let mut m = games().lock();
+        match m.get_mut(&gid) {
+            Some(g) if !g.is_standby && g.phase != GamePhase::InGame => {
+                g.phase = GamePhase::InGame;
+                true
+            }
+            _ => false,
+        }
+    };
+    if changed {
+        tracing::info!(
+            target: "cnc",
+            "[CNC] match started gid={gid} -- phase InGame (StartGame relayed; leave/reclaim no longer held)"
+        );
+    }
 }
 
 pub fn set_phase(gid: i64, phase: GamePhase) {
