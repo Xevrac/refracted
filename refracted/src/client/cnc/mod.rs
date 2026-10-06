@@ -699,7 +699,11 @@ pub fn enqueue_player_joining_to_members(gid: i64, joiner_sid: u64) {
     }
 }
 
-/// Player ATTR `color=` while the frontend RtsClient is still alive.
+/// Player ATTR `color=` at lobby GameReady and again at StartGame
+pub(crate) fn enqueue_native_house_color_attr_for_gid(gid: i64) {
+    enqueue_native_house_color_attr(gid);
+}
+
 fn enqueue_native_house_color_attr(gid: i64) {
     use crate::client::cnc::game_state;
     use indexmap::IndexMap;

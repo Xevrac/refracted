@@ -210,6 +210,9 @@ where
             if frame.type_id == START_GAME_TYPE_ID {
                 if let Some(gid) = start_gid.filter(|g| *g > 0) {
                     super::super::game_state::note_match_started(gid);
+                    // Lobby GameReady color= hit the frontend RtsClient; re-push once the
+                    // match instance exists so Blaze→A9FED0 can fill map[persona].
+                    crate::client::cnc::enqueue_native_house_color_attr_for_gid(gid);
                 }
             }
             let extra = if frame.type_id == LOAD_MAP_TYPE_ID {
