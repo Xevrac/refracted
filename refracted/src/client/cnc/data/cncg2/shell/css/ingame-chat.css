@@ -192,11 +192,20 @@ body.ingame-aurora.cc-theme--aurora:before {
     font-weight: bold;
     margin-right: 4px;
 }
+.chat-line .chat-from.ally {
+    color: #7ec8ff;
+}
+.chat-line .chat-from.enemy {
+    color: #e85d5d;
+}
 .chat-line .chat-from.team {
     color: #8fdf7a;
 }
 .chat-line .chat-from.self {
-    color: #ffd27a;
+    color: #7ec8ff;
+}
+.chat-line .chat-from.dev {
+    color: #6f50a5;
 }
 .chat-line .chat-text {
     color: #e8e8e8;

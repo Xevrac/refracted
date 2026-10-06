@@ -11,6 +11,7 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     $scope.messages = [];
     $scope.playerName = '';
 
+    var DEV_NAMES = { 'nemo': true, 'xevrac': true };
     var chatUiOpen = false;
     var ignoreEnterUntil = 0;
     var VISIBILITY_KEY = 'cnc_ingame_chat_visibility';
@@ -78,12 +79,38 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }, 0);
     }
 
+    function isDevName(name) {
+        return !!DEV_NAMES[String(name || '').toLowerCase()];
+    }
+
+    // All chat: purple for developers (lobby parity). Otherwise viewer-relative
+    // ally blue / enemy red / self gold. Team channel keeps its green tint.
+    $scope.fromClass = function (m) {
+        if (!m || m.kind === 'system') {
+            return '';
+        }
+        if (m.channel === 'team') {
+            return 'team';
+        }
+        if (isDevName(m.from)) {
+            return 'dev';
+        }
+        if (m.relation === 's' || m.kind === 'self') {
+            return 'self';
+        }
+        if (m.relation === 'e') {
+            return 'enemy';
+        }
+        return 'ally';
+    };
+
     function pushLine(from, text, kind) {
         $scope.messages.push({
             from: from || '',
             text: text || '',
             kind: kind || 'msg',
-            channel: $scope.channel
+            channel: $scope.channel,
+            relation: kind === 'self' ? 's' : ''
         });
         if ($scope.messages.length > 80) {
             $scope.messages.shift();
@@ -289,8 +316,9 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }
     }
 
-    // Lines are comma-joined, each percent-encoded (H372): "seq|channel|sender|name|text"
-    // once decoded (text last, may contain '|').
+    // Lines are comma-joined, each percent-encoded (H372):
+    // "seq|channel|sender|relation|name|text" once decoded (text last, may contain '|').
+    // relation: s=self, a=ally, e=enemy (viewer-relative). Legacy 5-field lines omit relation.
     function applyLines(data) {
         if (!data || data.status !== 0 || typeof data.lines !== 'string') {
             return;
@@ -316,14 +344,28 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
                 continue;
             }
             maxSeq = seq;
-            var from = parts[3];
-            var text = parts.slice(4).join('|');
-            var kind = from.toLowerCase() === mine ? 'self' : 'msg';
+            var relation = '';
+            var from;
+            var text;
+            var rel = parts[3];
+            if (parts.length >= 6 && (rel === 's' || rel === 'a' || rel === 'e')) {
+                relation = rel;
+                from = parts[4];
+                text = parts.slice(5).join('|');
+            } else {
+                from = parts[3];
+                text = parts.slice(4).join('|');
+            }
+            var kind = (relation === 's' || from.toLowerCase() === mine) ? 'self' : 'msg';
+            if (!relation && kind === 'self') {
+                relation = 's';
+            }
             $scope.messages.push({
                 from: from,
                 text: text,
                 kind: kind,
-                channel: parts[1] === '1' ? 'team' : 'all'
+                channel: parts[1] === '1' ? 'team' : 'all',
+                relation: relation
             });
             if ($scope.messages.length > 80) {
                 $scope.messages.shift();
