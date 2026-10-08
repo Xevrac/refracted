@@ -33,7 +33,7 @@ pub fn get_component_name(component_id: u16) -> &'static str {
         24 => "CommerceInfoComponent", // 0x18
         25 => "AssociationListsComponent", // 0x19
         27 => "GpsContentControllerComponent", // 0x1B
-        28 => "GameReportingComponent", // 0x1C
+        28 => "GameReporting", // 0x1C
         2000 => "DynamicFilterComponent", // 0x7D0
         2049 => "RspComponent", // 0x801
         2050 => "PacksComponent", // 0x802
@@ -505,7 +505,7 @@ pub fn get_command_name(component_id: u16, command_id: u16) -> Option<String> {
         (25, 8) => Some(format!("{}.unsubscribeFromLists", component_name)),
         (25, 9) => Some(format!("{}.getConfigListsInfo", component_name)),
         
-        // GameReportingComponent (28 / 0x1C)
+        // GameReporting (28 / 0x1C)
         (28, 1) => Some(format!("{}.submitGameReport", component_name)),
         (28, 2) => Some(format!("{}.submitOfflineGameReport", component_name)),
         (28, 3) => Some(format!("{}.submitGameEvents", component_name)),

@@ -2094,7 +2094,7 @@ pub fn handle_packet_fields(
         (0x0005, 0x0001) => Some(handle_redirector_get_server_instance(payload)),
         // UtilComponent::preAuth
         (0x0009, 0x0007) => Some(handle_util_preauth(payload)),
-        // GameReportingComponent (0x1C): submit, trusted end report, and history queries.
+        // GameReporting (0x1C): submit, trusted end report, and history queries.
         (0x001C, cmd) if (1..=13).contains(&cmd) || cmd == 100 || cmd == 101 => {
             Some(game_reporting::handle(cmd, payload))
         }
