@@ -22,8 +22,8 @@
 
         <div id="chat-history" class="chat-history">
             <div class="chat-empty" ng-show="!hasVisible()">Type a message…</div>
-            <div class="chat-line" ng-repeat="m in messages" ng-show="messageVisible(m)" ng-class="m.kind">
-                <span class="chat-from" ng-class="fromClass(m)" ng-show="m.from"><span ng-if="m.channel=='team'">(Team) </span>{{ m.from }}:</span>
+            <div class="chat-line" ng-repeat="m in messages" ng-show="messageVisible(m)" ng-class="[m.kind, m.relation == 'o' ? 'spectator' : '']">
+                <span class="chat-from" ng-class="fromClass(m)" ng-show="m.from"><span ng-if="m.channel=='team'">(Team) </span>{{ m.from }}<span ng-if="m.relation=='o'"> (Spectator)</span>:</span>
                 <span class="chat-text">{{ m.text }}</span>
             </div>
         </div>

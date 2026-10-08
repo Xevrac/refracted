@@ -33,6 +33,9 @@ pub struct PlayerInfo {
     pub enable_skill_tree: bool,
 }
 
+/// `PlayerInfo.start_point` of an observer seat; Prism's `PlayerSpawnType.SpectatorStartPoint`.
+pub const SPECTATOR_START_POINT: i32 = -1;
+
 pub const CREATE_GAME_OPTIONS_NONE: u32 = 0;
 pub const CREATE_GAME_OPTIONS_ALLOW_RECONNECT: u32 = 1;
 /// Game-level tech tree flag (not on PlayerInfo).
@@ -361,10 +364,22 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
             let consumable = u32_attr(&p.attribs, "_consumable")
                 .or_else(|| u32_attr(&p.attribs, "_consumableplayerpower"))
                 .unwrap_or(0);
+            // Observer: PlayerInfo has no spectator field, so the seat goes out with start
+            // point -1 (a playing seat is always >= 1) and a real faction the client can load.
+            let observer = !p.is_ai && super::super::game_state::is_observer_attrs(&p.attribs);
+            if !p.is_ai {
+                super::super::game_state::note_match_spectator(p.persona_id, observer);
+            }
+            // General must match that faction (APA Classic), whatever `_general` holds.
+            let (faction, start_point, general_id) = if observer {
+                (2, SPECTATOR_START_POINT, 2914080600)
+            } else {
+                (faction_from_player(&p.attribs, p.is_ai), start_point, general_id)
+            };
             PlayerInfo {
                 player_id: p.persona_id as u64,
                 reconnect: false,
-                faction: faction_from_player(&p.attribs, p.is_ai),
+                faction,
                 general_id,
                 team,
                 start_point,

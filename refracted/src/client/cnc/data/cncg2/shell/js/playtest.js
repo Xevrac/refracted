@@ -34,6 +34,10 @@
             if (!on() || !slot) {
                 return false;
             }
+            // A human observer plays no faction, so EU-only does not apply to it.
+            if (!slot.isAi && String(slot.faction || '').toUpperCase() === 'OBS') {
+                return false;
+            }
             var changed = false;
             if (String(slot.faction || '').toUpperCase() !== 'EU') {
                 slot.faction = 'EU';

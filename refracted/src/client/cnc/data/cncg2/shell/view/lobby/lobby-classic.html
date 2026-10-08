@@ -191,12 +191,34 @@
                     </div>
                     <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(1)}" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="cc-lobby__soon" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">SWAP</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">{{ localIsSpectator() ? 'JOIN' : 'SWAP' }}</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(1)">ADD AI</button>
                     </div>
                 </div>
 
-                <div class="cc-lobby__vs"><span>VS</span></div>
+                <div class="cc-lobby__vs" ng-class="{'cc-lobby__vs--spectator': spectatorVisible()}">
+                    <span>VS</span>
+                    <div class="cc-lobby__spectator" ng-show="spectatorVisible()" ng-click="$event.stopPropagation()">
+                        <div class="cc-lobby__spectator-head">SPECTATOR</div>
+                        <div class="cc-lobby__spectator-card" ng-show="spectatorSlot.occupied"
+                             ng-class="{local: spectatorSlot.isLocal}">
+                            <button type="button" class="cc-lobby__kick"
+                                    ng-if="isLobbyHost() && !spectatorSlot.isLocal"
+                                    ng-click="kickSpectator($event)"
+                                    data-tip="Kick spectator from lobby">&times;</button>
+                            <div class="cc-lobby__portrait"
+                                 ng-class="{'cc-lobby__portrait--host': spectatorSlot.isHost || (spectatorSlot.isLocal && isLobbyHost())}">
+                                <img ng-src="{{ generalAvatar(spectatorSlot) }}"
+                                     cc-fallback-src="{{ spectatorAvatarFallback }}" alt="">
+                            </div>
+                            <div class="cc-lobby__spectator-name">{{ spectatorSlot.displayName }}</div>
+                        </div>
+                        <button type="button" class="cc-lobby__spectate-btn"
+                                ng-show="canSpectate()" ng-disabled="swapLocked()"
+                                ng-click="spectate($event)"
+                                data-tip="Watch the match from the spectator seat">SPECTATE</button>
+                    </div>
+                </div>
 
                 <div class="cc-lobby__team cc-lobby__team--2">
                     <div class="cc-lobby__team-head">TEAM 2</div>
@@ -273,7 +295,7 @@
                     </div>
                     <div class="cc-lobby__team-actions" ng-class="{'cc-lobby__team-actions--three': canAddPlayers() && canSwapTo(2)}" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="cc-lobby__soon" data-tip="Coming soon!"><button type="button" class="cc-lobby__act cc-lobby__act--invite" disabled>INVITE FRIEND</button></span>
-                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">SWAP</button>
+                        <button type="button" class="cc-lobby__act cc-lobby__act--invite" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">{{ localIsSpectator() ? 'JOIN' : 'SWAP' }}</button>
                         <button type="button" class="cc-lobby__act cc-lobby__act--ai" ng-show="canAddPlayers()" ng-click="addAi(2)">ADD AI</button>
                     </div>
                 </div>
@@ -282,7 +304,7 @@
             <div class="cc-lobby__actions">
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="leaveGameRoom()">LEAVE</button>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--browse cc-lobby__btn--ready" ng-click="toggleReady()"
-                        ng-show="!isLobbyHost()"
+                        ng-show="!isLobbyHost() && !localIsSpectator()"
                         ng-class="{ready: localReady}">{{ localReady ? 'UNREADY' : 'READY' }}</button>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startBattle()"
                         ng-show="isLobbyHost()" ng-disabled="_starting">START BATTLE</button>
@@ -424,6 +446,14 @@
                                            ng-model="lobbyOptions.enableRebuildableDerricks"
                                            ng-change="applyLobbyMatchOptions()">
                                     REBUILDABLE DERRICKS
+                                </label>
+                                <label class="cc-lobby__options-check"
+                                       data-tip-pos="below"
+                                       data-tip="Close the spectator seat for this lobby">
+                                    <input type="checkbox"
+                                           ng-model="lobbyOptions.disallowSpectators"
+                                           ng-change="applyLobbyMatchOptions()">
+                                    DISALLOW SPECTATORS
                                 </label>
                                 <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
                                        data-tip-pos="below"

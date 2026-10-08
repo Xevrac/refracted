@@ -237,6 +237,13 @@
         { code: 'EU', label: 'EU' },
         { code: 'GLA', label: 'GLA' }
     ];
+    // Spectator seat: one reserved seat on top of the player seats. The server marks it with
+    // the OBS faction and sends it to the dedicated as CreateGame startPoint -1.
+    var SPECTATOR_FACTION = 'OBS';
+    // Prism writes the portrait into the game's UTFWinAssets; the shell copy covers a backend
+    // that cannot see the game directory.
+    var SPECTATOR_AVATAR = '/cnc/utfwin/images/Generals%2064x64/Spectator.png';
+    var SPECTATOR_AVATAR_FALLBACK = 'view/image/generals/Spectator.png';
     var GENERALS_BY_FACTION = {
         APA: [
             { id: 2914080600, key: 'APA_ClassicGeneral', label: 'Classic', icon: 'AG_Basic_01.png' },
@@ -363,6 +370,9 @@
         if (slot.invitePending) {
             return DEFAULT_AVATAR;
         }
+        if (slot.isSpectator) {
+            return SPECTATOR_AVATAR;
+        }
         var file = generalIconFile(slot.faction, slot.general);
         return file ? (GENERAL_ICON_DIR + file) : DEFAULT_AVATAR;
     }
@@ -370,6 +380,9 @@
     function codenameForSlot(slot) {
         if (!slot) {
             return 'GENERAL';
+        }
+        if (slot.isSpectator) {
+            return 'SPECTATOR';
         }
         var label = generalLabel(slot.faction, slot.general);
         if (label && label !== 'GENERAL') {
@@ -389,6 +402,7 @@
             isLocal: false,
             isAi: false,
             isHost: false,
+            isSpectator: false,
             ready: false,
             invitePending: false,
             codename: '',
@@ -524,6 +538,22 @@
         s.teamNum = 1;
         s.startpoint = 0;
         return s;
+    }
+
+    function emptySpectatorSeat() {
+        var s = emptySlot();
+        s.teamNum = 0;
+        return s;
+    }
+
+    function seatAsSpectator(slot) {
+        slot.isSpectator = true;
+        slot.teamNum = 0;
+        slot.faction = SPECTATOR_FACTION;
+        slot.general = 0;
+        slot.startpoint = 0;
+        slot.codename = codenameForSlot(slot);
+        slot.avatar = avatarForSlot(slot);
     }
 
     function makeTeam(size, teamNum) {
@@ -662,6 +692,18 @@
         }
     }
 
+    // <img cc-fallback-src="...">: swap to the fallback once when the primary source fails.
+    CCApp.directive('ccFallbackSrc', function () {
+        return function (scope, element, attrs) {
+            element.bind('error', function () {
+                var fallback = attrs.ccFallbackSrc;
+                if (fallback && element.attr('src') !== fallback) {
+                    element.attr('src', fallback);
+                }
+            });
+        };
+    });
+
     CCApp.controller('ShellLobbyController', function ($scope, $rootScope, $timeout) {
         $scope.maps = MAPS;
         $scope.playtest = playtestOn();
@@ -700,7 +742,8 @@
             enableInfiniteResourceCenters: false,
             enableUnlockFullFactionRoster: false,
             enableInstantSelling: false,
-            enableRebuildableDerricks: true
+            enableRebuildableDerricks: true,
+            disallowSpectators: false
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -733,6 +776,9 @@
         $scope.team1 = makeTeam(3, 1);
         $scope.team2 = makeTeam(3, 2);
         $scope.team1[0] = fillLocalSlot($rootScope.playerName, $scope.selectedMap);
+        $scope.spectatorSlot = emptySpectatorSeat();
+        $scope.spectatorOpen = false;
+        $scope.spectatorAvatarFallback = SPECTATOR_AVATAR_FALLBACK;
 
         $scope.factionIcon = function (slot) {
             if (!slot || !slot.faction) {
@@ -2127,6 +2173,9 @@
             var teams = [$scope.team1, $scope.team2];
             var t;
             var i;
+            if ($scope.spectatorSlot && $scope.spectatorSlot.isLocal) {
+                return $scope.spectatorSlot;
+            }
             for (t = 0; t < teams.length; t++) {
                 for (i = 0; i < teams[t].length; i++) {
                     if (teams[t][i] && teams[t][i].isLocal) {
@@ -2594,6 +2643,7 @@
             $scope.lobbyOptions.enableUnlockFullFactionRoster = false;
             $scope.lobbyOptions.enableInstantSelling = false;
             $scope.lobbyOptions.enableRebuildableDerricks = true;
+            $scope.lobbyOptions.disallowSpectators = false;
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -2669,6 +2719,11 @@
             } else if (!s.color) {
                 s.color = unusedColor(s);
             }
+            if (p.spectator) {
+                seatAsSpectator(s);
+                return;
+            }
+            s.isSpectator = false;
             var faction = p.faction ? normalizeFaction(p.faction)
                 : (s.faction || defaultFactionForMap($scope.selectedMap));
             var general = p.general ? (Number(p.general) || 0) : 0;
@@ -2694,9 +2749,14 @@
             var next = { 1: [], 2: [] };
             var keep = { 1: [], 2: [] };
             var placedLocal = false;
+            var spectator = null;
             var t;
             var i;
             var teams = [$scope.team1, $scope.team2];
+            var seated = $scope.spectatorSlot;
+            if (seated && seated.occupied && !seated.isLocal && seated.pid) {
+                existing[String(seated.pid)] = seated;
+            }
             for (t = 0; t < teams.length; t++) {
                 for (i = 0; i < teams[t].length; i++) {
                     var cur = teams[t][i];
@@ -2733,6 +2793,11 @@
                     delete existing[String(p.pid)];
                     updateSlotFromRoster(slot, p);
                 }
+                if (p.spectator && !p.isAi) {
+                    // The spectator seat sits outside both team columns.
+                    spectator = spectator || slot;
+                    continue;
+                }
                 if (next[teamNum].length >= size) {
                     continue;
                 }
@@ -2740,7 +2805,18 @@
                 next[teamNum].push(slot);
             }
             if (!placedLocal && local) {
-                next[Number(local.teamNum) === 2 ? 2 : 1].unshift(local);
+                if (local.isSpectator) {
+                    spectator = spectator || local;
+                } else {
+                    next[Number(local.teamNum) === 2 ? 2 : 1].unshift(local);
+                }
+            }
+            if (spectator) {
+                if ($scope.spectatorSlot !== spectator) {
+                    $scope.spectatorSlot = spectator;
+                }
+            } else if ($scope.spectatorSlot.occupied) {
+                $scope.spectatorSlot = emptySpectatorSeat();
             }
             for (t = 1; t <= 2; t++) {
                 var arr = next[t].concat(keep[t]);
@@ -2761,6 +2837,12 @@
 
         function restoreLocalSeat() {
             var local = localSlot();
+            if (local && local.isSpectator) {
+                local.isSpectator = false;
+                applyLobbyDefaultsToSlot(local, $scope.selectedMap);
+            }
+            $scope.spectatorSlot = emptySpectatorSeat();
+            $scope.spectatorOpen = false;
             if (!local || $scope.team1[0] === local) {
                 return;
             }
@@ -2784,7 +2866,103 @@
             if (!me || $scope.isSoloMap()) {
                 return false;
             }
+            if (me.isSpectator) {
+                return $scope.teamHasEmpty(team);
+            }
             return Number(me.teamNum || 1) !== Number(team) && $scope.teamHasEmpty(team);
+        };
+
+        $scope.localIsSpectator = function () {
+            var me = localSlot();
+            return !!(me && me.isLocal && me.isSpectator);
+        };
+
+        // The seat shows while spectators are allowed, and for as long as someone holds it.
+        function mapAllowsSpectators() {
+            return !$scope.lobbyOptions.disallowSpectators && !$scope.mapForcesTutorial &&
+                !$scope.isSoloMap();
+        }
+
+        $scope.spectatorVisible = function () {
+            return !!$scope.spectatorSlot.occupied || mapAllowsSpectators();
+        };
+
+        $scope.canSpectate = function () {
+            var me = localSlot();
+            if (!me || !me.isLocal || me.isSpectator || $scope.spectatorSlot.occupied) {
+                return false;
+            }
+            // In a gameroom the roster says whether the seat is free; alone, nobody else can hold it.
+            return $scope._joinedGameroom ? !!$scope.spectatorOpen : mapAllowsSpectators();
+        };
+
+        // Own lobby (no gameroom, no roster): the local card moves between a team and the seat here.
+        function seatLocalAsSpectator(me) {
+            var from = Number(me.teamNum) === 2 ? $scope.team2 : $scope.team1;
+            var idx = from.indexOf(me);
+            if (idx >= 0) {
+                var freed = emptySlot();
+                freed.teamNum = Number(me.teamNum) === 2 ? 2 : 1;
+                from[idx] = freed;
+            }
+            seatAsSpectator(me);
+            $scope.spectatorSlot = me;
+        }
+
+        function seatLocalSpectatorInTeam(me, team) {
+            var target = Number(team) === 2 ? $scope.team2 : $scope.team1;
+            var i;
+            for (i = 0; i < target.length; i++) {
+                if (!target[i].occupied) {
+                    target[i] = me;
+                    me.isSpectator = false;
+                    me.teamNum = Number(team) === 2 ? 2 : 1;
+                    applyLobbyDefaultsToSlot(me, $scope.selectedMap);
+                    $scope.spectatorSlot = emptySpectatorSeat();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Server decides: the seat is single, and the host may have turned spectators off.
+        $scope.spectate = function ($event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            var me = localSlot();
+            if (!$scope.canSpectate() || lockedByReady(me)) {
+                return;
+            }
+            $scope.slotMenu = null;
+            $scope.startModalSlot = null;
+            closeColorPicker();
+            if (!$scope._joinedGameroom) {
+                seatLocalAsSpectator(me);
+                syncPlayerAttrsToServer(me);
+                return;
+            }
+            httpRequest('POST', withKey('/cnc/player-attrs?gid=' + encodeURIComponent($scope.gameId || '1') +
+                '&pid=' + encodeURIComponent(localPersonaId() || 0) +
+                '&faction=' + SPECTATOR_FACTION + '&isai=0')).then(function () {
+                $timeout(function () {
+                    startRosterPoll();
+                });
+            });
+        };
+
+        $scope.kickSpectator = function ($event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            var slot = $scope.spectatorSlot;
+            if (!slot || !slot.occupied || slot.isLocal || !$scope.isLobbyHost() ||
+                !(Number(slot.pid) > 0)) {
+                return;
+            }
+            httpRequest('POST', withKey('/cnc/kick-player?gid=' + encodeURIComponent(lobbyGid()) +
+                '&pid=' + encodeURIComponent(slot.pid)));
+            $scope.spectatorSlot = emptySpectatorSeat();
         };
 
         $scope.swapLocked = function () {
@@ -2794,6 +2972,12 @@
         $scope.swapTeam = function (team) {
             var me = localSlot();
             if (!$scope.canSwapTo(team) || lockedByReady(me)) {
+                return;
+            }
+            if (!$scope._joinedGameroom && me.isSpectator) {
+                if (seatLocalSpectatorInTeam(me, team)) {
+                    syncPlayerAttrsToServer(me);
+                }
                 return;
             }
             if (!$scope._joinedGameroom) {
@@ -2815,10 +2999,22 @@
                 return;
             }
             var gid = $scope.gameId || '1';
-            httpRequest('POST', withKey('/cnc/player-attrs?gid=' + encodeURIComponent(gid) +
+            var url = '/cnc/player-attrs?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPersonaId() || 0) +
-                '&team=' + encodeURIComponent(team) + '&isai=0')).then(function () {
+                '&team=' + encodeURIComponent(team) + '&isai=0';
+            if (me.isSpectator) {
+                // Back into play: the faction change is what gives the spectator seat up.
+                var seat = emptySlot();
+                seat.occupied = true;
+                applyLobbyDefaultsToSlot(seat, $scope.selectedMap);
+                url += '&faction=' + encodeURIComponent(seat.faction) +
+                    '&general=' + encodeURIComponent(seat.general || 0);
+            }
+            httpRequest('POST', withKey(url)).then(function (data) {
                 $timeout(function () {
+                    if (data && data.rejected && data.rejected.indexOf('lobby_full') >= 0) {
+                        $scope._lobbyFullError = LOBBY_FULL_MESSAGE;
+                    }
                     startRosterPoll();
                 });
             });
@@ -2837,6 +3033,9 @@
             }
             wipe($scope.team1);
             wipe($scope.team2);
+            if ($scope.spectatorSlot.occupied && !$scope.spectatorSlot.isLocal) {
+                $scope.spectatorSlot = emptySpectatorSeat();
+            }
         }
 
         function clearRemoteAiSlots() {
@@ -2922,7 +3121,11 @@
                 if (data.enableRebuildableDerricks != null) {
                     $scope.lobbyOptions.enableRebuildableDerricks = !!data.enableRebuildableDerricks;
                 }
+                if (data.disallowSpectators != null) {
+                    $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;
+                }
             }
+            $scope.spectatorOpen = !!data.spectatorOpen;
             $scope.allHumansReady = !!data.allReady;
             if (data.self) {
                 // Server-confirmed identity 
@@ -2974,6 +3177,25 @@
                         ($scope.isLobbyHost && $scope.isLobbyHost()));
                     $scope.localReady = asHost ? true : !!p.ready;
                     if (localSlot() && localSlot().isLocal) {
+                        // The server owns the spectator seat (auto-fill on a full lobby, the
+                        // host's Disallow Spectators), so the local card follows the roster.
+                        var me = localSlot();
+                        if (!!p.spectator !== !!me.isSpectator) {
+                            if (p.spectator) {
+                                seatAsSpectator(me);
+                                $scope.slotMenu = null;
+                                $scope.startModalSlot = null;
+                                closeColorPicker();
+                            } else {
+                                me.isSpectator = false;
+                                me.faction = p.faction ? normalizeFaction(p.faction)
+                                    : defaultFactionForMap($scope.selectedMap);
+                                me.general = Number(p.general) ||
+                                    defaultGeneralId(me.faction, $scope.selectedMap);
+                                me.codename = codenameForSlot(me);
+                                me.avatar = avatarForSlot(me);
+                            }
+                        }
                         localSlot().ready = $scope.localReady;
                         localSlot().isHost = asHost || !!p.isHost;
                         if (p.startpoint != null && Date.now() >= ($scope._startpointHoldUntil || 0)) {
@@ -2994,7 +3216,8 @@
                         }
                         var generalDrift = p.general && Number(p.general) !== Number(localSlot().general);
                         var factionDrift = p.faction && normalizeFaction(p.faction) !== localSlot().faction;
-                        if ((generalDrift || factionDrift) && ($scope._attrsResyncAt || 0) <= Date.now()) {
+                        if (!localSlot().isSpectator && (generalDrift || factionDrift) &&
+                            ($scope._attrsResyncAt || 0) <= Date.now()) {
                             $scope._attrsResyncAt = Date.now() + 3000;
                             resyncLocal = 'attrs';
                         }
@@ -3217,7 +3440,8 @@
             if (slot.faction) {
                 q += '&faction=' + encodeURIComponent(slot.faction);
             }
-            if (slot.teamNum != null && (!$scope._joinedGameroom || $scope._rosterSawSelf)) {
+            if (!slot.isSpectator && slot.teamNum != null &&
+                (!$scope._joinedGameroom || $scope._rosterSawSelf)) {
                 q += '&team=' + encodeURIComponent(slot.teamNum);
             }
             var sp = parseStartId(slot.startpoint);
@@ -3284,6 +3508,22 @@
             if ($scope._starting) {
                 return;
             }
+            if ($scope.localIsSpectator()) {
+                var spectatingHost = localSlot();
+                if (!$scope._joinedGameroom && ($scope.mapForcesTutorial || $scope.isSoloMap())) {
+                    // The map takes no spectator: back into a team before the start.
+                    if (!seatLocalSpectatorInTeam(spectatingHost, 1)) {
+                        seatLocalSpectatorInTeam(spectatingHost, 2);
+                    }
+                } else {
+                    var watched = 0;
+                    eachOccupiedSlot(function () { watched += 1; });
+                    if (watched === 0) {
+                        $scope._startError = 'Add a player or AI to spectate.';
+                        return;
+                    }
+                }
+            }
             $scope.closeLobbyOptions();
             $scope._starting = true;
             $scope._startError = '';
@@ -3303,7 +3543,7 @@
             var host = localSlot();
             var gname = (host && host.displayName) || 'Player1';
             var ais = aiSlots();
-            var occupied = 0;
+            var occupied = $scope.spectatorSlot.occupied ? 1 : 0;
             eachOccupiedSlot(function () { occupied += 1; });
             var capacity = Math.max(1, occupied);
             var level = ($scope.selectedMap && $scope.selectedMap.path) ||
@@ -3409,6 +3649,9 @@
             eachOccupiedSlot(function (slot) {
                 pending.push(syncPlayerAttrsToServer(slot, true));
             });
+            if ($scope.localIsSpectator()) {
+                pending.push(syncPlayerAttrsToServer(localSlot()));
+            }
 
             whenAll(pending, beginCreate, function () {
                 failStart('Failed to communicate with the backend, please try again.');
@@ -3755,7 +3998,8 @@
             if (!g || g.joinable === false) {
                 return;
             }
-            if ((Number(g.humans) || 0) > 0 && !gameHasRoom(g)) {
+            // A full lobby still takes one joiner in its spectator seat, when it is free.
+            if ((Number(g.humans) || 0) > 0 && !gameHasRoom(g) && !g.spectatorOpen) {
                 $scope._lobbyFullError = LOBBY_FULL_MESSAGE;
                 return;
             }
@@ -3840,6 +4084,7 @@
             var factionsOnly = $scope.lobbyOptions.enableUnlockFullFactionRoster === true;
             var instantSelling = $scope.lobbyOptions.enableInstantSelling === true;
             var rebuildableDerricks = $scope.lobbyOptions.enableRebuildableDerricks === true;
+            var disallowSpectators = $scope.lobbyOptions.disallowSpectators === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
                 specialAbilities: special,
@@ -3848,7 +4093,8 @@
                 infiniteResourceCenters: infinite,
                 factionsOnly: factionsOnly,
                 instantSelling: instantSelling,
-                rebuildableDerricks: rebuildableDerricks
+                rebuildableDerricks: rebuildableDerricks,
+                disallowSpectators: disallowSpectators
             }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
@@ -3877,6 +4123,11 @@
                     if (data.enableRebuildableDerricks != null) {
                         $scope.lobbyOptions.enableRebuildableDerricks = !!data.enableRebuildableDerricks;
                     }
+                    if (data.disallowSpectators != null) {
+                        $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;
+                    }
+                    // A seated spectator may have been moved into a team or removed.
+                    startRosterPoll();
                 });
             });
         };

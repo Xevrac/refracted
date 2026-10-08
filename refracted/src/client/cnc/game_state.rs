@@ -65,6 +65,8 @@ static LOBBY_CHAT: OnceLock<Mutex<HashMap<i64, Vec<LobbyChatLine>>>> = OnceLock:
 static LOBBY_TYPING: OnceLock<Mutex<HashMap<i64, HashMap<String, Instant>>>> = OnceLock::new();
 const LOBBY_TYPING_TTL: Duration = Duration::from_secs(4);
 pub const LOBBY_TEAM_CAPACITY: usize = 3;
+/// Spectator seats a lobby holds on top of its player seats.
+pub const LOBBY_SPECTATOR_SEATS: usize = 1;
 
 fn lobby_typing() -> &'static Mutex<HashMap<i64, HashMap<String, Instant>>> {
     LOBBY_TYPING.get_or_init(|| Mutex::new(HashMap::new()))
@@ -1092,6 +1094,8 @@ pub struct CncGame {
     /// Structure sell completes in ~0.01s. Default off (retail 10s).
     pub enable_instant_selling: bool,
     pub enable_rebuildable_derricks: bool,
+    /// Host lobby tweak: nobody may take the spectator seat. Default off.
+    pub disallow_spectators: bool,
     pub starting: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
@@ -1238,6 +1242,16 @@ pub fn match_options(gid: i64) -> (bool, bool, bool, bool, bool, bool, bool) {
 /// Copy host lobby progression flags onto a dedicated gid (same pattern as pending map).
 pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
     let host = host_persona();
+    let disallow_spectators = games()
+        .lock()
+        .iter()
+        .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+        .map(|(_, game)| game.disallow_spectators);
+    if let Some(v) = disallow_spectators {
+        if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+            game.disallow_spectators = v;
+        }
+    }
     let source = {
         let m = games().lock();
         m.iter()
@@ -1492,6 +1506,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
+            disallow_spectators: false,
             starting: false,
             replicated_wire: None,
             pros_wire: None,
@@ -1541,6 +1556,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_unlock_full_faction_roster = false;
     game.enable_instant_selling = false;
     game.enable_rebuildable_derricks = true;
+    game.disallow_spectators = false;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -1726,6 +1742,198 @@ fn startpoint_from_attrs(attrs: &IndexMap<String, String>) -> i32 {
         .get("_startpoint")
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(0)
+}
+
+/// Lobby `_faction` code of a Zero Hour style observer (spectator) seat.
+pub const OBSERVER_FACTION: &str = "OBS";
+
+/// Observer seat: watches the match, holds no start point, owns no units.
+pub fn is_observer_attrs(attrs: &IndexMap<String, String>) -> bool {
+    attrs
+        .get("_faction")
+        .map(|f| matches!(f.trim().to_ascii_uppercase().as_str(), "OBS" | "OBSERVER"))
+        .unwrap_or(false)
+}
+
+/// Observer check that also sees a faction pick still waiting in the pending overlay.
+fn is_observer_with_pending(
+    pending: Option<&HashMap<i64, IndexMap<String, String>>>,
+    player: &CncPlayer,
+) -> bool {
+    if player.is_ai {
+        return false;
+    }
+    if player.attribs.contains_key("_faction") {
+        return is_observer_attrs(&player.attribs);
+    }
+    pending
+        .and_then(|by_pid| by_pid.get(&player.persona_id))
+        .map(is_observer_attrs)
+        .unwrap_or(false)
+}
+
+fn is_spectator(player: &CncPlayer) -> bool {
+    !player.is_ai && is_observer_attrs(&player.attribs)
+}
+
+/// Seats taken by players (humans and AI); spectators sit outside the player seats.
+fn seated_player_count(game: &CncGame, except_persona: i64) -> usize {
+    game.players
+        .iter()
+        .filter(|p| p.persona_id != except_persona && !is_spectator(p))
+        .count()
+}
+
+fn spectator_count(game: &CncGame, except_persona: i64) -> usize {
+    game.players
+        .iter()
+        .filter(|p| p.persona_id != except_persona && is_spectator(p))
+        .count()
+}
+
+/// The reserved spectator seat can be taken by `except_persona` (0 = a newcomer).
+fn spectator_seat_open(gid: i64, game: &CncGame, except_persona: i64) -> bool {
+    let map = if game.map_path.is_empty() {
+        get_map_path_locked(gid)
+    } else {
+        game.map_path.clone()
+    };
+    !game.disallow_spectators
+        && !is_alpha_tutorial_map(&map)
+        && spectator_count(game, except_persona) < LOBBY_SPECTATOR_SEATS
+}
+
+static MATCH_SPECTATORS: OnceLock<Mutex<HashSet<i64>>> = OnceLock::new();
+
+/// Record whether `persona_id` went into its match as a spectator (CreateGame roster).
+pub fn note_match_spectator(persona_id: i64, spectating: bool) {
+    let mut set = MATCH_SPECTATORS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock();
+    if spectating {
+        set.insert(persona_id);
+    } else {
+        set.remove(&persona_id);
+    }
+}
+
+/// The persona watched its last match, so that match's report is not a win or a loss.
+pub fn persona_spectated_last_match(persona_id: i64) -> bool {
+    MATCH_SPECTATORS
+        .get()
+        .map(|s| s.lock().contains(&persona_id))
+        .unwrap_or(false)
+}
+
+/// Validate a `_faction` change that moves a human across the spectator boundary, in place.
+/// Taking the seat gives the start point back; leaving it needs a free player seat and lands
+/// on the requested team, or the emptier one. Returns the rejection code when refused, with
+/// the offending keys removed from `attrs`.
+pub fn check_spectator_change(
+    gid: i64,
+    persona_id: i64,
+    attrs: &mut IndexMap<String, String>,
+) -> Option<&'static str> {
+    if !attrs.contains_key("_faction") {
+        return None;
+    }
+    let wants = is_observer_attrs(attrs);
+    let m = games().lock();
+    let game = m.get(&gid)?;
+    let player = game.players.iter().find(|p| p.persona_id == persona_id)?;
+    let currently = is_spectator(player);
+    if wants == currently {
+        return None;
+    }
+    if wants {
+        if player.is_ai || !spectator_seat_open(gid, game, persona_id) {
+            attrs.shift_remove("_faction");
+            attrs.shift_remove("_general");
+            return Some("spectator_unavailable");
+        }
+        attrs.insert("_startpoint".to_string(), "0".to_string());
+        return None;
+    }
+    let requested = attrs.get("_team").and_then(|t| t.parse::<i32>().ok());
+    let team = requested
+        .filter(|t| team_size(&game.players, *t, persona_id) < LOBBY_TEAM_CAPACITY)
+        .unwrap_or_else(|| balanced_join_team(&game.players));
+    if seated_player_count(game, persona_id) >= lobby_capacity(gid, game)
+        || team_size(&game.players, team, persona_id) >= LOBBY_TEAM_CAPACITY
+    {
+        attrs.shift_remove("_faction");
+        attrs.shift_remove("_general");
+        attrs.shift_remove("_team");
+        return Some("lobby_full");
+    }
+    attrs.insert("_team".to_string(), team.to_string());
+    if !attrs.contains_key("_general") {
+        // The spectator seat pins a general; let the new faction pick its own.
+        attrs.insert("_general".to_string(), "0".to_string());
+    }
+    None
+}
+
+/// Host lobby tweak. Turning spectators off moves a seated spectator into a free player seat;
+/// the personas returned found no seat and are to be removed from the lobby by the caller.
+pub fn set_spectators_disallowed(gid: i64, persona_id: i64, disallow: bool) -> Option<Vec<i64>> {
+    let mut moves: Vec<(i64, IndexMap<String, String>)> = Vec::new();
+    let mut evict: Vec<i64> = Vec::new();
+    {
+        let mut m = games().lock();
+        let game = m.get_mut(&gid)?;
+        if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+            return None;
+        }
+        game.disallow_spectators = disallow;
+        if !disallow {
+            return Some(evict);
+        }
+        let map = if game.map_path.is_empty() {
+            get_map_path_locked(gid)
+        } else {
+            game.map_path.clone()
+        };
+        let capacity = lobby_capacity(gid, game);
+        let spectators: Vec<i64> = game
+            .players
+            .iter()
+            .filter(|p| is_spectator(p))
+            .map(|p| p.persona_id)
+            .collect();
+        for pid in spectators {
+            let team = balanced_join_team(&game.players);
+            if seated_player_count(game, pid) >= capacity
+                || team_size(&game.players, team, pid) >= LOBBY_TEAM_CAPACITY
+            {
+                evict.push(pid);
+                continue;
+            }
+            let mut attrs = default_human_attribs_for_map(&map, 0, team);
+            attrs.shift_remove("_isai");
+            if let Some(player) = game.players.iter_mut().find(|p| p.persona_id == pid) {
+                // Seated now, so the next spectator in this loop sees the seat as taken.
+                for (k, v) in &attrs {
+                    apply_attr_to_player(player, k, v);
+                }
+                player.ready = false;
+            }
+            moves.push((pid, attrs));
+        }
+    }
+    for (pid, attrs) in moves {
+        set_pending_player_attrs(gid, pid, attrs);
+    }
+    refresh_pros_wire_for_gid(gid);
+    Some(evict)
+}
+
+pub fn spectators_disallowed(gid: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.disallow_spectators)
+        .unwrap_or(false)
 }
 
 /// `#rrggbb` / `rrggbb` / `AARRGGBB` → uppercase RGB hex.
@@ -1921,7 +2129,12 @@ fn infer_startpoint_capacity(
             }
         }
     }
-    max_id.max(game.players.len() as i32).max(1)
+    let seated = game
+        .players
+        .iter()
+        .filter(|p| !is_observer_attrs(&p.attribs))
+        .count();
+    max_id.max(seated as i32).max(1)
 }
 
 fn pending_start_count(gid: i64) -> i32 {
@@ -1963,8 +2176,19 @@ pub fn resolve_startpoints_before_create(gid: i64) {
         game,
     );
 
+    // Observers take no start point: they neither hold one nor receive a random pick.
+    let observers: Vec<bool> = game
+        .players
+        .iter()
+        .map(|p| is_observer_with_pending(pending_snapshot.as_ref(), p))
+        .collect();
+
     let mut effective: Vec<i32> = Vec::with_capacity(game.players.len());
-    for player in &game.players {
+    for (idx, player) in game.players.iter().enumerate() {
+        if observers[idx] {
+            effective.push(0);
+            continue;
+        }
         let mut sp = startpoint_from_attrs(&player.attribs);
         if sp <= 0 {
             if let Some(ref pending) = pending_snapshot {
@@ -1988,6 +2212,9 @@ pub fn resolve_startpoints_before_create(gid: i64) {
     let mut used: HashSet<i32> = HashSet::new();
     let mut needs_pick: Vec<usize> = Vec::new();
     for (idx, sp) in effective.iter().enumerate() {
+        if observers[idx] {
+            continue;
+        }
         if *sp > 0 && used.insert(*sp) {
             continue;
         }
@@ -2014,6 +2241,10 @@ pub fn resolve_startpoints_before_create(gid: i64) {
     let picks: Vec<i32> = effective.clone();
     for (idx, sp) in effective.into_iter().enumerate() {
         if let Some(player) = game.players.get_mut(idx) {
+            if observers[idx] {
+                player.attribs.insert("_startpoint".to_string(), "0".to_string());
+                continue;
+            }
             let sp = if sp > 0 {
                 sp
             } else {
@@ -2028,7 +2259,7 @@ pub fn resolve_startpoints_before_create(gid: i64) {
 
     tracing::info!(
         target: "cnc",
-        "[CNC] startpoints resolved gid={gid} map=\"{map_path}\" capacity={capacity} picks={picks:?}"
+        "[CNC] startpoints resolved gid={gid} map=\"{map_path}\" capacity={capacity} picks={picks:?} observers={observers:?}"
     );
 }
 
@@ -2261,6 +2492,14 @@ fn merge_pending_into_player(gid: i64, player: &mut CncPlayer, map_path: &str, i
 }
 
 fn ensure_general_attr(player: &mut CncPlayer, map_path: &str) {
+    // Observer: no general of its own. Pin the APA Classic id CreateGame pairs with its wire
+    // faction. It must not reach default_general_for_faction: an unknown faction falls through
+    // to resolve_host_reset_gid(), which locks games() -- and every caller here already holds
+    // that lock, so the lobby deadlocked the moment a player picked Observer.
+    if is_observer_attrs(&player.attribs) {
+        apply_attr_to_player(player, "_general", DEFAULT_GENERAL_APA_CLASSIC);
+        return;
+    }
     let map = map_path;
     let faction = player
         .attribs
@@ -2559,7 +2798,9 @@ pub fn player_data_probe(gid: i64) -> serde_json::Value {
                 notes.push("team < 1");
                 issues.push(format!("player {} team={}", p.persona_id, team));
             }
-            if start < 0 {
+            if is_observer_attrs(&p.attribs) {
+                notes.push("observer (CreateGame startPoint -1)");
+            } else if start < 0 {
                 ok = false;
                 notes.push("startpoint < 0");
                 issues.push(format!("player {} startpoint={}", p.persona_id, start));
@@ -2708,6 +2949,11 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         "[CNC] seed_from_reset gid={gid} host={host} humans={human_n} ai={ai_n} pids={:?}",
         players.iter().map(|p| p.persona_id).collect::<Vec<_>>()
     );
+    let disallow_spectators = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.disallow_spectators)
+        .unwrap_or(false);
     let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = games()
         .lock()
         .get(&gid)
@@ -2745,6 +2991,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_unlock_full_faction_roster,
         enable_instant_selling,
         enable_rebuildable_derricks,
+        disallow_spectators,
         starting: false,
         replicated_wire: None,
         pros_wire: None,
@@ -2929,6 +3176,7 @@ pub fn seed_from_join(gid: i64) {
             enable_unlock_full_faction_roster: false,
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
+            disallow_spectators: false,
             starting: false,
             replicated_wire: None,
             pros_wire: None,
@@ -3046,7 +3294,7 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
 
         if let Some(leaving) = leaving_human {
             // AI takeover for live match only lobby leaver just frees the seat
-            if human_count > 1 && game.phase == GamePhase::InGame {
+            if human_count > 1 && game.phase == GamePhase::InGame && !is_spectator(&leaving) {
                 let slot = leaving.slot;
                 let team = leaving.team.max(1);
                 let faction = leaving
@@ -3144,7 +3392,7 @@ fn lobby_capacity(gid: i64, game: &CncGame) -> usize {
     cap as usize
 }
 
-/// A new (not yet seated) persona cannot join: every seat, human or AI, is taken.
+/// A new (not yet seated) persona finds no player seat: every one, human or AI, is taken.
 pub fn lobby_full_for(gid: i64, persona_id: i64) -> bool {
     let m = games().lock();
     let Some(game) = m.get(&gid) else {
@@ -3153,7 +3401,20 @@ pub fn lobby_full_for(gid: i64, persona_id: i64) -> bool {
     if game.is_standby || game.players.iter().any(|p| p.persona_id == persona_id) {
         return false;
     }
-    game.players.len() >= lobby_capacity(gid, game)
+    seated_player_count(game, 0) >= lobby_capacity(gid, game)
+}
+
+/// A new persona cannot join at all: no player seat, and the spectator seat is taken or off.
+pub fn join_denied_for(gid: i64, persona_id: i64) -> bool {
+    let m = games().lock();
+    let Some(game) = m.get(&gid) else {
+        return false;
+    };
+    if game.is_standby || game.players.iter().any(|p| p.persona_id == persona_id) {
+        return false;
+    }
+    seated_player_count(game, 0) >= lobby_capacity(gid, game)
+        && !spectator_seat_open(gid, game, 0)
 }
 
 pub fn mark_kicked(gid: i64, persona_id: i64) {
@@ -3486,7 +3747,7 @@ pub fn all_humans_ready(gid: i64) -> bool {
     !humans.is_empty()
         && humans
             .iter()
-            .all(|p| p.ready || (host != 0 && p.persona_id == host))
+            .all(|p| p.ready || is_spectator(p) || (host != 0 && p.persona_id == host))
 }
 
 pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
@@ -3524,7 +3785,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
     let all_ready = !humans.is_empty()
         && humans
             .iter()
-            .all(|p| p.ready || (host != 0 && p.persona_id == host));
+            .all(|p| p.ready || is_spectator(p) || (host != 0 && p.persona_id == host));
     let players: Vec<_> = game
         .players
         .iter()
@@ -3554,6 +3815,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
                 },
                 "ready": p.ready || p.is_ai || is_host,
                 "isHost": is_host,
+                "spectator": is_spectator(p),
             })
         })
         .collect();
@@ -3571,6 +3833,8 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableFactionsOnly": game.enable_unlock_full_faction_roster,
         "enableInstantSelling": game.enable_instant_selling,
         "enableRebuildableDerricks": game.enable_rebuildable_derricks,
+        "disallowSpectators": game.disallow_spectators,
+        "spectatorOpen": spectator_seat_open(gid, game, 0),
         "allReady": all_ready,
         "map": if game.map_path.is_empty() { get_map_path_locked(gid) } else { game.map_path.clone() },
         "startCount": game.start_count,
@@ -3790,7 +4054,7 @@ fn parse_add_queued_gid(payload: &[u8]) -> i64 {
 fn team_size(players: &[CncPlayer], team: i32, except_persona: i64) -> usize {
     players
         .iter()
-        .filter(|p| p.team == team && p.persona_id != except_persona)
+        .filter(|p| p.team == team && p.persona_id != except_persona && !is_spectator(p))
         .count()
 }
 
@@ -3833,7 +4097,7 @@ pub fn startpoint_taken_by_other(gid: i64, persona_id: i64, startpoint: i32) -> 
     };
     game.players
         .iter()
-        .filter(|p| p.persona_id != persona_id)
+        .filter(|p| p.persona_id != persona_id && !is_observer_attrs(&p.attribs))
         .any(|p| effective_startpoint_for_player(gid, p) == startpoint)
 }
 
@@ -3963,6 +4227,11 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
         let is_host = game.host_persona == persona_id;
         let slot = next_free_slot(&game.players);
         let team = if is_host { 1 } else { balanced_join_team(&game.players) };
+        // Player seats full: the newcomer takes the reserved spectator seat (join_denied_for
+        // already refused the join when that seat is taken or disallowed).
+        let as_spectator = !game.is_standby
+            && seated_player_count(game, 0) >= lobby_capacity(gid, game)
+            && spectator_seat_open(gid, game, 0);
         let map_path = if !game.map_path.is_empty() {
             game.map_path.clone()
         } else {
@@ -3998,6 +4267,12 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
         if !is_host {
             apply_attr_to_player(&mut player, "_team", &team.to_string());
         }
+        if as_spectator {
+            apply_attr_to_player(&mut player, "_faction", OBSERVER_FACTION);
+            apply_attr_to_player(&mut player, "_startpoint", "0");
+            ensure_general_attr(&mut player, &map_for_defaults);
+            player.ready = false;
+        }
         let mut m = games().lock();
         let game = m.get_mut(&gid)?;
         if game.players.iter().any(|p| p.persona_id == persona_id) {
@@ -4013,6 +4288,18 @@ pub fn ensure_client_player(gid: i64, persona_id: i64, display_name: &str) -> Op
             let mut balanced = IndexMap::new();
             balanced.insert("_team".to_string(), player.team.to_string());
             write_pending_player_attrs(gid, persona_id, &balanced);
+        }
+        if as_spectator {
+            // Pending attrs are re-applied at match start; keep the seat a spectator there too.
+            let mut seat = IndexMap::new();
+            seat.insert("_faction".to_string(), OBSERVER_FACTION.to_string());
+            seat.insert("_startpoint".to_string(), "0".to_string());
+            write_pending_player_attrs(gid, persona_id, &seat);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame gid={} pid={} seated as spectator (player seats full)",
+                gid,
+                persona_id
+            );
         }
         player
     };
@@ -4489,7 +4776,8 @@ pub fn browser_game_list_json() -> serde_json::Value {
             continue;
         }
         let humans = game.players.iter().filter(|p| !p.is_ai).count();
-        let total = game.players.len();
+        let spectators = spectator_count(game, 0);
+        let total = game.players.len() - spectators;
         let map_leaf = game
             .map_path
             .rsplit('/')
@@ -4547,6 +4835,8 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "mapPath": game.map_path,
             "players": total,
             "humans": humans,
+            "spectators": spectators,
+            "spectatorOpen": !game.is_standby && humans > 0 && spectator_seat_open(gid, game, 0),
             "maxPlayers": lobby_capacity(gid, game),
             "admin": game.host_persona,
             "phase": phase_label,

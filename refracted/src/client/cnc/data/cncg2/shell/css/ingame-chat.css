@@ -210,6 +210,12 @@ body.ingame-aurora.cc-theme--aurora:before {
 .chat-line .chat-text {
     color: #e8e8e8;
 }
+.chat-line.spectator .chat-from,
+.chat-line.spectator .chat-from.spectator,
+.chat-line.spectator .chat-text {
+    color: #9a9a9a;
+    opacity: 0.75;
+}
 .chat-line.system .chat-text {
     color: #888;
     font-style: italic;

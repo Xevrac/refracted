@@ -217,12 +217,34 @@
                     </div>
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
-                        <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">Swap</button>
+                        <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
                         <button type="button" class="au-btn au-btn--primary" ng-show="canAddPlayers()" ng-click="addAi(1)">Add AI</button>
                     </div>
                 </div>
 
-                <div class="au-lobby__vs"><span>VS</span></div>
+                <div class="au-lobby__vs">
+                    <span>VS</span>
+                    <div class="au-lobby__spectator" ng-show="spectatorVisible()" ng-click="$event.stopPropagation()">
+                        <div class="au-lobby__spectator-head">Spectator</div>
+                        <div class="au-lobby__spectator-card" ng-show="spectatorSlot.occupied"
+                             ng-class="{'au-lobby__spectator-card--local': spectatorSlot.isLocal}">
+                            <button type="button" class="au-lobby__kick"
+                                    ng-if="isLobbyHost() && !spectatorSlot.isLocal"
+                                    ng-click="kickSpectator($event)"
+                                    data-tip="Kick spectator from lobby">&times;</button>
+                            <div class="au-lobby__avatar"
+                                 ng-class="{'au-lobby__avatar--host': spectatorSlot.isHost || (spectatorSlot.isLocal && isLobbyHost())}">
+                                <img ng-src="{{ generalAvatar(spectatorSlot) }}"
+                                     cc-fallback-src="{{ spectatorAvatarFallback }}" alt="">
+                            </div>
+                            <div class="au-lobby__spectator-name">{{ spectatorSlot.displayName }}</div>
+                        </div>
+                        <button type="button" class="au-btn au-btn--ghost au-lobby__spectate-btn"
+                                ng-show="canSpectate()" ng-disabled="swapLocked()"
+                                ng-click="spectate($event)"
+                                data-tip="Watch the match from the spectator seat">Spectate</button>
+                    </div>
+                </div>
 
                 <div class="au-lobby__team au-lobby__team--2">
                     <div class="au-lobby__team-head">Team 2</div>
@@ -299,7 +321,7 @@
                     </div>
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
-                        <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">Swap</button>
+                        <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
                         <button type="button" class="au-btn au-btn--primary" ng-show="canAddPlayers()" ng-click="addAi(2)">Add AI</button>
                     </div>
                 </div>
@@ -311,7 +333,7 @@
                 <button type="button" class="au-btn au-btn--ghost" ng-click="leaveGameRoom()">Leave</button>
                 <button type="button" class="au-btn au-btn--ghost au-lobby__ready-btn"
                         ng-click="toggleReady()"
-                        ng-show="!isLobbyHost()"
+                        ng-show="!isLobbyHost() && !localIsSpectator()"
                         ng-class="{'au-btn--ready': localReady}">{{ localReady ? 'Unready' : 'Ready' }}</button>
                 <button type="button" class="au-btn au-btn--primary au-lobby__start-battle"
                         ng-click="startBattle()"
@@ -449,6 +471,14 @@
                                                ng-model="lobbyOptions.enableRebuildableDerricks"
                                                ng-change="applyLobbyMatchOptions()">
                                         Rebuildable Derricks
+                                    </label>
+                                    <label class="au-lobby__options-check"
+                                           data-tip-pos="below"
+                                           data-tip="Close the spectator seat for this lobby">
+                                        <input type="checkbox"
+                                               ng-model="lobbyOptions.disallowSpectators"
+                                               ng-change="applyLobbyMatchOptions()">
+                                        Disallow Spectators
                                     </label>
                                     <label class="au-lobby__options-check au-lobby__options-check--disabled"
                                            data-tip-pos="below"

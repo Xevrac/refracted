@@ -47,6 +47,14 @@ fn apply_report(command: u16, payload: &[u8]) {
         return;
     }
     for (persona, victory) in outcomes {
+        if super::game_state::persona_spectated_last_match(persona) {
+            crate::debug_println!(
+                "\x1b[38;2;100;200;255m[CNC]\x1b[0m game report cmd={} persona={} skipped (spectator)",
+                command,
+                persona
+            );
+            continue;
+        }
         match crate::nexus::identity::record_persona_match(persona, victory) {
             Ok(stats) => crate::debug_println!(
                 "\x1b[38;2;100;200;255m[CNC]\x1b[0m game report cmd={} persona={} result={} wins={} losses={}",
@@ -90,6 +98,14 @@ fn record_session(command: u16, victory: bool) {
         );
         return;
     };
+    if super::game_state::persona_spectated_last_match(persona) {
+        crate::debug_println!(
+            "\x1b[38;2;100;200;255m[CNC]\x1b[0m game report cmd={} persona={} skipped (spectator)",
+            command,
+            persona
+        );
+        return;
+    }
     match crate::nexus::identity::record_persona_match(persona, victory) {
         Ok(stats) => crate::debug_println!(
             "\x1b[38;2;100;200;255m[CNC]\x1b[0m game report cmd={} persona={} result={} wins={} losses={}",

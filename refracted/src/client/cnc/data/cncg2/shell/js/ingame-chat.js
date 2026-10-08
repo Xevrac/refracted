@@ -85,9 +85,13 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
 
     // All chat: purple for developers (lobby parity). Otherwise viewer-relative
     // ally blue / enemy red / self gold. Team channel keeps its green tint.
+    // A spectator's line is grey for every reader, whatever the channel.
     $scope.fromClass = function (m) {
         if (!m || m.kind === 'system') {
             return '';
+        }
+        if (m.relation === 'o') {
+            return 'spectator';
         }
         if (m.channel === 'team') {
             return 'team';
@@ -318,7 +322,8 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
 
     // Lines are comma-joined, each percent-encoded (H372):
     // "seq|channel|sender|relation|name|text" once decoded (text last, may contain '|').
-    // relation: s=self, a=ally, e=enemy (viewer-relative). Legacy 5-field lines omit relation.
+    // relation: s=self, a=ally, e=enemy (viewer-relative), o=sender is a spectator.
+    // Legacy 5-field lines omit relation.
     function applyLines(data) {
         if (!data || data.status !== 0 || typeof data.lines !== 'string') {
             return;
@@ -348,7 +353,7 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
             var from;
             var text;
             var rel = parts[3];
-            if (parts.length >= 6 && (rel === 's' || rel === 'a' || rel === 'e')) {
+            if (parts.length >= 6 && (rel === 's' || rel === 'a' || rel === 'e' || rel === 'o')) {
                 relation = rel;
                 from = parts[4];
                 text = parts.slice(5).join('|');

@@ -547,14 +547,16 @@ fn utfwin_asset_roots() -> Vec<PathBuf> {
     roots
 }
 
-/// Serve `UTFWinAssets/images/MiniMap/*.png` for the Refracted lobby preview.
+/// Serve `UTFWinAssets/images/MiniMap/*.png` and `Generals 64x64/*.png` for the Refracted lobby.
 fn handle_cnc_utfwin(base: &str) -> HttpResponse {
-    let rest = base.trim_start_matches("cnc/utfwin/");
-    let Some(rel) = sanitize_relative_request_path(rest) else {
+    // "Generals 64x64" arrives percent-encoded.
+    let rest = percent_decode_plus(base.trim_start_matches("cnc/utfwin/"));
+    let Some(rel) = sanitize_relative_request_path(&rest) else {
         return HttpResponse::new(400, "text/plain", b"Bad path".to_vec());
     };
     let norm = rel.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
-    if !norm.starts_with("images/minimap/") || !norm.ends_with(".png") {
+    let served = norm.starts_with("images/minimap/") || norm.starts_with("images/generals 64x64/");
+    if !served || !norm.ends_with(".png") {
         return HttpResponse::new(404, "text/plain", b"Not Found".to_vec());
     }
     for root in utfwin_asset_roots() {
@@ -897,6 +899,12 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
                 rejected.push("startpoint_taken");
             }
         }
+        if is_ai_attrs && game_state::is_observer_attrs(&attrs) {
+            attrs.shift_remove("_faction");
+            rejected.push("spectator_unavailable");
+        } else if let Some(why) = game_state::check_spectator_change(gid, pid, &mut attrs) {
+            rejected.push(why);
+        }
     }
     if attrs.is_empty() || (!rejected.is_empty() && attrs.keys().all(|k| k == "_isai")) {
         crate::console_println!("[CNC] player-attrs gid={} pid={} rejected={:?}", gid, pid, rejected);
@@ -1213,9 +1221,26 @@ fn parse_gid_pid_match_options(
     )
 }
 
+/// `disallowSpectators` on `/cnc/lobby-options` (query or JSON body).
+fn parse_disallow_spectators(query: Option<&str>, body: &[u8]) -> Option<bool> {
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == "disallowSpectators")
+                .then(|| parse_opt_bool_str(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v.get("disallowSpectators").and_then(json_opt_bool))
+        .or(from_query)
+}
+
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling, rebuildable) =
         parse_gid_pid_match_options(query, body);
+    let disallow_spectators = parse_disallow_spectators(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1230,14 +1255,15 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && full_roster.is_none()
         && instant_selling.is_none()
         && rebuildable.is_none()
+        && disallow_spectators.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, or rebuildableDerricks required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, or disallowSpectators required"}"#.to_vec(),
         );
     }
-    let resp = game_state::set_match_options(
+    let mut resp = game_state::set_match_options(
         gid,
         pid,
         special,
@@ -1262,6 +1288,24 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
     );
     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    if ok {
+        if let Some(disallow) = disallow_spectators {
+            // A spectator with no player seat to move into leaves the lobby, as a kick does.
+            let evicted = game_state::set_spectators_disallowed(gid, pid, disallow).unwrap_or_default();
+            for spectator in &evicted {
+                game_state::mark_kicked(gid, *spectator);
+                remove_player_from_game(gid, *spectator, PLAYER_REMOVED_REASON_PLAYER_LEFT);
+            }
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} disallowSpectators={} evicted={:?}",
+                gid,
+                pid,
+                disallow,
+                evicted
+            );
+        }
+        resp["disallowSpectators"] = serde_json::json!(game_state::spectators_disallowed(gid));
+    }
     HttpResponse::new(
         if ok { 200 } else { 403 },
         "application/json",
@@ -2946,9 +2990,9 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
         );
         return Err(crate::common::error::BlazeError::AuthorizationRequired);
     }
-    if game_state::lobby_full_for(gid, pid) {
+    if game_state::join_denied_for(gid, pid) {
         crate::debug_println!(
-            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (lobby full: no player slots available)",
+            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (lobby full: no player or spectator slot available)",
             gid,
             pid
         );
