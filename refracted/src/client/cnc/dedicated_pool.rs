@@ -533,6 +533,23 @@ pub fn simucloud_upstream_for_gid(gid: i64) -> SocketAddr {
     SocketAddr::from(([127, 0, 0, 1], crate::client::cnc::msgsystem::simucloud::SIMUCLOUD_PORT))
 }
 
+/// Whether `host:port` is the ServerHost of a registered dedicated -- the only thing the
+/// server browser may ask this host to probe.
+pub fn is_registered_serverhost(host: &str, port: u16) -> bool {
+    let Ok(ip) = host
+        .parse::<SocketAddr>()
+        .map(|sa| sa.ip())
+        .or_else(|_| host.parse::<IpAddr>())
+    else {
+        return false;
+    };
+    list_entries()
+        .iter()
+        .any(|e| peer_ip_addr(e) == ip && msg_sys_port(e) == port)
+}
+
+/// Round trip from this host (the MsgSys hub) to a dedicated ServerHost. This is only the
+/// hub → dedicated leg of a player's ping; the player → hub leg comes from the client's QoS.
 pub fn probe_host_rtt_ms(host: &str, port: Option<u16>) -> Option<u32> {
     use std::net::{IpAddr, SocketAddr, TcpStream};
     use std::time::{Duration, Instant};

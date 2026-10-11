@@ -59,6 +59,8 @@ struct LobbyChatLine {
     user: String,
     text: String,
     system: bool,
+    /// Authenticated persona that sent the line. The name tag is read from Nexus, not the client.
+    persona_id: i64,
 }
 
 static LOBBY_CHAT: OnceLock<Mutex<HashMap<i64, Vec<LobbyChatLine>>>> = OnceLock::new();
@@ -108,20 +110,27 @@ pub fn lobby_chat_json(gid: i64) -> serde_json::Value {
             "user": l.user,
             "text": l.text,
             "system": l.system,
+            "tag": crate::nexus::identity::persona_name_tag(l.persona_id),
         })).collect::<Vec<_>>(),
         "typing": lobby_typing_names(gid),
     })
 }
 
-pub fn lobby_chat_push(gid: i64, user: &str, text: &str) -> serde_json::Value {
-    lobby_chat_push_line(gid, user, text, false)
+pub fn lobby_chat_push(gid: i64, user: &str, text: &str, persona_id: i64) -> serde_json::Value {
+    lobby_chat_push_line(gid, user, text, false, persona_id)
 }
 
 pub fn lobby_chat_push_system(gid: i64, text: &str) -> serde_json::Value {
-    lobby_chat_push_line(gid, "System", text, true)
+    lobby_chat_push_line(gid, "System", text, true, 0)
 }
 
-fn lobby_chat_push_line(gid: i64, user: &str, text: &str, system: bool) -> serde_json::Value {
+fn lobby_chat_push_line(
+    gid: i64,
+    user: &str,
+    text: &str,
+    system: bool,
+    persona_id: i64,
+) -> serde_json::Value {
     let user: String = user.chars().take(32).collect();
     let text: String = text.chars().take(200).collect();
     if text.trim().is_empty() {
@@ -133,7 +142,12 @@ fn lobby_chat_push_line(gid: i64, user: &str, text: &str, system: bool) -> serde
     {
         let mut m = lobby_chat().lock();
         let list = m.entry(gid).or_default();
-        list.push(LobbyChatLine { user, text, system });
+        list.push(LobbyChatLine {
+            user,
+            text,
+            system,
+            persona_id: if system { 0 } else { persona_id },
+        });
         if list.len() > 80 {
             let extra = list.len() - 80;
             list.drain(0..extra);
@@ -1817,6 +1831,55 @@ pub fn note_match_spectator(persona_id: i64, spectating: bool) {
     }
 }
 
+/// What a persona went into its last match with (CreateGame roster) and when that match started
+/// (StartGame relayed). Read by GameReporting for the persona's last general and match times.
+#[derive(Debug, Clone)]
+pub struct MatchEntry {
+    pub gid: i64,
+    pub general_id: u32,
+    pub faction: String,
+    started: Option<Instant>,
+}
+
+static MATCH_ENTRIES: OnceLock<Mutex<HashMap<i64, MatchEntry>>> = OnceLock::new();
+
+fn match_entries() -> &'static Mutex<HashMap<i64, MatchEntry>> {
+    MATCH_ENTRIES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Record the general and faction a (non-spectating) persona takes into match `gid`. Called for
+/// every CreateGame roster; a repeat for the same gid keeps the start time.
+pub fn note_match_entry(persona_id: i64, gid: i64, general_id: u32, faction: &str) {
+    let faction = match faction.trim().to_ascii_uppercase().as_str() {
+        "ESC" | "EU" => "EU".to_string(),
+        "GLA" => "GLA".to_string(),
+        _ => "APA".to_string(),
+    };
+    let mut map = match_entries().lock();
+    let started = map
+        .get(&persona_id)
+        .filter(|e| e.gid == gid)
+        .and_then(|e| e.started);
+    map.insert(persona_id, MatchEntry { gid, general_id, faction, started });
+}
+
+/// StartGame for `gid`: the match clock starts for every persona entered in it.
+fn note_match_entries_started(gid: i64) {
+    let now = Instant::now();
+    for entry in match_entries().lock().values_mut() {
+        if entry.gid == gid && entry.started.is_none() {
+            entry.started = Some(now);
+        }
+    }
+}
+
+/// The persona's last match entry and, when the match was seen to start, its length so far (s).
+pub fn last_match_entry(persona_id: i64) -> Option<(MatchEntry, Option<u64>)> {
+    let entry = match_entries().lock().get(&persona_id).cloned()?;
+    let secs = entry.started.map(|t| t.elapsed().as_secs());
+    Some((entry, secs))
+}
+
 /// The persona watched its last match, so that match's report is not a win or a loss.
 pub fn persona_spectated_last_match(persona_id: i64) -> bool {
     MATCH_SPECTATORS
@@ -3210,6 +3273,7 @@ pub fn note_match_started(gid: i64) {
         }
     };
     if changed {
+        note_match_entries_started(gid);
         tracing::info!(
             target: "cnc",
             "[CNC] match started gid={gid} -- phase InGame (StartGame relayed; leave/reclaim no longer held)"
@@ -3281,9 +3345,10 @@ pub fn remove_player(gid: i64, persona_id: i64) -> Option<usize> {
 }
 
 pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
-    let (humans, converted) = {
+    let (humans, converted, migrated) = {
         let mut map = games().lock();
         let game = map.get_mut(&gid)?;
+        let was_host = persona_id > 0 && game.host_persona == persona_id;
 
         let human_count = game.players.iter().filter(|p| !p.is_ai).count();
         let leaving_human = game
@@ -3292,7 +3357,7 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
             .find(|p| p.persona_id == persona_id && !p.is_ai)
             .cloned();
 
-        if let Some(leaving) = leaving_human {
+        let (humans, converted) = if let Some(leaving) = leaving_human {
             // AI takeover for live match only lobby leaver just frees the seat
             if human_count > 1 && game.phase == GamePhase::InGame && !is_spectator(&leaving) {
                 let slot = leaving.slot;
@@ -3365,7 +3430,11 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
             }
             let remaining = game.players.iter().filter(|p| !p.is_ai).count();
             (remaining, false)
-        }
+        };
+        // `players` is in join order, so the host seat has passed to the earliest-joined human left.
+        let migrated = (was_host && game.host_persona > 0)
+            .then(|| (game.host_persona, game.phase == GamePhase::InGame));
+        (humans, converted, migrated)
     };
     if !converted {
         // A freed seat must not be re-materialised from pending attrs at match start.
@@ -3373,8 +3442,66 @@ pub fn remove_player_ex(gid: i64, persona_id: i64) -> Option<(usize, bool)> {
             by_pid.remove(&persona_id);
         }
     }
+    if let Some((new_host, in_match)) = migrated {
+        announce_host_migration(gid, persona_id, new_host, in_match);
+    }
     refresh_pros_wire_for_gid(gid);
     Some((humans, converted))
+}
+
+/// The host left and `new_host` holds the lobby now (H463): every remaining member's Blaze
+/// client moves its admin list, and the lobby is told who took over.
+fn announce_host_migration(gid: i64, old_host: i64, new_host: i64, in_match: bool) {
+    // pid=0 pending attrs are the departed host's own overlay (`merge_pending_into_player`).
+    if let Some(by_pid) = pending_player_attrs().lock().get_mut(&gid) {
+        by_pid.remove(&0);
+    }
+    let (name, members): (String, Vec<i64>) = {
+        let m = games().lock();
+        let Some(game) = m.get(&gid) else {
+            return;
+        };
+        (
+            game.players
+                .iter()
+                .find(|p| p.persona_id == new_host)
+                .map(|p| p.display_name.clone())
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| "Player".to_string()),
+            game.players
+                .iter()
+                .filter(|p| !p.is_ai)
+                .map(|p| p.persona_id)
+                .collect(),
+        )
+    };
+    let mut clients = 0usize;
+    if let Ok(pushes) = super::fireframe::pushes_notify_admin_list_migrated(gid, new_host, old_host) {
+        for pid in &members {
+            for sid in sessions_for_persona(*pid) {
+                if super::dedicated_pool::is_dedicated_blaze_session(sid) {
+                    continue;
+                }
+                super::fireframe::enqueue_pending_pushes(sid, pushes.clone());
+                clients += 1;
+            }
+        }
+    }
+    if clients > 0 {
+        let _ = crate::blaze::server::inject_bus::broadcast(Vec::new());
+    }
+    if !in_match {
+        let _ = lobby_chat_push_system(gid, &format!("{name} is now the lobby host."));
+    }
+    crate::console_println!(
+        "[CNC] lobby host migrated gid={} {} -> {} ({}) humans={} blaze_clients={}",
+        gid,
+        old_host,
+        new_host,
+        name,
+        members.len(),
+        clients
+    );
 }
 
 /// Seats a lobby can hold: the map's start points once known, else the game cap.
@@ -3722,6 +3849,55 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
     }
 }
 
+/// Team, start point, faction, general and house colour of a seated human (None for AI / absent).
+pub fn seat_signature(gid: i64, persona_id: i64) -> Option<Vec<String>> {
+    let m = games().lock();
+    let game = m.get(&gid)?;
+    let p = game.players.iter().find(|p| p.persona_id == persona_id && !p.is_ai)?;
+    let get = |k: &str| p.attribs.get(k).cloned().unwrap_or_default();
+    Some(vec![
+        p.team.to_string(),
+        get("_startpoint"),
+        get("_faction"),
+        get("_general"),
+        get(ATTR_HOUSE_COLOR),
+        get("_color"),
+    ])
+}
+
+/// Drop one human's ready flag (never the host's: the host starts the match).
+pub fn unready_player(gid: i64, persona_id: i64) {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return;
+    };
+    let host = game.host_persona;
+    if let Some(p) = game
+        .players
+        .iter_mut()
+        .find(|p| p.persona_id == persona_id && !p.is_ai && p.persona_id != host)
+    {
+        if p.ready {
+            p.ready = false;
+            tracing::info!(target: "cnc", "[CNC] gid={gid} pid={persona_id} unready: own seat changed");
+        }
+    }
+}
+
+/// Host changed the lobby options: every other human must review them and ready up again.
+pub fn unready_all_but_host(gid: i64) {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return;
+    };
+    let host = game.host_persona;
+    for p in game.players.iter_mut() {
+        if !p.is_ai && p.persona_id != host {
+            p.ready = false;
+        }
+    }
+}
+
 pub fn set_player_ready(gid: i64, persona_id: i64, ready: bool) -> bool {
     let mut m = games().lock();
     let Some(game) = m.get_mut(&gid) else {
@@ -3792,6 +3968,11 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         .map(|p| {
             let is_host = p.persona_id == host && host != 0;
             let startpoint = effective_startpoint_for_player(gid, p);
+            let name_tag = if p.is_ai {
+                String::new()
+            } else {
+                crate::nexus::identity::persona_name_tag(p.persona_id)
+            };
             serde_json::json!({
                 "pid": p.persona_id,
                 "name": p.display_name,
@@ -3816,6 +3997,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
                 "ready": p.ready || p.is_ai || is_host,
                 "isHost": is_host,
                 "spectator": is_spectator(p),
+                "nameTag": name_tag,
             })
         })
         .collect();
@@ -5232,5 +5414,64 @@ mod lobby_handoff_tests {
             Some("2")
         );
         destroy_game(gid);
+    }
+
+    #[test]
+    fn host_leave_hands_lobby_to_next_joined_human() {
+        let _lock = exclusive();
+        let gid = 987_606;
+        seed_from_join(gid);
+        let host = host_persona_for_gid(gid);
+        let second = host + 7_000_006;
+        let third = host + 7_000_007;
+        // An AI seated ahead of the humans is never picked.
+        games().lock().get_mut(&gid).unwrap().players.push(CncPlayer {
+            persona_id: -1002,
+            display_name: "AI".into(),
+            slot: 1,
+            team: 2,
+            is_ai: true,
+            ready: true,
+            attribs: default_ai_attribs(1, 2, "GLA"),
+            custom_data: IndexMap::new(),
+            stat: PROS_STAT_ACTIVE_CONNECTING,
+        });
+        ensure_client_player(gid, second, "Second").expect("second");
+        ensure_client_player(gid, third, "Third").expect("third");
+        let mut overlay = IndexMap::new();
+        overlay.insert("_faction".to_string(), "GLA".to_string());
+        write_pending_player_attrs(gid, 0, &overlay);
+
+        assert_eq!(remove_player_ex(gid, host), Some((2, false)));
+        assert_eq!(host_persona_for_gid(gid), second);
+        assert!(is_lobby_host(gid, second));
+        assert!(!pending_player_attrs()
+            .lock()
+            .get(&gid)
+            .map(|by_pid| by_pid.contains_key(&0))
+            .unwrap_or(false));
+        let announced = |who: &str| {
+            let want = format!("{who} is now the lobby host.");
+            lobby_chat()
+                .lock()
+                .get(&gid)
+                .map(|lines| lines.iter().filter(|l| l.system && l.text == want).count())
+                .unwrap_or(0)
+        };
+        assert_eq!(announced("Second"), 1);
+
+        // The same leave arriving twice (shell POST, then Blaze removePlayer) moves nothing more.
+        assert_eq!(remove_player_ex(gid, host), Some((2, false)));
+        assert_eq!(host_persona_for_gid(gid), second);
+        assert_eq!(announced("Second"), 1);
+
+        // A non-host leaving keeps the host.
+        assert_eq!(remove_player_ex(gid, third), Some((1, false)));
+        assert_eq!(host_persona_for_gid(gid), second);
+        assert_eq!(announced("Third"), 0);
+
+        destroy_game(gid);
+        lobby_chat().lock().remove(&gid);
+        pending_player_attrs().lock().remove(&gid);
     }
 }

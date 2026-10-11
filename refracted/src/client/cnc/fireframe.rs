@@ -728,6 +728,39 @@ pub fn pushes_notify_player_removed(gid: i64, pid: i64, reason: i32) -> BlazeRes
     }])
 }
 
+/// Lobby host handover: `old_admin` leaves the client's admin list, `new_admin` joins it.
+pub fn pushes_notify_admin_list_migrated(
+    gid: i64,
+    new_admin: i64,
+    old_admin: i64,
+) -> BlazeResult<Vec<OutgoingPush>> {
+    crate::debug_println!(
+        "\x1b[38;2;255;215;0m[CNC]\x1b[0m FireFrame: NotifyAdminListChange(migrate) gid={} admin={} was={}",
+        gid,
+        new_admin,
+        old_admin
+    );
+    let body = super::build_game_manager_notify_admin_list_change(
+        gid,
+        new_admin,
+        super::ADMIN_LIST_OP_MIGRATED,
+        old_admin,
+    )?;
+    let wire = notification_envelope(0x0004, 0x00CA, &body);
+    let pl = wire.len();
+    Ok(vec![OutgoingPush {
+        wire,
+        component: 0x0004,
+        command: 0x00CA,
+        tdf_body: body.to_vec(),
+        blaze_send_label: "NotifyAdminListChange",
+        info_log_line: format!(
+            "[Blaze→Client] GameManager.NotifyAdminListChange Component=4, Command=202, Size={}, MsgType=NOTIFICATION, MsgNum=0",
+            pl
+        ),
+    }])
+}
+
 pub fn request_client_local_game_teardown(gid: i64, pid: i64, reason: i32) {
     if gid <= 0 || pid <= 0 {
         return;

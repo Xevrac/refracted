@@ -10,8 +10,10 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     $scope.draft = '';
     $scope.messages = [];
     $scope.playerName = '';
+    $scope.spectator = false;
 
-    var DEV_NAMES = { 'nemo': true, 'xevrac': true };
+    var nameTags = {};
+    var nameTagsAt = 0;
     var chatUiOpen = false;
     var ignoreEnterUntil = 0;
     var VISIBILITY_KEY = 'cnc_ingame_chat_visibility';
@@ -79,13 +81,9 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }, 0);
     }
 
-    function isDevName(name) {
-        return !!DEV_NAMES[String(name || '').toLowerCase()];
-    }
-
-    // All chat: purple for developers (lobby parity). Otherwise viewer-relative
-    // ally blue / enemy red / self gold. Team channel keeps its green tint.
-    // A spectator's line is grey for every reader, whatever the channel.
+    // All chat: Nexus name tags (developer purple, playtester #ffcf47). Otherwise
+    // viewer-relative ally blue / enemy red / self gold. Team channel keeps its
+    // green tint. A spectator's line is grey for every reader, whatever the channel.
     $scope.fromClass = function (m) {
         if (!m || m.kind === 'system') {
             return '';
@@ -96,8 +94,12 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         if (m.channel === 'team') {
             return 'team';
         }
-        if (isDevName(m.from)) {
+        var tag = m.persona ? nameTags[String(m.persona)] : '';
+        if (tag === 'developer') {
             return 'dev';
+        }
+        if (tag === 'playtester') {
+            return 'playtester';
         }
         if (m.relation === 's' || m.kind === 'self') {
             return 'self';
@@ -321,9 +323,10 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     }
 
     // Lines are comma-joined, each percent-encoded (H372):
-    // "seq|channel|sender|relation|name|text" once decoded (text last, may contain '|').
+    // "seq|channel|sender|relation|persona|name|text" once decoded (text last, may contain '|').
     // relation: s=self, a=ally, e=enemy (viewer-relative), o=sender is a spectator.
-    // Legacy 5-field lines omit relation.
+    // persona is the Nexus id the match server stamped; name colour comes from that.
+    // Legacy lines omit persona (and older ones omit relation).
     function applyLines(data) {
         if (!data || data.status !== 0 || typeof data.lines !== 'string') {
             return;
@@ -350,10 +353,17 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
             }
             maxSeq = seq;
             var relation = '';
+            var persona = '';
             var from;
             var text;
             var rel = parts[3];
-            if (parts.length >= 6 && (rel === 's' || rel === 'a' || rel === 'e' || rel === 'o')) {
+            var knownRel = rel === 's' || rel === 'a' || rel === 'e' || rel === 'o';
+            if (parts.length >= 7 && knownRel && /^[0-9]+$/.test(parts[4]) && parts[4] !== '0') {
+                relation = rel;
+                persona = parts[4];
+                from = parts[5];
+                text = parts.slice(6).join('|');
+            } else if (parts.length >= 6 && knownRel) {
                 relation = rel;
                 from = parts[4];
                 text = parts.slice(5).join('|');
@@ -370,7 +380,8 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
                 text: text,
                 kind: kind,
                 channel: parts[1] === '1' ? 'team' : 'all',
-                relation: relation
+                relation: relation,
+                persona: persona
             });
             if ($scope.messages.length > 80) {
                 $scope.messages.shift();
@@ -395,8 +406,9 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
                 setTimeout(pollServer, POLL_MS);
             }
         }
+        refreshNameTags();
         if (!executeShell('/prism/chat/poll', { since: lastSeq < 0 ? 0 : lastSeq }, function (data) {
-            applyLines(data);
+            applyPoll(data);
             again();
         })) {
             again();
@@ -405,8 +417,52 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         setTimeout(again, POLL_STALL_MS);
     }
 
+    function applyPoll(data) {
+        if (data && (data.spectator === 1 || data.spectator === true)) {
+            $scope.spectator = true;
+            if ($scope.channel === 'team') {
+                $scope.channel = 'all';
+                runGame('ServerPlayer.ChangeChatChannel 0');
+            }
+        }
+        applyLines(data);
+    }
+
+    function refreshNameTags() {
+        var now = Date.now();
+        if (now - nameTagsAt < 15000) {
+            return;
+        }
+        nameTagsAt = now;
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/cnc/name-tags', true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4 || xhr.status < 200 || xhr.status >= 300) {
+                    return;
+                }
+                var data = null;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (e) {
+                    return;
+                }
+                if (!data || !data.tags) {
+                    return;
+                }
+                $timeout(function () {
+                    nameTags = data.tags;
+                }, 0);
+            };
+            xhr.send(null);
+        } catch (e2) { /* ignore */ }
+    }
+
     $scope.setChannel = function (ch) {
         if (ch !== 'all' && ch !== 'team') {
+            return;
+        }
+        if (ch === 'team' && $scope.spectator) {
             return;
         }
         $scope.channel = ch;
@@ -455,8 +511,9 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }
 
         // The server relays the line back to this player too, so it is not pushed here.
+        var channel = $scope.spectator ? 'all' : $scope.channel;
         var sent = executeShell('/prism/chat/send',
-            { channel: $scope.channel, user: $scope.playerName, text: text },
+            { channel: channel, user: $scope.playerName, text: text },
             function (data) {
                 if (!data || data.status !== 0) {
                     pushLine('', 'Message not sent (no match server connection).', 'system');

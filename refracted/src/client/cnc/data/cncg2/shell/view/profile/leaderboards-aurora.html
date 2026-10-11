@@ -1,0 +1,28 @@
+<div class="au-prof au-prof--lb">
+    <div class="au-prof__lb">
+        <h4 class="au-prof__head">Near you</h4>
+        <div class="au-prof__trow au-prof__trow--head">
+            <span>Rank</span><span class="au-prof__tname">Player</span><span>Wins</span><span>Losses</span>
+        </div>
+        <div class="au-prof__trow" ng-repeat="user in leaderboardNearMe" ng-class="{'au-prof__trow--me': user.isMe}">
+            <span>{{ user.rank }}</span><span class="au-prof__tname">{{ user.name }}</span>
+            <span class="au-prof__win">{{ user.wins }}</span><span class="au-prof__loss">{{ user.losses }}</span>
+        </div>
+        <p class="au-prof__note" ng-show="profileUnavailable">Match records are unavailable: this server is not connected to the Nexus database.</p>
+        <p class="au-prof__note" ng-show="!profileUnavailable && !leaderboardNearMe.length">Finish a match to get a rank.</p>
+    </div>
+    <div class="au-prof__lb au-prof__lb--top">
+        <h4 class="au-prof__head">Top 50</h4>
+        <div class="au-prof__trow au-prof__trow--head">
+            <span>Rank</span><span class="au-prof__tname">Player</span><span>Wins</span><span>Losses</span>
+        </div>
+        <div class="au-prof__scroll">
+            <div class="au-prof__trow" ng-repeat="user in leaderboardTop" ng-class="{'au-prof__trow--me': user.isMe}">
+                <span><b class="au-prof__place au-prof__place--{{ user.rank }}" ng-if="user.rank <= 3">{{ user.rank }}</b><em ng-if="user.rank > 3">{{ user.rank }}</em></span>
+                <span class="au-prof__tname">{{ user.name }}</span>
+                <span class="au-prof__win">{{ user.wins }}</span><span class="au-prof__loss">{{ user.losses }}</span>
+            </div>
+            <p class="au-prof__note" ng-show="!profileUnavailable && !leaderboardTop.length">No matches reported yet.</p>
+        </div>
+    </div>
+</div>

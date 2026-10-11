@@ -7,7 +7,7 @@ mod store;
 mod auth;
 mod handoff;
 
-pub use store::{BoundSession, IdentityStore, MatchStats, PersonaRecord, UserRecord};
+pub use store::{BoundSession, IdentityStore, LeaderRow, MatchDetails, MatchEntry, MatchStats, PersonaRecord, UserRecord};
 pub use auth::{assert_bound_identity, IssuedCredentials};
 pub use handoff::{
     ensure_bound_from_handoff, handoff_file_present, handoff_path, try_bind_launcher_handoff,
@@ -166,9 +166,23 @@ pub fn persona_match_stats(persona_id: i64) -> Result<MatchStats, String> {
     store.match_stats(persona_id)
 }
 
-pub fn record_persona_match(persona_id: i64, victory: bool) -> Result<MatchStats, String> {
+pub fn persona_match_history(persona_id: i64, limit: u32) -> Result<Vec<MatchEntry>, String> {
     let store = current_identity_store().ok_or("mysql identity store is not ready")?;
-    let stats = store.record_match_outcome(persona_id, victory)?;
+    store.match_history(persona_id, limit)
+}
+
+pub fn match_leaderboard() -> Result<Vec<LeaderRow>, String> {
+    let store = current_identity_store().ok_or("mysql identity store is not ready")?;
+    store.leaderboard()
+}
+
+pub fn record_persona_match(
+    persona_id: i64,
+    victory: bool,
+    details: &MatchDetails,
+) -> Result<MatchStats, String> {
+    let store = current_identity_store().ok_or("mysql identity store is not ready")?;
+    let stats = store.record_match_outcome(persona_id, victory, details)?;
     tracing::info!(
         persona = stats.persona_id,
         result = if victory { "win" } else { "loss" },
@@ -176,9 +190,62 @@ pub fn record_persona_match(persona_id: i64, victory: bool) -> Result<MatchStats
         losses = stats.losses,
         win_streak = stats.win_streak,
         loss_streak = stats.loss_streak,
+        general = ?details.general_id,
+        faction = ?details.faction,
+        secs = ?details.duration_secs,
         "persona record"
     );
     Ok(stats)
+}
+
+struct NameTagCache {
+    at: std::time::Instant,
+    tags: std::collections::HashMap<i64, String>,
+}
+
+static NAME_TAGS: parking_lot::Mutex<Option<NameTagCache>> = parking_lot::Mutex::new(None);
+static NAME_TAG_WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+const NAME_TAG_TTL: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn cached_name_tags() -> std::collections::HashMap<i64, String> {
+    {
+        let guard = NAME_TAGS.lock();
+        if let Some(cache) = guard.as_ref() {
+            if cache.at.elapsed() < NAME_TAG_TTL {
+                return cache.tags.clone();
+            }
+        }
+    }
+    let fresh = match current_identity_store() {
+        Some(store) => store.tagged_personas().unwrap_or_else(|e| {
+            if !NAME_TAG_WARNED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                tracing::warn!("name tag lookup failed: {e}");
+            }
+            std::collections::HashMap::new()
+        }),
+        None => std::collections::HashMap::new(),
+    };
+    *NAME_TAGS.lock() = Some(NameTagCache {
+        at: std::time::Instant::now(),
+        tags: fresh.clone(),
+    });
+    fresh
+}
+
+/// `developer` or `playtester` for this persona, or empty when the account has no tag.
+pub fn persona_name_tag(persona_id: i64) -> String {
+    if persona_id <= 0 {
+        return String::new();
+    }
+    cached_name_tags()
+        .get(&persona_id)
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Every tagged persona. Keys are persona ids. Values are `developer` or `playtester`.
+pub fn name_tag_map() -> std::collections::HashMap<i64, String> {
+    cached_name_tags()
 }
 
 pub fn log_headless_identity_policy(env: &AppEnv) {

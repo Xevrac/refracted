@@ -859,8 +859,6 @@ button.btn-alert-marker.btn-alert-marker--wop:hover::before {
     color: #3aa0ff;
 }
 
-html.cnc-playtest .au-side,
-html.cnc-playtest .au-lobby__side,
 html.cnc-playtest .cc-lobby__sidebar,
 html.cnc-playtest .cc-content-area > .cc-sidebar {
     opacity: 0.4;

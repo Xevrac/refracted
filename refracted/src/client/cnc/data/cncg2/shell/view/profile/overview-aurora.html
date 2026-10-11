@@ -1,0 +1,45 @@
+<div class="au-prof au-prof--overview">
+    <div class="au-prof__id">
+        <img class="au-prof__face" ng-src="{{ generalIcon }}" ng-show="generalIcon" alt="">
+        <div class="au-prof__id-text">
+            <strong>{{ playerName }}</strong>
+            <span>{{ generalLine }}</span>
+        </div>
+        <div class="au-prof__big">
+            <b>{{ wins }}</b><em>Wins</em>
+        </div>
+        <div class="au-prof__big">
+            <b>{{ losses }}</b><em>Losses</em>
+        </div>
+        <div class="au-prof__big">
+            <b>{{ profileOverview.winRate }}<i>%</i></b><em>Win rate</em>
+        </div>
+    </div>
+
+    <div class="au-prof__cols">
+        <div class="au-prof__col">
+            <h4 class="au-prof__head">Record</h4>
+            <ul class="au-prof__rows">
+                <li><span>Wins</span><b class="au-prof__win">{{ profileOverview.wins }}</b></li>
+                <li><span>Losses</span><b class="au-prof__loss">{{ profileOverview.losses }}</b></li>
+                <li><span>Win rate</span><b>{{ profileOverview.winRate }}%</b></li>
+                <li><span>Current win streak</span><b>{{ profileOverview.winStreak }}</b></li>
+                <li><span>Current loss streak</span><b>{{ profileOverview.lossStreak }}</b></li>
+                <li><span>Shortest match</span><b>{{ profileOverview.shortestMatch }}</b></li>
+                <li><span>Fastest win</span><b>{{ profileOverview.bestWin }}</b></li>
+                <li><span>Last general played</span><b>{{ profileOverview.lastGeneral }}</b></li>
+            </ul>
+        </div>
+        <div class="au-prof__col">
+            <h4 class="au-prof__head">Recent games</h4>
+            <ul class="au-prof__rows">
+                <li ng-repeat="game in profileOverview.recentGames">
+                    <span>{{ game.date }}<em class="au-prof__game-meta" ng-show="game.general || game.length">{{ game.general }}<i ng-show="game.general && game.length"> &middot; </i>{{ game.length }}</em></span>
+                    <b ng-class="{'au-prof__win': game.result == 'VICTORY', 'au-prof__loss': game.result != 'VICTORY'}">{{ game.result }}</b>
+                </li>
+                <li class="au-prof__none" ng-show="profileUnavailable">Match records are unavailable: this server is not connected to the Nexus database.</li>
+                <li class="au-prof__none" ng-show="!profileUnavailable && !profileOverview.recentGames.length">No games recorded yet.</li>
+            </ul>
+        </div>
+    </div>
+</div>

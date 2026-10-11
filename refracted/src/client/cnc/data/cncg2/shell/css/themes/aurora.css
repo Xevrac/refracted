@@ -1,447 +1,2752 @@
+/* GENERATED: Aurora (Default). Do not edit here.
+   Source: refracted/tools/cnc-shell-webdev/aurora/src/*.css, built by build.py in that folder.
+   Sizes are rem against a 1920x1080 reference (1rem = 16px at 1080p); js/shell-theme.js scales the root. */
+/* ---- 00-base.css ---- */
 /* =========================================================================
-   Theme: Aurora
-   Dark tactical HUD inspired by refracted_cnc/frontend (blue accent, grid,
-   vignette). Keeps bumped/bevel shading; ES5-era CSS only (WebKit 535).
-   Activated via body.cc-theme--aurora
+   Base: fonts, reset, type, buttons, frames, dialogs, tooltips, pre-landing.
+   The classic stylesheets (Bootstrap included) are not loaded while an Aurora
+   theme is active, so everything the Aurora pages need is defined here.
    ========================================================================= */
 
-body.cc-theme.cc-theme--aurora {
-    color: #e6edf5;
-    background-color: #070907;
-    background-image:
-        -webkit-radial-gradient(50% 15%, ellipse, rgba(0, 136, 255, 0.14), transparent 55%),
-        -webkit-radial-gradient(80% 80%, ellipse, rgba(0, 80, 140, 0.10), transparent 50%),
-        -webkit-radial-gradient(10% 70%, ellipse, rgba(0, 100, 80, 0.07), transparent 45%),
-        -webkit-linear-gradient(rgba(58, 160, 255, 0.035) 1px, transparent 1px),
-        -webkit-linear-gradient(0deg, rgba(58, 160, 255, 0.035) 1px, transparent 1px),
-        url('../images/cnc_background.png');
-    background-size:
-        auto,
-        auto,
-        auto,
-        56px 56px,
-        56px 56px,
-        cover;
-    background-position: center, center, center, 0 0, 0 0, center;
-    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
-    background-attachment: fixed;
-}
+@font-face { font-family: 'AuText';    src: url('../../fonts/Eurostile-Reg.otf') format('opentype'); }
+@font-face { font-family: 'AuBold';    src: url('../../fonts/Eurostile-Bol.otf') format('opentype'); }
+@font-face { font-family: 'AuDisplay'; src: url('../../fonts/Eurostile-Hea.otf') format('opentype'); }
 
-body.cc-theme.cc-theme--aurora .cc-app-root {
-    position: relative;
-}
+/* Before js/shell-theme.js has measured the window: same rule, in CSS. */
+html { font-size: 0.8333vw; }
+@media (min-aspect-ratio: 16/9) { html { font-size: 1.4815vh; } }
 
-/* Soft grain / scanlines (no mix-blend — WebKit 535) */
-body.cc-theme.cc-theme--aurora:before {
-    content: "";
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 0.12;
-    background-image: -webkit-repeating-linear-gradient(
-        top,
-        transparent,
-        transparent 2px,
-        rgba(0, 0, 0, 0.28) 2px,
-        rgba(0, 0, 0, 0.28) 3px
-    );
-}
+*, *:before, *:after { box-sizing: border-box; }
 
-body.cc-theme.cc-theme--aurora .cc-app-root {
-    position: relative;
-    z-index: 1;
-}
-
-/* Pre-landing: opaque black veil over aurora body grid/glows */
-body.cc-theme.cc-theme--aurora .cc-pre-landing {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+html, body {
     width: 100%;
     height: 100%;
-    z-index: 200000;
-    background: #000;
-    background-color: #000;
-    background-image: none;
-}
-
-/* Top bar — darker panel, cyan hairline */
-body.cc-theme.cc-theme--aurora .cc-top-bar {
-    background: rgba(12, 15, 13, 0.92);
-    border-bottom: 1px solid #1c2a32;
-    -webkit-box-shadow: 0 1px 0 rgba(0, 136, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.55);
-    box-shadow: 0 1px 0 rgba(0, 136, 255, 0.18), 0 8px 24px rgba(0, 0, 0, 0.55);
-}
-
-body.cc-theme.cc-theme--aurora .cc-persona-name,
-body.cc-theme.cc-theme--aurora .cc-username {
-    color: #e6edf5;
-    text-shadow: 0 1px 0 #000, 0 0 12px rgba(0, 136, 255, 0.25);
-}
-
-body.cc-theme.cc-theme--aurora .cc-persona-email,
-body.cc-theme.cc-theme--aurora .cc-build-meta {
-    color: #8b9aab;
-}
-
-/* Classic Support Us (top-left) — Aurora accent if classic chrome is themed */
-body.cc-theme.cc-theme--aurora .cc-support-us {
-    border-color: rgba(0, 136, 255, 0.45);
-    background-color: #0088ff;
-    background-image: -webkit-linear-gradient(top, #3aa0ff 0%, #0088ff 48%, #0066cc 100%);
-    background-image: linear-gradient(to bottom, #3aa0ff 0%, #0088ff 48%, #0066cc 100%);
-    -webkit-box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-        0 8px 22px rgba(0, 136, 255, 0.22);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-        0 8px 22px rgba(0, 136, 255, 0.22);
-}
-
-body.cc-theme.cc-theme--aurora .cc-support-us:hover,
-body.cc-theme.cc-theme--aurora .cc-support-us:focus {
-    border-color: #3aa0ff;
-    background-color: #3aa0ff;
-    background-image: -webkit-linear-gradient(top, #5cb4ff 0%, #3aa0ff 45%, #0088ff 100%);
-    background-image: linear-gradient(to bottom, #5cb4ff 0%, #3aa0ff 45%, #0088ff 100%);
-}
-
-body.cc-theme.cc-theme--aurora .btn.btn-massive-play,
-body.cc-theme.cc-theme--aurora .btn.btn-play-dropdown,
-body.cc-theme.cc-theme--aurora .btn.btn-primary,
-body.cc-theme.cc-theme--aurora .btn.btn-options,
-body.cc-theme.cc-theme--aurora .btn.btn-mini.btn-add-premium {
-    color: #fff;
-    border: 1px solid rgba(0, 136, 255, 0.45);
-    background-color: #0088ff;
-    background-image: -webkit-linear-gradient(top, #3aa0ff 0%, #0088ff 48%, #0066cc 100%);
-    background-image: linear-gradient(to bottom, #3aa0ff 0%, #0088ff 48%, #0066cc 100%);
-    -webkit-box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-        0 8px 22px rgba(0, 136, 255, 0.22);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.28),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-        0 8px 22px rgba(0, 136, 255, 0.22);
-    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.65);
-}
-
-body.cc-theme.cc-theme--aurora .btn.btn-massive-play:hover,
-body.cc-theme.cc-theme--aurora .btn.btn-play-dropdown:hover,
-body.cc-theme.cc-theme--aurora .btn.btn-primary:hover,
-body.cc-theme.cc-theme--aurora .btn.btn-options:hover,
-body.cc-theme.cc-theme--aurora .btn.btn-massive-play:focus,
-body.cc-theme.cc-theme--aurora .btn.btn-play-dropdown:focus,
-body.cc-theme.cc-theme--aurora .btn.btn-primary:focus,
-body.cc-theme.cc-theme--aurora .btn.btn-options:focus {
-    border-color: #3aa0ff;
-    background-color: #3aa0ff;
-    background-image: -webkit-linear-gradient(top, #5cb4ff 0%, #3aa0ff 45%, #0088ff 100%);
-    background-image: linear-gradient(to bottom, #5cb4ff 0%, #3aa0ff 45%, #0088ff 100%);
-}
-
-body.cc-theme.cc-theme--aurora .btn.btn-massive-play:active,
-body.cc-theme.cc-theme--aurora .btn.btn-primary:active {
-    -webkit-box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
-    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
-}
-
-/* Ghost / secondary */
-body.cc-theme.cc-theme--aurora .btn-default {
-    background-color: #101412;
-    background-image: -webkit-linear-gradient(top, #1a221e 0%, #101412 100%);
-    background-image: linear-gradient(to bottom, #1a221e 0%, #101412 100%);
-    border: 1px solid #1c2a32;
-    color: #e6edf5;
-}
-
-body.cc-theme.cc-theme--aurora .btn-default:hover {
-    border-color: rgba(0, 136, 255, 0.55);
-    background-color: rgba(0, 136, 255, 0.12);
-}
-
-/* Nav tabs */
-body.cc-theme.cc-theme--aurora .cc-nav-tabs > li > a,
-body.cc-theme.cc-theme--aurora .nav-tabs > li > a {
-    color: #8b9aab;
-    border-color: transparent;
-    text-shadow: 0 1px 0 #000;
-}
-
-body.cc-theme.cc-theme--aurora .cc-nav-tabs > li.active > a,
-body.cc-theme.cc-theme--aurora .nav-tabs > li.active > a {
-    color: #e6edf5;
-    border-bottom: 2px solid #0088ff;
-    background: transparent;
-}
-
-/* Panels / feeds / friends — dark surface + blue edge */
-body.cc-theme.cc-theme--aurora .cc-panel,
-body.cc-theme.cc-theme--aurora .cc-feed-panel,
-body.cc-theme.cc-theme--aurora .cc-friends-panel,
-body.cc-theme.cc-theme--aurora .cc-party-box,
-body.cc-theme.cc-theme--aurora .well {
-    background: rgba(16, 20, 18, 0.92);
-    border: 1px solid #1c2a32;
-    -webkit-box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 0 0 1px rgba(0, 136, 255, 0.08),
-        0 12px 32px rgba(0, 0, 0, 0.45);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 0 0 1px rgba(0, 136, 255, 0.08),
-        0 12px 32px rgba(0, 0, 0, 0.45);
-}
-
-body.cc-theme.cc-theme--aurora .cc-panel h3,
-body.cc-theme.cc-theme--aurora .cc-feed-panel h3,
-body.cc-theme.cc-theme--aurora .cc-friends-panel h3 {
-    color: #e6edf5;
-    border-bottom: 1px solid #1c2a32;
-    text-shadow: 0 1px 0 #000;
-}
-
-/* Corner HUD ticks on main play cluster */
-body.cc-theme.cc-theme--aurora .cc-center-cluster {
-    position: relative;
-}
-
-body.cc-theme.cc-theme--aurora .cc-center-cluster:before,
-body.cc-theme.cc-theme--aurora .cc-center-cluster:after {
-    content: "";
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border-color: rgba(0, 136, 255, 0.45);
-    pointer-events: none;
-    z-index: 2;
-}
-
-body.cc-theme.cc-theme--aurora .cc-center-cluster:before {
-    top: -6px;
-    left: -6px;
-    border-top: 1px solid;
-    border-left: 1px solid;
-}
-
-body.cc-theme.cc-theme--aurora .cc-center-cluster:after {
-    right: -6px;
-    bottom: -6px;
-    border-right: 1px solid;
-    border-bottom: 1px solid;
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-lost-modal {
-    background: rgba(0, 0, 0, 0.55);
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-lost-modal__box {
-    border-color: rgba(58, 160, 255, 0.35);
-    background: rgba(16, 20, 18, 0.98);
-    color: #e6edf5;
-    letter-spacing: 0.05em;
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-lost-modal__ok {
-    min-width: 120px;
-    height: auto;
-    padding: 8px 16px;
-    border: 1px solid #0066cc;
-    border-radius: 0;
-    background-color: #0088ff;
-    background-image: -webkit-linear-gradient(top, #3aa0ff, #0088ff);
-    background-image: linear-gradient(to bottom, #3aa0ff, #0088ff);
-    color: #fff;
-    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
-    font-size: 13px;
-    letter-spacing: 0.12em;
-    text-shadow: none;
-    -webkit-box-shadow: 0 8px 22px rgba(0, 136, 255, 0.22);
-    box-shadow: 0 8px 22px rgba(0, 136, 255, 0.22);
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-lost-modal__ok:hover {
-    border-color: #3aa0ff;
-    color: #fff;
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal {
-    background: rgba(0, 0, 0, 0.55);
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal__box,
-body.cc-theme.cc-theme--aurora .cc-shell-quit-progress__box {
-    border-color: rgba(58, 160, 255, 0.35);
-    background: rgba(16, 20, 18, 0.98);
-    color: #e6edf5;
-    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal__title {
-    color: #e6edf5;
-    text-shadow: 0 0 16px rgba(0, 136, 255, 0.35);
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal__msg {
-    color: #c8d4e0;
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal__btn--yes {
-    border-color: #0066cc;
-    border-radius: 0;
-    background-color: #0088ff;
-    background-image: -webkit-linear-gradient(top, #3aa0ff, #0088ff);
-    background-image: linear-gradient(to bottom, #3aa0ff, #0088ff);
-    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
-    letter-spacing: 0.12em;
-    text-shadow: none;
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal__btn--no {
-    border-color: #1c2a32;
-    border-radius: 0;
-    background-color: #101412;
-    background-image: none;
-    color: #e6edf5;
-    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
-    letter-spacing: 0.12em;
-    text-shadow: none;
-}
-
-body.cc-theme.cc-theme--aurora .cc-shell-quit-modal__btn--no:hover {
-    border-color: #3aa0ff;
-    color: #fff;
-}
-
-/* Options modal under aurora */
-body.cc-theme.cc-theme--aurora .options-modal-box {
-    background: #0c0f0d;
-    border: 1px solid #1c2a32;
-    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.2), 0 20px 50px rgba(0, 0, 0, 0.85);
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.2), 0 20px 50px rgba(0, 0, 0, 0.85);
-}
-
-body.cc-theme.cc-theme--aurora .options-header h2 {
-    color: #e6edf5;
-    text-shadow: 0 0 16px rgba(0, 136, 255, 0.35);
-}
-
-body.cc-theme.cc-theme--aurora .options-tabs li a {
-    color: #9eb4c8;
-}
-body.cc-theme.cc-theme--aurora .options-tabs li.active a {
-    color: #fff;
-}
-body.cc-theme.cc-theme--aurora .options-tabs li a:hover {
-    color: #e6edf5;
-}
-body.cc-theme.cc-theme--aurora .opt-label-main,
-body.cc-theme.cc-theme--aurora .opt-radio,
-body.cc-theme.cc-theme--aurora .opt-checkbox {
-    color: #e6edf5;
-}
-
-/* Shell options dialogue buttons — grey hatch + outline (not solid / not classic textures) */
-body.cc-theme.cc-theme--aurora .btn-opt-action,
-body.cc-theme.cc-theme--aurora .btn-opt-restore {
-    color: #d8d8d8;
-    text-align: center;
-    text-shadow: 0 1px 0 #000;
-    border: 1px solid #4a5560;
-    border-radius: 4px;
+    margin: 0;
     padding: 0;
-    background-color: #1a1e22;
+    overflow: hidden;
+}
+body {
+    font-family: 'AuText', Arial, sans-serif;
+    font-size: 1.25rem;
+    line-height: 1.4;
+    color: #eceef0;
+    background-color: #050505;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+    -webkit-font-smoothing: antialiased;
+}
+/* The backdrop is the supplied image, untouched: no tint, no overlay. */
+
+body { background: #050505 url('../../images/aurora-battlefield.png') center center / cover no-repeat; }
+
+
+
+[ng\:cloak], [ng-cloak], .ng-cloak, .ng-hide { display: none !important; }
+[hidden] { display: none !important; }
+
+h1, h2, h3, h4, h5, p, ul, ol, figure, fieldset { margin: 0; padding: 0; border: 0; }
+ul, ol { list-style: none; }
+img { border: 0; max-width: 100%; }
+a { color: #3d9eff; text-decoration: none; cursor: pointer; }
+a:hover { color: #7cc0ff; }
+strong, b { font-family: 'AuBold', Arial, sans-serif; font-weight: normal; }
+em, i, u { font-style: normal; text-decoration: none; }
+hr { border: 0; border-top: 1px dashed rgba(217, 221, 226, 0.16); margin: 1.125rem 0; }
+
+button, input, select, textarea {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+    border-radius: 0;
+    outline: none;
+}
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+button[disabled], button:disabled { cursor: default; }
+input[type="text"], input[type="password"] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-appearance: none;
+}
+::-webkit-input-placeholder { color: #66696e; }
+
+::-webkit-scrollbar { width: 0.5rem; height: 0.5rem; }
+::-webkit-scrollbar-track { background: rgba(217, 221, 226, 0.06); }
+::-webkit-scrollbar-thumb { background: rgba(217, 221, 226, 0.32); }
+::-webkit-scrollbar-thumb:hover { background: rgba(217, 221, 226, 0.55); }
+
+.clearfix:after { content: ''; display: table; clear: both; }
+.cc-app-root, .cc-shell-root { position: absolute; top: 0; right: 0; bottom: 0; left: 0; }
+
+/* -------------------------------------------------------------------------
+   Frame: a panel with a hairline border. Corner ticks (eight background layers, no extra markup)
+   only on the main menu cards and a few lobby panels; everywhere else they were too much.
+   ------------------------------------------------------------------------- */
+.au-frame,
+.au-play__btn,
+.au-panel,
+.au-plate,
+.au-me,
+.au-feature,
+.au-lobby__slot,
+.au-lobby__spectator,
+.au-lobby__summary,
+.au-lobby__chat,
+.au-lobby__modal-box,
+.au-lobby-browser__list,
+.au-lobby-browser__detail,
+.au-lobby-browser__pw-box,
+.options-content,
+.cc-shell-lost-modal__box,
+.cc-shell-quit-modal__box,
+.cc-shell-quit-progress__box,
+.credits-modal-box,
+.alert-popup-box,
+.confirm-modal-box,
+.quit-progress-box,
+.chat-panel {
+    position: relative;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background-color: rgba(12, 13, 14, 0.94);
+}
+.au-play__btn,
+.au-lobby__slot,
+.au-lobby__spectator,
+.au-lobby__summary {
     background-image:
-        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
-        -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
+        linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)), linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)),
+        linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)), linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)),
+        linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)), linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)),
+        linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4)), linear-gradient(rgba(74, 144, 217, 0.4), rgba(74, 144, 217, 0.4));
+    background-repeat: no-repeat;
+    background-origin: border-box;
+    background-size: 1.625rem 3px, 3px 1.625rem, 1.625rem 3px, 3px 1.625rem, 1.625rem 3px, 3px 1.625rem, 1.625rem 3px, 3px 1.625rem;
+    background-position:
+        left top, left top, right top, right top,
+        left bottom, left bottom, right bottom, right bottom;
+}
+
+/* -------------------------------------------------------------------------
+   Buttons
+   ------------------------------------------------------------------------- */
+.au-btn,
+.cc-shell-lost-modal__ok,
+.cc-shell-quit-modal__btn,
+.confirm-btn,
+.btn-opt-action,
+.btn-opt-restore,
+.btn-back-to-main,
+.btn-massive-green {
+    display: inline-block;
+    min-width: 9.375rem;
+    height: 3.75rem;
+    padding: 0 1.75rem;
+    border: 1px solid rgba(217, 221, 226, 0.42);
+    background: rgba(12, 13, 14, 0.9);
+    color: #eceef0;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.1875rem;
+    line-height: 3.625rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-align: center;
+    white-space: nowrap;
+    transition: background-color 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+}
+.au-btn:hover,
+.cc-shell-lost-modal__ok:hover,
+.cc-shell-quit-modal__btn:hover,
+.confirm-btn:hover,
+.btn-opt-action:hover,
+.btn-opt-restore:hover,
+.btn-back-to-main:hover {
+    border-color: rgba(217, 221, 226, 0.2);
+    background: #2c2f34;
+    color: #ffffff;
+}
+.au-btn--ghost { color: #a1a4a8; }
+.au-btn--sm {
+    min-width: 0;
+    height: 2.5rem;
+    padding: 0 1rem;
+    font-family: 'AuText', Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 2.375rem;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #eceef0;
+}
+.au-btn--primary,
+.btn-opt-green,
+.btn-massive-green,
+.cc-shell-quit-modal__btn--yes,
+.cc-shell-lost-modal__ok {
+    border-color: #3d9eff;
+    background: #3d9eff;
+    color: #04111f;
+    box-shadow: 0 0 1.625rem rgba(61, 158, 255, 0.4);
+}
+.au-btn--primary:hover,
+.btn-opt-green:hover,
+.btn-massive-green:hover,
+.cc-shell-quit-modal__btn--yes:hover,
+.cc-shell-lost-modal__ok:hover {
+    border-color: #7cc0ff;
+    background: #7cc0ff;
+    color: #04111f;
+    box-shadow: 0 0 2.125rem rgba(61, 158, 255, 0.6);
+}
+.au-btn--ready { border-color: rgba(125, 255, 155, 0.7); color: #7dff9b; }
+.au-btn--ready:hover { border-color: #7dff9b; background: rgba(125, 255, 155, 0.14); color: #7dff9b; }
+.au-btn--danger { border-color: rgba(255, 90, 82, 0.5); color: #ff5a52; }
+.au-btn--danger:hover { border-color: #ff5a52; background: rgba(255, 90, 82, 0.14); color: #ff5a52; }
+.au-btn[disabled], .au-btn:disabled,
+.btn-opt-action[disabled], .btn-opt-restore[disabled] {
+    opacity: 0.38;
+    box-shadow: none;
+    pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------
+   Dialogs: connection lost, quit, quit progress, refused login, in-game confirms
+   ------------------------------------------------------------------------- */
+.cc-shell-lost-modal,
+.cc-shell-quit-modal,
+.cc-shell-quit-progress,
+.confirm-modal-overlay,
+.quit-progress-overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.62);
+}
+.cc-shell-auth-modal { z-index: 200001; background: rgba(0, 0, 0, 0.86); }
+.cc-shell-lost-modal__box,
+.cc-shell-quit-modal__box,
+.cc-shell-quit-progress__box,
+.confirm-modal-box,
+.quit-progress-box,
+.au-lobby__modal-box,
+.au-lobby-browser__pw-box {
+    min-width: 32.5rem;
+    max-width: 47.5rem;
+    padding: 2.5rem 2.75rem 2.25rem;
+    background-color: rgba(12, 13, 14, 0.98);
+    box-shadow: 0 1.5rem 3.75rem rgba(0, 0, 0, 0.8);
+    font-size: 1.1875rem;
+    color: #eceef0;
+    text-align: center;
+}
+.cc-shell-quit-modal__title,
+.confirm-modal-title,
+.au-dialog__title {
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.625rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #ffffff;
+    margin-bottom: 0.875rem;
+}
+.cc-shell-quit-modal__msg,
+.confirm-modal-msg,
+.quit-progress-msg { color: #a1a4a8; font-size: 1.1875rem; }
+.cc-shell-quit-modal__actions,
+.confirm-modal-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 2.125rem;
+}
+.cc-shell-quit-modal__actions > * + *,
+.confirm-modal-actions > * + * { margin-left: 0.875rem; }
+.cc-shell-lost-modal__box > div { margin-bottom: 1.875rem; }
+.cc-shell-lost-modal__ok { float: none; }
+.cc-shell-quit-progress__box, .quit-progress-box { min-width: 0; padding: 1.875rem 3.5rem; letter-spacing: 0.06em; }
+/* Quit is the destructive answer here: red outline, never the glowing fill. */
+.cc-shell-quit-modal__btn--yes, .confirm-btn:first-child {
+    border-color: rgba(255, 90, 82, 0.6);
+    background: rgba(12, 13, 14, 0.9);
+    color: #ff5a52;
+    box-shadow: none;
+}
+.cc-shell-quit-modal__btn--yes:hover, .confirm-btn:first-child:hover {
+    border-color: #ff5a52;
+    background: rgba(255, 90, 82, 0.14);
+    color: #ff5a52;
+    box-shadow: none;
+}
+
+/* -------------------------------------------------------------------------
+   Pre-landing (sign-in progress)
+   ------------------------------------------------------------------------- */
+.cc-pre-landing {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 200000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000000;
+}
+.cc-pre-landing__inner { text-align: center; }
+.cc-pre-landing__brand:before {
+    content: '';
+    display: block;
+    width: 35rem;
+    height: 10.875rem;
+    margin: 0 auto 2.25rem;
+    background: url('../../images/aurora-logo.png') center center / contain no-repeat;
+}
+.cc-pre-landing__title { display: none; }
+.cc-pre-landing__spinner {
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: 0 auto 1.625rem;
+    border: 3px solid rgba(217, 221, 226, 0.2);
+    border-top-color: #3d9eff;
+    border-radius: 50%;
+    animation: au-spin 0.9s linear infinite;
+}
+.cc-pre-landing__status {
+    font-size: 1.125rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+}
+@keyframes au-spin { to { transform: rotate(360deg); } }
+
+/* -------------------------------------------------------------------------
+   Tooltips: the shared data-tip label (js/shell-lobby-tooltips.js places it and
+   toggles display). It slides in from the side the host is on while the text types in.
+   ------------------------------------------------------------------------- */
+.au-lobby__hover-tip {
+    position: absolute;
+    z-index: 100000;
+    display: none;
+    padding: 0.4375rem 0.75rem 0.5rem;
+    border: 1px solid rgba(217, 221, 226, 0.42);
+    background: #0c0d0e;
+    color: #eceef0;
+    font-size: 1rem;
+    line-height: 1.35;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 0.625rem 1.625rem rgba(0, 0, 0, 0.7);
+    opacity: 0;
+}
+.au-lobby__hover-tip.shell-tip--from-left { transform: translateX(-0.5rem); }
+.au-lobby__hover-tip.shell-tip--from-right { transform: translateX(0.5rem); }
+.au-lobby__hover-tip.shell-tip--in {
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.12s ease-out, transform 0.14s ease-out;
+}
+.au-lobby__hover-tip--ready { border-color: rgba(125, 255, 155, 0.7); color: #7dff9b; }
+.au-lobby__hover-tip--not-ready { color: #a1a4a8; }
+.shell-tip__track { display: inline-block; }
+.shell-tip__char { display: inline-block; white-space: pre; opacity: 0; animation: au-tip-char 0.08s linear both; }
+@keyframes au-tip-char { from { opacity: 0; } to { opacity: 1; } }
+
+/* -------------------------------------------------------------------------
+   "Coming soon" note
+   ------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------
+   Text caret for chat boxes: a blinking _ after the typed text while the input has focus. The
+   hidden copy of the text pushes the _ to where the text ends (it sits at the right edge once the
+   text is wider than the box).
+   ------------------------------------------------------------------------- */
+.au-caret-field { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; align-self: stretch; }
+.au-caret-field > input { flex: 1 1 auto; min-width: 0; font-family: inherit; }
+.au-caret {
+    position: absolute;
+    top: 0; bottom: 0; left: 0; right: 0;
+    display: none;
+    align-items: center;
+    pointer-events: none;
+    white-space: pre;
+}
+.au-caret-field > input:focus + .au-caret { display: flex; }
+.au-caret-field > input:focus::-webkit-input-placeholder { color: transparent; }
+.au-caret__text { flex: 0 1 auto; min-width: 0; overflow: hidden; visibility: hidden; }
+.au-caret i { flex: 0 0 auto; font-style: normal; color: #3d9eff; animation: au-caret-blink 1s steps(1) infinite; }
+@keyframes au-caret-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
+
+.cc-info-tip {
+    display: block;
+    max-width: 47.5rem;
+    margin: 7.5rem auto 0;
+    padding: 2.25rem 2.5rem;
+    border: 1px dashed rgba(217, 221, 226, 0.26);
+    text-align: center;
+    color: #a1a4a8;
+    font-size: 1.1875rem;
+}
+.cc-info-tip strong {
+    display: block;
+    margin-bottom: 0.625rem;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+/* ---- 10-home.css ---- */
+/* =========================================================================
+   Main menu. Positions are the concept sheet's, measured on a 1920x1080 frame:
+   left blocks hang from the top left, the general and the record plate from the
+   bottom right, the nav bar from the bottom edge.
+   ========================================================================= */
+
+.au-main, .au-dash {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+}
+.au-dash { overflow: hidden; }
+
+/* ---- Logo ---- */
+.au-head {
+    position: absolute;
+    left: 3.1875rem;
+    top: 1.5625rem;
+    z-index: 6;
+}
+/* The PNG carries its own drop shadow in a 40px transparent margin: the visible plate is 30.75rem wide at 4.625rem, 3rem. */
+.au-head__logo {
+    display: block;
+    width: 33.625rem;
+    height: auto;
+    max-width: none;
+}
+.au-head__sub {
+    display: block;
+    margin: -1.125rem 0 0 2rem;
+    font-size: 1.1875rem;
+    letter-spacing: 0.04em;
+    color: #a1a4a8;
+}
+/* Build line: rfr / prism / cnc versions. Hovering it shows the About note. */
+.au-head__ver {
+    display: block;
+    margin: 0.1875rem 0 0 2rem;
+    font-size: 0.8125rem;
+    line-height: 1rem;
+    letter-spacing: 0.06em;
+    color: #a1a4a8;
+    white-space: nowrap;
+    opacity: 0.5;
+    transition: opacity 0.12s;
+}
+.au-head__ver i { margin: 0 0.3125rem 0 1rem; text-transform: uppercase; letter-spacing: 0.14em; }
+.au-head__ver i:first-child { margin-left: 0; }
+.au-head__ver:hover { opacity: 1; }
+
+/* ---- General (Default). A square box standing on the nav bar at the right edge, as tall as the
+        card column: 753 x 753 on the 1920x1080 frame (it scales with the window like everything else). ---- */
+.au-general {
+    position: absolute;
+    right: 0;
+    bottom: 5.375rem;
+    width: 47.0625rem;
+    height: 47.0625rem;
+    z-index: 1;
+    pointer-events: none;
+}
+.au-general img {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    max-width: none;
+}
+/* Menu art (images/general-art): drawn for the box, anchored bottom right. */
+.au-general--fit img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: right bottom;
+}
+/* Loading-screen art (1920x1080 canvas, figure on the right): scaled to the box's height and
+   anchored right; the empty left of the canvas runs out of the box. */
+.au-general:not(.au-general--fit) img { width: auto; height: 100%; }
+/* No loading-screen art for this general: the portrait bust, above the plate. */
+.au-general.au-general--bust img {
+    right: 9.375rem;
+    bottom: 13rem;
+    width: 26.25rem;
+    height: auto;
+}
+
+/* ---- Play page ---- */
+.au-live {
+    position: absolute;
+    top: 15.0625rem;
+    left: 4.625rem;
+    right: 4.625rem;
+    bottom: 5.375rem;
+    z-index: 5;
+    display: flex;
+    align-items: flex-start;
+}
+.au-live__play { flex: 0 0 29.5625rem; width: 29.5625rem; }
+.au-live__main { flex: 0 0 35rem; width: 35rem; margin-left: 2.6875rem; }
+
+/* A <button> cannot be a flex container in this engine, so the two lines are placed with padding.
+   Padding plus the fixed line heights add up to the card's height exactly: the result is the same
+   whether or not the engine centres a button's content. */
+.au-play__btn {
+    display: block;
+    width: 100%;
+    height: 7.5rem;
+    margin-bottom: 1.4375rem;
+    padding: 1.5625rem 0 1.6875rem 2rem;
+    text-align: left;
+    transition: background-color 0.12s, border-color 0.12s;
+}
+.au-play__wrap { display: block; }
+.au-play__btn strong {
+    display: block;
+    font-size: 1.8125rem;
+    line-height: 2.125rem;
+    color: #ffffff;
+}
+.au-play__btn span {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 1.25rem;
+    line-height: 1.625rem;
+    color: #a1a4a8;
+}
+.au-play__btn:hover { background-color: rgba(44, 47, 52, 0.94); border-color: rgba(217, 221, 226, 0.5); }
+.au-play__btn[disabled] { opacity: 0.45; }
+.au-play__btn[disabled]:hover { background-color: rgba(12, 13, 14, 0.94); border-color: rgba(217, 221, 226, 0.26); }
+
+/* The one thing to press: filled, accent frame and ticks. */
+.au-play__btn--main {
+    height: 10.5625rem;
+    padding-top: 2.1875rem;
+    padding-bottom: 2.375rem;
+    border-color: #3d9eff;
+    background-color: rgba(10, 33, 57, 0.94);
     background-image:
-        repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
-        linear-gradient(to bottom, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
-    background-size: auto, 100% 100%;
-    -webkit-box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.45);
-    -webkit-filter: none;
-    filter: none;
+        linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)), linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)),
+        linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)), linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)),
+        linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)), linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)),
+        linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4)), linear-gradient(rgba(124, 192, 255, 0.4), rgba(124, 192, 255, 0.4));
+    background-size: 1.75rem 4px, 4px 1.75rem, 1.75rem 4px, 4px 1.75rem, 1.75rem 4px, 4px 1.75rem, 1.75rem 4px, 4px 1.75rem;
+    box-shadow: 0 0 2.125rem rgba(61, 158, 255, 0.16);
+}
+.au-play__btn--main strong { font-size: 3.0625rem; line-height: 3.5rem; color: #b9dcff; }
+.au-play__btn--main span { margin-top: 0.625rem; font-size: 1.3125rem; line-height: 1.75rem; color: #3d9eff; }
+.au-play__btn--main:hover {
+    border-color: #7cc0ff;
+    background-color: #0e2c4b;
+    box-shadow: 0 0 2.75rem rgba(61, 158, 255, 0.32);
 }
 
-body.cc-theme.cc-theme--aurora .btn-opt-action {
-    height: 31px;
-    line-height: 29px;
+/* ---- News ---- */
+.au-news { padding: 1.25rem 1.75rem 0.375rem; }
+
+/* as tall as the four cards beside it */
+.au-news { height: 37.375rem; display: flex; flex-direction: column; }
+
+.au-news__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+}
+.au-news__title {
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.3125rem;
+    letter-spacing: 0.14em;
+    color: #3d9eff;
+}
+.au-news__refresh { width: 1.375rem; height: 1.375rem; color: #66696e; transition: color 0.12s; }
+.au-news__refresh svg { display: block; width: 100%; height: 100%; }
+.au-news__refresh:hover { color: #eceef0; }
+.au-news__refresh.is-cooling { opacity: 0.35; pointer-events: none; }
+.au-news__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.au-news__item {
+    display: flex;
+    padding: 1.125rem 0 1.25rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+    cursor: pointer;
+}
+.au-news__item:last-child { border-bottom: 0; }
+.au-news__date {
+    flex: 0 0 5.75rem;
+    padding-top: 0.1875rem;
+    font-size: 1.1875rem;
+    color: #a1a4a8;
+    white-space: nowrap;
+}
+.au-news__text { flex: 1 1 auto; min-width: 0; }
+.au-news__text strong {
+    display: block;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    color: #ffffff;
+    transition: color 0.12s;
+}
+.au-news__text span {
+    display: block;
+    margin-top: 0.625rem;
+    font-size: 1.25rem;
+    line-height: 1.5;
+    color: #a1a4a8;
+}
+.au-news__pin { margin-right: 0.5rem; font-size: 0.6875rem; color: #3d9eff; vertical-align: 0.1875rem; }
+.au-news__item:hover .au-news__text strong { color: #7cc0ff; }
+.au-news__item--empty { cursor: default; color: #66696e; }
+
+/* ---- Record plate (Default) ---- */
+.au-plate {
+    position: absolute;
+    right: -1.875rem;
+    bottom: 2.0625rem;
+    width: 29.75rem;
+    height: 7.75rem;
+    padding: 0 2rem 0 1.75rem;
+    display: flex;
+    align-items: center;
+    background-color: rgba(12, 13, 14, 0.86);
+}
+.au-plate__id { flex: 1 1 auto; min-width: 0; }
+.au-plate__name {
+    display: block;
+    font-size: 2.25rem;
+    line-height: 1.1;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.au-plate__general { display: block; margin-top: 0; font-size: 1.1875rem; color: #3d9eff; }
+.au-plate__bars { margin-top: 0; }
+.au-plate__bar { display: flex; align-items: center; height: 1.6875rem; }
+.au-plate__bar img { flex: 0 0 1.375rem; width: 1.375rem; height: 1.375rem; object-fit: contain; }
+.au-plate__bar i {
+    flex: 0 0 14.375rem;
+    display: block;
+    height: 0.5625rem;
+    margin: 0 0 0 0.75rem;
+    background: rgba(217, 221, 226, 0.14);
+}
+.au-plate__bar u { display: block; height: 100%; background: #a1a4a8; }
+.au-plate__bar--apa u { background: #e0452c; }
+.au-plate__bar--eu u { background: #2f8cff; }
+.au-plate__bar--gla u { background: #6fbf3a; }
+.au-plate__bar b { flex: 0 0 2.125rem; text-align: right; font-size: 1.125rem; line-height: 1; color: #eceef0; }
+.au-plate__wins {
+    flex: 0 0 auto;
+    min-width: 4.625rem;
+    margin-left: 1.375rem;
+    text-align: center;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 3.375rem;
+    line-height: 1;
+    color: #ffffff;
+}
+.au-plate__wins em {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-family: 'AuText', Arial, sans-serif;
+    font-size: 0.9375rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #a1a4a8;
 }
 
-body.cc-theme.cc-theme--aurora .btn-opt-restore {
-    height: 24px;
-    line-height: 22px;
+/* ---- Aurora (Alternate): player card, feature banner, news strip ---- */
+
+
+/* ---- News article ---- */
+.au-article {
+    position: absolute;
+    top: 15.0625rem;
+    left: 4.625rem;
+    bottom: 7.875rem;
+    width: 73.75rem;
+    z-index: 5;
+    padding: 2.125rem 2.5rem 1.875rem;
+    display: flex;
+    flex-direction: column;
+}
+.au-article__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 1.375rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+}
+.au-article__title { font-family: 'AuBold', Arial, sans-serif; font-size: 2.25rem; font-weight: normal; line-height: 1.15; color: #ffffff; }
+.au-article__date { display: block; margin-top: 0.5rem; font-size: 1rem; color: #3d9eff; }
+.au-article__scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1.5rem 1.25rem 0 0;
+    font-size: 1.1875rem;
+    line-height: 1.6;
+    color: #a1a4a8;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.au-article__image { display: block; max-width: 100%; margin-bottom: 1.5rem; border: 1px solid rgba(217, 221, 226, 0.2); }
+.au-article__summary { margin-bottom: 1.25rem; font-size: 1.3125rem; color: #eceef0; }
+.au-article__scroll p { margin-bottom: 1rem; }
+.au-article__scroll h3 {
+    margin: 1.625rem 0 0.75rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.125rem;
+    font-weight: normal;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+.au-article__scroll ul { margin: 0 0 1rem; }
+.au-article__scroll li { position: relative; padding-left: 1.375rem; margin-bottom: 0.375rem; }
+.au-article__scroll li:before {
+    content: '';
+    position: absolute;
+    left: 0.125rem;
+    top: 0.62em;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    background: #4a90d9;
+}
+.au-article__scroll li ul { margin: 0.375rem 0 0; }
+.au-article__scroll li li:before { background: #66696e; }
+
+/* ---- Section pages (Profile, Learn, Support, Generals) ---- */
+.au-subnav {
+    position: absolute;
+    top: 10.1875rem;
+    left: 38.75rem;
+    right: 4.625rem;
+    z-index: 6;
+    display: flex;
+}
+.au-subnav a {
+    height: 3.25rem;
+    padding: 0 1.625rem;
+    margin-right: 0.625rem;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background: rgba(12, 13, 14, 0.9);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 3.125rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+    white-space: nowrap;
+    transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+}
+.au-subnav a:hover { color: #ffffff; border-color: rgba(217, 221, 226, 0.5); background: #2c2f34; }
+.au-subnav a.au-subnav__on { background: rgba(217, 221, 226, 0.2); border-color: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.au-page {
+    position: absolute;
+    top: 15.0625rem;
+    left: 4.625rem;
+    right: 4.625rem;
+    bottom: 7.875rem;
+    z-index: 5;
+    padding: 2.125rem 2.5rem;
+    overflow: hidden;
+}
+.au-page__host { height: 100%; }
+.au-page--tip { border-style: dashed; background-image: none; }
+.au-page--tip .cc-info-tip { border: 0; }
+
+/* ---- Nav bar ---- */
+.au-nav {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    height: 5.375rem;
+    padding: 0 4.625rem;
+    display: flex;
+    border-top: 1px solid #babec2;
+    background: rgba(9, 9, 10, 0.97);
 }
 
-body.cc-theme.cc-theme--aurora .btn-opt-green,
-body.cc-theme.cc-theme--aurora .btn-opt-yellow,
-body.cc-theme.cc-theme--aurora .btn-opt-restore {
-    background-color: #1a1e22;
+/* The wrapper carries the tooltip of a locked tab. It needs a real height of its own: a button's
+   height: 100% does not resolve against a merely stretched flex item in this engine. */
+.au-nav__wrap { display: block; height: 100%; }
+.au-nav__item {
+    height: 100%;
+    padding: 0 2.375rem 0 2.5625rem;
+    border-right: 1px solid rgba(217, 221, 226, 0.2);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.4375rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+    transition: background-color 0.12s, color 0.12s;
+}
+.au-nav > .au-nav__item:first-child { border-left: 1px solid rgba(217, 221, 226, 0.2); }
+.au-nav__item:hover { color: #ffffff; background: rgba(217, 221, 226, 0.08); }
+.au-nav__item--on, .au-nav__item--on:hover { background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.au-nav__item[disabled] { color: #66696e; opacity: 0.55; }
+.au-nav__item[disabled]:hover { background: none; color: #66696e; }
+/* Options, Support us and Quit are ordinary bar buttons; Quit warns on hover. */
+.au-nav__item--quit:hover { color: #ff5a52; background: rgba(255, 90, 82, 0.12); }
+.au-nav__tools { margin-left: auto; display: flex; align-items: center; }
+.au-nav__link {
+    margin-right: 2.125rem;
+    font-size: 1.1875rem;
+    color: #a1a4a8;
+    white-space: nowrap;
+    transition: color 0.12s;
+}
+.au-nav__link:hover { color: #ffffff; }
+/* Online counts, bottom right */
+.au-online { display: flex; align-items: baseline; margin-left: 2.75rem; white-space: nowrap; }
+.au-online strong {
+    margin-right: 0.75rem;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 2.125rem;
+    line-height: 1;
+    color: #ffffff;
+}
+.au-online span { font-size: 1.1875rem; color: #a1a4a8; }
+
+
+.alert-popup-box {
+    position: absolute;
+    left: 1.4375rem;
+    top: 100%;
+    width: 32.5rem;
+    margin-top: 0.625rem;
+    padding: 1.5rem 1.75rem;
+    background-color: rgba(12, 13, 14, 0.98);
+    font-size: 1rem;
+    line-height: 1.55;
+    color: #a1a4a8;
+    box-shadow: 0 1.25rem 3.125rem rgba(0, 0, 0, 0.7);
+}
+.alert-popup-credits { margin-top: 0.75rem; color: #eceef0; }
+/* Build info hover: the note fades in while the versions (or the note) are hovered, and out after. */
+.au-head__about { display: inline-block; }
+.au-head__about .au-head__ver { cursor: default; }
+.au-head__about:hover .au-head__ver { opacity: 1; }
+.au-head__about .au-head__about-note {
+    display: block;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-0.375rem);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+    animation: none;
+}
+.au-head__about:hover .au-head__about-note {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s;
 }
 
-body.cc-theme.cc-theme--aurora .btn-opt-action:hover,
-body.cc-theme.cc-theme--aurora .btn-opt-restore:hover {
-    color: #fff;
-    border-color: #6a7a88;
-    background-color: #242a30;
+/* Playtest ribbon (devWrapper.html) */
+.cc-playtest-banner {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    z-index: 30;
+    transform: translateX(-50%);
+    padding: 0 1.375rem;
+    border: 1px solid rgba(61, 158, 255, 0.6);
+    border-top: 0;
+    background: rgba(10, 33, 57, 0.92);
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 0.8125rem;
+    line-height: 1.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #b9dcff;
+}
+/* ---- 20-lobby.css ---- */
+/* =========================================================================
+   Lobby. Concept frame 1920x1080: 3.4375rem margins, three columns 468 | 812 | 468
+   with 1.875rem gutters, map stage 812 x 522 (14:9), action bar 5.375rem.
+   ========================================================================= */
+
+.au-lobby {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+}
+
+/* The lobby sits on a darker cut of the backdrop, as on the concept sheet. */
+.au-lobby { background: rgba(0, 0, 0, 0.42); }
+
+.au-lobby__body {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+}
+.au-lobby__body--room { display: flex; flex-direction: column; }
+
+/* ---- Header ---- */
+.au-lobby__head {
+    position: relative;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 120rem;
+    margin: 0 auto;
+    padding: 1.9375rem 3.4375rem 0;
+    height: 7rem;
+    display: flex;
+    align-items: baseline;
+}
+.au-lobby__title {
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 2.375rem;
+    font-weight: normal;
+    line-height: 1.2;
+    letter-spacing: 0.135em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+.au-lobby__server { margin-left: 1.875rem; font-size: 1.25rem; color: #a1a4a8; }
+
+.au-lobby__lock { margin-left: 1.75rem; font-size: 1.25rem; color: #3d9eff; }
+.au-lobby__vs {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 3.75rem;
+    text-align: center;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.1875rem;
+    letter-spacing: 0.22em;
+    color: #3d9eff;
+    pointer-events: none;
+}
+
+/* ---- Columns ---- */
+.au-lobby__room {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 120rem;
+    margin: 0 auto;
+    padding: 0 3.4375rem 1.375rem;
+    display: flex;
+}
+.au-lobby__col { display: flex; flex-direction: column; min-height: 0; }
+.au-lobby__col--left, .au-lobby__col--right { flex: 0 0 29.25rem; width: 29.25rem; }
+.au-lobby__col--stage { flex: 0 0 50.75rem; width: 50.75rem; margin: 0.3125rem 1.875rem 0; }
+
+/* ---- Teams ---- */
+/* Tall enough that the spectator box and lobby options start level with the top of the chat box
+   (measured at 1920x1080: 35.5625rem). */
+.au-lobby__team { flex: 0 0 auto; min-height: 35.5625rem; }
+.au-lobby__team-head {
+    height: 2.5rem;
+    margin-bottom: 0.875rem;
+    border-bottom: 2px solid #ffffff;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.3125rem;
+    line-height: 2.125rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+
+.au-lobby__team--2 .au-lobby__team-head { border-bottom-color: #3d9eff; color: #3d9eff; }
+
+.au-lobby__slot {
+    height: 6.5rem;
+    margin-bottom: 0.875rem;
+    background-color: rgba(19, 20, 22, 0.96);
+    /* ticks on the right corners only: the house colour runs down the left edge */
+    background-size: 0 0, 0 0, 1.625rem 3px, 3px 1.625rem, 0 0, 0 0, 1.625rem 3px, 3px 1.625rem;
+}
+.au-lobby__slot.menu-open { z-index: 30; }
+.au-lobby__slot--local { background-color: rgba(44, 47, 52, 0.98); border-color: rgba(217, 221, 226, 0.85); }
+.au-lobby__slot-body { position: relative; height: 100%; display: flex; }
+
+.au-lobby__color-ribbon {
+    position: absolute;
+    left: -1px;
+    top: -1px;
+    bottom: -1px;
+    width: 0.75rem;
+}
+.au-lobby__color-ribbon--pick { cursor: pointer; }
+.au-lobby__color-ribbon--pick:hover { box-shadow: 0 0 0.75rem rgba(255, 255, 255, 0.5); }
+
+
+/* Bust portrait (UTFWinAssets UserPortraits, 247 x 210), standing on the card's lower edge. */
+.au-lobby__avatar {
+    flex: 0 0 7.625rem;
+    width: 7.625rem;
+    height: 100%;
+    margin-left: 1.125rem;
+    overflow: hidden;
+}
+.au-lobby__avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: contain;
+    object-position: center bottom;
+}
+.au-lobby__meta { padding-left: 1rem; }
+
+
+
+.au-lobby__meta { flex: 1 1 auto; min-width: 0; padding-top: 0.8125rem; }
+.au-lobby__meta strong {
+    display: block;
+    font-size: 1.625rem;
+    line-height: 1.25;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.au-lobby__host-tag {
+    margin-left: 0.75rem;
+    font-family: 'AuText', Arial, sans-serif;
+    font-size: 1.0625rem;
+    color: #3d9eff;
+}
+.au-lobby__diff-tag--pick { cursor: pointer; }
+.au-lobby__diff-tag--pick:hover { color: #7cc0ff; }
+.au-lobby__general {
+    display: flex;
+    align-items: center;
+    margin-top: 0.75rem;
+    font-size: 1.25rem;
+    color: #a1a4a8;
+    white-space: nowrap;
+}
+.au-lobby__general img { width: 1.375rem; height: 1.375rem; margin: 0 0.75rem 0 0.1875rem; object-fit: contain; }
+.au-lobby__general i { margin-right: 0.5rem; color: #eceef0; }
+.au-lobby__general b { font-weight: normal; overflow: hidden; text-overflow: ellipsis; }
+
+/* Nexus name tags */
+.name-tag--developer, .chat-user--developer { color: #c58bff !important; }
+.name-tag--playtester, .chat-user--playtester { color: #ffcf47 !important; }
+
+.au-lobby__slot-side {
+    flex: 0 0 auto;
+    padding: 1rem 0.875rem 0.625rem 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+.au-lobby__slot-state { display: flex; align-items: center; }
+.au-lobby__start-badge {
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.1875rem;
+    line-height: 1.5625rem;
+    color: #a1a4a8;
+    transition: color 0.12s;
+}
+.au-lobby__start-badge:hover { color: #ffffff; }
+.au-lobby__start-badge[disabled] { color: #a1a4a8; }
+/* Start location: a box the size of the ready box, beside it. */
+.au-lobby__start-box {
+    display: block;
+    width: 1.5625rem;
+    height: 1.5625rem;
+    border: 2px solid #a1a4a8;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 0.9375rem;
+    line-height: 1.3125rem;
+    text-align: center;
+    color: #a1a4a8;
+}
+.au-lobby__start-box--set { border-color: #3d9eff; background: rgba(61, 158, 255, 0.18); color: #ffffff; }
+.au-lobby__ready {
+    width: 1.5625rem;
+    height: 1.5625rem;
+    margin-left: 1.25rem;
+    border: 2px solid #a1a4a8;
+}
+.au-lobby__ready.on {
+    border-color: #7dff9b;
+    background: #7dff9b;
+    box-shadow: 0 0 0.875rem rgba(125, 255, 155, 0.55);
+}
+.au-lobby__slot-tools { display: flex; opacity: 0.55; transition: opacity 0.12s; }
+.au-lobby__slot:hover .au-lobby__slot-tools,
+.au-lobby__slot.menu-open .au-lobby__slot-tools { opacity: 1; }
+.au-lobby__menu-btn, .au-lobby__kick {
+    width: 1.625rem;
+    height: 1.625rem;
+    margin-left: 0.375rem;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    font-size: 1.25rem;
+    line-height: 1.375rem;
+    text-align: center;
+    color: #a1a4a8;
+    transition: border-color 0.12s, color 0.12s, background-color 0.12s;
+}
+.au-lobby__menu-btn:hover, .au-lobby__menu-btn.open { border-color: rgba(217, 221, 226, 0.2); color: #ffffff; background: rgba(217, 221, 226, 0.1); }
+.au-lobby__kick:hover { border-color: #ff5a52; color: #ff5a52; }
+.au-lobby__menu-btn[disabled] { opacity: 0.3; pointer-events: none; }
+/* still hoverable: its tooltip says why */
+.au-lobby__kick.disabled, .au-lobby__kick.disabled:hover { opacity: 0.3; border-color: rgba(217, 221, 226, 0.26); color: #a1a4a8; cursor: default; }
+.au-lobby__chevron {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-bottom: 0.3125rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+}
+
+/* Slot menu: faction, general, colour. As wide as the card, under it (above it near the bottom). */
+.au-lobby__slot-menu {
+    position: absolute;
+    top: 100%;
+    left: -1px;
+    right: -1px;
+    z-index: 40;
+    margin-top: 0.375rem;
+    padding: 0.375rem 1.125rem 1.125rem;
+    border: 1px solid rgba(217, 221, 226, 0.5);
+    background: #0c0d0e;
+    box-shadow: 0 1.125rem 2.5rem rgba(0, 0, 0, 0.8);
+}
+.au-lobby__slot-menu--up { top: auto; bottom: 100%; margin: 0 0 0.375rem; }
+.au-lobby__slot-menu-label {
+    padding: 0.75rem 0 0.5625rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 0.875rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+/* Rows of tiles; no flex gap in this engine, so tiles carry a right margin the row swallows. */
+.au-lobby__pick-row { display: flex; flex-wrap: wrap; margin-right: -0.5rem; }
+.au-lobby__pick {
+    display: flex;
+    align-items: center;
+    margin: 0 0.5rem 0.5rem 0;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background: #131416;
+    color: #eceef0;
+    white-space: nowrap;
+    transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+.au-lobby__pick:hover { border-color: rgba(217, 221, 226, 0.2); background: #2c2f34; color: #ffffff; }
+.au-lobby__pick.active { border-color: rgba(217, 221, 226, 0.2); background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.au-lobby__pick.disabled { opacity: 0.35; pointer-events: none; }
+.au-lobby__pick--faction {
+    flex: 1 1 0;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    justify-content: center;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.0625rem;
+    letter-spacing: 0.08em;
+}
+.au-lobby__pick--faction img { width: 1.25rem; height: 1.25rem; margin-right: 0.5625rem; object-fit: contain; }
+/* Generals: four tiles per row, portrait over name. */
+.au-lobby__pick--general {
+    flex: 0 0 auto;
+    width: calc(25% - 0.5rem);
+    height: 6rem;
+    flex-direction: column;
+    justify-content: center;
+    font-size: 0.9375rem;
+}
+.au-lobby__pick--general img { width: 3.25rem; height: 3.25rem; margin-bottom: 0.375rem; object-fit: cover; }
+.au-lobby__pick--general span { max-width: 100%; padding: 0 0.25rem; overflow: hidden; text-overflow: ellipsis; }
+.au-lobby__slot-colors { display: flex; align-items: center; justify-content: space-between; }
+.au-lobby__swatch {
+    flex: 0 0 2.125rem;
+    width: 2.125rem;
+    height: 2.125rem;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    transition: transform 0.12s, border-color 0.12s;
+}
+.au-lobby__swatch:hover { border-color: rgba(255, 255, 255, 0.7); transform: scale(1.08); }
+.au-lobby__swatch.on { border-color: #ffffff; box-shadow: 0 0 0 1px #000000, 0 0 0.75rem rgba(255, 255, 255, 0.35); }
+.au-lobby__swatch.taken { opacity: 0.22; }
+.au-lobby__swatch[disabled]:hover { transform: none; }
+.au-lobby__swatch--rainbow {
+    background: linear-gradient(90deg, #e33, #ec3, #3c5, #3cc, #36e, #c3d);
+}
+
+/* Open seat */
+.au-lobby__team-actions {
+    height: 6.5rem;
+    padding: 0 1.125rem 0 1.25rem;
+    display: flex;
+    align-items: center;
+    border: 1px dashed rgba(217, 221, 226, 0.28);
+    background: rgba(12, 13, 14, 0.7);
+}
+.au-lobby__open-seat { flex: 1 1 auto; font-size: 1.25rem; color: #a1a4a8; }
+.au-lobby__team-actions .au-btn { margin-left: 0.75rem; }
+.au-lobby__soon { display: inline-block; }
+
+/* Spectator seat and lobby options summary share a line across the two columns */
+.au-lobby__spectator, .au-lobby__summary { flex: 0 0 auto; }
+.au-lobby__spectator {
+    min-height: 3.75rem;
+    padding: 0 1.25rem 0 1.4375rem;
+    display: flex;
+    align-items: center;
+}
+.au-lobby__spectator-head, .au-lobby__summary-head {
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.1875rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+}
+.au-lobby__spectator-head { flex: 1 1 auto; }
+.au-lobby__spectator-card { display: flex; align-items: center; }
+.au-lobby__spectator-name { font-size: 1.25rem; color: #eceef0; }
+.au-lobby__spectator-card--local .au-lobby__spectator-name { color: #ffffff; }
+.au-lobby__spectator .au-lobby__kick { margin-left: 0.75rem; }
+.au-lobby__spectate-btn { margin-left: 0.75rem; }
+
+.au-lobby__summary {
+    min-height: 3.75rem;
+    padding: 0 1.375rem;
+    display: flex;
+    align-items: center;
+}
+.au-lobby__summary-line { display: flex; align-items: center; font-size: 1.1875rem; color: #a1a4a8; white-space: nowrap; }
+.au-lobby__summary--custom .au-lobby__summary-line { color: #eceef0; }
+.au-lobby__summary-line u {
+    text-decoration: none;
+    border-bottom: 2px dotted #ffcf47;
+    padding-bottom: 0.125rem;
+}
+.au-lobby__spanner { flex: 0 0 auto; width: 1.25rem; height: 1.25rem; margin-right: 0.75rem; color: #ffcf47; }
+.au-lobby__summary--click { cursor: pointer; transition: border-color 0.12s; }
+.au-lobby__summary--click:hover { border-color: rgba(217, 221, 226, 0.6); }
+.au-lobby__rules { width: 38.75rem; }
+.au-lobby__rules-copy { margin-bottom: 1.125rem; color: #a1a4a8; }
+.au-lobby__rules .au-lobby__summary-row { text-align: left; }
+.au-lobby__rules .au-lobby__summary-row em { font-style: normal; color: #66696e; }
+.au-lobby__summary-head { padding-bottom: 0.75rem; }
+.au-lobby__summary-row {
+    display: flex;
+    justify-content: space-between;
+    height: 2.75rem;
+    border-top: 1px dashed rgba(217, 221, 226, 0.2);
+    font-size: 1.25rem;
+    line-height: 2.6875rem;
+    color: #a1a4a8;
+}
+.au-lobby__summary-row b { font-family: 'AuText', Arial, sans-serif; color: #eceef0; }
+
+
+/* ---- Map stage ---- */
+.au-lobby__map {
+    position: relative;
+    flex: 0 0 32.625rem;
+    height: 32.625rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: #131416;
+    overflow: hidden;
+}
+.au-lobby__map-fill {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: center center / cover no-repeat;
+    opacity: 0.3;
+}
+/* The stage is drawn as a recon print: drained of colour in Default, cyan in Alternate.
+   Filters are the only way to do that here; without them the map simply shows in colour.
+   No blur: the engine paints in software and would redo it on every repaint of the stage. */
+
+.au-lobby__map-fill { -webkit-filter: grayscale(0.9); filter: grayscale(0.9); }
+.au-lobby__map-img { -webkit-filter: grayscale(0.82) contrast(1.05); filter: grayscale(0.82) contrast(1.05); }
+.au-lobby__map--war .au-lobby__map-fill { -webkit-filter: grayscale(0.82) contrast(1.05); filter: grayscale(0.82) contrast(1.05); }
+
+
+.au-lobby__map--war .au-lobby__map-fill { top: 0; right: 0; bottom: 0; left: 0; opacity: 1; }
+
+/* The field is what the start pips are placed in: the square minimap, or the whole stage for a war map. */
+.au-lobby__map-field {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 32.625rem;
+    margin-left: -16.3125rem;
+}
+.au-lobby__map-field--war { left: 0; right: 0; width: auto; margin-left: 0; }
+.au-lobby__map-crop { position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden; }
+.au-lobby__map-crop img { position: absolute; max-width: none; }
+.au-lobby__map-grid {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    pointer-events: none;
     background-image:
-        -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
-        -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
-    background-image:
-        repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
-        linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
-    -webkit-filter: none;
-    filter: none;
+        linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+    background-size: 6.3438rem 6.525rem;
+    box-shadow: inset 0 0 5.625rem rgba(0, 0, 0, 0.5);
+}
+.au-lobby__map-name {
+    position: absolute;
+    left: 1.375rem;
+    top: 1.125rem;
+    height: 2.875rem;
+    padding: 0 1rem 0 1.0625rem;
+    display: flex;
+    align-items: baseline;
+    border-left: 3px solid #3d9eff;
+    background: rgba(12, 13, 14, 0.9);
+    line-height: 2.875rem;
+}
+.au-lobby__map-name strong { font-size: 1.5rem; color: #ffffff; }
+.au-lobby__map-name span { margin-left: 1rem; font-size: 1.0625rem; color: #a1a4a8; }
+.au-lobby__map-tools { position: absolute; right: 1.25rem; top: 1.25rem; }
+.au-lobby__maps-btn { height: 2.8125rem; padding: 0 1.125rem; font-size: 1.1875rem; line-height: 2.6875rem; border-color: rgba(217, 221, 226, 0.5); }
+
+.au-lobby__pip {
+    position: absolute;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: -1.375rem 0 0 -1.375rem;
+    border: 2px dashed #d9dde2;
+    border-radius: 50%;
+    background: rgba(12, 13, 14, 0.7);
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.25rem;
+    line-height: 2.5rem;
+    text-align: center;
+    color: #d9dde2;
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
 }
 
-body.cc-theme.cc-theme--aurora .btn-opt-green:hover,
-body.cc-theme.cc-theme--aurora .btn-opt-yellow:hover,
-body.cc-theme.cc-theme--aurora .btn-opt-restore:hover {
-    border-color: #6a7a88;
-}
+.au-lobby__pip { border-color: #63d8f2; color: #63d8f2; }
 
-body.cc-theme.cc-theme--aurora .opt-select {
-    background: #101412;
-    border: 1px solid #1c2a32;
-    color: #e6edf5;
+.au-lobby__pip:hover { transform: scale(1.12); }
+.au-lobby__pip.taken {
+    border: 3px solid #ffffff;
+    line-height: 2.375rem;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0.125rem 0.625rem rgba(0, 0, 0, 0.6);
 }
-body.cc-theme.cc-theme--aurora .opt-slider {
-    background: transparent;
+.au-lobby__pip.mine { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3), 0 0.125rem 0.625rem rgba(0, 0, 0, 0.6); }
+.au-lobby__pip--preview { cursor: default; width: 1.875rem; height: 1.875rem; margin: -0.9375rem 0 0 -0.9375rem; font-size: 0.9375rem; line-height: 1.625rem; }
+.au-lobby__pip--preview:hover { transform: none; }
+
+/* ---- Chat ---- */
+.au-lobby__chat {
+    flex: 1 1 auto;
+    min-height: 9.375rem;
+    margin-top: 1.5rem;
+    padding: 0.75rem 1rem 0 1rem;
+    display: flex;
+    flex-direction: column;
+}
+.au-lobby__chat-log {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 0.375rem;
+    overflow-y: auto;
+    font-size: 1.25rem;
+    line-height: 2.1875rem;
+    color: #eceef0;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.au-lobby__chat-line--system { color: #3d9eff; }
+.au-lobby__chat-user { margin-right: 0.5rem; font-family: 'AuBold', Arial, sans-serif; color: #eceef0; }
+.au-lobby__chat-empty, .au-lobby__chat-typing { font-size: 1.0625rem; color: #66696e; }
+.au-lobby__chat-typing { padding: 0 0.375rem; line-height: 1.5rem; }
+.au-lobby__chat-form {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    height: 3.5rem;
+    padding: 0 0.875rem;
+    border-top: 1px solid rgba(217, 221, 226, 0.26);
+}
+.au-lobby__chat-form .au-caret-field { font-size: 1.25rem; color: #ffffff; }
+.au-lobby__chat-prompt { margin-right: 0.5rem; color: #a1a4a8; }
+.au-lobby__chat-input {
+    flex: 1 1 auto;
+    height: 2.5rem;
+    padding: 0;
     border: 0;
-    color: #e6edf5;
-}
-body.cc-theme.cc-theme--aurora .opt-slider::-webkit-slider-runnable-track {
-    background: #101412;
-    border: 1px solid #1c2a32;
-}
-body.cc-theme.cc-theme--aurora .opt-slider::-webkit-slider-thumb {
-    background: #d0d6dc;
-    border-color: #0a1014;
+    background: none;
+    font-size: 1.25rem;
+    color: #ffffff;
 }
 
-/* Pre-landing */
-body.cc-theme.cc-theme--aurora .cc-pre-landing__title {
-    color: #e6edf5;
-    text-shadow: 0 0 24px rgba(0, 136, 255, 0.35);
+/* ---- Action bar ---- */
+.au-lobby__actions {
+    flex: 0 0 5.375rem;
+    height: 5.375rem;
+    border-top: 1px solid #babec2;
+    background: rgba(9, 9, 10, 0.97);
 }
 
-body.cc-theme.cc-theme--aurora .cc-pre-landing__tagline,
-body.cc-theme.cc-theme--aurora .cc-pre-landing__status {
-    color: #8b9aab;
+.au-lobby__actions-in {
+    max-width: 120rem;
+    height: 100%;
+    margin: 0 auto;
+    padding: 0 3.4375rem;
+    display: flex;
+    align-items: center;
+}
+.au-lobby__actions .au-btn { font-size: 1.4375rem; }
+.au-lobby__actions-link { margin-left: 2.125rem; font-size: 1.1875rem; color: #a1a4a8; transition: color 0.12s; }
+.au-lobby__actions-link:hover { color: #ffffff; }
+.au-lobby__ready-btn, .au-lobby__start-battle { margin-left: auto; }
+.au-lobby__ready-btn { min-width: 9.875rem; border-width: 2px; line-height: 3.5rem; }
+.au-btn--ready-on, .au-btn--ready-on:hover { border-color: #7dff9b; background: #7dff9b; color: #062010; box-shadow: 0 0 1.625rem rgba(125, 255, 155, 0.4); }
+.au-lobby__start-battle { min-width: 18.75rem; }
+
+/* ---- Lobby dialogs ---- */
+.au-lobby__modal, .au-lobby-browser__pw-modal {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 8000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.66);
+}
+.au-lobby__modal-box > div:first-child { margin-bottom: 0.25rem; }
+.au-lobby__modal-box > .au-btn { display: block; margin: 1.875rem auto 0; }
+.au-lobby__search-line { display: flex; align-items: center; justify-content: center; color: #a1a4a8; }
+.au-spinner {
+    flex: 0 0 auto;
+    width: 1.375rem;
+    height: 1.375rem;
+    margin-right: 0.875rem;
+    border: 2px solid rgba(217, 221, 226, 0.2);
+    border-top-color: #3d9eff;
+    border-radius: 50%;
+    animation: au-spin 0.9s linear infinite;
+}
+.au-lobby__options-title, .au-lobby__maps-modal-title, .au-lobby__start-modal-title {
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.625rem;
+    font-weight: normal;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #ffffff;
+    margin-bottom: 1.375rem;
+}
+.au-lobby__options-actions { display: flex; justify-content: center; margin-top: 1.875rem; }
+.au-lobby__options-actions > * + * { margin-left: 0.875rem; }
+
+/* Lobby options */
+.au-lobby__options { width: 56.25rem; max-width: none; }
+/* Form-like dialogs: title and buttons centred like every dialog, the fields read left to right. */
+.au-lobby__options-section, .au-lobby__options-row, .au-lobby__maps-split { text-align: left; }
+.au-lobby__options-section-label, .au-lobby__options-cell-head {
+    display: flex;
+    align-items: baseline;
+    padding-bottom: 0.625rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.0625rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+.au-lobby__options-stub {
+    margin-left: 0.75rem;
+    padding: 0 0.5rem;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    font-family: 'AuText', Arial, sans-serif;
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.14em;
+    color: #66696e;
+}
+.au-lobby__options-section { padding-bottom: 1.25rem; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); }
+.au-lobby__options-password-row { display: flex; }
+.au-lobby__options-password-field { flex: 1 1 auto; }
+.au-lobby__options-password-actions { display: flex; }
+.au-lobby__options-password-actions .au-btn { height: 2.875rem; min-width: 0; margin-left: 0.625rem; padding: 0 1.25rem; font-size: 1rem; line-height: 2.75rem; }
+.au-lobby__password-clear svg { width: 1.125rem; height: 1.125rem; vertical-align: -0.1875rem; }
+.au-lobby__password-input, .au-lobby-browser__pw-input {
+    width: 100%;
+    height: 2.875rem;
+    padding: 0 0.875rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 1.1875rem;
+    color: #ffffff;
+}
+.au-lobby__password-input:focus, .au-lobby-browser__pw-input:focus { border-color: #3d9eff; }
+.au-lobby__password-input[disabled] { opacity: 0.5; }
+.au-lobby__password-flag { display: inline-block; margin-top: 0.5rem; font-size: 0.9375rem; color: #3d9eff; }
+.au-lobby__options-row { display: flex; padding: 1.25rem 0; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); }
+.au-lobby__options-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.au-lobby__options-cell { flex: 1 1 0; min-width: 0; padding-right: 1.5rem; }
+.au-lobby__options-cell select {
+    width: 15rem;
+    height: 2.875rem;
+    padding: 0 2.75rem 0 1rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    -webkit-appearance: none;
+    background: rgba(0, 0, 0, 0.4) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'><path fill='%23e6e9ec' d='M0 0h12L6 7z'/></svg>") right 1rem center / 0.8125rem 0.5rem no-repeat;
+    font-size: 1.1875rem;
+    color: #eceef0;
+}
+.au-lobby__options-cell select[disabled] { opacity: 0.45; }
+.au-lobby__options-check {
+    display: flex;
+    align-items: center;
+    height: 2.375rem;
+    font-size: 1.1875rem;
+    color: #eceef0;
+    cursor: pointer;
+}
+.au-lobby__options-check--disabled { color: #66696e; cursor: default; }
+.au-lobby__options-check input, .opt-checkbox input {
+    -webkit-appearance: none;
+    flex: 0 0 auto;
+    width: 1.375rem;
+    height: 1.375rem;
+    margin: 0 0.875rem 0 0;
+    border: 2px solid #a1a4a8;
+    background: none;
+    cursor: pointer;
+}
+.au-lobby__options-check input:checked, .opt-checkbox input:checked {
+    border-color: #3d9eff;
+    background: #3d9eff;
+    box-shadow: inset 0 0 0 3px #0c0d0e;
+}
+.au-lobby__options-check input[disabled] { border-color: #66696e; cursor: default; }
+.au-lobby__options-check input[disabled]:checked { background: #66696e; }
+
+/* Map picker */
+.au-lobby__maps-modal { width: 73.75rem; max-width: none; }
+.au-lobby__maps-split { display: flex; }
+.au-lobby__maps-list-cell { flex: 1 1 auto; min-width: 0; }
+.au-lobby__maps-list { height: 31.25rem; overflow-y: auto; border: 1px solid rgba(217, 221, 226, 0.2); }
+.au-lobby__maps-row {
+    display: flex;
+    align-items: center;
+    height: 3.875rem;
+    padding: 0 1.25rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+    cursor: pointer;
+    transition: background-color 0.12s;
+}
+.au-lobby__maps-row:hover { background: rgba(217, 221, 226, 0.08); }
+.au-lobby__maps-row.on { background: rgba(217, 221, 226, 0.2); }
+.au-lobby__maps-row-name { flex: 1 1 auto; font-family: 'AuBold', Arial, sans-serif; font-size: 1.375rem; color: #ffffff; }
+.au-lobby__maps-row-mode { font-size: 1.0625rem; color: #a1a4a8; }
+.au-lobby__maps-row-status {
+    margin-left: 1rem;
+    padding: 0 0.5rem;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #66696e;
+}
+.au-lobby__maps-row.on .au-lobby__maps-row-name, .au-lobby__maps-row.on .au-lobby__maps-row-mode { color: #ffffff; }
+.au-lobby__maps-row.disabled { cursor: default; }
+.au-lobby__maps-row.disabled .au-lobby__maps-row-name { color: #66696e; }
+.au-lobby__maps-row.disabled.on .au-lobby__maps-row-name { color: #ffffff; }
+.au-lobby__maps-preview-cell { flex: 0 0 26.25rem; width: 26.25rem; margin-left: 1.875rem; }
+.au-lobby__maps-preview-art {
+    position: relative;
+    width: 26.25rem;
+    height: 26.25rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: #131416;
+}
+.au-lobby__maps-preview-meta { display: flex; align-items: baseline; margin-top: 1rem; font-size: 1.0625rem; color: #a1a4a8; }
+.au-lobby__maps-preview-meta strong { margin-right: 1rem; font-size: 1.625rem; color: #ffffff; }
+.au-lobby__maps-preview-meta span { margin-right: 0.875rem; }
+
+/* Start location */
+.au-lobby__start-modal { width: 38.75rem; min-width: 0; }
+.au-lobby__start-modal-title { margin-bottom: 0.5rem; }
+.au-lobby__start-modal-copy { color: #a1a4a8; margin-bottom: 1.375rem; }
+.au-lobby__start-grid { display: flex; flex-wrap: wrap; margin: 0 -0.375rem; }
+.au-lobby__start-cell {
+    width: 4rem;
+    height: 4rem;
+    margin: 0.375rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: rgba(0, 0, 0, 0.3);
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.5rem;
+    color: #eceef0;
+    transition: background-color 0.12s, border-color 0.12s;
+}
+.au-lobby__start-cell:hover { border-color: rgba(217, 221, 226, 0.2); background: #2c2f34; }
+.au-lobby__start-cell.on { border-color: rgba(217, 221, 226, 0.2); background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.au-lobby__start-cell.taken, .au-lobby__start-cell[disabled] { opacity: 0.28; pointer-events: none; }
+.au-lobby__start-cell.on[disabled] { opacity: 1; }
+
+/* ---- Custom colour picker (js/shell-lobby-color-picker.js). Fixed pixel geometry: the script
+        positions it and reads the 172 x 118 field, so it does not scale with the window. ---- */
+.cnc-hue-picker {
+    position: absolute;
+    z-index: 10020;
+    width: 190px;
+    padding: 8px 8px 7px 8px;
+    display: none;
+    border: 1px solid rgba(217, 221, 226, 0.5);
+    background: #0c0d0e;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.8);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    line-height: 1.25;
+    color: #eceef0;
+}
+@keyframes cncHuePickerIn {
+    0% { opacity: 0; transform: translateY(-5px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.cnc-hue-picker--in { animation: cncHuePickerIn 0.16s ease-out; }
+.cnc-hue-picker__head {
+    height: 16px;
+    margin: 0 0 7px 0;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.14em;
+    line-height: 16px;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+.cnc-hue-picker__close {
+    float: right;
+    width: 16px;
+    height: 16px;
+    color: #a1a4a8;
+    font-size: 16px;
+    line-height: 14px;
+}
+.cnc-hue-picker__close:hover { color: #ffffff; }
+.cnc-hue-picker__sv-wrap, .cnc-hue-picker__hue-wrap {
+    position: relative;
+    overflow: hidden;
+    font-size: 0;
+    line-height: 0;
+}
+.cnc-hue-picker__hue-wrap { margin-top: 6px; }
+.cnc-hue-picker__sv, .cnc-hue-picker__hue { display: block; margin: 0; padding: 0; max-width: none; }
+.cnc-hue-picker__sv { width: 172px; height: 118px; cursor: crosshair; }
+.cnc-hue-picker__hue { width: 172px; height: 14px; cursor: pointer; }
+.cnc-hue-picker__sv-cursor {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    margin-top: -7px;
+    border: 2px solid #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 0 0 1px rgba(10, 18, 28, 0.9);
+    pointer-events: none;
+}
+.cnc-hue-picker__sv-cursor.is-denied { border-color: #ff5a52; }
+.cnc-hue-picker__hue-cursor {
+    position: absolute;
+    top: 0;
+    width: 4px;
+    height: 14px;
+    margin-left: -2px;
+    background: rgba(10, 18, 28, 0.95);
+    pointer-events: none;
+}
+.cnc-hue-picker__hue-cursor:after {
+    content: '';
+    position: absolute;
+    left: 1px;
+    top: 1px;
+    width: 2px;
+    height: 12px;
+    background: #ffffff;
+}
+.cnc-hue-picker__hue-cursor.is-denied:after { background: #ff5a52; }
+.cnc-hue-picker__foot { margin-top: 7px; height: 18px; line-height: 18px; overflow: hidden; }
+.cnc-hue-picker__chip {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border: 1px solid #fff;
+}
+.cnc-hue-picker__chip.is-denied { border-color: #ff5a52; opacity: 0.55; }
+.cnc-hue-picker__hex { display: inline-block; vertical-align: middle; letter-spacing: 0.04em; }
+.cnc-hue-picker__hex.is-denied { color: #ff5a52; text-decoration: line-through; }
+.cnc-hue-picker__hint { margin-top: 4px; font-size: 10px; letter-spacing: 0.02em; color: #66696e; }
+
+/* =========================================================================
+   Server browser: the lobby's frame (title row, action bar) around a server
+   table and a detail card.
+   ========================================================================= */
+.au-lobby__browser, .au-browser {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+}
+.au-browser { display: flex; flex-direction: column; }
+.au-browser__filters { margin-left: auto; align-self: center; }
+.au-browser__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 120rem;
+    margin: 0 auto;
+    padding: 0.375rem 3.4375rem 1.875rem;
+    display: flex;
+}
+.au-lobby-browser__list { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.au-lobby-browser__detail { flex: 0 0 30rem; width: 30rem; margin-left: 1.875rem; padding: 0.5625rem; }
+.au-browser__row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 3.875rem;
+    padding: 0 1.375rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+    font-size: 1.25rem;
+    color: #eceef0;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.12s;
+}
+.au-browser__row--head {
+    cursor: default;
+    flex: 0 0 auto;
+    height: 3.5rem;
+    border-bottom: 1px solid rgba(217, 221, 226, 0.26);
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+}
+.au-browser__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.au-browser__scroll .au-browser__row:hover { background: rgba(217, 221, 226, 0.08); }
+.au-browser__scroll .au-browser__row.on, .au-browser__scroll .au-browser__row.on:hover { background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.au-browser__row.disabled { color: #66696e; }
+.au-browser__col { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.au-browser__col--lock { flex: 0 0 2.75rem; }
+.au-browser__col--server { flex: 2 1 0; font-family: 'AuBold', Arial, sans-serif; }
+.au-browser__row--head .au-browser__col--server { font-family: inherit; }
+.au-browser__col--map { flex: 1.4 1 0; }
+.au-browser__col--players, .au-browser__col--ping, .au-browser__col--state { flex: 0 0 9.375rem; }
+.au-browser__padlock { display: inline-block; width: 1.375rem; height: 1.375rem; color: #3d9eff; vertical-align: middle; }
+.au-browser__padlock svg { display: block; width: 100%; height: 100%; }
+.au-browser__row.on .au-browser__padlock { color: #ffffff; }
+.au-browser__ping {
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    margin-right: 0.75rem;
+    border-radius: 50%;
+    background: #66696e;
+}
+.au-browser__ping.ping--good { background: #7dff9b; box-shadow: 0 0 0.5rem rgba(125, 255, 155, 0.6); }
+.au-browser__ping.ping--ok { background: #e6b322; }
+.au-browser__ping.ping--bad { background: #ff5a52; }
+.au-browser__empty, .au-browser__detail-empty { padding: 3.75rem 1.875rem; text-align: center; color: #66696e; }
+.au-browser__art {
+    position: relative;
+    height: 14.4375rem;
+    background: #131416 center center / cover no-repeat;
+}
+.au-browser__art-meta {
+    position: absolute;
+    left: 0.875rem;
+    bottom: 0.875rem;
+    height: 2.875rem;
+    padding: 0 1rem 0 1.0625rem;
+    display: flex;
+    align-items: baseline;
+    border-left: 3px solid #3d9eff;
+    background: rgba(12, 13, 14, 0.9);
+    line-height: 2.875rem;
+}
+.au-browser__art-meta { max-width: 26.875rem; overflow: hidden; }
+.au-browser__art-meta strong { font-size: 1.5rem; color: #ffffff; white-space: nowrap; }
+.au-browser__art-meta span { margin-left: 1rem; font-size: 1.0625rem; color: #a1a4a8; }
+.au-browser__name {
+    margin: 1.5rem 0.875rem 0.75rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.875rem;
+    font-weight: normal;
+    color: #ffffff;
+}
+.au-browser__stats { margin: 0 0.875rem; }
+.au-browser__stats li {
+    display: flex;
+    justify-content: space-between;
+    height: 2.75rem;
+    border-top: 1px dashed rgba(217, 221, 226, 0.2);
+    font-size: 1.25rem;
+    line-height: 2.6875rem;
+    color: #a1a4a8;
+}
+.au-browser__stats b { font-family: 'AuText', Arial, sans-serif; color: #eceef0; }
+.au-browser__pw-err { margin-top: 0.625rem; font-size: 1.0625rem; color: #ff5a52; }
+/* ---- 30-options.css ---- */
+/* =========================================================================
+   Game options: a full page, on the main shell and in the pause menu alike.
+   Concept frame 1920x1080: title at 92/55, tab column 345 wide, panel 482..1827
+   x 165..912, rows 68 high, footer buttons on 943..1010.
+   The markup is view/options.html, shared with Classic; rows are built from it
+   with flexbox (label left, control right).
+   ========================================================================= */
+
+.options-modal-overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 7000;
+    background: rgba(5, 5, 5, 0.8);
 }
 
-body.cc-theme.cc-theme--aurora .cc-pre-landing__spinner {
-    border-color: rgba(0, 136, 255, 0.25);
-    border-top-color: #0088ff;
+.options-modal-overlay {
+    background: linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.62)), #050505 url('../../images/aurora-battlefield.png') center center / cover no-repeat;
 }
+
+
+.options-modal-box {
+    position: relative;
+    width: 100%;
+    max-width: 120rem;
+    height: 100%;
+    margin: 0 auto;
+}
+.btn-options-close { display: none; }
+.options-header { position: absolute; left: 5.75rem; top: 3.0625rem; }
+.options-header h2 {
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 2.75rem;
+    font-weight: normal;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+
+.options-body-wrapper {
+    position: absolute;
+    top: 10.25rem;
+    left: 5.75rem;
+    right: 5.75rem;
+    bottom: 10.5rem;
+    display: flex;
+}
+
+/* ---- Tabs ---- */
+.options-sidebar { flex: 0 0 21.5625rem; width: 21.5625rem; }
+.options-tabs li { margin-bottom: 0.5625rem; }
+.options-tabs a {
+    display: block;
+    height: 5.0625rem;
+    padding-left: 1.75rem;
+    border: 1px solid rgba(217, 221, 226, 0.2);
+    background: rgba(12, 13, 14, 0.55);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.5rem;
+    line-height: 4.9375rem;
+    letter-spacing: 0.12em;
+    color: #a1a4a8;
+    transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+}
+.options-tabs a:hover { border-color: rgba(217, 221, 226, 0.5); background: rgba(44, 47, 52, 0.9); color: #ffffff; }
+.options-tabs li.active a { border-color: rgba(217, 221, 226, 0.2); background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+
+/* ---- Panel ---- */
+.options-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 2.8125rem;
+    padding: 0.875rem 1.375rem 1.25rem 2.625rem;
+    background-color: rgba(12, 13, 14, 0.96);
+    overflow: hidden;
+}
+/* The panes scroll in a plain div pinned to the panel: a fieldset can be neither a flex container nor a
+   reliable scroller in this engine, and percentage heights do not resolve inside stretched flex items. */
+.opt-fieldset { display: block; min-width: 0; }
+.opt-panes {
+    position: absolute;
+    top: 0.875rem;
+    right: 1.375rem;
+    bottom: 1.25rem;
+    left: 2.625rem;
+    padding-right: 1.25rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+.opt-content--waiting .opt-panes { opacity: 0.45; }
+.opt-pane { flex: 0 0 auto; }
+.opt-pane--lobby-defaults { order: -1; }
+.opt-section {
+    height: 2.9375rem;
+    margin-top: 0.75rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.3125rem;
+    font-weight: normal;
+    line-height: 2.875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+
+/* A row: label on the left, control on the right, hint underneath. */
+.opt-group, .opt-row, .opt-col-half {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-height: 4.25rem;
+}
+.opt-group, .opt-row { border-bottom: 1px dashed rgba(217, 221, 226, 0.2); }
+.opt-group--lobby-defaults { display: block; border-bottom: 0; min-height: 0; }
+.opt-group--lobby-defaults > .opt-label-main--section,
+.opt-group--lobby-defaults > .opt-hint { display: none; }
+/* Two settings side by side */
+.opt-col-half { flex: 1 1 0; min-width: 0; }
+.opt-col-half + .opt-col-half { margin-left: 3.5rem; }
+.opt-label-main {
+    flex: 1 1 auto;
+    font-size: 1.375rem;
+    color: #eceef0;
+}
+.opt-hint {
+    flex: 0 0 100%;
+    margin: -0.5rem 0 0.875rem;
+    padding-right: 34%;
+    font-size: 1.0625rem;
+    line-height: 1.45;
+    color: #66696e;
+}
+
+/* Segmented choice: radios, and the Aurora-only button groups */
+.opt-radio, .opt-seg button {
+    flex: 0 0 auto;
+    height: 3rem;
+    padding: 0 1.375rem;
+    margin-left: -1px;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: rgba(0, 0, 0, 0.25);
+    font-size: 1.1875rem;
+    line-height: 2.875rem;
+    color: #a1a4a8;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.12s, color 0.12s;
+}
+.opt-radio input { display: none; }
+.opt-radio:hover, .opt-seg button:hover { color: #ffffff; background: rgba(217, 221, 226, 0.1); }
+.opt-radio.opt-radio--on, .opt-seg button.opt-seg--on {
+    position: relative;
+    border-color: rgba(217, 221, 226, 0.2);
+    background: rgba(217, 221, 226, 0.2);
+    color: #ffffff;
+}
+.opt-seg { flex: 0 0 auto; display: flex; }
+.opt-seg button[disabled] { opacity: 0.45; pointer-events: none; }
+
+/* Dropdown */
+.opt-select {
+    flex: 0 0 auto;
+    min-width: 11.875rem;
+    height: 3rem;
+    padding: 0 2.75rem 0 1.125rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    -webkit-appearance: none;
+    background: rgba(0, 0, 0, 0.25) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'><path fill='%23e6e9ec' d='M0 0h12L6 7z'/></svg>") right 1rem center / 0.8125rem 0.5rem no-repeat;
+    font-size: 1.1875rem;
+    color: #eceef0;
+    cursor: pointer;
+}
+.opt-select:hover, .opt-select:focus { border-color: rgba(217, 221, 226, 0.7); }
+.opt-select[disabled] { opacity: 0.4; cursor: default; }
+.opt-select option { background: #0c0d0e; color: #eceef0; }
+
+/* Colour swatches */
+.opt-swatches { flex: 0 0 auto; display: flex; }
+.opt-swatches button {
+    width: 2.5rem;
+    height: 2rem;
+    margin-left: 0.5rem;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+.opt-swatches button:hover { border-color: rgba(255, 255, 255, 0.5); }
+.opt-swatches button.opt-swatches--on { border-color: #ffffff; box-shadow: 0 0 0 1px #000000, 0 0 0 3px rgba(255, 255, 255, 0.25); }
+.opt-swatches--off { opacity: 0.35; }
+.opt-swatches--off button { pointer-events: none; }
+
+/* Switch: the checkbox rides the right edge of its row */
+.opt-checkbox {
+    flex: 0 0 100%;
+    display: block;
+    position: relative;
+    height: 4.25rem;
+    line-height: 4.1875rem;
+    font-size: 1.375rem;
+    color: #eceef0;
+    cursor: pointer;
+}
+.opt-checkbox + .opt-checkbox { border-top: 1px dashed rgba(217, 221, 226, 0.2); }
+.opt-checkbox input, .opt-checkbox input:checked {
+    position: absolute;
+    right: 0;
+    top: 0.875rem;
+    width: 5.5rem;
+    height: 2.5rem;
+    margin: 0;
+    border: 1px solid rgba(217, 221, 226, 0.45);
+    box-shadow: none;
+    background: rgba(0, 0, 0, 0.3) linear-gradient(#66696e, #66696e) left 0.25rem center / 2.375rem 1.875rem no-repeat;
+    transition: background-position 0.12s;
+}
+.opt-checkbox input:checked {
+    border-color: rgba(217, 221, 226, 0.2);
+    background: rgba(0, 0, 0, 0.3) linear-gradient(rgba(217, 221, 226, 0.2), rgba(217, 221, 226, 0.2)) right 0.25rem center / 2.375rem 1.875rem no-repeat;
+}
+.opt-checkbox--disabled { color: #66696e; cursor: default; }
+.opt-checkbox--disabled input { opacity: 0.4; }
+
+/* Slider: a row of ticks, lit up to the value (thumb shadow fills the left side, the mask cuts the ticks) */
+.opt-group { position: relative; }
+.opt-slider {
+    flex: 0 0 20.125rem;
+    width: 20.125rem;
+    height: 1.5rem;
+    margin: 0 4.75rem 0 0;
+    padding: 0;
+    -webkit-appearance: none;
+    background: rgba(217, 221, 226, 0.2);
+    overflow: hidden;
+    cursor: pointer;
+    -webkit-mask-image: repeating-linear-gradient(90deg, #000 0, #000 0.5625rem, transparent 0.5625rem, transparent 1rem);
+}
+.opt-slider::-webkit-slider-runnable-track { height: 1.5rem; background: none; }
+.opt-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 0.5625rem;
+    height: 1.5rem;
+    background: #ffffff;
+    box-shadow: -62.5rem 0 0 61.9375rem rgba(217, 221, 226, 0.2);
+}
+.opt-value {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 4rem;
+    font-size: 1.25rem;
+    line-height: 4.25rem;
+    text-align: right;
+    color: #eceef0;
+}
+
+/* ---- Footer ---- */
+.options-restore-wrap {
+    position: absolute;
+    left: 24.375rem;
+    top: 100%;
+    margin-top: 1.9375rem;
+}
+.btn-opt-restore { width: 22.0625rem; height: 4.1875rem; font-size: 1.5rem; line-height: 4.0625rem; color: #a1a4a8; border-color: rgba(217, 221, 226, 0.26); }
+.options-footer {
+    position: absolute;
+    right: 5.75rem;
+    bottom: 4.375rem;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+}
+.btn-opt-action { height: 4.1875rem; font-size: 1.5rem; line-height: 4.0625rem; margin-left: 0.9375rem; }
+.btn-opt-green { min-width: 13.1875rem; }
+.btn-opt-yellow { min-width: 11.6875rem; border-color: rgba(217, 221, 226, 0.5); color: #ffffff; }
+.opt-footer-status { order: 1; margin-right: 1.5rem; font-size: 1.0625rem; color: #a1a4a8; }
+.opt-footer-status--error { color: #ff5a52; }
+
+/* Labels in sentence case, as on the concept sheet (the shared markup is Title Case for Classic). */
+.opt-label-main, .opt-checkbox { text-transform: lowercase; }
+.opt-label-main::first-letter, .opt-checkbox::first-letter { text-transform: uppercase; }
+/* ---- 40-pages.css ---- */
+/* =========================================================================
+   Section pages the concept sheets do not draw: Profile, Learn, Support,
+   Credits. Same language as the concept screens: framed panel, accent section
+   heads, dashed rows, label left and value right.
+   ========================================================================= */
+
+/* ---- Shared pieces ---- */
+.au-prof { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.au-prof__head {
+    height: 2.9375rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.3125rem;
+    font-weight: normal;
+    line-height: 2.875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+.au-prof__rows li {
+    display: flex;
+    justify-content: space-between;
+    height: 3.5rem;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+    font-size: 1.3125rem;
+    line-height: 3.4375rem;
+    color: #a1a4a8;
+}
+.au-prof__rows b { font-family: 'AuText', Arial, sans-serif; color: #eceef0; }
+.au-prof__rows .au-prof__none { color: #66696e; }
+.au-prof__game-meta { margin-left: 0.875rem; font-style: normal; font-size: 1rem; color: #66696e; }
+.au-prof__game-meta i { font-style: normal; }
+.au-prof__soon {
+    margin: 0 0 1.625rem;
+    padding: 1.125rem 1.5rem 1.125rem 1.375rem;
+    border: 1px solid rgba(61, 158, 255, 0.45);
+    border-left: 0.25rem solid #3d9eff;
+    background: rgba(61, 158, 255, 0.12);
+    font-size: 1.125rem;
+    line-height: 1.45;
+    color: #b9dcff;
+}
+.au-prof__soon strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-weight: normal;
+    font-size: 0.9375rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
+.au-prof__note { margin: 1.125rem 0 0; font-size: 1.0625rem; line-height: 1.4; color: #66696e; }
+.au-prof__win, .au-prof__rows b.au-prof__win { color: #7dff9b; }
+.au-prof__loss, .au-prof__rows b.au-prof__loss { color: #ff5a52; }
+.au-prof__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* ---- Profile: overview ---- */
+.au-prof__id {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    padding-bottom: 1.75rem;
+    border-bottom: 1px solid rgba(217, 221, 226, 0.26);
+}
+.au-prof__face {
+    flex: 0 0 7rem;
+    width: 7rem;
+    height: 7rem;
+    margin-right: 1.75rem;
+    border: 1px solid rgba(217, 221, 226, 0.4);
+    object-fit: cover;
+}
+.au-prof__id-text { flex: 1 1 auto; min-width: 0; }
+.au-prof__id-text strong { display: block; font-size: 2.75rem; line-height: 1.15; color: #ffffff; }
+.au-prof__id-text span { display: block; margin-top: 0.25rem; font-size: 1.25rem; color: #3d9eff; }
+.au-prof__big { flex: 0 0 auto; min-width: 10.625rem; margin-left: 1.875rem; text-align: right; }
+.au-prof__big b {
+    display: block;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 3.375rem;
+    line-height: 1.05;
+    color: #ffffff;
+}
+.au-prof__big b i { font-size: 1.625rem; color: #a1a4a8; }
+.au-prof__big em { font-size: 0.9375rem; letter-spacing: 0.14em; text-transform: uppercase; color: #a1a4a8; }
+
+.au-prof__cols { flex: 1 1 auto; display: flex; margin-top: 1rem; }
+.au-prof__col { flex: 1 1 0; min-width: 0; }
+.au-prof__col + .au-prof__col { margin-left: 3.5rem; }
+.au-prof__ranks .au-plate__bar { height: 3.5rem; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); }
+.au-prof__ranks .au-plate__bar img { flex: 0 0 1.75rem; width: 1.75rem; height: 1.75rem; }
+.au-prof__ranks .au-plate__bar span { flex: 0 0 5.625rem; margin-left: 1rem; font-size: 1.3125rem; color: #eceef0; }
+.au-prof__ranks .au-plate__bar i { flex: 1 1 auto; height: 0.625rem; margin: 0; }
+.au-prof__ranks .au-plate__bar b { flex: 0 0 3.75rem; font-size: 1.3125rem; }
+
+/* ---- Profile: statistics ---- */
+.au-prof__bar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 1.25rem; }
+.au-prof__bar .au-prof__head { flex: 1 1 auto; border-bottom: 0; }
+.au-prof__bar .opt-seg img { width: 1.5rem; height: 1.5rem; margin-right: 0.625rem; vertical-align: -0.3125rem; object-fit: contain; }
+.au-prof__wl { display: flex; align-items: center; height: 4rem; border-top: 1px dashed rgba(217, 221, 226, 0.2); border-bottom: 1px dashed rgba(217, 221, 226, 0.2); font-size: 1.3125rem; }
+.au-prof__wl i { flex: 1 1 auto; height: 0.75rem; margin: 0 1.5rem; background: rgba(255, 90, 82, 0.75); }
+.au-prof__wl u { display: block; height: 100%; background: #7dff9b; }
+.au-prof__rows--grid { display: flex; flex-wrap: wrap; margin: 0 -1.75rem; }
+.au-prof__rows--grid li { flex: 0 0 33.333%; padding: 0 1.75rem; border-bottom: 0; }
+.au-prof__rows--grid li { position: relative; }
+.au-prof__rows--grid li:after {
+    content: '';
+    position: absolute;
+    left: 1.75rem;
+    right: 1.75rem;
+    bottom: 0;
+    border-bottom: 1px dashed rgba(217, 221, 226, 0.2);
+}
+
+/* ---- Profile: match history ---- */
+.au-prof__hrow { display: flex; align-items: center; height: 3.5rem; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); font-size: 1.25rem; }
+.au-prof__hrow--head {
+    flex: 0 0 auto;
+    border-bottom: 1px solid rgba(217, 221, 226, 0.26);
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+}
+.au-prof__hcell { flex: 1 1 0; display: flex; align-items: center; }
+.au-prof__hcell--l { justify-content: flex-end; text-align: right; }
+.au-prof__hdate { flex: 0 0 13.75rem; text-align: center; color: #eceef0; }
+.au-prof__hrow--head .au-prof__hdate { color: #a1a4a8; }
+.au-prof__hcell i { flex: 1 1 auto; display: flex; height: 0.75rem; background: rgba(217, 221, 226, 0.1); }
+.au-prof__hcell--l i { justify-content: flex-end; }
+.au-prof__hcell em { flex: 0 0 3.5rem; text-align: center; color: #eceef0; }
+.au-prof__fill--win { display: block; height: 100%; background: #7dff9b; }
+.au-prof__fill--loss { display: block; height: 100%; background: #ff5a52; }
+
+/* ---- Profile: achievements ---- */
+.au-prof__grid { display: flex; flex-wrap: wrap; margin: 1.25rem -0.625rem 0; }
+.au-prof__ach {
+    position: relative;
+    flex: 0 0 auto;
+    width: 20rem;
+    height: 8.25rem;
+    margin: 0 0.625rem 1.25rem;
+    padding: 1.25rem 1.25rem 0 6.5rem;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background: rgba(19, 20, 22, 0.9);
+}
+.au-prof__medal {
+    position: absolute;
+    left: 1.5rem;
+    top: 1.875rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    border: 2px solid #3d9eff;
+    transform: rotate(45deg);
+}
+.au-prof__medal i { position: absolute; top: 0.75rem; right: 0.75rem; bottom: 0.75rem; left: 0.75rem; background: #3d9eff; }
+.au-prof__ach strong { display: block; font-size: 1.375rem; line-height: 1.2; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.au-prof__ach-x { display: block; margin-top: 0.25rem; font-size: 1.0625rem; color: #a1a4a8; white-space: pre-line; height: 1.5rem; overflow: hidden; }
+.au-prof__ach-state { display: block; margin-top: 0.375rem; font-size: 0.875rem; letter-spacing: 0.16em; text-transform: uppercase; color: #7dff9b; }
+.au-prof__ach-bar { position: absolute; left: -1px; right: -1px; bottom: -1px; height: 0.3125rem; background: rgba(217, 221, 226, 0.14); }
+.au-prof__ach-bar u { display: block; height: 100%; background: #3d9eff; }
+.au-prof__ach--locked .au-prof__medal { border-color: #66696e; }
+.au-prof__ach--locked .au-prof__medal i { background: none; }
+.au-prof__ach--locked strong { color: #a1a4a8; }
+.au-prof__ach--locked .au-prof__ach-state { color: #66696e; }
+
+/* ---- Profile: leaderboards ---- */
+.au-prof--lb { flex-direction: row; }
+.au-prof__lb { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.au-prof__lb + .au-prof__lb { margin-left: 3.5rem; }
+.au-prof__trow { flex: 0 0 auto; display: flex; align-items: center; height: 3.125rem; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); font-size: 1.1875rem; color: #eceef0; }
+.au-prof__trow > span { flex: 1 1 0; text-align: right; padding-right: 0.75rem; white-space: nowrap; }
+.au-prof__trow > span:first-child { flex: 0 0 4.75rem; text-align: left; padding-left: 0.5rem; }
+.au-prof__trow > .au-prof__tname { flex: 2.4 1 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.au-prof__trow--head {
+    border-bottom: 1px solid rgba(217, 221, 226, 0.26);
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 0.875rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #a1a4a8;
+}
+.au-prof__trow--me { background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.au-prof__trow--me .au-prof__win, .au-prof__trow--me .au-prof__loss { color: #ffffff; }
+.au-prof__place {
+    display: inline-block;
+    width: 1.875rem;
+    height: 1.875rem;
+    font-size: 1.0625rem;
+    line-height: 1.875rem;
+    text-align: center;
+    color: #14100a;
+    background: #d9a441;
+}
+.au-prof__place--2 { background: #c3c8ce; }
+.au-prof__place--3 { background: #b9773f; }
+
+/* ---- Learn ---- */
+.learn-tab-container, .learn-tab-container > div, .guides-layout-container { height: 100%; }
+.guides-layout-container { display: flex; }
+.guides-sidebar { flex: 0 0 21.5625rem; width: 21.5625rem; overflow-y: auto; }
+.btn-sidebar-item {
+    display: block;
+    width: 100%;
+    height: 3.375rem;
+    margin-bottom: 0.5rem;
+    padding-left: 1.375rem;
+    border: 1px solid rgba(217, 221, 226, 0.2);
+    background: rgba(12, 13, 14, 0.55);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0.12em;
+    text-align: left;
+    color: #a1a4a8;
+    transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+}
+.btn-sidebar-item:hover { border-color: rgba(217, 221, 226, 0.5); background: rgba(44, 47, 52, 0.9); color: #ffffff; }
+.btn-sidebar-item.active { border-color: rgba(217, 221, 226, 0.2); background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.guides-main-panel { position: relative; flex: 1 1 auto; min-width: 0; margin-left: 2.8125rem; }
+.guides-scroll-area { position: absolute; top: 0; right: 0; bottom: 0; left: 0; height: auto; }
+.guides-scroll-area, .support-scroll-area {
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 1.5rem;
+    font-size: 1.25rem;
+    line-height: 1.6;
+    color: #a1a4a8;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.guide-page-header {
+    padding-bottom: 0.875rem;
+    margin-bottom: 1.125rem;
+    border-bottom: 1px solid rgba(217, 221, 226, 0.26);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.875rem;
+    font-weight: normal;
+    letter-spacing: 0.12em;
+    color: #ffffff;
+}
+.guides-scroll-area h3, .support-block h3 {
+    margin: 1.625rem 0 0.625rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.4375rem;
+    font-weight: normal;
+    color: #ffffff;
+}
+.guides-scroll-area p, .support-block p { margin-bottom: 0.75rem; }
+.guides-scroll-area ul, .support-block ul { margin: 0 0 0.875rem; }
+.guides-scroll-area li, .support-block li { position: relative; padding-left: 1.375rem; margin-bottom: 0.25rem; }
+.guides-scroll-area li:before, .support-block li:before {
+    content: '';
+    position: absolute;
+    left: 0.125rem;
+    top: 0.65em;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    background: #4a90d9;
+}
+.guides-scroll-area li ul { margin: 0.25rem 0 0; }
+.guides-scroll-area li li:before { background: #66696e; }
+.guides-scroll-area img { max-width: 100%; border: 1px solid rgba(217, 221, 226, 0.2); }
+.guide-image-wrap { margin: 0.875rem 0 1.25rem; }
+.guide-image-panel { display: flex; align-items: center; margin: 0.75rem 0; padding: 0.875rem 1.125rem; border: 1px dashed rgba(217, 221, 226, 0.26); }
+.panel-label { flex: 0 0 15rem; font-family: 'AuBold', Arial, sans-serif; color: #eceef0; }
+.guides-scroll-area table { width: 100%; margin: 0.875rem 0 1.25rem; border-collapse: collapse; font-size: 1.125rem; }
+.guides-scroll-area th, .guides-scroll-area td { border-bottom: 1px dashed rgba(217, 221, 226, 0.2) !important; text-align: left; vertical-align: top; }
+.guides-scroll-area th { color: #3d9eff !important; font-family: 'AuBold', Arial, sans-serif; font-weight: normal; letter-spacing: 0.08em; }
+.guides-scroll-area tr { border-bottom: 0 !important; }
+
+.tutorial-simple-container { max-width: 62.5rem; padding-top: 0.625rem; }
+.tutorial-text-block { margin-bottom: 2.125rem; font-size: 1.3125rem; line-height: 1.6; color: #a1a4a8; }
+
+/* ---- Support ---- */
+.support-container { height: 100%; }
+.support-scroll-area > div { max-width: 80rem; }
+.support-block { padding-bottom: 0.375rem; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); }
+.support-block h3 { margin-top: 1.25rem; }
+.support-block a { color: #3d9eff !important; font-family: 'AuBold', Arial, sans-serif; font-weight: normal !important; }
+.support-block a:hover { color: #7cc0ff !important; }
+.support-block img { max-width: 26.25rem; }
+
+/* ---- Credits: a full page, like Game options ---- */
+.credits-modal-overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 7000;
+    background: rgba(5, 5, 5, 0.92);
+}
+
+.credits-modal-overlay {
+    background: linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.62)), #050505 url('../../images/aurora-battlefield.png') center center / cover no-repeat;
+}
+
+
+.credits-modal-box {
+    position: absolute;
+    top: 10.25rem;
+    bottom: 10.5rem;
+    left: 50%;
+    width: 68.75rem;
+    margin-left: -34.375rem;
+    padding: 2.125rem 1.375rem 1.875rem 2.625rem;
+    display: flex;
+    flex-direction: column;
+    background-color: rgba(12, 13, 14, 0.96);
+}
+.credits-modal-box:before {
+    content: 'Credits';
+    position: absolute;
+    left: 0;
+    top: -7.1875rem;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 2.75rem;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+.btn-credits-close {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    width: 13.1875rem;
+    height: 4.1875rem;
+    margin-top: 1.9375rem;
+    border: 1px solid rgba(217, 221, 226, 0.5);
+    background: rgba(12, 13, 14, 0.9);
+    transition: background-color 0.12s, border-color 0.12s;
+}
+.btn-credits-close:after {
+    content: 'Back';
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.5rem;
+    line-height: 4.0625rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+.btn-credits-close:hover { border-color: rgba(217, 221, 226, 0.2); background: #2c2f34; }
+.credits-header { flex: 0 0 auto; padding-bottom: 1.25rem; text-align: center; border-bottom: 1px dashed rgba(217, 221, 226, 0.2); }
+.victory-logo { height: 6rem; width: auto; opacity: 0.9; }
+.credits-divider { display: none; }
+.credits-scroll-area { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0.625rem 1.25rem 0 0; text-align: center; }
+.credit-category {
+    margin: 2.125rem 0 0.375rem;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.5rem;
+    font-weight: normal;
+    letter-spacing: 0.14em;
+    color: #3d9eff;
+}
+.credit-subcategory {
+    margin: 1.375rem 0 0.25rem;
+    font-family: 'AuBold', Arial, sans-serif;
+    font-size: 1.1875rem;
+    font-weight: normal;
+    letter-spacing: 0.12em;
+    color: #eceef0;
+}
+.credits-role-block { margin-top: 1rem; }
+.credit-role { font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: #66696e; }
+.credit-name { font-size: 1.3125rem; line-height: 1.5; color: #eceef0; }
+.credit-missing-data { color: #66696e; font-size: 0.9375rem; }
+.credits-legal-text .credit-name { font-size: 1rem; color: #a1a4a8; text-align: left; }
+/* ---- 50-ingame.css ---- */
+/* =========================================================================
+   In-game pages. They are separate documents drawn over the match:
+   ingame_menu.html (full screen) and ingame_chat.html (a small view the game
+   places bottom left; its sizes are against 630x245, see data-au-ref).
+   ========================================================================= */
+
+html[data-au-page], html[data-au-page] body { background: transparent !important; }
+html[data-au-page] body:before { display: none; }
+
+/* ---- Pause menu: a panel down the right edge ---- */
+html[data-au-page="ingame"] body { background: rgba(0, 0, 0, 0.42) !important; }
+.pause-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 37.4375rem;
+    padding: 9.5625rem 3.5rem 0 3.5625rem;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #babec2;
+    background: rgba(12, 13, 14, 0.97);
+    box-shadow: -1.875rem 0 5rem rgba(0, 0, 0, 0.5);
+}
+.pause-menu-title {
+    order: 0;
+    margin-bottom: 6.5rem;
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 2.9375rem;
+    font-weight: normal;
+    line-height: 1.2;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffffff;
+}
+.pause-menu-btn {
+    width: 100%;
+    height: 6.25rem;
+    margin-bottom: 1.0625rem;
+    padding-left: 1.875rem;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background: rgba(0, 0, 0, 0.25);
+    font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
+    font-size: 1.75rem;
+    letter-spacing: 0.12em;
+    text-align: left;
+    text-transform: uppercase;
+    color: #ffffff;
+    transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+.pause-menu-btn:hover { border-color: rgba(217, 221, 226, 0.2); background: #2c2f34; }
+.pause-menu-btn--main { order: 1; border-color: rgba(217, 221, 226, 0.2); background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.pause-menu-btn--main:hover { background: #ffffff; border-color: #ffffff; }
+.pause-menu-btn--options { order: 2; margin-bottom: 3.6875rem; }
+.pause-menu-btn--warn { order: 3; border-color: rgba(61, 158, 255, 0.5); color: #3d9eff; }
+.pause-menu-btn--warn:hover { border-color: #3d9eff; background: rgba(61, 158, 255, 0.14); }
+.pause-menu-btn--quit { order: 4; border-color: rgba(255, 90, 82, 0.4); color: #ff5a52; }
+.pause-menu-btn--quit:hover { border-color: #ff5a52; background: rgba(255, 90, 82, 0.14); }
+
+/* Options over a match: the game shows through, dimmed, instead of the menu backdrop. */
+html[data-au-page="ingame"] .options-modal-overlay { background: rgba(0, 0, 0, 0.8); }
+
+/* ---- In-game chat ---- */
+html[data-au-page="chat"] { font-size: 2.54vw; }
+html[data-au-page="chat"] body { font-size: 0.875rem; }
+.chat-panel {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    padding: 0.5rem 0.625rem 0 0.75rem;
+    display: flex;
+    flex-direction: column;
+    background-color: rgba(12, 13, 14, 0.78);
+    background-size: 0.875rem 2px, 2px 0.875rem, 0.875rem 2px, 2px 0.875rem, 0.875rem 2px, 2px 0.875rem, 0.875rem 2px, 2px 0.875rem;
+}
+.chat-header {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.625rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+}
+.chat-header-title { display: none; }
+.chat-channel-btns { display: flex; }
+.chat-channel-btn {
+    height: 1.5rem;
+    padding: 0 0.75rem;
+    margin-left: -1px;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 0.75rem;
+    line-height: 1.375rem;
+    color: #a1a4a8;
+}
+.chat-channel-btn:hover { color: #ffffff; }
+.chat-channel-btn.active { position: relative; border-color: rgba(217, 221, 226, 0.2); background: rgba(217, 221, 226, 0.2); color: #ffffff; }
+.chat-channel-btn[disabled] { opacity: 0.4; }
+.chat-close-btn {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-left: 0.375rem;
+    border: 1px solid rgba(217, 221, 226, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 0.6875rem;
+    line-height: 1.375rem;
+    color: #a1a4a8;
+}
+.chat-close-btn:hover { border-color: #ff5a52; color: #ff5a52; }
+.chat-history {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+    -webkit-user-select: text;
+    user-select: text;
+}
+.chat-history::-webkit-scrollbar { width: 0.25rem; }
+.chat-line { display: flex; align-items: baseline; font-size: 0.9062rem; line-height: 1.5625rem; color: #eceef0; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+.chat-tag { flex: 0 0 2.875rem; font-size: 0.6875rem; color: #66696e; }
+.chat-tag.team { color: #5fc27a; }
+.chat-from { flex: 0 0 auto; margin-right: 0.625rem; font-family: 'AuBold', Arial, sans-serif; color: #7ec8ff; }
+.chat-from-prefix, .chat-colon { display: none; }
+.chat-from.ally { color: #7ec8ff; }
+.chat-from.enemy { color: #ff7468; }
+.chat-from.team { color: #8fdf7a; }
+.chat-from.self { color: #ffcf47; }
+.chat-from.dev { color: #c58bff; }
+.chat-from.playtester { color: #ffcf47; }
+.chat-text { flex: 1 1 auto; min-width: 0; word-wrap: break-word; }
+.chat-line.spectator .chat-from, .chat-line.spectator .chat-text { color: #9a9da2; }
+.chat-line.system .chat-text { color: #3d9eff; }
+.chat-empty { font-size: 0.8125rem; line-height: 1.5625rem; color: #66696e; }
+.chat-input-row {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    height: 2.25rem;
+    margin: 0.25rem 0 0;
+    border-top: 1px solid rgba(217, 221, 226, 0.3);
+}
+.chat-input-row .au-caret-field { font-size: 0.9062rem; color: #ffffff; }
+.chat-prompt { flex: 0 0 auto; margin-right: 0.625rem; font-size: 0.6875rem; color: #a1a4a8; }
+.chat-prompt.team { color: #5fc27a; }
+.chat-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 1.75rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 0.9062rem;
+    color: #ffffff;
+}
+.chat-send-btn { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; color: #66696e; }
+.chat-send-btn:hover { color: #ffffff; }
+.chat-send-icon { display: block; width: 1rem; height: 1rem; margin: 0 auto; }
+/* Keep the first lines clear of the All / Team switch in the top right corner. */
+.chat-history:before { content: ''; float: right; width: 9.375rem; height: 1.625rem; }
+/* ---- 60-motion.css ---- */
+/* =========================================================================
+   Motion. Entrances play once when an element is first drawn or shown again
+   (ng-show brings it back from display: none, which restarts the animation):
+   pages fade and rise, columns slide in from their own side, lists stagger,
+   dialogs pop. All of it is opacity and transform only, short, and fills
+   "backwards": the hidden first frame applies during the delay and the element
+   is back on its normal styles afterwards, so hover transforms keep working
+   and nothing stays hidden if an animation does not run.
+   The engine paints in software: no looping animations except the small spinners.
+   ========================================================================= */
+
+@keyframes au-fade { from { opacity: 0; } }
+@keyframes au-rise { from { opacity: 0; transform: translateY(1.125rem); } }
+@keyframes au-rise-s { from { opacity: 0; transform: translateY(0.4375rem); } }
+@keyframes au-drop { from { opacity: 0; transform: translateY(-0.875rem); } }
+@keyframes au-from-left { from { opacity: 0; transform: translateX(-1.625rem); } }
+@keyframes au-from-right { from { opacity: 0; transform: translateX(2rem); } }
+@keyframes au-pop { from { opacity: 0; transform: scale(0.955); } }
+@keyframes au-pip { 0% { opacity: 0; transform: scale(0.35); } 70% { opacity: 1; transform: scale(1.14); } }
+@keyframes au-grow { from { transform: scaleX(0); } }
+@keyframes au-ready { from { transform: scale(1.55); } }
+
+/* ---- Main menu ---- */
+.au-head { animation: au-fade 0.5s ease-out backwards; }
+.au-play > * { animation: au-from-left 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-play > :nth-child(2) { animation-delay: 0.06s; }
+.au-play > :nth-child(3) { animation-delay: 0.12s; }
+.au-play > :nth-child(4) { animation-delay: 0.18s; }
+.au-news, .au-feature { animation: au-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s backwards; }
+
+.au-news__item { animation: au-fade 0.4s ease-out 0.26s backwards; }
+.au-news__item:nth-child(2) { animation-delay: 0.33s; }
+.au-news__item:nth-child(3) { animation-delay: 0.4s; }
+.au-news__item:nth-child(n+4) { animation-delay: 0.47s; }
+.au-general { animation: au-from-right 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.08s backwards; }
+.au-plate { animation: au-rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) 0.34s backwards; }
+.au-me { animation: au-drop 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s backwards; }
+/* Bars fill from the left */
+.au-plate__bar u, .au-me__bar u, .au-prof__wl u {
+    transform-origin: left center;
+    animation: au-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.5s backwards;
+}
+
+/* Cards lean towards the pointer */
+.au-play__btn { transition: background-color 0.12s, border-color 0.12s, box-shadow 0.16s, transform 0.16s ease-out; }
+.au-play__btn:hover { transform: translateX(0.375rem); }
+.au-play__btn[disabled]:hover { transform: none; }
+.au-news__text { transition: transform 0.16s ease-out; }
+.au-news__item:hover .au-news__text { transform: translateX(0.3125rem); }
+.au-news__item--empty:hover .au-news__text { transform: none; }
+
+/* Bar buttons: an accent line draws across the top edge */
+.au-nav__item { position: relative; }
+.au-nav__item:after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -1px;
+    height: 3px;
+    background: #3d9eff;
+    transform: scaleX(0);
+    transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.au-nav__item:hover:after { transform: scaleX(1); }
+.au-nav__item--on:after, .au-nav__item[disabled]:after { display: none; }
+.au-nav__item--quit:after { background: #ff5a52; }
+
+/* Section pages and the news article */
+.au-subnav { animation: au-fade 0.3s ease-out backwards; }
+.au-page, .au-article { animation: au-rise 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-page__host { animation: au-fade 0.24s ease-out backwards; }
+
+/* ---- Primary buttons: a sheen crosses on hover ---- */
+.au-btn--primary, .btn-opt-green, .btn-massive-green, .cc-shell-lost-modal__ok,
+.au-btn--primary:hover, .btn-opt-green:hover, .btn-massive-green:hover, .cc-shell-lost-modal__ok:hover {
+    background-image: linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.42) 50%, rgba(255, 255, 255, 0) 62%);
+    background-size: 260% 100%;
+    background-repeat: no-repeat;
+    background-position: 130% 0;
+    transition: background-position 0.6s ease-out, background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.au-btn--primary:hover, .btn-opt-green:hover, .btn-massive-green:hover, .cc-shell-lost-modal__ok:hover {
+    background-position: -30% 0;
+}
+
+/* ---- Dialogs ---- */
+.cc-shell-lost-modal, .cc-shell-quit-modal, .cc-shell-quit-progress, .confirm-modal-overlay,
+.quit-progress-overlay, .au-lobby__modal, .au-lobby-browser__pw-modal {
+    animation: au-fade 0.16s ease-out backwards;
+}
+.cc-shell-lost-modal__box, .cc-shell-quit-modal__box, .cc-shell-quit-progress__box, .confirm-modal-box,
+.quit-progress-box, .au-lobby__modal-box, .au-lobby-browser__pw-box {
+    animation: au-pop 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.alert-popup-box { transform-origin: left top; animation: au-pop 0.18s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-lobby__slot-menu { transform-origin: right top; animation: au-pop 0.16s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-lobby__slot-menu--up { transform-origin: right bottom; }
+
+/* ---- Lobby ---- */
+.au-lobby__head { animation: au-fade 0.4s ease-out backwards; }
+.au-lobby__col--left { animation: au-from-left 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-lobby__col--right { animation: au-from-right 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-lobby__col--stage { animation: au-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) 0.05s backwards; }
+/* A card pops in when a player takes the seat */
+.au-lobby__slot { animation: au-pop 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-lobby__pip { animation: au-pip 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s backwards; }
+.au-lobby__pip:nth-child(3) { animation-delay: 0.35s; }
+.au-lobby__pip:nth-child(4) { animation-delay: 0.4s; }
+.au-lobby__pip:nth-child(5) { animation-delay: 0.45s; }
+.au-lobby__pip:nth-child(6) { animation-delay: 0.5s; }
+.au-lobby__pip:nth-child(n+7) { animation-delay: 0.55s; }
+.au-lobby__pip--preview { animation-delay: 0s; }
+.au-lobby__chat-line { animation: au-rise-s 0.2s ease-out backwards; }
+.au-lobby__ready.on { animation: au-ready 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+
+/* Server browser */
+.au-lobby-browser__list { animation: au-rise 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-lobby-browser__detail { animation: au-from-right 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) 0.06s backwards; }
+.au-browser__scroll .au-browser__row { animation: au-fade 0.3s ease-out backwards; }
+.au-browser__detail-in { animation: au-fade 0.22s ease-out backwards; }
+
+/* ---- Game options, credits ---- */
+.options-modal-overlay, .credits-modal-overlay { animation: au-fade 0.2s ease-out backwards; }
+.options-header { animation: au-from-left 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.options-tabs li { animation: au-from-left 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.options-tabs li:nth-child(2) { animation-delay: 0.04s; }
+.options-tabs li:nth-child(3) { animation-delay: 0.08s; }
+.options-tabs li:nth-child(4) { animation-delay: 0.12s; }
+.options-tabs li:nth-child(5) { animation-delay: 0.16s; }
+.options-tabs li:nth-child(6) { animation-delay: 0.2s; }
+.options-content, .credits-modal-box { animation: au-rise 0.36s cubic-bezier(0.2, 0.7, 0.2, 1) 0.05s backwards; }
+.opt-pane { animation: au-fade 0.22s ease-out backwards; }
+.options-footer, .options-restore-wrap { animation: au-fade 0.4s ease-out 0.15s backwards; }
+
+/* ---- Sign-in screen ---- */
+.cc-pre-landing__brand:before { animation: au-pop 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.cc-pre-landing__status { animation: au-fade 0.5s ease-out 0.2s backwards; }
+
+/* ---- In-game ---- */
+.pause-menu { animation: au-from-right 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.pause-menu-title, .pause-menu-btn { animation: au-fade 0.3s ease-out 0.12s backwards; }
+.chat-line { animation: au-rise-s 0.18s ease-out backwards; }

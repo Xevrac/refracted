@@ -133,6 +133,9 @@
                                 <img ng-src="{{ generalAvatar(slot) }}" alt="">
                             </div>
                             <div class="cc-lobby__color-ribbon" ng-if="!slot.invitePending"
+                                 ng-class="{'cc-lobby__color-ribbon--pick': canChangeColor(slot)}"
+                                 ng-click="pickColorFromRibbon(slot, $event)"
+                                 data-tip="{{ canChangeColor(slot) ? 'Pick colour' : '' }}"
                                  ng-style="{'background-color': slot.color}"></div>
                             <div class="cc-lobby__tools" ng-if="!slot.invitePending">
                                 <div class="cc-lobby__ready" ng-class="{on: slot.ready}"
@@ -151,13 +154,13 @@
                                         ng-class="{open: slotMenu == slotMenuKey(1, $index)}"
                                         data-tip="Pick faction and colour"></button>
                             </div>
-                            <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
+                            <ul class="cc-lobby__menu" ng-class="{'cc-lobby__menu--up': slotMenuUp}" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
-                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
+                                <li class="cc-lobby__menu-faction" ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
                                     <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
                                 </li>
                                 <li class="cc-lobby__menu-label">General</li>
-                                <li ng-repeat="g in availableGenerals(slot)"
+                                <li class="cc-lobby__menu-general" ng-repeat="g in availableGenerals(slot)"
                                     ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral(slot)}">
                                     <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
                                 </li>
@@ -181,7 +184,7 @@
                             <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
                             <div class="cc-lobby__names">
                                 <div class="cc-lobby__codename">{{ slot.codename }}</div>
-                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="{'lobby-name--dev': isDevName(slot.displayName)}">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="nameTagClass(slot)">{{ slot.displayName }}</div>
                                 <div class="cc-lobby__ai" ng-if="slot.isAi">
                                     <span>AI:</span>
                                     <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
@@ -211,7 +214,7 @@
                                 <img ng-src="{{ generalAvatar(spectatorSlot) }}"
                                      cc-fallback-src="{{ spectatorAvatarFallback }}" alt="">
                             </div>
-                            <div class="cc-lobby__spectator-name">{{ spectatorSlot.displayName }}</div>
+                            <div class="cc-lobby__spectator-name" ng-class="nameTagClass(spectatorSlot)">{{ spectatorSlot.displayName }}</div>
                         </div>
                         <button type="button" class="cc-lobby__spectate-btn"
                                 ng-show="canSpectate()" ng-disabled="swapLocked()"
@@ -237,6 +240,9 @@
                                 <img ng-src="{{ generalAvatar(slot) }}" alt="">
                             </div>
                             <div class="cc-lobby__color-ribbon" ng-if="!slot.invitePending"
+                                 ng-class="{'cc-lobby__color-ribbon--pick': canChangeColor(slot)}"
+                                 ng-click="pickColorFromRibbon(slot, $event)"
+                                 data-tip="{{ canChangeColor(slot) ? 'Pick colour' : '' }}"
                                  ng-style="{'background-color': slot.color}"></div>
                             <div class="cc-lobby__tools" ng-if="!slot.invitePending">
                                 <div class="cc-lobby__ready" ng-class="{on: slot.ready}"
@@ -255,13 +261,13 @@
                                         ng-class="{open: slotMenu == slotMenuKey(2, $index)}"
                                         data-tip="Pick faction and colour"></button>
                             </div>
-                            <ul class="cc-lobby__menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
+                            <ul class="cc-lobby__menu" ng-class="{'cc-lobby__menu--up': slotMenuUp}" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
                                 <li class="cc-lobby__menu-label">Faction</li>
-                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
+                                <li class="cc-lobby__menu-faction" ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
                                     <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
                                 </li>
                                 <li class="cc-lobby__menu-label">General</li>
-                                <li ng-repeat="g in availableGenerals(slot)"
+                                <li class="cc-lobby__menu-general" ng-repeat="g in availableGenerals(slot)"
                                     ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral(slot)}">
                                     <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
                                 </li>
@@ -285,7 +291,7 @@
                             <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
                             <div class="cc-lobby__names">
                                 <div class="cc-lobby__codename">{{ slot.codename }}</div>
-                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="{'lobby-name--dev': isDevName(slot.displayName)}">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="nameTagClass(slot)">{{ slot.displayName }}</div>
                                 <div class="cc-lobby__ai" ng-if="slot.isAi">
                                     <span>AI:</span>
                                     <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>

@@ -37,6 +37,13 @@ CCApp.run(function ($rootScope) {
         $rootScope.lobbyOpen = true;
         $rootScope.lobbyView = 'matchmake';
     };
+    // Aurora "Find a match": no map pick. The lobby controller consumes quickMatchPending and joins
+    // the lowest-ping populated server (an idle one when none is populated).
+    $rootScope.quickMatch = function () {
+        $rootScope.quickMatchPending = true;
+        $rootScope.lobbyOpen = true;
+        $rootScope.lobbyView = 'matchmake';
+    };
     $rootScope.openGameRoom = function () {
         $rootScope.lobbyOpen = true;
         $rootScope.lobbyView = 'gameroom';
@@ -122,6 +129,9 @@ CCApp.directive('ngRightClick', function($parse) {
 // ROOT CONTROLLER (Global Modals & Context Menus)
 // ==========================================
 CCApp.controller('RootController', function($scope, $document, $rootScope, $timeout) {
+    $rootScope.buildRfr = $rootScope.buildRfr || '—';
+    $rootScope.buildPrism = $rootScope.buildPrism || '—';
+    $rootScope.buildGame = $rootScope.buildGame || '150805';
 
     function syncBlaze() {
         if (!window.CncBlazeState) {
@@ -380,7 +390,11 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
                         wins: data.wins || 0,
                         losses: data.losses || 0,
                         winStreak: data.winStreak || 0,
-                        lossStreak: data.lossStreak || 0
+                        lossStreak: data.lossStreak || 0,
+                        lastGeneralId: data.lastGeneralId || 0,
+                        lastFaction: data.lastFaction || '',
+                        shortestMatchSecs: data.shortestMatchSecs || 0,
+                        bestWinSecs: data.bestWinSecs || 0
                     };
                 };
                 if ($rootScope.$$phase) {
@@ -427,6 +441,85 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
             $scope.$apply(function(){ $scope.closeFriendContextMenu(); });
         }
     });
+
+    function isTextField(el) {
+        if (!el || !el.tagName) {
+            return false;
+        }
+        var tag = el.tagName.toUpperCase();
+        if (tag === 'TEXTAREA') {
+            return true;
+        }
+        if (tag !== 'INPUT') {
+            return false;
+        }
+        var type = (el.type || 'text').toLowerCase();
+        return type === 'text' || type === 'password' || type === 'search' || type === 'email' || type === '';
+    }
+
+    // Esc walks back: dialogs, then the current page, then quit confirm on the main menu.
+    function handleShellEscape() {
+        if (!$rootScope.preLandingComplete || $rootScope.authRefusal || $rootScope.quittingOpen) {
+            return;
+        }
+        var el = document.activeElement;
+        if (isTextField(el)) {
+            el.blur();
+            return;
+        }
+        if ($rootScope.confirmQuitOpen) {
+            $rootScope.cancelConfirmQuit();
+            return;
+        }
+        if ($rootScope.serverLostError) {
+            $rootScope.dismissServerLostError();
+            return;
+        }
+        if ($rootScope.optionsOpen) {
+            $rootScope.closeOptions();
+            return;
+        }
+        if ($rootScope.creditsOpen) {
+            $rootScope.closeCredits();
+            return;
+        }
+        if ($rootScope.alertPopupOpen) {
+            $rootScope.alertPopupOpen = false;
+            return;
+        }
+        var packet = { handled: false };
+        $rootScope.$broadcast('cnc:escape', packet);
+        if (packet.handled || $rootScope.lobbyOpen) {
+            return;
+        }
+        $rootScope.openConfirmQuit();
+    }
+
+    var escHeld = false;
+    $document.bind('keydown', function (event) {
+        var key = event.keyCode || event.which;
+        if (key !== 27) {
+            return;
+        }
+        if (escHeld) {
+            return;
+        }
+        escHeld = true;
+        if (event.preventDefault) {
+            event.preventDefault();
+        }
+        if ($scope.$$phase) {
+            handleShellEscape();
+        } else {
+            $scope.$apply(handleShellEscape);
+        }
+    });
+    $document.bind('keyup', function (event) {
+        var key = event.keyCode || event.which;
+        if (key === 27) {
+            escHeld = false;
+        }
+    });
 });
 
 // ==========================================
@@ -465,7 +558,15 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         return !!($rootScope.playtest && PLAYTEST_LOCKED_TABS[tabName]);
     };
 
+    /** Aurora folds Learn into Support (Play tutorial, FAQ, Guides, Troubleshoot). */
+    function auroraShell() {
+        return !!(window.CncShellTheme && CncShellTheme.family() === 'aurora');
+    }
+
     $scope.setTab = function(tabName) {
+        if (tabName === 'LEARN' && auroraShell()) {
+            tabName = 'SUPPORT';
+        }
         if ($scope.playtestNavLocked(tabName)) {
             return;
         }
@@ -475,7 +576,7 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         }
         if (tabName === 'PROFILE') { $scope.activeSubTab = 'OVERVIEW'; } 
         else if (tabName === 'CUSTOMIZE') { $scope.activeSubTab = 'MODIFY GENERALS'; } 
-        else if (tabName === 'SUPPORT') { $scope.activeSubTab = 'FAQ'; } 
+        else if (tabName === 'SUPPORT') { $scope.activeSubTab = auroraShell() ? 'PLAY TUTORIAL' : 'FAQ'; } 
         else if (tabName === 'LEARN') { $scope.activeSubTab = 'GUIDES'; } 
         else { $scope.activeSubTab = ''; }
     };
@@ -492,6 +593,43 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
             $rootScope.openLobby();
         }
     };
+    $scope.quickMatch = function () {
+        if ($rootScope.quickMatch) {
+            $rootScope.quickMatch();
+        }
+    };
+
+    // Aurora: the general on the main menu (js/shell-general-art.js): the one played last
+    // (matchRecord.lastGeneralId, from Refracted), else the lobby default from OPTIONS.
+    $scope.generalArt = null;
+    $scope.generalLine = '';
+    $scope.generalIcon = '';
+    var generalShown = '';
+    function refreshGeneral() {
+        var rec = $rootScope.matchRecord || {};
+        var pick = (window.CncGeneralArt && CncGeneralArt.current)
+            ? CncGeneralArt.current({ generalId: rec.lastGeneralId }) : null;
+        $scope.generalLine = pick ? pick.line : '';
+        $scope.generalIcon = pick ? pick.icon : '';
+        var src = pick ? pick.src : '';
+        if (src === generalShown) {
+            return;
+        }
+        generalShown = src;
+        $scope.generalArt = src ? { src: src, fit: pick.fit, bust: pick.bust, style: pick.style } : null;
+    }
+    $rootScope.$watch('matchRecord.lastGeneralId', function () { refreshGeneral(); });
+    $scope.winRate = function () {
+        var played = ($scope.wins || 0) + ($scope.losses || 0);
+        return played ? Math.round(($scope.wins / played) * 100) : 0;
+    };
+    refreshGeneral();
+    // Lobby defaults are edited in OPTIONS; pick the change up when the dialog closes.
+    $scope.$on('$destroy', $rootScope.$watch('optionsOpen', function (open, was) {
+        if (was && !open) {
+            refreshGeneral();
+        }
+    }));
 
     // 3. Shared Faction Data (Header Cluster)
     $scope.activeFaction = 'apa'; 
@@ -588,9 +726,64 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         }, window.CncNews.refreshCooldownMs);
     };
 
+    // Aurora (Alternate): the feature banner leads with the newest article.
+    var FEATURE_FALLBACK = 'view/image/lobby-card-art/monsoon.png';
+    $scope.featureImage = function () {
+        var lead = $scope.newsEntries[0];
+        if (lead && lead.image) {
+            return lead.image;
+        }
+        return $rootScope.playtest ? playtestHero : FEATURE_FALLBACK;
+    };
+
     $scope.activeNewsArticle = null;
-    $scope.openArticle = function(article) { $scope.activeNewsArticle = article; $scope.mapOpen = false; };
+    $scope.openArticle = function(article) {
+        if (!article) {
+            return;
+        }
+        $scope.activeNewsArticle = article;
+        $scope.mapOpen = false;
+    };
     $scope.closeArticle = function() { $scope.activeNewsArticle = null; };
+
+    var SUBTAB_HOME = {
+        PROFILE: 'OVERVIEW',
+        CUSTOMIZE: 'MODIFY GENERALS',
+        SUPPORT: 'FAQ',
+        LEARN: 'GUIDES'
+    };
+    $scope.$on('cnc:escape', function (e, packet) {
+        if ($scope.friendContextMenu && $scope.friendContextMenu.open) {
+            $scope.closeFriendContextMenu();
+            packet.handled = true;
+            return;
+        }
+        if ($scope.mapOpen) {
+            $scope.mapOpen = false;
+            packet.handled = true;
+            return;
+        }
+        if ($scope.joinedRoom) {
+            $scope.leaveRoom();
+            packet.handled = true;
+            return;
+        }
+        if ($scope.activeNewsArticle) {
+            $scope.closeArticle();
+            packet.handled = true;
+            return;
+        }
+        var homeSub = ($scope.activeTab === 'SUPPORT' && auroraShell()) ? 'PLAY TUTORIAL' : SUBTAB_HOME[$scope.activeTab];
+        if (homeSub && $scope.activeSubTab && $scope.activeSubTab !== homeSub) {
+            $scope.setSubTab(homeSub);
+            packet.handled = true;
+            return;
+        }
+        if ($scope.activeTab && $scope.activeTab !== 'LIVE') {
+            $scope.setTab('LIVE');
+            packet.handled = true;
+        }
+    });
 
     // ==========================================
     // SIDEBAR LOGIC (Feeds, Chat, Friends)
@@ -660,31 +853,48 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     $scope.buildRfr = '—';
     $scope.buildPrism = '—';
     $scope.buildCnc = '150805';
+    $scope.buildGame = '150805';
+    $rootScope.buildRfr = $rootScope.buildRfr || '—';
+    $rootScope.buildPrism = $rootScope.buildPrism || '—';
+    $rootScope.buildGame = $rootScope.buildGame || '150805';
     $scope.mapOpen = false; 
     $scope.toggleMap = function() { $scope.mapOpen = !$scope.mapOpen; };
+
+    function publishBuild(name, value) {
+        if (!value) {
+            return;
+        }
+        $scope[name] = value;
+        $rootScope[name] = value;
+    }
 
     function applyBuildInfo(body) {
         if (!body) {
             return;
         }
         if (body.rfr) {
-            $scope.buildRfr = body.rfr;
+            publishBuild('buildRfr', body.rfr);
         }
         // Prism version is client-owned
         try {
             if (window.__PRISM_VERSION) {
-                $scope.buildPrism = window.__PRISM_VERSION;
+                publishBuild('buildPrism', window.__PRISM_VERSION);
             } else if (body.prism) {
-                $scope.buildPrism = body.prism;
+                publishBuild('buildPrism', body.prism);
             }
         } catch (eP) {
             if (body.prism) {
-                $scope.buildPrism = body.prism;
+                publishBuild('buildPrism', body.prism);
             }
         }
-        var cnc = body.cnc_rl || body.cnc;
-        if (cnc) {
-            $scope.buildCnc = cnc;
+        var shellBuild = body.cnc_rl || body.cnc;
+        if (shellBuild) {
+            $scope.buildCnc = shellBuild;
+        }
+        // gamebuild is the exe version from GetGameBuild(). Fall back to the shell constant.
+        var game = body.gamebuild || shellBuild;
+        if (game) {
+            publishBuild('buildGame', game);
         }
         if (body.debugDll === true || body.debugDll === 1 || body.debugDll === '1') {
             $rootScope.showDebugTools = true;

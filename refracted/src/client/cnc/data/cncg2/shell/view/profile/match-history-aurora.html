@@ -1,0 +1,22 @@
+<div class="au-prof au-prof--history">
+    <div class="au-prof__hrow au-prof__hrow--head">
+        <span class="au-prof__hcell au-prof__hcell--l">Defeats</span>
+        <span class="au-prof__hdate">Date</span>
+        <span class="au-prof__hcell">Victories</span>
+    </div>
+    <div class="au-prof__scroll">
+        <div class="au-prof__hrow" ng-repeat="match in matchHistoryData">
+            <span class="au-prof__hcell au-prof__hcell--l">
+                <em>{{ match.defeats }}</em>
+                <i><u class="au-prof__fill--loss" ng-style="{'width': match.defPct + '%'}"></u></i>
+            </span>
+            <span class="au-prof__hdate">{{ match.date }}</span>
+            <span class="au-prof__hcell">
+                <i><u class="au-prof__fill--win" ng-style="{'width': match.vicPct + '%'}"></u></i>
+                <em>{{ match.victories }}</em>
+            </span>
+        </div>
+        <p class="au-prof__note" ng-show="profileUnavailable">Match records are unavailable: this server is not connected to the Nexus database.</p>
+        <p class="au-prof__note" ng-show="!profileUnavailable && !matchHistoryData.length">No matches recorded yet. History starts with matches reported after the 2026-10-11 Refracted update; earlier results count only in your totals.</p>
+    </div>
+</div>

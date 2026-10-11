@@ -12,6 +12,12 @@
     var MINIMAP_DIR = '/cnc/utfwin/images/MiniMap/';
     var LOBBY_MINIMAP_DIR = '/cncg2/shell/view/image/lobby-minimaps/';
     var LOBBY_CARD_ART_DIR = '/cncg2/shell/view/image/lobby-card-art/';
+    // War maps: optional 14:9 art that fills the Aurora lobby's map stage, one per map, named after
+    // the map's minimap file (DM_Monsoon_3v3_MO.png -> lobby-warmaps/DM_Monsoon_3v3_MO.jpg, or .png).
+    // Sizes and the pip rule are in the shell README ("War maps").
+    var LOBBY_WARMAP_DIR = '/cncg2/shell/view/image/lobby-warmaps/';
+    var WARMAP_ASPECT = 14 / 9;
+    var warMapProbe = {};
     var MAP_THUMB = MINIMAP_DIR + 'MissingMap.png';
     // UTFWin MiniMaps are 512²; lobby PNGs crop the playable island. Pip UV uses map.world.
     var WORLD_XZ = { minX: -512, maxX: 512, minZ: -512, maxZ: 512 };
@@ -274,6 +280,9 @@
         ]
     };
     var GENERAL_ICON_DIR = 'view/image/generals/';
+    var BUST_DIR = '/cnc/utfwin/images/UserPortraits/';
+    // The game's bust files misspell two generals.
+    var BUST_FILE_FIXES = { AG_UrbanCombat_01: 'AG_UrbanConbat_01', EG_RapidAssault_01: 'EG_RapidAssult_01' };
     var FACTION_ICON = {
         APA: 'view/image/Factionlogos/APA_sm.png',
         EU: 'view/image/Factionlogos/EU_sm.png',
@@ -414,7 +423,8 @@
             avatar: DEFAULT_AVATAR,
             teamNum: 1,
             startpoint: 0,
-            pid: 0
+            pid: 0,
+            nameTag: ''
         };
     }
 
@@ -791,6 +801,20 @@
             return avatarForSlot(slot);
         };
 
+        // Aurora (Default) lobby cards show the game's bust portrait (UTFWinAssets/images/UserPortraits);
+        // the square icon stays the <img cc-fallback-src> when the backend cannot see the game directory.
+        $scope.slotPortrait = function (slot) {
+            var icon = avatarForSlot(slot);
+            if ($rootScope.shellUiTheme !== 'aurora') {
+                return icon;
+            }
+            var m = /generals\/([A-Z]{2}_[A-Za-z]+_\d+)[AB]?\.png$/.exec(icon);
+            if (!m) {
+                return icon;
+            }
+            return BUST_DIR + (BUST_FILE_FIXES[m[1]] || m[1]) + '_UP.png';
+        };
+
         $scope.mapCardStyle = function (map) {
             if (!map) {
                 return {};
@@ -801,6 +825,70 @@
                 'background-repeat': 'no-repeat',
                 'background-size': 'cover'
             };
+        };
+
+        // War map for the Aurora map stage, or '' while unknown / when the map has none.
+        // Probed once per map: <minimap name>.jpg and .png.
+        $scope.warMapSrc = function (map) {
+            if (!map || !map.minimap) {
+                return '';
+            }
+            var key = map.minimap;
+            var probe = warMapProbe[key];
+            if (!probe) {
+                probe = warMapProbe[key] = { src: '' };
+                var base = LOBBY_WARMAP_DIR + key.replace(/\.[a-z]+$/i, '');
+                // Both names are tried side by side; the engine does not reliably raise an
+                // error event for a missing image, so nothing waits on one.
+                var tryLoad = function (url) {
+                    var img = new Image();
+                    img.onload = function () {
+                        $timeout(function () {
+                            if (!probe.src) {
+                                probe.src = url;
+                            }
+                        }, 0);
+                    };
+                    img.src = url;
+                };
+                tryLoad(base + '.jpg');
+                tryLoad(base + '.png');
+            }
+            return probe.src;
+        };
+
+        // Stage background: the war map when there is one, else the lobby minimap (CSS blurs it).
+        $scope.mapFillStyle = function (map) {
+            var src = $scope.warMapSrc(map) || $scope.lobbyMinimapSrc(map);
+            return { 'background-image': 'url("' + src + '")' };
+        };
+
+        // Where the square lobby minimap sits inside the war map, as fractions of the war map
+        // (u0, v0 = top left; u1, v1 = bottom right). Pips keep their minimap u/v and are placed
+        // through this rect. Default: the minimap scaled to the war map's full width and centred,
+        // i.e. a square picture cropped to 14:9. A map can override it with warFit.
+        function warFit(map) {
+            if (map && map.warFit) {
+                return map.warFit;
+            }
+            var over = (WARMAP_ASPECT - 1) / 2;
+            return { u0: 0, v0: -over, u1: 1, v1: 1 + over };
+        }
+
+        // Pip position on the Aurora map stage.
+        $scope.stagePipStyle = function (sp) {
+            var style = $scope.startPipStyle(sp);
+            var map = $scope.selectedMap;
+            if (!sp || !$scope.warMapSrc(map)) {
+                return style;
+            }
+            var uv = lobbyUvForStart(sp, map);
+            var fit = warFit(map);
+            var u = fit.u0 + uv.u * (fit.u1 - fit.u0);
+            var v = fit.v0 + uv.v * (fit.v1 - fit.v0);
+            style.left = (Math.max(0.03, Math.min(0.97, u)) * 100).toFixed(2) + '%';
+            style.top = (Math.max(0.05, Math.min(0.95, v)) * 100).toFixed(2) + '%';
+            return style;
         };
 
         $scope.lobbyMinimapSrc = function (map) {
@@ -887,6 +975,15 @@
             return FACTIONS;
         };
 
+        /** 64x64 portrait for the slot menu's general tiles. */
+        $scope.generalIconSrc = function (g) {
+            return g && g.icon ? GENERAL_ICON_DIR + g.icon : '';
+        };
+
+        $scope.factionIconFor = function (code) {
+            return FACTION_ICON[normalizeFaction(code)] || '';
+        };
+
         $scope.availableGenerals = function (slot) {
             if (!slot) {
                 return [];
@@ -908,13 +1005,14 @@
         };
 
         // A ready non-host player keeps spot, faction, general, colour and team until they unready.
+        // Being ready no longer locks a seat: changing your own team, start, faction, general or
+        // colour unreadies you on the server (player-attrs), and the roster poll brings that back.
         function lockedByReady(slot) {
-            return !!(slot && slot.isLocal && $scope.localReady &&
-                !($scope.isLobbyHost && $scope.isLobbyHost()));
+            return false;
         }
         $scope.lockedByReady = lockedByReady;
 
-        // Only the local player's card (and the host's AI cards) can be edited; ready players stay locked.
+        // Only the local player's card (and the host's AI cards) can be edited.
         function slotLocked(slot) {
             var owns = !!(slot && (slot.isLocal || (slot.isAi && $scope.isLobbyHost && $scope.isLobbyHost())));
             return !owns || lockedByReady(slot);
@@ -1547,24 +1645,154 @@
             if (!data.messages.length) {
                 return;
             }
-            $scope.lobbyChat = data.messages;
-            scrollLobbyChat();
+            if (mergeLobbyChat(data.messages)) {
+                scrollLobbyChat();
+            }
         }
 
-        var DEV_NAMES = { 'nemo': true, 'xevrac': true };
+        function sameChatLine(a, b) {
+            return a.user === b.user && a.text === b.text && !!a.system === !!b.system;
+        }
+
+        /**
+         * Keep the line objects already on screen and only append new ones. Replacing the array on
+         * every poll re-rendered every line, which replayed their entrance animation (the chat
+         * "flicked down" each poll). Handles the server dropping its oldest lines.
+         * Returns true when something changed.
+         */
+        function mergeLobbyChat(next) {
+            var cur = $scope.lobbyChat || [];
+            var k, i, overlap;
+            // The server has not caught up with a line sent from here yet: keep what is shown.
+            for (i = 0; i < next.length && i < cur.length && sameChatLine(cur[i], next[i]); i++) { /* scan */ }
+            if (i === next.length && next.length <= cur.length) {
+                return false;
+            }
+            for (k = 0; k < cur.length; k++) {
+                overlap = cur.length - k;
+                if (overlap > next.length) {
+                    continue;
+                }
+                for (i = 0; i < overlap; i++) {
+                    if (!sameChatLine(cur[k + i], next[i])) {
+                        break;
+                    }
+                }
+                if (i === overlap) {
+                    break;
+                }
+            }
+            overlap = cur.length - k;
+            if (k === 0 && overlap === next.length) {
+                return false;
+            }
+            $scope.lobbyChat = cur.slice(k).concat(next.slice(overlap));
+            return true;
+        }
+
         var TYPING_DOTS = ['...', '..', '.', '..'];
         $scope.lobbyTyping = [];
         $scope.typingDots = '...';
 
-        $scope.isDevName = function (name) {
-            return !!DEV_NAMES[String(name || '').toLowerCase()];
+        $scope.nameTagClass = function (slot) {
+            var tag = slot && slot.nameTag;
+            if (tag === 'developer') {
+                return { 'lobby-name--dev': true };
+            }
+            if (tag === 'playtester') {
+                return { 'lobby-name--playtester': true };
+            }
+            return {};
+        };
+
+        // Lobby chat names take the speaker's house colour (Aurora).
+        $scope.chatUserStyle = function (msg) {
+            if (!msg || msg.system || !msg.user) {
+                return {};
+            }
+            var want = String(msg.user).toLowerCase();
+            var lists = [$scope.team1 || [], $scope.team2 || []];
+            var li;
+            var i;
+            for (li = 0; li < lists.length; li++) {
+                for (i = 0; i < lists[li].length; i++) {
+                    var slot = lists[li][i];
+                    if (slot && slot.occupied && !slot.isAi && slot.color &&
+                            String(slot.displayName || '').toLowerCase() === want) {
+                        return { color: slot.color };
+                    }
+                }
+            }
+            return {};
+        };
+
+        $scope.difficultyLabel = function (slot) {
+            var d = String((slot && slot.difficulty) || 'HARD').toLowerCase();
+            return d.charAt(0).toUpperCase() + d.slice(1) + ' AI';
+        };
+
+        /** Difficulty choices for the slot menu (AI seats, host only). One array: ng-repeat needs a stable list. */
+        var DIFFICULTY_CHOICES = (function () {
+            var out = [];
+            var i;
+            for (i = 0; i < DIFFS.length; i++) {
+                out.push({ id: DIFFS[i], label: DIFFS[i].charAt(0) + DIFFS[i].slice(1).toLowerCase() });
+            }
+            return out;
+        })();
+        $scope.difficultyChoices = function () {
+            return DIFFICULTY_CHOICES;
+        };
+
+        $scope.isDifficulty = function (slot, id) {
+            return String((slot && slot.difficulty) || 'HARD').toUpperCase() === id;
+        };
+
+        $scope.pickDifficulty = function (slot, id, $event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if (!slot || !slot.isAi || !$scope.isLobbyHost()) {
+                return;
+            }
+            $scope.setDifficulty(slot, id);
+        };
+
+        $scope.cycleDifficulty = function (slot, $event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if (!slot || !slot.isAi || !$scope.isLobbyHost()) {
+                return;
+            }
+            var at = DIFFS.indexOf(String(slot.difficulty || 'HARD').toUpperCase());
+            $scope.setDifficulty(slot, DIFFS[(at + 1) % DIFFS.length]);
+        };
+
+        // "3v3, 6 start locations"
+        $scope.mapTagLine = function (map) {
+            if (!map) {
+                return '';
+            }
+            var mode = $scope.mapModeLabel(map);
+            if (mode && /^\d+V\d+$/.test(mode)) {
+                mode = mode.toLowerCase();
+            }
+            var n = mapStartCount(map);
+            return mode + (n > 1 ? ', ' + n + ' start locations' : '');
         };
 
         $scope.chatUserClass = function (msg) {
             if (msg && msg.system) {
                 return 'chat-user--system';
             }
-            return msg && $scope.isDevName(msg.user) ? 'chat-user--dev' : '';
+            if (msg && msg.tag === 'developer') {
+                return 'chat-user--dev';
+            }
+            if (msg && msg.tag === 'playtester') {
+                return 'chat-user--playtester';
+            }
+            return '';
         };
 
         $scope.typingLabel = function () {
@@ -1698,6 +1926,45 @@
             $scope.lobbyOptionsOpen = true;
         };
 
+        // Options the server keeps for the match, with their vanilla values (applyLobbyMatchOptions).
+        $scope.lobbyOptionDefs = [
+            { key: 'enableTechTree', label: 'Tech tree', def: true },
+            { key: 'enableSpecialAbilities', label: 'Special abilities', def: true },
+            { key: 'enableUnlockFullFactionRoster', label: 'Full faction roster', def: false },
+            { key: 'enableInstantSelling', label: 'Instant selling', def: false },
+            { key: 'enableRebuildableDerricks', label: 'Rebuildable derricks', def: true },
+            { key: 'disallowSpectators', label: 'Spectators disallowed', def: false }
+        ];
+        $scope.optionValue = function (d) {
+            var v = $scope.lobbyOptions[d.key];
+            return (v === undefined || v === null) ? d.def : !!v;
+        };
+        $scope.optionChanged = function (d) {
+            return $scope.optionValue(d) !== d.def;
+        };
+        $scope.lobbyCustomized = function () {
+            var i;
+            for (i = 0; i < $scope.lobbyOptionDefs.length; i++) {
+                if ($scope.optionChanged($scope.lobbyOptionDefs[i])) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        $scope.lobbyRulesOpen = false;
+        $scope.openLobbySummary = function ($event) {
+            if ($scope.isLobbyHost && $scope.isLobbyHost()) {
+                $scope.openLobbyOptions($event);
+                return;
+            }
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if ($scope.lobbyCustomized()) {
+                $scope.lobbyRulesOpen = true;
+            }
+        };
+
         $scope.closeLobbyOptions = function () {
             $scope.applyLobbyMatchOptions();
             $scope.lobbyOptionsOpen = false;
@@ -1705,6 +1972,55 @@
                 $scope.lobbySubTab = 'GENERALS';
             }
         };
+
+        $scope.$on('cnc:escape', function (e, packet) {
+            if (!$rootScope.lobbyOpen) {
+                return;
+            }
+            if (window.CncLobbyColorPicker && CncLobbyColorPicker.isOpen && CncLobbyColorPicker.isOpen()) {
+                CncLobbyColorPicker.close();
+                packet.handled = true;
+                return;
+            }
+            if ($scope.startModalSlot) {
+                $scope.closeStartModal();
+                packet.handled = true;
+                return;
+            }
+            if ($scope.mapPickerOpen) {
+                $scope.closeMapPicker();
+                packet.handled = true;
+                return;
+            }
+            if ($scope.lobbyOptionsOpen) {
+                $scope.closeLobbyOptions();
+                packet.handled = true;
+                return;
+            }
+            if ($scope.mapMenuOpen || $scope.slotMenu) {
+                $scope.closeMenus();
+                packet.handled = true;
+                return;
+            }
+            if ($rootScope.lobbyView === 'gameroom') {
+                if ($rootScope.leaveGameRoom) {
+                    $rootScope.leaveGameRoom();
+                }
+                packet.handled = true;
+                return;
+            }
+            if ($rootScope.lobbyView === 'browser') {
+                if ($rootScope.closeServerBrowser) {
+                    $rootScope.closeServerBrowser();
+                }
+                packet.handled = true;
+                return;
+            }
+            if ($rootScope.exitLobby) {
+                $rootScope.exitLobby();
+            }
+            packet.handled = true;
+        });
 
         $scope.toggleSlotMenu = function (team, index, $event) {
             if ($event) {
@@ -1722,9 +2038,30 @@
             }
             var key = $scope.slotMenuKey(team, index);
             closeColorPicker();
+            $scope.slotMenuUp = slotMenuOpensUp($event);
             $scope.slotMenu = ($scope.slotMenu === key) ? null : key;
             $scope.mapMenuOpen = false;
         };
+
+        // Room the slot menu needs under its card; with less, and more above, it opens upward.
+        var SLOT_MENU_ROOM = 520; // menu height on the 1920x1080 frame (scaled by the root font size)
+        function slotMenuOpensUp($event) {
+            var el = $event && ($event.currentTarget || $event.target);
+            var $card;
+            var top;
+            var below;
+            if (!el || !window.jQuery) {
+                return false;
+            }
+            $card = jQuery(el).closest('.au-lobby__slot, .cc-lobby__card');
+            if (!$card.length || !$card.offset()) {
+                return false;
+            }
+            top = $card.offset().top - (jQuery(window).scrollTop() || 0);
+            below = (jQuery(window).height() || 0) - (top + $card.outerHeight());
+            var k = (parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16) / 16;
+            return below < SLOT_MENU_ROOM * k && top > below;
+        }
 
         $scope.setFaction = function (slot, code, $event) {
             if ($event && $event.stopPropagation) {
@@ -1784,7 +2121,16 @@
             }
         };
 
-        $scope.openCustomColorPicker = function (slot, $event) {
+        // The colour ribbon under the avatar is a shortcut to the colour picker.
+        $scope.pickColorFromRibbon = function (slot, $event) {
+            if (!$scope.canChangeColor(slot)) {
+                return;
+            }
+            $scope.slotMenu = null;
+            $scope.openCustomColorPicker(slot, $event, true);
+        };
+
+        $scope.openCustomColorPicker = function (slot, $event, quickPick) {
             var host;
             if ($event) {
                 if ($event.stopPropagation) {
@@ -1808,6 +2154,7 @@
             window.CncLobbyColorPicker.open(host, {
                 current: slot.color,
                 taken: takenHouseColors(slot),
+                closeOnPick: !!quickPick,
                 onPick: function (hex) {
                     $scope.setColor(slot, hex);
                     if (!$scope.$$phase) {
@@ -1927,6 +2274,10 @@
             if (!games || !games.length) {
                 return [];
             }
+            // Aurora has no map-pick step any more, so its browser lists every server.
+            if (auroraQuickMatch()) {
+                return games.slice(0);
+            }
             var wantPath = $scope.mapPath || '';
             var wantLeaf = wantPath ? wantPath.split('/').pop() : '';
             var out = [];
@@ -1963,8 +2314,8 @@
                         return;
                     }
                     var port = row.pingPort != null ? row.pingPort : 18387;
-                    var url = '/cnc/server-ping?host=' + encodeURIComponent(row.pingHost) +
-                        '&port=' + encodeURIComponent(port);
+                    var url = withKey('/cnc/server-ping?host=' + encodeURIComponent(row.pingHost) +
+                        '&port=' + encodeURIComponent(port));
                     httpRequest('GET', url).then(function (data) {
                         if (data && data.pingMs != null) {
                             $timeout(function () {
@@ -2435,55 +2786,105 @@
             return Math.max(0, pool.assignableIn);
         }
 
-        function pickMatchTarget(games) {
-            if (!games || !games.length) {
-                return null;
-            }
-            var joinable = [];
+        function auroraQuickMatch() {
+            return !!(window.CncShellTheme && CncShellTheme.family && CncShellTheme.family() === 'aurora');
+        }
+
+        function joinableMatchRows(games) {
+            var out = [];
             var i;
-            for (i = 0; i < games.length; i++) {
+            for (i = 0; i < (games || []).length; i++) {
                 if (gameHasRoom(games[i]) && !games[i].passwordProtected) {
-                    joinable.push(games[i]);
+                    out.push(games[i]);
                 }
             }
-            if (!joinable.length) {
+            return out;
+        }
+
+        // Fills row.pingMs for every row that has a ping host; calls done() once all answered or after timeoutMs.
+        function probeMatchPings(rows, timeoutMs, done) {
+            var pending = 0;
+            var finished = false;
+            function finish() {
+                if (!finished) {
+                    finished = true;
+                    done();
+                }
+            }
+            var i;
+            for (i = 0; i < rows.length; i++) {
+                (function (row) {
+                    if (!row || !row.pingHost) {
+                        return;
+                    }
+                    pending++;
+                    var port = row.pingPort != null ? row.pingPort : 18387;
+                    httpRequest('GET', withKey('/cnc/server-ping?host=' + encodeURIComponent(row.pingHost) +
+                        '&port=' + encodeURIComponent(port))).then(function (data) {
+                        if (data && data.pingMs != null) {
+                            row.pingMs = Number(data.pingMs);
+                        }
+                        pending--;
+                        if (pending <= 0) {
+                            finish();
+                        }
+                    });
+                })(rows[i]);
+            }
+            if (pending === 0) {
+                finish();
+                return;
+            }
+            $timeout(finish, timeoutMs);
+        }
+
+        function pingRank(g) {
+            var ms = g && g.pingMs != null ? Number(g.pingMs) : NaN;
+            return isNaN(ms) ? 1e9 : ms;
+        }
+
+        // Lowest ping first; among equal pings, the busier lobby.
+        function byPingThenHumans(a, b) {
+            var d = pingRank(a) - pingRank(b);
+            if (d !== 0) {
+                return d;
+            }
+            return (Number(b.humans) || 0) - (Number(a.humans) || 0);
+        }
+
+        function pickMatchTarget(joinable) {
+            if (!joinable || !joinable.length) {
                 return null;
             }
-
-            function sortByHumansDesc(a, b) {
-                return (Number(b.humans) || 0) - (Number(a.humans) || 0);
-            }
-
+            var i;
             var populated = [];
-            for (i = 0; i < joinable.length; i++) {
-                if ((Number(joinable[i].humans) || 0) > 0) {
-                    populated.push(joinable[i]);
-                }
-            }
-            if (populated.length) {
-                var populatedMap = [];
-                for (i = 0; i < populated.length; i++) {
-                    if (mapMatchesSelected(populated[i])) {
-                        populatedMap.push(populated[i]);
-                    }
-                }
-                var pool = populatedMap.length ? populatedMap : populated;
-                pool.sort(sortByHumansDesc);
-                return pool[0];
-            }
-
             var idle = [];
             for (i = 0; i < joinable.length; i++) {
                 var g = joinable[i];
-                var humans = Number(g.humans) || 0;
-                if (humans > 0) {
-                    continue;
-                }
-                if (g.isStandby || g.kind === 'standby' || g.map === 'Standby' || humans === 0) {
+                if ((Number(g.humans) || 0) > 0) {
+                    populated.push(g);
+                } else {
                     idle.push(g);
                 }
             }
+            if (populated.length) {
+                // Classic still picks a map first; Aurora joins any map.
+                if (!auroraQuickMatch()) {
+                    var onMap = [];
+                    for (i = 0; i < populated.length; i++) {
+                        if (mapMatchesSelected(populated[i])) {
+                            onMap.push(populated[i]);
+                        }
+                    }
+                    if (onMap.length) {
+                        populated = onMap;
+                    }
+                }
+                populated.sort(byPingThenHumans);
+                return populated[0];
+            }
             if (idle.length) {
+                idle.sort(byPingThenHumans);
                 return idle[0];
             }
             return null;
@@ -2499,7 +2900,9 @@
             }
             $scope._findingMatch = true;
             $scope._matchError = '';
-            syncMapToServer();
+            if (!auroraQuickMatch()) {
+                syncMapToServer();
+            }
 
             function failFind(msg) {
                 $scope._findingMatch = false;
@@ -2511,48 +2914,60 @@
 
             httpRequest('GET', '/cnc/dedicated-pool').then(function (pool) {
                 httpRequest('GET', '/cnc/game-list').then(function (data) {
-                    $timeout(function () {
-                        if (!$scope._findingMatch) {
-                            return;
-                        }
-                        var idlePool = poolAssignableCount(pool);
-                        var stabilizingIn = poolStabilizingHint(pool);
-                        var games = (data && data.games) ? data.games : [];
-                        var target = pickMatchTarget(games);
-                        var populated = !!(target && (Number(target.humans) || 0) > 0);
+                    var joinable = joinableMatchRows((data && data.games) ? data.games : []);
+                    probeMatchPings(joinable, 1500, function () {
+                        $timeout(function () {
+                            if (!$scope._findingMatch) {
+                                return;
+                            }
+                            var idlePool = poolAssignableCount(pool);
+                            var stabilizingIn = poolStabilizingHint(pool);
+                            var target = pickMatchTarget(joinable);
+                            var populated = !!(target && (Number(target.humans) || 0) > 0);
 
-                        if (populated) {
+                            if (!populated && (idlePool <= 0 || !target)) {
+                                if (stabilizingIn > 0) {
+                                    failFind('Server is still recycling — try again in a moment.');
+                                } else {
+                                    failFind('No idle servers found, check back later.');
+                                }
+                                return;
+                            }
                             if (window.CncProbe && CncProbe.log) {
                                 CncProbe.log('Lobby FIND MATCH: joining gid=' + target.gid +
-                                    ' humans=' + (target.humans || 0));
+                                    ' humans=' + (target.humans || 0) +
+                                    ' ping=' + (target.pingMs != null ? target.pingMs + 'ms' : '?') +
+                                    ' standby=' + !!(target.isStandby || target.kind === 'standby') +
+                                    ' idlePool=' + idlePool + ' of ' + joinable.length + ' joinable');
                             }
                             $scope._findingMatch = false;
                             $scope._joinStatus = 'Match found, joining..';
                             $scope.joinBrowserGame(target);
-                            return;
-                        }
-
-                        if (idlePool <= 0 || !target) {
-                            if (stabilizingIn > 0) {
-                                failFind('Server is still recycling — try again in a moment.');
-                            } else {
-                                failFind('No idle servers found, check back later.');
-                            }
-                            return;
-                        }
-                        if (window.CncProbe && CncProbe.log) {
-                            CncProbe.log('Lobby FIND MATCH: joining gid=' + target.gid +
-                                ' humans=' + (target.humans || 0) +
-                                ' standby=' + !!(target.isStandby || target.kind === 'standby') +
-                                ' idlePool=' + idlePool);
-                        }
-                        $scope._findingMatch = false;
-                        $scope._joinStatus = 'Match found, joining..';
-                        $scope.joinBrowserGame(target);
+                        });
                     });
                 });
             });
         };
+
+        // Aurora has no map-pick screen: 'matchmake' is only the searching state. Arriving there from
+        // "Find a match" starts the search; arriving any other way (leaving a lobby, Back from the
+        // browser, a lost server) goes straight home, where the root modal shows any error.
+        $scope.$watch(function () {
+            return $rootScope.lobbyOpen + '|' + $rootScope.lobbyView + '|' + !!$rootScope.quickMatchPending +
+                '|' + !!$scope._findingMatch + '|' + !!$scope._matchError + '|' + !!$scope._joinStatus;
+        }, function () {
+            if (!$rootScope.lobbyOpen || $rootScope.lobbyView !== 'matchmake' || !auroraQuickMatch()) {
+                return;
+            }
+            if ($rootScope.quickMatchPending) {
+                $rootScope.quickMatchPending = false;
+                $scope.findMatch();
+                return;
+            }
+            if (!$scope._findingMatch && !$scope._matchError && !$scope._joinStatus && $rootScope.exitLobby) {
+                $rootScope.exitLobby();
+            }
+        });
 
         $scope.leaveGameRoom = function () {
             postLeaveGameRoom();
@@ -2707,6 +3122,7 @@
             s.pid = p.pid || s.pid || 0;
             if (!p.isAi) {
                 s.displayName = p.name || s.displayName;
+                s.nameTag = p.nameTag || '';
             }
             if (p.difficulty) {
                 s.difficulty = p.difficulty;
@@ -2786,6 +3202,7 @@
                     }
                     slot = local;
                     placedLocal = true;
+                    slot.nameTag = p.nameTag || '';
                 } else if (p.isAi && hostOwnsAi) {
                     continue;
                 } else {
@@ -3211,12 +3628,16 @@
                                 resyncLocal = 'startpoint';
                             }
                         }
+                        // A held colour the server does not show yet has not landed: it is sent again.
+                        var colorDrift = false;
                         if (p.color && Date.now() >= ($scope._colorHoldUntil || 0)) {
                             localSlot().color = cssHouseColor(p.color);
+                        } else if (p.color && !sameHouseColor(p.color, localSlot().color)) {
+                            colorDrift = true;
                         }
                         var generalDrift = p.general && Number(p.general) !== Number(localSlot().general);
                         var factionDrift = p.faction && normalizeFaction(p.faction) !== localSlot().faction;
-                        if (!localSlot().isSpectator && (generalDrift || factionDrift) &&
+                        if (!localSlot().isSpectator && (generalDrift || factionDrift || colorDrift) &&
                             ($scope._attrsResyncAt || 0) <= Date.now()) {
                             $scope._attrsResyncAt = Date.now() + 3000;
                             resyncLocal = 'attrs';
@@ -3922,6 +4343,8 @@
             applyMapFromBrowserGame(g);
             if (localSlot() && localSlot().isLocal) {
                 applyLobbyDefaultsToSlot(localSlot(), $scope.selectedMap);
+                // The default colour holds until the server has it; the seat's auto-assigned one must not replace it.
+                $scope._colorHoldUntil = Date.now() + 4000;
                 localSlot().ready = !!$scope._localIsLobbyHost;
                 localSlot().isHost = !!$scope._localIsLobbyHost;
                 if (window.CncBlazeState && CncBlazeState.getPersonaId) {

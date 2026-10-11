@@ -57,10 +57,10 @@ body.ingame-classic .options-modal-overlay {
     width: 320px;
     margin: -114px 0 0 -160px;
     padding: 12px;
-    background: rgba(10, 14, 16, 0.96);
-    border: 1px solid #1c2a32;
-    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.78);
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.78);
+    background: rgba(10, 10, 11, 0.96);
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    -webkit-box-shadow: 0 0 0 1px #2e3136, 0 20px 48px rgba(0, 0, 0, 0.78);
+    box-shadow: 0 0 0 1px #2e3136, 0 20px 48px rgba(0, 0, 0, 0.78);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     z-index: 100;
@@ -72,8 +72,8 @@ body.ingame-classic .options-modal-overlay {
     height: 44px;
     margin: 0 0 8px 0;
     padding: 0;
-    border: 1px solid #4a5560;
-    background-color: #1a1e22;
+    border: 1px solid #6b6f75;
+    background-color: #1c1d1f;
     background-image:
         -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
         -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
@@ -96,15 +96,15 @@ body.ingame-classic .options-modal-overlay {
 .pause-menu-btn:focus {
     outline: none;
     color: #fff;
-    border-color: #6a7a88;
-    background-color: #242a30;
+    border-color: #9da1a8;
+    background-color: #2e3136;
     background-image:
         -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
         -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
     background-image:
         repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
         linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
-    text-shadow: 0 0 8px rgba(58, 160, 255, 0.18);
+    text-shadow: 0 0 8px #2e3136;
 }
 
 /* Confirm Quit / Confirm Surrender — over pause menu */
@@ -122,10 +122,10 @@ body.ingame-classic .options-modal-overlay {
     width: 340px;
     height: 150px;
     margin: -75px 0 0 -170px;
-    background: rgba(10, 14, 16, 0.97);
-    border: 1px solid #1c2a32;
-    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
+    background: rgba(10, 10, 11, 0.97);
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    -webkit-box-shadow: 0 0 0 1px #2e3136, 0 20px 48px rgba(0, 0, 0, 0.82);
+    box-shadow: 0 0 0 1px #2e3136, 0 20px 48px rgba(0, 0, 0, 0.82);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
 }
@@ -164,8 +164,8 @@ body.ingame-classic .options-modal-overlay {
     height: 30px;
     margin: 0 8px;
     padding: 0;
-    border: 1px solid #4a5560;
-    background-color: #1a1e22;
+    border: 1px solid #6b6f75;
+    background-color: #1c1d1f;
     background-image:
         -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 6px),
         -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.22) 100%);
@@ -186,8 +186,8 @@ body.ingame-classic .options-modal-overlay {
 .confirm-btn:focus {
     outline: none;
     color: #fff;
-    border-color: #6a7a88;
-    background-color: #242a30;
+    border-color: #9da1a8;
+    background-color: #2e3136;
     background-image:
         -webkit-repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px),
         -webkit-linear-gradient(top, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0.18) 100%);
@@ -216,10 +216,10 @@ body.ingame-classic .options-modal-overlay {
     width: 320px;
     margin: -48px 0 0 -160px;
     padding: 28px 20px;
-    background: rgba(10, 14, 16, 0.98);
-    border: 1px solid #1c2a32;
-    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.16), 0 20px 48px rgba(0, 0, 0, 0.82);
+    background: rgba(10, 10, 11, 0.98);
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    -webkit-box-shadow: 0 0 0 1px #2e3136, 0 20px 48px rgba(0, 0, 0, 0.82);
+    box-shadow: 0 0 0 1px #2e3136, 0 20px 48px rgba(0, 0, 0, 0.82);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     text-align: center;
@@ -238,4 +238,134 @@ body.ingame-classic .options-modal-overlay {
 /* Options modal: reuse shell styles from options.css + theme sheets; only raise z-index. */
 .options-modal-overlay {
     z-index: 9999;
+}
+
+/* =========================================================================
+   Aurora themes: the pause menu docks to the right edge and Return to Game leads.
+   The markup keeps the original order (Classic is unchanged); the old flexbox
+   ordinal groups reorder it here. Aurora (Alternate) restates colours at the end.
+   ========================================================================= */
+.pause-menu-title {
+    display: none;
+}
+body.ingame-aurora .pause-menu {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: 400px;
+    margin: 0;
+    padding: 110px 36px 0 36px;
+    border: 0;
+    border-left: 1px solid rgba(217, 221, 226, 0.5);
+    background: rgba(13, 14, 15, 0.93);
+    -webkit-box-shadow: -30px 0 80px rgba(0, 0, 0, 0.5);
+    box-shadow: -30px 0 80px rgba(0, 0, 0, 0.5);
+}
+body.ingame-aurora .pause-menu-title {
+    display: block;
+    margin: 0 0 36px 0;
+    color: #fff;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 34px;
+    line-height: 1;
+    font-weight: bold;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    -webkit-box-ordinal-group: 1;
+    -webkit-order: 1;
+    order: 1;
+}
+body.ingame-aurora .pause-menu-btn,
+body.ingame-aurora .pause-menu-btn:last-child {
+    height: auto;
+    margin: 0 0 12px 0;
+    padding: 20px;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background-color: #141516;
+    background-image: none;
+    color: #eceef0;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    font-size: 21px;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-align: left;
+    text-shadow: none;
+    -webkit-box-shadow: none;
+    box-shadow: none;
+}
+body.ingame-aurora .pause-menu-btn:hover,
+body.ingame-aurora .pause-menu-btn:focus {
+    border-color: #d9dde2;
+    background-color: #2e3136;
+    background-image: none;
+    color: #fff;
+}
+body.ingame-aurora .pause-menu-btn--main,
+body.ingame-aurora .pause-menu-btn--main:last-child {
+    border-color: #d9dde2;
+    background-color: #d9dde2;
+    color: #0a0a0b;
+    -webkit-box-ordinal-group: 2;
+    -webkit-order: 2;
+    order: 2;
+}
+body.ingame-aurora .pause-menu-btn--main:hover,
+body.ingame-aurora .pause-menu-btn--main:focus {
+    border-color: #fff;
+    background-color: #fff;
+    color: #0a0a0b;
+}
+body.ingame-aurora .pause-menu-btn--options {
+    -webkit-box-ordinal-group: 3;
+    -webkit-order: 3;
+    order: 3;
+}
+body.ingame-aurora .pause-menu-btn--warn {
+    margin-top: 28px;
+    border-color: rgba(74, 168, 255, 0.5);
+    color: #4aa8ff;
+    -webkit-box-ordinal-group: 4;
+    -webkit-order: 4;
+    order: 4;
+}
+body.ingame-aurora .pause-menu-btn--quit {
+    border-color: rgba(255, 77, 77, 0.5);
+    color: #ff4d4d;
+    -webkit-box-ordinal-group: 5;
+    -webkit-order: 5;
+    order: 5;
+}
+body.ingame-aurora .confirm-modal-box,
+body.ingame-aurora .quit-progress-box {
+    border-color: rgba(217, 221, 226, 0.5);
+    background: rgba(13, 14, 15, 0.98);
+    -webkit-box-shadow: 0 20px 48px rgba(0, 0, 0, 0.82);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.82);
+}
+body.ingame-aurora .confirm-modal-title {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+body.ingame-aurora .confirm-btn {
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background-color: #141516;
+    background-image: none;
+    color: #eceef0;
+    font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
+    letter-spacing: 0.12em;
+    text-shadow: none;
+}
+body.ingame-aurora .confirm-btn:hover,
+body.ingame-aurora .confirm-btn:focus {
+    border-color: #d9dde2;
+    background-color: #2e3136;
+    background-image: none;
+    color: #fff;
 }

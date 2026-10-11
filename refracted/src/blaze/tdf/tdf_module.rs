@@ -949,6 +949,45 @@ impl TdfEncoder {
         None
     }
 
+    /// First string→integer MAP (`0x05`, key `0x01`, value `0x00`) for `tag`, entries in wire order --
+    /// **linear scan** like [`Self::find_long_field`]. E.g. `NLMP` (ping-site alias → latency ms).
+    pub fn scan_string_int_map_field(data: &[u8], tag: &str) -> Option<Vec<(String, u64)>> {
+        let mut i = 0usize;
+        while i + 6 <= data.len() {
+            if Self::wire_tag_matches_at(data, i, tag)
+                && data[i + 3] == 0x5
+                && data[i + 4] == 0x1
+                && data[i + 5] == 0x0
+            {
+                if let Some(entries) = Self::decode_string_int_map_entries(&data[i + 6..]) {
+                    return Some(entries);
+                }
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Map body after the key/value type bytes: `count (key_len key value)*`.
+    fn decode_string_int_map_entries(data: &[u8]) -> Option<Vec<(String, u64)>> {
+        let (count, mut offset) = Self::decode_varint(data).ok()?;
+        if count > 1024 {
+            return None;
+        }
+        let mut out = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            let (key_len, n) = Self::decode_varint(data.get(offset..)?).ok()?;
+            offset += n;
+            let key_end = offset.checked_add(key_len as usize)?;
+            let key = Self::decode_null_terminated_string(data.get(offset..key_end)?).ok()?;
+            offset = key_end;
+            let (value, n) = Self::decode_varint(data.get(offset..)?).ok()?;
+            offset += n;
+            out.push((key, value));
+        }
+        Some(out)
+    }
+
     /// All integer values for `tag` in document order (DFS), e.g. two `"IP  "` for EXIP/INIP.
     pub fn find_all_int_fields(data: &[u8], tag: &str) -> Vec<i32> {
         let mut out = Vec::new();

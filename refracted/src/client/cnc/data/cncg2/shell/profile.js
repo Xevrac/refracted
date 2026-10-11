@@ -1,120 +1,209 @@
 /**
  * Profile Controller
- * Manages the specific views and data rendering for the Profile Tab
+ * Profile pages read GET /cnc/profile (Refracted, Nexus mysql): wins, losses, streaks, every
+ * reported match (date + result) and the wins leaderboard. Nothing else is recorded yet, so
+ * per-faction statistics, levels, ratings and achievements show as not recorded ('—' / empty).
  */
-CCApp.controller('ProfileController', function($scope, $rootScope) {
-    
+CCApp.controller('ProfileController', function($scope, $rootScope, $timeout) {
+    var NONE = '—';
+    var MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+    function dayLabel(d) {
+        return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    }
+    /** 754 -> "12:34", 4000 -> "1:06:40", unknown -> '—'. */
+    function clock(secs) {
+        if (secs === null || secs === undefined || secs === '' || isNaN(secs)) {
+            return NONE;
+        }
+        secs = Math.max(0, Math.round(Number(secs)));
+        var h = Math.floor(secs / 3600);
+        var m = Math.floor(secs / 60) % 60;
+        var s = secs % 60;
+        var mm = (h && m < 10 ? '0' : '') + m;
+        return (h ? h + ':' : '') + mm + ':' + (s < 10 ? '0' : '') + s;
+    }
+    $scope.clock = clock;
+
+    /** "APA Classic" for a general id, '' when unknown. */
+    function generalName(id) {
+        var factions = ['APA', 'EU', 'GLA'];
+        var i, j, list;
+        if (!id || !window.CncLobbyDefaults || !CncLobbyDefaults.generals) {
+            return '';
+        }
+        for (i = 0; i < factions.length; i++) {
+            list = CncLobbyDefaults.generals(factions[i], true);
+            for (j = 0; j < list.length; j++) {
+                if (Number(list[j].id) === Number(id)) {
+                    return factions[i] + ' ' + list[j].label;
+                }
+            }
+        }
+        return '';
+    }
+
+    function dayKey(d) {
+        return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    }
+
     // ==========================================
-    // PROFILE OVERVIEW DATA (name: use playerName in templates / $root)
+    // OVERVIEW
     // ==========================================
+    $scope.profileLoaded = false;
+    // True when Refracted answered but has no match records to give (no Nexus database: 503).
+    $scope.profileUnavailable = false;
     $scope.profileOverview = {
-        wins: 51, generalsUnlocked: 4, generalsTotal: 18,
-        recentGames: [ { date: "Oct 16, 2013", result: "DEFEAT" }, { date: "Oct 16, 2013", result: "DEFEAT" } ]
+        wins: 0, losses: 0, winRate: 0, winStreak: 0, lossStreak: 0,
+        shortestMatch: NONE, bestWin: NONE, lastGeneral: NONE,
+        generalsUnlocked: NONE, generalsTotal: NONE,
+        recentGames: [], achievements: []
     };
 
     // ==========================================
-    // STATISTICS DATA
+    // STATISTICS (per faction is not recorded)
     // ==========================================
-    $scope.statsActiveFaction = 'apa'; 
-    
-    $scope.setStatsFaction = function(factionId) { 
-        $scope.statsActiveFaction = factionId; 
+    $scope.statsActiveFaction = 'apa';
+    $scope.setStatsFaction = function(factionId) {
+        $scope.statsActiveFaction = factionId;
     };
-
-    $scope.factionStats = {
-        apa: { wins: 46, losses: 22, income: "4,463", xp: "21,683", resources: "1,991,372", unitsBuilt: "2,695", unitsDestroyed: "1,475", unitsLost: "490", structBuilt: "696", structDestroyed: "300", structLost: "127" },
-        gla: { wins: 12, losses: 8, income: "3,100", xp: "8,450", resources: "850,120", unitsBuilt: "1,450", unitsDestroyed: "890", unitsLost: "310", structBuilt: "210", structDestroyed: "150", structLost: "85" },
-        eu: { wins: 30, losses: 15, income: "5,200", xp: "15,800", resources: "1,500,000", unitsBuilt: "2,100", unitsDestroyed: "1,200", unitsLost: "400", structBuilt: "500", structDestroyed: "220", structLost: "90" }
-    };
-
-    $scope.getWinPct = function(factionId) {
-        var data = $scope.factionStats[factionId];
-        var total = data.wins + data.losses;
-        if (total === 0) return 50; 
-        return (data.wins / total) * 100;
-    };
-
-    // ==========================================
-    // MATCH HISTORY DATA
-    // ==========================================
-    $scope.matchHistoryData = [
-        { date: "OCT 8, 2013", defeats: 0, victories: 2, defPct: 0, vicPct: 100 },
-        { date: "OCT 6, 2013", defeats: 0, victories: 1, defPct: 0, vicPct: 100 },
-        { date: "OCT 4, 2013", defeats: 0, victories: 2, defPct: 0, vicPct: 100 },
-        { date: "OCT 3, 2013", defeats: 0, victories: 5, defPct: 0, vicPct: 100 },
-        { date: "SEP 25, 2013", defeats: 1, victories: 5, defPct: 20, vicPct: 80 },
-        { date: "SEP 24, 2013", defeats: 0, victories: 1, defPct: 0, vicPct: 100 },
-        { date: "SEP 22, 2013", defeats: 2, victories: 1, defPct: 65, vicPct: 35 }
-    ];
-
-    // ==========================================
-    // ACHIEVEMENTS DATA
-    // ==========================================
-    $scope.achievementsList = [
-        { name: "No Contest", icon: "view/image/debugPinkRect.png", locked: false, multiplier: "10:00\nX" },
-        { name: "Demolitionist", icon: "view/image/debugPinkRect.png", locked: false, multiplier: "x15" },
-        { name: "Peoples Hero", icon: "view/image/debugPinkRect.png", locked: false, multiplier: "x20" },
-        { name: "Napoleon Redux", icon: "view/image/debugPinkRect.png", locked: true, multiplier: "x20", progress: 25 },
-        { name: "Welcome to the Watch", icon: "view/image/debugPinkRect.png", locked: true, multiplier: "", progress: 50 }
-    ];
-
-    // ==========================================
-    // LEADERBOARDS DATA
-    // ==========================================
-    $scope.leaderboardNearMe = [
-        { rank: 240, name: "lamnothere2", level: 2, wins: 3, losses: 0, rating: "1,259", isMe: false },
-        { rank: 241, name: "FunkerVoigt", level: 3, wins: 12, losses: 1, rating: "1,259", isMe: false },
-        { rank: 242, name: "UnknownPlayer", level: 19, wins: 51, losses: 25, rating: "1,258", isMe: true },
-        { rank: 243, name: "Prinzip1914", level: 16, wins: 26, losses: 0, rating: "1,258", isMe: false },
-        { rank: 244, name: "LittleJohn", level: 8, wins: 4, losses: 2, rating: "1,258", isMe: false }
-    ];
-
-    function syncLocalPlayerOnLeaderboard(name) {
-        var n = (name != null && String(name) !== "") ? name : "UnknownPlayer";
-        for (var j = 0; j < $scope.leaderboardNearMe.length; j++) {
-            if ($scope.leaderboardNearMe[j].isMe) {
-                $scope.leaderboardNearMe[j].name = n;
-                break;
-            }
-        }
+    function emptyFactionRow() {
+        return { wins: NONE, losses: NONE, income: NONE, xp: NONE, resources: NONE, unitsBuilt: NONE,
+                 unitsDestroyed: NONE, unitsLost: NONE, structBuilt: NONE, structDestroyed: NONE, structLost: NONE };
     }
-    $rootScope.$watch("playerName", syncLocalPlayerOnLeaderboard);
-    syncLocalPlayerOnLeaderboard($rootScope.playerName);
+    $scope.factionStats = { apa: emptyFactionRow(), gla: emptyFactionRow(), eu: emptyFactionRow() };
+    $scope.factionStatsRecorded = false;
+    $scope.getWinPct = function() {
+        var o = $scope.profileOverview;
+        var total = o.wins + o.losses;
+        return total ? (o.wins / total) * 100 : 50;
+    };
 
-    function applyMatchRecord(rec) {
-        if (!rec) {
-            return;
-        }
-        var wins = rec.wins || 0;
-        var losses = rec.losses || 0;
-        $scope.profileOverview.wins = wins;
-        var factions = ['apa', 'gla', 'eu'];
-        for (var i = 0; i < factions.length; i++) {
-            var row = $scope.factionStats[factions[i]];
-            if (row) {
-                row.wins = wins;
-                row.losses = losses;
-            }
-        }
-        for (var j = 0; j < $scope.leaderboardNearMe.length; j++) {
-            if ($scope.leaderboardNearMe[j].isMe) {
-                $scope.leaderboardNearMe[j].wins = wins;
-                $scope.leaderboardNearMe[j].losses = losses;
-                break;
-            }
-        }
-    }
-    applyMatchRecord($rootScope.matchRecord);
-    $rootScope.$watch('matchRecord', applyMatchRecord, true);
+    // ==========================================
+    // MATCH HISTORY (per local day)
+    // ==========================================
+    $scope.matchHistoryData = [];
 
+    // ==========================================
+    // ACHIEVEMENTS (not recorded)
+    // ==========================================
+    $scope.achievementsList = [];
+
+    // ==========================================
+    // LEADERBOARDS (by wins, then fewest losses)
+    // ==========================================
+    $scope.leaderboardNearMe = [];
     $scope.leaderboardTop = [];
-    var mockTopNames = ["edi211188", "Dabrifa", "ZxGanon_the_Boss", "Brossea", "ORBIT_Hexis", "CYC_FuryDE"];
-    for (var i = 1; i <= 50; i++) {
-        $scope.leaderboardTop.push({
-            rank: i, name: mockTopNames[i-1] || ("Commander_" + (900 + i)), level: Math.floor(Math.random() * 40) + 10,
-            wins: Math.floor(Math.random() * 300) + 100, losses: Math.floor(Math.random() * 50) + 1,
-            rating: (2255 - (i * 12)).toLocaleString(), isMe: false
-        });
+    $scope.leaderboardRanked = 0;
+
+    function boardRows(rows, me) {
+        var out = [];
+        for (var i = 0; rows && i < rows.length; i++) {
+            out.push({
+                rank: rows[i].rank,
+                name: rows[i].name,
+                level: NONE,
+                wins: rows[i].wins,
+                losses: rows[i].losses,
+                rating: NONE,
+                isMe: rows[i].personaId === me
+            });
+        }
+        return out;
     }
 
+    function applyProfile(data) {
+        var o = $scope.profileOverview;
+        o.wins = data.wins || 0;
+        o.losses = data.losses || 0;
+        o.winStreak = data.winStreak || 0;
+        o.lossStreak = data.lossStreak || 0;
+        o.winRate = (o.wins + o.losses) ? Math.round(o.wins / (o.wins + o.losses) * 100) : 0;
+        o.shortestMatch = clock(data.shortestMatchSecs);
+        o.bestWin = clock(data.bestWinSecs);
+        o.lastGeneral = generalName(data.lastGeneralId) || NONE;
+
+        var history = data.history || [];
+        var recent = [];
+        var days = [];
+        var byDay = {};
+        for (var i = 0; i < history.length; i++) {
+            var d = new Date(history[i].at * 1000);
+            var win = !!history[i].victory;
+            if (recent.length < 10) {
+                recent.push({
+                    date: dayLabel(d),
+                    result: win ? 'VICTORY' : 'DEFEAT',
+                    general: generalName(history[i].generalId),
+                    length: history[i].secs === null || history[i].secs === undefined ? '' : clock(history[i].secs)
+                });
+            }
+            var k = dayKey(d);
+            var row = byDay[k];
+            if (!row) {
+                row = byDay[k] = { date: dayLabel(d), defeats: 0, victories: 0, defPct: 0, vicPct: 0 };
+                days.push(row);
+            }
+            if (win) { row.victories++; } else { row.defeats++; }
+        }
+        for (var j = 0; j < days.length; j++) {
+            var n = days[j].victories + days[j].defeats;
+            days[j].vicPct = Math.round(days[j].victories / n * 100);
+            days[j].defPct = 100 - days[j].vicPct;
+        }
+        o.recentGames = recent;
+        $scope.matchHistoryData = days;
+
+        $scope.leaderboardTop = boardRows(data.top, data.personaId);
+        $scope.leaderboardNearMe = boardRows(data.near, data.personaId);
+        $scope.leaderboardRanked = data.ranked || 0;
+        $scope.profileLoaded = true;
+        $scope.profileUnavailable = false;
+    }
+
+    function loadProfile() {
+        var key = '';
+        try {
+            if (window.CncPreLanding && CncPreLanding.getLoginKey) {
+                key = CncPreLanding.getLoginKey() || '';
+            }
+        } catch (e) { /* ignore */ }
+        var url = '/cnc/profile' + (key ? '?key=' + encodeURIComponent(key) : '');
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) {
+                    return;
+                }
+                if (xhr.status !== 200) {
+                    if (xhr.status === 503) {
+                        $timeout(function () { $scope.profileUnavailable = true; }, 0);
+                    }
+                    return;
+                }
+                var data = null;
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch (pe) { /* ignore */ }
+                if (!data || !data.ok) {
+                    return;
+                }
+                if ($rootScope.$$phase) {
+                    applyProfile(data);
+                } else {
+                    $scope.$apply(function () { applyProfile(data); });
+                }
+            };
+            xhr.send(null);
+        } catch (e2) { /* ignore */ }
+    }
+
+    // Reload when the record changes (a reported match) and whenever Profile is opened.
+    $rootScope.$watch('matchRecord', function () { $timeout(loadProfile, 0); }, true);
+    $scope.$watch('activeTab', function (tab) {
+        if (tab === 'PROFILE') {
+            loadProfile();
+        }
+    });
 });

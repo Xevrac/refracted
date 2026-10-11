@@ -409,17 +409,17 @@ body.cc-theme--cnc-alpha .btn-options-close::after {
 }
 body.cc-theme--aurora .options-content::-webkit-scrollbar-track,
 body.ingame-aurora .options-content::-webkit-scrollbar-track {
-    background: rgba(12, 15, 13, 0.9);
-    border-left: 1px solid #1c2a32;
+    background: rgba(10, 10, 11, 0.9);
+    border-left: 1px solid rgba(217, 221, 226, 0.26);
 }
 body.cc-theme--aurora .options-content::-webkit-scrollbar-thumb,
 body.ingame-aurora .options-content::-webkit-scrollbar-thumb {
-    background: #2a4a62;
-    border: 1px solid #1c2a32;
+    background: #4a4d52;
+    border: 1px solid rgba(217, 221, 226, 0.26);
 }
 body.cc-theme--aurora .options-content::-webkit-scrollbar-thumb:hover,
 body.ingame-aurora .options-content::-webkit-scrollbar-thumb:hover {
-    background: #3a6a8a;
+    background: #6b6f75;
 }
 body.cc-theme--classic .options-content::-webkit-scrollbar-track,
 body.cc-theme--cnc-alpha .options-content::-webkit-scrollbar-track {

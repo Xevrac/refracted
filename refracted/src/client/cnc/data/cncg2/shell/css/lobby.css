@@ -2525,8 +2525,14 @@
 
 .cnc-hue-picker__sv-wrap,
 .cnc-hue-picker__hue-wrap {
+    position: relative;
+    overflow: hidden;
     font-size: 0;
     line-height: 0;
+}
+
+.cnc-hue-picker__hue-wrap {
+    margin-top: 6px;
 }
 
 .cnc-hue-picker__sv,
@@ -2545,8 +2551,52 @@
 .cnc-hue-picker__hue {
     width: 172px;
     height: 14px;
-    margin-top: 6px;
+    margin-top: 0;
     cursor: pointer;
+}
+
+.cnc-hue-picker__sv-cursor {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin-left: -7px;
+    margin-top: -7px;
+    border: 2px solid #ffffff;
+    border-radius: 8px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    -webkit-box-shadow: 0 0 0 1px rgba(10, 18, 28, 0.9);
+    box-shadow: 0 0 0 1px rgba(10, 18, 28, 0.9);
+    background: transparent;
+    pointer-events: none;
+}
+
+.cnc-hue-picker__sv-cursor.is-denied {
+    border-color: #e74c3c;
+}
+
+.cnc-hue-picker__hue-cursor {
+    position: absolute;
+    top: 0;
+    width: 4px;
+    height: 14px;
+    margin-left: -2px;
+    background: rgba(10, 18, 28, 0.95);
+    pointer-events: none;
+}
+
+.cnc-hue-picker__hue-cursor:after {
+    content: '';
+    position: absolute;
+    left: 1px;
+    top: 1px;
+    width: 2px;
+    height: 12px;
+    background: #ffffff;
+}
+
+.cnc-hue-picker__hue-cursor.is-denied:after {
+    background: #e74c3c;
 }
 
 .cnc-hue-picker__foot {
@@ -2602,7 +2652,8 @@
     color: #b8a878;
 }
 
-.cc-lobby__hue-picker canvas {
+.cc-lobby__hue-picker .cnc-hue-picker__sv-wrap,
+.cc-lobby__hue-picker .cnc-hue-picker__hue-wrap {
     border: 1px solid #6a5c3a;
 }
 
@@ -2620,9 +2671,17 @@
 }
 
 .cc-lobby__chat-user.chat-user--dev,
-.cc-lobby__player.lobby-name--dev {
+.cc-lobby__player.lobby-name--dev,
+.cc-lobby__spectator-name.lobby-name--dev {
     color: #6f50a5;
     font-weight: bold;
+}
+
+.cc-lobby__chat-user.chat-user--playtester,
+.cc-lobby__player.lobby-name--playtester,
+.cc-lobby__spectator-name.lobby-name--playtester {
+    color: #ffcf47;
+    font-weight: normal;
 }
 
 .cc-lobby__chat-typing {
@@ -2656,4 +2715,52 @@
     margin: 0;
     opacity: 0.45;
     cursor: default;
+}
+
+/* Slot menu: factions on one row, generals in two columns; opens upward on a low card. */
+.cc-lobby__menu {
+    width: 210px;
+}
+
+.cc-lobby__menu--up {
+    top: auto;
+    bottom: 100%;
+    margin-bottom: 4px;
+}
+
+.cc-lobby__menu-label,
+.cc-lobby__menu-colors {
+    clear: both;
+}
+
+.cc-lobby__menu li.cc-lobby__menu-faction {
+    float: left;
+    width: 33.33%;
+}
+
+.cc-lobby__menu li.cc-lobby__menu-faction a {
+    padding-left: 4px;
+    padding-right: 4px;
+    text-align: center;
+}
+
+.cc-lobby__menu li.cc-lobby__menu-general {
+    float: left;
+    width: 50%;
+}
+
+.cc-lobby__menu li.cc-lobby__menu-general a {
+    padding-right: 6px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* The ribbon under the portrait opens the colour picker on a card you can edit. */
+.cc-lobby__color-ribbon--pick {
+    cursor: pointer;
+}
+
+.cc-lobby__color-ribbon--pick:hover {
+    border-color: #fff;
 }

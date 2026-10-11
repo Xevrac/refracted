@@ -373,6 +373,12 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/match-record" && is_get {
         return Some(handle_cnc_match_record(query));
     }
+    if base == "cnc/profile" && is_get {
+        return Some(handle_cnc_profile(query));
+    }
+    if base == "cnc/name-tags" && is_get {
+        return Some(handle_cnc_name_tags());
+    }
     if base == "cnc/lobby-chat" {
         return Some(handle_cnc_lobby_chat(is_post, query, body));
     }
@@ -469,6 +475,7 @@ fn handle_cnc_build_info(query: Option<&str>) -> HttpResponse {
     let body = shell_build_info_json(
         client_reported_prism_version(query),
         client_reported_debug_dll(query),
+        client_reported_game_build(query),
     );
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
@@ -495,6 +502,29 @@ fn client_reported_prism_version(query: Option<&str>) -> Option<String> {
     None
 }
 
+/// CNC executable build, attached by the client the same way Prism is.
+/// `GetGameBuild()` reads the exe version resource; the menu used to hardcode this.
+fn client_reported_game_build(query: Option<&str>) -> Option<String> {
+    let q = query?;
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == "gamebuild" {
+                let t = percent_decode_plus(v);
+                let t = t.trim();
+                if !t.is_empty()
+                    && t.len() <= 64
+                    && t.chars().all(|c| {
+                        c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '/'
+                    })
+                {
+                    return Some(t.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 fn client_reported_debug_dll(query: Option<&str>) -> bool {
     let Some(q) = query else {
         return false;
@@ -509,14 +539,22 @@ fn client_reported_debug_dll(query: Option<&str>) -> bool {
     false
 }
 
-fn shell_build_info_json(client_prism: Option<String>, debug_dll: bool) -> serde_json::Value {
+fn shell_build_info_json(
+    client_prism: Option<String>,
+    debug_dll: bool,
+    game_build: Option<String>,
+) -> serde_json::Value {
     let rfr = env!("CARGO_PKG_VERSION").to_string();
+    let cnc = game_build
+        .clone()
+        .unwrap_or_else(|| CNC_RL_BUILD.to_string());
     serde_json::json!({
         "ok": true,
         "rfr": rfr,
         "prism": client_prism,
-        "cnc": CNC_RL_BUILD,
+        "cnc": cnc,
         "cnc_rl": CNC_RL_BUILD,
+        "gamebuild": game_build,
         "debugDll": debug_dll,
     })
 }
@@ -547,7 +585,9 @@ fn utfwin_asset_roots() -> Vec<PathBuf> {
     roots
 }
 
-/// Serve `UTFWinAssets/images/MiniMap/*.png` and `Generals 64x64/*.png` for the Refracted lobby.
+/// Serve `UTFWinAssets/images/MiniMap/*.png` and `Generals 64x64/*.png` for the Refracted lobby,
+/// plus `LoadingScreen/*.png` (main-menu general) and `UserPortraits/*.png` (lobby busts) for the
+/// Aurora shell themes.
 fn handle_cnc_utfwin(base: &str) -> HttpResponse {
     // "Generals 64x64" arrives percent-encoded.
     let rest = percent_decode_plus(base.trim_start_matches("cnc/utfwin/"));
@@ -555,7 +595,10 @@ fn handle_cnc_utfwin(base: &str) -> HttpResponse {
         return HttpResponse::new(400, "text/plain", b"Bad path".to_vec());
     };
     let norm = rel.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
-    let served = norm.starts_with("images/minimap/") || norm.starts_with("images/generals 64x64/");
+    let served = norm.starts_with("images/minimap/")
+        || norm.starts_with("images/generals 64x64/")
+        || norm.starts_with("images/loadingscreen/")
+        || norm.starts_with("images/userportraits/");
     if !served || !norm.ends_with(".png") {
         return HttpResponse::new(404, "text/plain", b"Not Found".to_vec());
     }
@@ -866,6 +909,7 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     if identity.is_none() {
         crate::console_println!("[CNC] player-attrs gid={} pid={} without a known login key", gid, pid);
     }
+    let requester = identity.as_ref().map(|(p, _)| *p);
     if let Some((persona, _)) = identity {
         if !is_ai_attrs {
             let host_sets_start = pid > 0
@@ -919,7 +963,15 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         attrs,
         rejected
     );
+    // A player who changes their own seat (team, start, faction, general, colour) is no longer
+    // ready, so they confirm the new setup. Only that player, and only for their own change: the
+    // host publishing leftover start points at match start does not unready anyone.
+    let own_change = pid > 0 && requester == Some(pid);
+    let seat_before = if own_change { game_state::seat_signature(gid, pid) } else { None };
     game_state::set_pending_player_attrs(gid, pid, attrs.clone());
+    if seat_before.is_some() && game_state::seat_signature(gid, pid) != seat_before {
+        game_state::unready_player(gid, pid);
+    }
     if attrs.contains_key("color")
         || attrs.contains_key("_color")
         || attrs.contains_key("housecolor")
@@ -1263,6 +1315,7 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, or disallowSpectators required"}"#.to_vec(),
         );
     }
+    let options_before = (game_state::match_options(gid), game_state::spectators_disallowed(gid));
     let mut resp = game_state::set_match_options(
         gid,
         pid,
@@ -1305,6 +1358,12 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             );
         }
         resp["disallowSpectators"] = serde_json::json!(game_state::spectators_disallowed(gid));
+        let options_after = (game_state::match_options(gid), game_state::spectators_disallowed(gid));
+        if options_after != options_before {
+            // Everyone reviews the new rules before readying up again.
+            game_state::unready_all_but_host(gid);
+            game_state::lobby_chat_push_system(gid, "Notice: Host has modified lobby options!");
+        }
     }
     HttpResponse::new(
         if ok { 200 } else { 403 },
@@ -1507,9 +1566,13 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     }
 }
 
+/// GET `/cnc/server-ping?host=&port=&key=` -- the requesting player's ping to one dedicated.
+/// Match traffic runs client → MsgSys hub (this host) → ServerHost, so the ping is both legs:
+/// player → hub from the client's own QoS probes, hub → dedicated probed here.
 fn handle_cnc_server_ping(query: Option<&str>) -> HttpResponse {
     let mut host = String::new();
     let mut port = dedicated_pool::DEDICATED_PING_TCP_PORT;
+    let mut key = String::new();
     if let Some(q) = query {
         for pair in q.split('&') {
             if let Some((k, v)) = pair.split_once('=') {
@@ -1520,17 +1583,31 @@ fn handle_cnc_server_ping(query: Option<&str>) -> HttpResponse {
                             port = p;
                         }
                     }
+                    "key" => key = percent_decode_plus(v),
                     _ => {}
                 }
             }
         }
     }
-    let ms = if host.is_empty() {
-        None
-    } else {
+    let server_ms = if dedicated_pool::is_registered_serverhost(&host, port) {
         dedicated_pool::probe_host_rtt_ms(&host, Some(port))
+    } else {
+        None
     };
-    let body = serde_json::json!({ "ok": ms.is_some(), "pingMs": ms, "host": host, "port": port });
+    let client_ms = client_qos_rtt_ms_for_key(&key);
+    // Never report the hub → dedicated leg alone: that is this host's ping, not the player's.
+    let ms = match (client_ms, server_ms) {
+        (Some(c), Some(s)) => Some(c.saturating_add(s).min(9999)),
+        _ => None,
+    };
+    let body = serde_json::json!({
+        "ok": ms.is_some(),
+        "pingMs": ms,
+        "clientMs": client_ms,
+        "serverMs": server_ms,
+        "host": host,
+        "port": port,
+    });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -1732,8 +1809,21 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
         let json = game_state::lobby_chat_json(gid);
         return HttpResponse::new(200, "application/json", json.to_string().into_bytes());
     }
-    let json = game_state::lobby_chat_push(gid, &user, &text);
+    let persona_id = identity.as_ref().map(|(pid, _)| *pid).unwrap_or(0);
+    let json = game_state::lobby_chat_push(gid, &user, &text, persona_id);
     HttpResponse::new(200, "application/json", json.to_string().into_bytes())
+}
+
+/// Chat name colours. The account tag is set in Nexus; the client only paints it.
+fn handle_cnc_name_tags() -> HttpResponse {
+    let mut tags = serde_json::Map::new();
+    for (persona_id, tag) in crate::nexus::identity::name_tag_map() {
+        if tag == "developer" || tag == "playtester" {
+            tags.insert(persona_id.to_string(), serde_json::Value::String(tag));
+        }
+    }
+    let body = serde_json::json!({ "ok": true, "tags": tags });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
 /// Login-key persona plus the in-game roster DSNM when that player is seated.
@@ -1745,6 +1835,10 @@ fn match_stats_json(stats: crate::nexus::identity::MatchStats) -> HttpResponse {
         "losses": stats.losses,
         "winStreak": stats.win_streak,
         "lossStreak": stats.loss_streak,
+        "lastGeneralId": stats.last_general_id,
+        "lastFaction": stats.last_faction,
+        "shortestMatchSecs": stats.shortest_match_secs,
+        "bestWinSecs": stats.best_win_secs,
     });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
@@ -1778,6 +1872,73 @@ fn handle_cnc_match_record(query: Option<&str>) -> HttpResponse {
             HttpResponse::new(503, "application/json", br#"{"ok":false}"#.to_vec())
         }
     }
+}
+
+/// Profile pages (Aurora): record, recent matches and leaderboards, all from Nexus mysql.
+/// Only what is recorded is returned; per-faction stats, levels, ratings and achievements are not.
+fn handle_cnc_profile(query: Option<&str>) -> HttpResponse {
+    const HISTORY_LIMIT: u32 = 500;
+    const TOP: usize = 50;
+    const NEAR: usize = 2;
+    let Some(pid) = match_record_persona(query) else {
+        return HttpResponse::new(401, "application/json", br#"{"ok":false}"#.to_vec());
+    };
+    let identity = crate::nexus::identity::persona_match_stats(pid).and_then(|stats| {
+        let history = crate::nexus::identity::persona_match_history(pid, HISTORY_LIMIT)?;
+        let board = crate::nexus::identity::match_leaderboard()?;
+        Ok((stats, history, board))
+    });
+    let (stats, history, board) = match identity {
+        Ok(v) => v,
+        Err(err) => {
+            tracing::warn!("profile read failed persona={pid}: {err}");
+            return HttpResponse::new(503, "application/json", br#"{"ok":false}"#.to_vec());
+        }
+    };
+    let row = |r: &crate::nexus::identity::LeaderRow| {
+        serde_json::json!({
+            "rank": r.rank,
+            "personaId": r.persona_id,
+            "name": r.display_name,
+            "wins": r.wins,
+            "losses": r.losses,
+        })
+    };
+    let near: Vec<serde_json::Value> = match board.iter().position(|r| r.persona_id == pid) {
+        Some(at) => board[at.saturating_sub(NEAR)..(at + NEAR + 1).min(board.len())]
+            .iter()
+            .map(row)
+            .collect(),
+        None => Vec::new(),
+    };
+    let body = serde_json::json!({
+        "ok": true,
+        "personaId": pid,
+        "wins": stats.wins,
+        "losses": stats.losses,
+        "winStreak": stats.win_streak,
+        "lossStreak": stats.loss_streak,
+        "lastGeneralId": stats.last_general_id,
+        "lastFaction": stats.last_faction,
+        "shortestMatchSecs": stats.shortest_match_secs,
+        "bestWinSecs": stats.best_win_secs,
+        "history": history
+            .iter()
+            .map(|m| {
+                serde_json::json!({
+                    "at": m.ended_at,
+                    "victory": m.victory,
+                    "secs": m.duration_secs,
+                    "generalId": m.general_id,
+                    "faction": m.faction,
+                })
+            })
+            .collect::<Vec<_>>(),
+        "top": board.iter().take(TOP).map(row).collect::<Vec<_>>(),
+        "near": near,
+        "ranked": board.len(),
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
 fn handle_cnc_identity(query: Option<&str>) -> HttpResponse {
@@ -2012,7 +2173,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
     let p = crate::common::user_profile::get_current_profile();
     if !crate::nexus::identity::json_personas_allowed() {
         // Nexus identity comes from the Blaze login; the local JSON profile would be a different persona.
-        let build = shell_build_info_json(None, false);
+        let build = shell_build_info_json(None, false, None);
         let script = format!("<script>window.__CNC_PROFILE={{}};window.__CNC_BUILD={};</script>", build);
         return insert_head_script(s, &script, html);
     }
@@ -2023,7 +2184,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
         "personaId": p.persona_id,
         "userId": p.user_id,
     });
-    let build = shell_build_info_json(None, false);
+    let build = shell_build_info_json(None, false, None);
     let script = format!(
         "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};</script>",
         json, build
@@ -2481,6 +2642,54 @@ fn persona_for_login_key(key: &str) -> Option<i64> {
     LOGIN_KEY_PERSONAS.lock().ok()?.get(key).map(|(pid, _)| *pid)
 }
 
+/// Blaze `NLMP` value for a ping site the client has not measured.
+const QOS_LATENCY_UNMEASURED: u64 = 0x0FFF_0FFF;
+
+/// Player → this host round trip (ms) from the game client's own QoS probes
+/// (`updateNetworkInfo` `NLMP`), by persona.
+static CLIENT_QOS_RTT_MS: std::sync::LazyLock<std::sync::Mutex<HashMap<i64, u32>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+/// Best measured `NLMP` latency. Every LTPS alias in preAuth is this host, so the lowest
+/// sample is the cleanest one.
+fn nlmp_best_latency_ms(payload: &[u8]) -> Option<u32> {
+    TdfEncoder::scan_string_int_map_field(payload, "NLMP")?
+        .into_iter()
+        .map(|(_, ms)| ms)
+        .filter(|&ms| ms < QOS_LATENCY_UNMEASURED)
+        .min()
+        .map(|ms| ms.min(9999) as u32)
+}
+
+fn note_client_qos_latency(sid: u64, payload: &[u8]) {
+    if dedicated_pool::dedicated_identity_for_session(sid).is_some() {
+        return;
+    }
+    let Some(ms) = nlmp_best_latency_ms(payload) else {
+        return;
+    };
+    let Some(persona) = crate::session::blaze_sessions::get_session(sid)
+        .and_then(|s| s.persona_id)
+        .filter(|&p| p != 0)
+    else {
+        return;
+    };
+    if let Ok(mut map) = CLIENT_QOS_RTT_MS.lock() {
+        map.insert(persona as i64, ms);
+    }
+    tracing::info!("[QoS] client latency persona={persona} session=#{sid} rtt={ms}ms (NLMP)");
+}
+
+/// QoS round trip of the player behind a shell login key.
+fn client_qos_rtt_ms_for_key(key: &str) -> Option<u32> {
+    let persona = persona_for_login_key(key).or_else(|| {
+        // JSON test clients carry no login key; the shell is the local player.
+        (!crate::nexus::identity::client_join_requires_login())
+            .then(|| cnc_game_client_identity().0 as i64)
+    })?;
+    CLIENT_QOS_RTT_MS.lock().ok()?.get(&persona).copied()
+}
+
 fn identity_for_login_key(key: &str) -> Option<(i64, String)> {
     LOGIN_KEY_PERSONAS.lock().ok()?.get(key).cloned()
 }
@@ -2885,6 +3094,7 @@ pub fn handle_user_sessions_update_network_info(payload: &[u8]) -> BlazeResult<B
     n.bps = bps;
     merge_network_snapshot(n);
     if let Some(sid) = crate::session::current_blaze_session_id() {
+        note_client_qos_latency(sid, payload);
         dedicated_pool::note_dedicated_network(
             sid,
             ips.get(1).copied().map(|u| u as i32).or_else(|| ips.first().copied().map(|u| u as i32)),
@@ -3727,6 +3937,10 @@ pub const PLAYER_REMOVED_REASON_GAME_DESTROYED: i32 = 4;
 pub const PLAYER_REMOVED_REASON_PLAYER_LEFT: i32 = 6;
 pub const PLAYER_REMOVED_REASON_PLAYER_KICKED: i32 = 8;
 
+/// `NotifyAdminListChange` OPER 2: `UID ` leaves the admin list and `ALST` takes its place
+/// (retail `Game` handler `127F890`; 0 adds `ALST`, 1 removes it).
+pub const ADMIN_LIST_OP_MIGRATED: i32 = 2;
+
 pub const GAME_REMOVAL_REASON_GAME_DESTROYED: i32 = 0;
 
 pub fn build_game_manager_notify_player_removed(
@@ -3738,6 +3952,21 @@ pub fn build_game_manager_notify_player_removed(
     out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     out.extend_from_slice(&TdfEncoder::encode_long("PID ", pid));
     out.extend_from_slice(&TdfEncoder::encode_int("REAS", reason));
+    Ok(Bytes::from(out))
+}
+
+/// `NotifyAdminListChange` (cmd 202): ALST + GID + OPER + UID (retail member table `17D2490`).
+pub fn build_game_manager_notify_admin_list_change(
+    gid: i64,
+    admin: i64,
+    oper: i32,
+    updater: i64,
+) -> BlazeResult<Bytes> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&TdfEncoder::encode_long("ALST", admin));
+    out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
+    out.extend_from_slice(&TdfEncoder::encode_int("OPER", oper));
+    out.extend_from_slice(&TdfEncoder::encode_long("UID ", updater));
     Ok(Bytes::from(out))
 }
 
@@ -4868,6 +5097,28 @@ mod notify_game_setup_tests {
         assert_eq!(
             TdfEncoder::find_int_field(&payload, "REAS"),
             Some(GAME_REMOVAL_REASON_GAME_DESTROYED)
+        );
+        TdfTreeParser::parse_packet(&payload).expect("parse tree");
+    }
+
+    #[test]
+    fn notify_admin_list_change_encodes_migrate() {
+        let payload = build_game_manager_notify_admin_list_change(
+            10_001,
+            1_201_618_778,
+            ADMIN_LIST_OP_MIGRATED,
+            1_201_618_777,
+        )
+        .expect("encode");
+        assert_eq!(
+            TdfEncoder::find_long_field(&payload, "ALST"),
+            Some(1_201_618_778)
+        );
+        assert_eq!(TdfEncoder::find_long_field(&payload, "GID "), Some(10_001));
+        assert_eq!(TdfEncoder::find_int_field(&payload, "OPER"), Some(2));
+        assert_eq!(
+            TdfEncoder::find_long_field(&payload, "UID "),
+            Some(1_201_618_777)
         );
         TdfTreeParser::parse_packet(&payload).expect("parse tree");
     }

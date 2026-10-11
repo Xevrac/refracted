@@ -12,7 +12,12 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
     $rootScope.allowShellThemeSelect = true;
 
     function syncIngameBodyTheme(id) {
-        id = (id === 'classic' || id === 'aurora') ? id : 'aurora';
+        var family = (id === 'classic') ? 'classic' : 'aurora';
+        var themeClass = 'cc-theme--' + family;
+        if (window.CncShellTheme && typeof CncShellTheme.family === 'function') {
+            family = CncShellTheme.family(id);
+            themeClass = CncShellTheme.bodyClass(id);
+        }
         var body = document.body;
         if (!body) {
             return;
@@ -20,6 +25,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         body.className = String(body.className || '')
             .replace(/\bcc-theme--classic\b/g, '')
             .replace(/\bcc-theme--cnc-alpha\b/g, '')
+            .replace(/\bcc-theme--aurora-alt\b/g, '')
             .replace(/\bcc-theme--aurora\b/g, '')
             .replace(/\bingame-aurora\b/g, '')
             .replace(/\bingame-classic\b/g, '')
@@ -28,7 +34,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         if ((' ' + body.className + ' ').indexOf(' cc-theme ') === -1) {
             body.className = (body.className ? body.className + ' ' : '') + 'cc-theme';
         }
-        body.className += ' cc-theme--' + id + ' ingame-' + id;
+        body.className += ' ' + themeClass + ' ingame-' + family;
     }
 
     (function syncIngameOptionsTheme() {
@@ -430,6 +436,65 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         // removePlayer + logout must finish before quit true.
         quitToDesktopAfterBlazeCleanup();
     };
+
+    function isTextField(el) {
+        if (!el || !el.tagName) {
+            return false;
+        }
+        var tag = el.tagName.toUpperCase();
+        if (tag === 'TEXTAREA') {
+            return true;
+        }
+        if (tag !== 'INPUT') {
+            return false;
+        }
+        var type = (el.type || 'text').toLowerCase();
+        return type === 'text' || type === 'password' || type === 'search' || type === 'email' || type === '';
+    }
+
+    // Retail Esc toggles the pause window. While it is up, Esc steps out of a
+    // dialog first, then closes the menu.
+    function handleIngameEscape() {
+        if ($scope.quittingOpen) {
+            return;
+        }
+        var el = document.activeElement;
+        if (isTextField(el)) {
+            el.blur();
+            return;
+        }
+        if ($scope.optionsOpen) {
+            $scope.closeOptions();
+            return;
+        }
+        if ($scope.confirmQuitOpen || $scope.confirmSurrenderOpen) {
+            $scope.cancelConfirm();
+            return;
+        }
+        $scope.returnToGame();
+    }
+
+    var escHeld = false;
+    document.addEventListener('keydown', function (ev) {
+        var key = ev.keyCode || ev.which;
+        if (key !== 27) {
+            return;
+        }
+        if (escHeld) {
+            return;
+        }
+        escHeld = true;
+        if (ev.preventDefault) {
+            ev.preventDefault();
+        }
+        $scope.$apply(handleIngameEscape);
+    });
+    document.addEventListener('keyup', function (ev) {
+        var key = ev.keyCode || ev.which;
+        if (key === 27) {
+            escHeld = false;
+        }
+    });
 
 });
 

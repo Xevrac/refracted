@@ -145,7 +145,7 @@ local function refractedInstallUsersettingsGraphics()
             return value
           end
         end
-        return 0
+        return 1
       end,
       function(nextValue)
         local on = toProfileBool(nextValue)

@@ -55,7 +55,7 @@ fn apply_report(command: u16, payload: &[u8]) {
             );
             continue;
         }
-        match crate::nexus::identity::record_persona_match(persona, victory) {
+        match crate::nexus::identity::record_persona_match(persona, victory, &match_details(persona)) {
             Ok(stats) => crate::debug_println!(
                 "\x1b[38;2;100;200;255m[CNC]\x1b[0m game report cmd={} persona={} result={} wins={} losses={}",
                 command,
@@ -71,6 +71,19 @@ fn apply_report(command: u16, payload: &[u8]) {
                 err
             ),
         }
+    }
+}
+
+/// General, faction and length of the persona's last match, from the CreateGame roster and the
+/// StartGame time (game_state). Missing pieces stay unknown.
+fn match_details(persona: i64) -> crate::nexus::identity::MatchDetails {
+    let Some((entry, secs)) = super::game_state::last_match_entry(persona) else {
+        return crate::nexus::identity::MatchDetails::default();
+    };
+    crate::nexus::identity::MatchDetails {
+        general_id: (entry.general_id != 0).then_some(entry.general_id as i64),
+        faction: Some(entry.faction),
+        duration_secs: secs.map(|s| s.min(i32::MAX as u64) as i32),
     }
 }
 
@@ -106,7 +119,7 @@ fn record_session(command: u16, victory: bool) {
         );
         return;
     }
-    match crate::nexus::identity::record_persona_match(persona, victory) {
+    match crate::nexus::identity::record_persona_match(persona, victory, &match_details(persona)) {
         Ok(stats) => crate::debug_println!(
             "\x1b[38;2;100;200;255m[CNC]\x1b[0m game report cmd={} persona={} result={} wins={} losses={}",
             command,

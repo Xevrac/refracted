@@ -20,7 +20,7 @@ CCApp.controller('SupportController', function($scope) {
         },
         {
             question: "Is there a guide for beginners?",
-            text: "Yes, you can find our beginner's guide and a basic tutorial for the EU under the \"Learn\" tab. We will be expanding our training and tutorial elements over the coming year.",
+            text: "Yes, there is a beginner's guide and a basic tutorial for the EU. We will be expanding our training and tutorial elements over the coming year.",
             actionText: "LEARN",
             actionTab: "LEARN",
             actionSubTab: "PLAY TUTORIAL"

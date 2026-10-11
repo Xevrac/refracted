@@ -1,103 +1,93 @@
-<div class="au-lobby-browser">
-    <div class="au-lobby-browser__bar">
-        <h2 class="au-lobby-browser__title">Server Browser</h2>
-        <span class="au-lobby-browser__count">{{ visibleBrowserGames().length }} listed</span>
-        <div class="au-lobby-browser__bar-actions">
-            <button type="button" class="au-btn au-btn--ghost" ng-click="closeServerBrowser()">Back</button>
-            <button type="button" class="au-btn au-btn--ghost" ng-click="refreshGameList()">Refresh</button>
+<div class="au-browser">
+    <div class="au-lobby__head">
+        <h2 class="au-lobby__title">Server browser</h2>
+        <span class="au-lobby__server">{{ visibleBrowserGames().length }} listed</span>
+        <div class="au-browser__filters opt-seg">
+            <button type="button" ng-class="{'opt-seg--on': browserListFilter == 'all'}"
+                    ng-click="setBrowserListFilter('all')">All</button>
+            <button type="button" ng-class="{'opt-seg--on': browserListFilter == 'joinable'}"
+                    ng-click="setBrowserListFilter('joinable')">Joinable</button>
+            <button type="button" ng-class="{'opt-seg--on': browserListFilter == 'idle'}"
+                    ng-click="setBrowserListFilter('idle')">Idle</button>
         </div>
     </div>
 
-    <div class="au-lobby-browser__filters">
-        <button type="button" class="au-lobby-browser__filter"
-                ng-class="{on: browserListFilter == 'all'}"
-                ng-click="setBrowserListFilter('all')">All</button>
-        <button type="button" class="au-lobby-browser__filter"
-                ng-class="{on: browserListFilter == 'joinable'}"
-                ng-click="setBrowserListFilter('joinable')">Joinable</button>
-        <button type="button" class="au-lobby-browser__filter"
-                ng-class="{on: browserListFilter == 'idle'}"
-                ng-click="setBrowserListFilter('idle')">Idle</button>
-    </div>
-
-    <div class="au-lobby-browser__body">
+    <div class="au-browser__body">
         <div class="au-lobby-browser__list">
-            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
-            <div class="au-lobby-browser__row au-lobby-browser__row--head">
-                <span class="au-lobby-browser__col au-lobby-browser__col--lock" data-tip="Password"></span>
-                <span class="au-lobby-browser__col au-lobby-browser__col--server">Server</span>
-                <span class="au-lobby-browser__col au-lobby-browser__col--map">Map</span>
-                <span class="au-lobby-browser__col au-lobby-browser__col--players">Players</span>
-                <span class="au-lobby-browser__col au-lobby-browser__col--ping">Ping</span>
-                <span class="au-lobby-browser__col au-lobby-browser__col--state">State</span>
+            <div class="au-browser__row au-browser__row--head">
+                <span class="au-browser__col au-browser__col--lock"></span>
+                <span class="au-browser__col au-browser__col--server">Server</span>
+                <span class="au-browser__col au-browser__col--map">Map</span>
+                <span class="au-browser__col au-browser__col--players">Players</span>
+                <span class="au-browser__col au-browser__col--ping">Ping</span>
+                <span class="au-browser__col au-browser__col--state">State</span>
             </div>
-            <div class="au-lobby-browser__scroll">
-                <button type="button"
-                        class="au-lobby-browser__row au-lobby-browser__row--server"
+            <div class="au-browser__scroll">
+                <div class="au-browser__row"
                         ng-repeat="g in visibleBrowserGames()"
                         ng-class="{on: isBrowserGameSelected(g), disabled: g.joinable === false}"
                         ng-click="selectBrowserGame(g)">
-                    <span class="au-lobby-browser__col au-lobby-browser__col--lock">
-                        <span class="au-lobby-browser__padlock" ng-show="g.passwordProtected" data-tip="Password protected"></span>
+                    <span class="au-browser__col au-browser__col--lock">
+                        <span class="au-browser__padlock" ng-show="g.passwordProtected" data-tip="Password protected">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg>
+                        </span>
                     </span>
-                    <span class="au-lobby-browser__col au-lobby-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
-                    <span class="au-lobby-browser__col au-lobby-browser__col--map">{{ browserMapLabel(g) }}</span>
-                    <span class="au-lobby-browser__col au-lobby-browser__col--players">{{ g.humans }}/{{ g.maxPlayers || g.players || 8 }}</span>
-                    <span class="au-lobby-browser__col au-lobby-browser__col--ping">
-                        <span class="au-lobby-browser__ping" ng-class="pingTone(g)"></span>
-                        {{ formatPing(g) }}
+                    <span class="au-browser__col au-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
+                    <span class="au-browser__col au-browser__col--map">{{ browserMapLabel(g) }}</span>
+                    <span class="au-browser__col au-browser__col--players">{{ g.humans }}/{{ g.maxPlayers || g.players || 8 }}</span>
+                    <span class="au-browser__col au-browser__col--ping">
+                        <i class="au-browser__ping" ng-class="pingTone(g)"></i>{{ formatPing(g) }}
                     </span>
-                    <span class="au-lobby-browser__col au-lobby-browser__col--state">{{ g.phase }}</span>
-                </button>
-                <div class="au-lobby-browser__empty" ng-show="!visibleBrowserGames().length">No servers match this filter.</div>
+                    <span class="au-browser__col au-browser__col--state">{{ g.phase }}</span>
+                </div>
+                <div class="au-browser__empty" ng-show="!visibleBrowserGames().length">No servers match this filter.</div>
             </div>
         </div>
 
         <div class="au-lobby-browser__detail">
-            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
-            <div ng-show="selectedBrowserGame">
-                <div class="au-lobby-browser__art au-lobby-browser__art--ph"
-                     ng-style="browserMapArtStyle(selectedBrowserGame)">
-                    <div class="au-lobby-browser__art-fade"></div>
-                    <div class="au-lobby-browser__art-meta">
-                        <span class="au-lobby-browser__mode">{{ browserMapMode(selectedBrowserGame) }}</span>
+            <div class="au-browser__detail-in" ng-show="selectedBrowserGame">
+                <div class="au-browser__art" ng-style="browserMapArtStyle(selectedBrowserGame)">
+                    <div class="au-browser__art-meta">
                         <strong>{{ browserMapLabel(selectedBrowserGame) }}</strong>
+                        <span>{{ browserMapMode(selectedBrowserGame) }}</span>
                     </div>
                 </div>
-                <h3 class="au-lobby-browser__detail-name">{{ selectedBrowserGame.name || ('Game ' + selectedBrowserGame.gid) }}</h3>
-                <ul class="au-lobby-browser__stats">
-                    <li><span>Players</span><strong>{{ selectedBrowserGame.humans }}/{{ selectedBrowserGame.maxPlayers || 8 }}</strong></li>
-                    <li><span>Ping</span><strong>{{ formatPing(selectedBrowserGame) }}</strong></li>
-                    <li><span>State</span><strong>{{ selectedBrowserGame.phase }}</strong></li>
-                    <li><span>Password</span><strong>{{ selectedBrowserGame.passwordProtected ? 'Yes' : 'No' }}</strong></li>
-                    <li><span>ID</span><strong>{{ selectedBrowserGame.gid || '—' }}</strong></li>
+                <h3 class="au-browser__name">{{ selectedBrowserGame.name || ('Game ' + selectedBrowserGame.gid) }}</h3>
+                <ul class="au-browser__stats">
+                    <li><span>Players</span><b>{{ selectedBrowserGame.humans }}/{{ selectedBrowserGame.maxPlayers || 8 }}</b></li>
+                    <li><span>Ping</span><b>{{ formatPing(selectedBrowserGame) }}</b></li>
+                    <li><span>State</span><b>{{ selectedBrowserGame.phase }}</b></li>
+                    <li><span>Password</span><b>{{ selectedBrowserGame.passwordProtected ? 'Yes' : 'No' }}</b></li>
+                    <li><span>ID</span><b>{{ selectedBrowserGame.gid || '—' }}</b></li>
                 </ul>
-                <button type="button" class="au-btn au-btn--primary au-lobby-browser__join"
-                        ng-click="joinBrowserGame(selectedBrowserGame)"
-                        ng-disabled="selectedBrowserGame.joinable === false">Join Server</button>
             </div>
-            <div class="au-lobby-browser__detail-empty" ng-show="!selectedBrowserGame">
+            <div class="au-browser__detail-empty" ng-show="!selectedBrowserGame">
                 Select a server to view details.
             </div>
         </div>
     </div>
 
+    <div class="au-lobby__actions">
+        <div class="au-lobby__actions-in">
+            <button type="button" class="au-btn au-btn--ghost" ng-click="closeServerBrowser()">Back</button>
+            <button type="button" class="au-lobby__actions-link" ng-click="refreshGameList()">Refresh</button>
+            <button type="button" class="au-lobby__actions-link" ng-click="openOptions()">Options</button>
+            <button type="button" class="au-btn au-btn--primary au-lobby__start-battle"
+                    ng-click="joinBrowserGame(selectedBrowserGame)"
+                    ng-disabled="!selectedBrowserGame || selectedBrowserGame.joinable === false">Join server</button>
+        </div>
+    </div>
+
     <div class="au-lobby-browser__pw-modal" ng-show="_joinPasswordPrompt">
         <div class="au-lobby-browser__pw-box">
-            <h3>Password required</h3>
-            <p>This server is password protected.</p>
+            <h3 class="au-dialog__title">Password required</h3>
+            <p class="au-lobby__start-modal-copy">This server is password protected.</p>
             <input type="password" class="au-lobby-browser__pw-input"
                    ng-model="$parent._joinPasswordValue"
                    placeholder="Enter password"
                    ng-keydown="$event.keyCode == 13 && confirmJoinPassword()">
-            <div class="au-lobby-browser__pw-err" ng-show="_joinPasswordError">{{ _joinPasswordError }}</div>
-            <div class="au-lobby-browser__pw-actions">
+            <div class="au-browser__pw-err" ng-show="_joinPasswordError">{{ _joinPasswordError }}</div>
+            <div class="au-lobby__options-actions">
                 <button type="button" class="au-btn au-btn--ghost" ng-click="cancelJoinPassword()">Cancel</button>
                 <button type="button" class="au-btn au-btn--primary" ng-click="confirmJoinPassword()">Join</button>
             </div>

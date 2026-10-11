@@ -24,11 +24,30 @@
     var hintEl = null;
     var hostEl = null;
     var onPick = null;
+    var closeOnPick = false;
     var taken = [];
     var state = { h: 210, s: 0.72, v: 0.84 };
     var drag = null;
     var hatchAurora = null;
     var hatchClassic = null;
+    var svCursor = null;
+    var hueCursor = null;
+    var geomSv = null;
+    var geomHue = null;
+    var svDirty = true;
+    var hueDirty = true;
+    var frameQueued = false;
+    var frameToken = 0;
+    var chromeHex = '';
+    var chromeDenied = null;
+    var svCursorDenied = null;
+    var hueCursorDenied = null;
+    var lastSvX = -1;
+    var lastSvY = -1;
+    var lastHueX = -1;
+    var patternTheme = '';
+    var patternSv = null;
+    var patternHue = null;
 
     function isAuroraTheme() {
         return /(?:^|\s)cc-theme--aurora(?:\s|$)/.test(document.body.className || '');
@@ -232,7 +251,26 @@
         return hatchClassic;
     }
 
-    function paintBlockout(ctx, rects) {
+    function cachedPattern(ctx, slot) {
+        var theme = isAuroraTheme() ? 'a' : 'c';
+        if (patternTheme !== theme) {
+            patternTheme = theme;
+            patternSv = null;
+            patternHue = null;
+        }
+        if (slot === 'hue') {
+            if (!patternHue) {
+                patternHue = ctx.createPattern(hatchCanvas(), 'repeat');
+            }
+            return patternHue;
+        }
+        if (!patternSv) {
+            patternSv = ctx.createPattern(hatchCanvas(), 'repeat');
+        }
+        return patternSv;
+    }
+
+    function paintBlockout(ctx, rects, slot) {
         var i;
         var r;
         var pattern;
@@ -245,7 +283,7 @@
             r = rects[i];
             ctx.fillRect(r.x, r.y, r.w, r.h);
         }
-        pattern = ctx.createPattern(hatchCanvas(), 'repeat');
+        pattern = cachedPattern(ctx, slot);
         if (pattern) {
             ctx.globalAlpha = 0.42;
             ctx.fillStyle = pattern;
@@ -364,7 +402,10 @@
         svCanvas.className = 'cnc-hue-picker__sv';
         svCanvas.width = SV_W;
         svCanvas.height = SV_H;
+        svCursor = document.createElement('span');
+        svCursor.className = 'cnc-hue-picker__sv-cursor';
         svWrap.appendChild(svCanvas);
+        svWrap.appendChild(svCursor);
 
         hueWrap = document.createElement('div');
         hueWrap.className = 'cnc-hue-picker__hue-wrap';
@@ -372,7 +413,10 @@
         hueCanvas.className = 'cnc-hue-picker__hue';
         hueCanvas.width = HUE_W;
         hueCanvas.height = HUE_H;
+        hueCursor = document.createElement('span');
+        hueCursor.className = 'cnc-hue-picker__hue-cursor';
         hueWrap.appendChild(hueCanvas);
+        hueWrap.appendChild(hueCursor);
 
         foot = document.createElement('div');
         foot.className = 'cnc-hue-picker__foot';
@@ -443,6 +487,7 @@
             closePicker();
         });
         $(window).on('resize.cncHuePicker scroll.cncHuePicker', function () {
+            clearGeom();
             if (panel && panel.style.display === 'block') {
                 placePanel();
             }
@@ -451,13 +496,44 @@
         return panel;
     }
 
-    function canvasPos(canvas, evt) {
+    function clearGeom() {
+        geomSv = null;
+        geomHue = null;
+    }
+
+    function measureCanvas(canvas) {
         var $c = $(canvas);
         var off = $c.offset() || { left: 0, top: 0 };
         var cssW = $c.outerWidth() || canvas.width;
         var cssH = $c.outerHeight() || canvas.height;
-        var x = (evt.pageX - off.left) * (canvas.width / cssW);
-        var y = (evt.pageY - off.top) * (canvas.height / cssH);
+        if (cssW < 1) {
+            cssW = canvas.width;
+        }
+        if (cssH < 1) {
+            cssH = canvas.height;
+        }
+        return {
+            left: off.left,
+            top: off.top,
+            scaleX: canvas.width / cssW,
+            scaleY: canvas.height / cssH
+        };
+    }
+
+    function canvasPos(canvas, evt, slot) {
+        var g = slot === 'hue' ? geomHue : geomSv;
+        var x;
+        var y;
+        if (!g) {
+            g = measureCanvas(canvas);
+            if (slot === 'hue') {
+                geomHue = g;
+            } else {
+                geomSv = g;
+            }
+        }
+        x = (evt.pageX - g.left) * g.scaleX;
+        y = (evt.pageY - g.top) * g.scaleY;
         if (x < 0) {
             x = 0;
         } else if (x > canvas.width - 1) {
@@ -500,14 +576,49 @@
 
     function hoverAt(which, evt) {
         var pos;
+        var prevH = state.h;
         if (which === 'sv') {
-            pos = canvasPos(svCanvas, evt);
+            pos = canvasPos(svCanvas, evt, 'sv');
             applySvPos(pos);
-            svCanvas.style.cursor = currentDenied() ? 'not-allowed' : 'crosshair';
         } else {
-            pos = canvasPos(hueCanvas, evt);
+            pos = canvasPos(hueCanvas, evt, 'hue');
             applyHuePos(pos);
-            hueCanvas.style.cursor = hueDenied(state.h, taken) ? 'not-allowed' : 'pointer';
+            if (state.h !== prevH) {
+                svDirty = true;
+            }
+        }
+        scheduleFrame();
+    }
+
+    function scheduleFrame() {
+        var token;
+        if (frameQueued) {
+            return;
+        }
+        frameQueued = true;
+        token = frameToken;
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(function () {
+                onFrame(token);
+            });
+        } else if (window.webkitRequestAnimationFrame) {
+            window.webkitRequestAnimationFrame(function () {
+                onFrame(token);
+            });
+        } else {
+            window.setTimeout(function () {
+                onFrame(token);
+            }, 16);
+        }
+    }
+
+    function onFrame(token) {
+        if (token !== frameToken) {
+            return;
+        }
+        frameQueued = false;
+        if (!panel || panel.style.display === 'none') {
+            return;
         }
         paint();
         updateChrome(false);
@@ -519,97 +630,125 @@
     }
 
     function finishDrag() {
+        var which = drag;
+        var picked;
         drag = null;
-        updateChrome(true);
+        frameToken += 1;
+        frameQueued = false;
+        paint();
+        picked = updateChrome(true);
+        // Opened as a quick pick: a colour chosen in the shade field closes it (the hue strip only
+        // moves the field, so it leaves the picker open).
+        if (picked && closeOnPick && which === 'sv') {
+            closePicker();
+        }
     }
 
     function drawSv() {
         var ctx = svCanvas.getContext('2d');
-        var img = ctx.createImageData(SV_W, SV_H);
-        var data = img.data;
-        var x;
-        var y;
-        var i;
-        var s;
-        var v;
-        var rgb;
-
-        for (y = 0; y < SV_H; y++) {
-            v = 1 - (y / (SV_H - 1));
-            for (x = 0; x < SV_W; x++) {
-                s = x / (SV_W - 1);
-                rgb = hsvToRgb(state.h, s, v);
-                i = (y * SV_W + x) * 4;
-                data[i] = rgb.r;
-                data[i + 1] = rgb.g;
-                data[i + 2] = rgb.b;
-                data[i + 3] = 255;
-            }
-        }
-        ctx.putImageData(img, 0, 0);
-        paintBlockout(ctx, deniedSvRects());
-
-        x = state.s * (SV_W - 1);
-        y = (1 - state.v) * (SV_H - 1);
-        ctx.beginPath();
-        ctx.arc(x, y, 7, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(10, 18, 28, 0.9)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, Math.PI * 2);
-        ctx.strokeStyle = currentDenied() ? '#e74c3c' : '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        var rgb = hsvToRgb(state.h, 1, 1);
+        var fade;
+        ctx.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
+        ctx.fillRect(0, 0, SV_W, SV_H);
+        fade = ctx.createLinearGradient(0, 0, SV_W, 0);
+        fade.addColorStop(0, '#ffffff');
+        fade.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, 0, SV_W, SV_H);
+        fade = ctx.createLinearGradient(0, 0, 0, SV_H);
+        fade.addColorStop(0, 'rgba(0,0,0,0)');
+        fade.addColorStop(1, '#000000');
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, 0, SV_W, SV_H);
+        paintBlockout(ctx, deniedSvRects(), 'sv');
     }
 
     function drawHue() {
         var ctx = hueCanvas.getContext('2d');
-        var x;
-        var rgb;
-        var h;
-        var mx;
+        var fade = ctx.createLinearGradient(0, 0, HUE_W, 0);
+        fade.addColorStop(0, '#ff0000');
+        fade.addColorStop(1 / 6, '#ffff00');
+        fade.addColorStop(2 / 6, '#00ff00');
+        fade.addColorStop(0.5, '#00ffff');
+        fade.addColorStop(4 / 6, '#0000ff');
+        fade.addColorStop(5 / 6, '#ff00ff');
+        fade.addColorStop(1, '#ff0000');
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, 0, HUE_W, HUE_H);
+        paintBlockout(ctx, deniedHueRects(), 'hue');
+    }
 
-        for (x = 0; x < HUE_W; x++) {
-            h = (x / (HUE_W - 1)) * 360;
-            rgb = hsvToRgb(h, 1, 1);
-            ctx.fillStyle = 'rgb(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ')';
-            ctx.fillRect(x, 0, 1, HUE_H);
+    function placeCursors() {
+        var x = (state.s * (SV_W - 1) + 0.5) | 0;
+        var y = ((1 - state.v) * (SV_H - 1) + 0.5) | 0;
+        var hx = ((state.h / 360) * (HUE_W - 1) + 0.5) | 0;
+        var denied = currentDenied();
+        var hueBlock = hueDenied(state.h, taken);
+        if (!svCursor || !hueCursor) {
+            return;
         }
-        paintBlockout(ctx, deniedHueRects());
-
-        mx = (state.h / 360) * (HUE_W - 1);
-        ctx.fillStyle = 'rgba(10, 18, 28, 0.95)';
-        ctx.fillRect(mx - 2, 0, 4, HUE_H);
-        ctx.fillStyle = hueDenied(state.h, taken) ? '#e74c3c' : '#ffffff';
-        ctx.fillRect(mx - 1, 1, 2, HUE_H - 2);
+        if (x !== lastSvX) {
+            lastSvX = x;
+            svCursor.style.left = x + 'px';
+        }
+        if (y !== lastSvY) {
+            lastSvY = y;
+            svCursor.style.top = y + 'px';
+        }
+        if (hx !== lastHueX) {
+            lastHueX = hx;
+            hueCursor.style.left = hx + 'px';
+        }
+        if (denied !== svCursorDenied) {
+            svCursorDenied = denied;
+            svCursor.className = 'cnc-hue-picker__sv-cursor' + (denied ? ' is-denied' : '');
+            svCanvas.style.cursor = denied ? 'not-allowed' : 'crosshair';
+        }
+        if (hueBlock !== hueCursorDenied) {
+            hueCursorDenied = hueBlock;
+            hueCursor.className = 'cnc-hue-picker__hue-cursor' + (hueBlock ? ' is-denied' : '');
+            hueCanvas.style.cursor = hueBlock ? 'not-allowed' : 'pointer';
+        }
     }
 
     function paint() {
         if (!svCanvas || !hueCanvas) {
             return;
         }
-        drawSv();
-        drawHue();
+        if (hueDirty) {
+            drawHue();
+            hueDirty = false;
+        }
+        if (svDirty) {
+            drawSv();
+            svDirty = false;
+        }
+        placeCursors();
     }
 
     function updateChrome(commit) {
         var hex = currentHex();
         var denied = currentDenied();
-        if (chipEl) {
-            chipEl.style.backgroundColor = hex;
-            chipEl.className = 'cnc-hue-picker__chip' + (denied ? ' is-denied' : '');
-        }
-        if (hexEl) {
-            hexEl.textContent = hex.toUpperCase();
-            hexEl.className = 'cnc-hue-picker__hex' + (denied ? ' is-denied' : '');
-        }
-        if (hintEl) {
-            hintEl.textContent = denied ? 'Hue taken' : '';
+        if (hex !== chromeHex || denied !== chromeDenied) {
+            chromeHex = hex;
+            chromeDenied = denied;
+            if (chipEl) {
+                chipEl.style.backgroundColor = hex;
+                chipEl.className = 'cnc-hue-picker__chip' + (denied ? ' is-denied' : '');
+            }
+            if (hexEl) {
+                hexEl.textContent = hex.toUpperCase();
+                hexEl.className = 'cnc-hue-picker__hex' + (denied ? ' is-denied' : '');
+            }
+            if (hintEl) {
+                hintEl.textContent = denied ? 'Hue taken' : '';
+            }
         }
         if (commit && !denied && typeof onPick === 'function') {
             onPick(hex);
+            return true;
         }
+        return false;
     }
 
     function placePanel() {
@@ -628,6 +767,7 @@
         if (!panel || !hostEl) {
             return;
         }
+        clearGeom();
         $host = $(hostEl);
         off = $host.offset() || { left: 8, top: 8 };
         hw = $host.outerWidth() || 14;
@@ -681,9 +821,20 @@
         ensurePanel();
         hostEl = host || null;
         onPick = opts.onPick || null;
+        closeOnPick = !!opts.closeOnPick;
         list = opts.taken || [];
         taken = takenMeta(list);
         hexToState(opts.current);
+        svDirty = true;
+        hueDirty = true;
+        chromeHex = '';
+        chromeDenied = null;
+        svCursorDenied = null;
+        hueCursorDenied = null;
+        lastSvX = -1;
+        lastSvY = -1;
+        lastHueX = -1;
+        clearGeom();
         panel.className = 'cnc-hue-picker ' + themePanelClass();
         if (window.CncLobbyTooltips && window.CncLobbyTooltips.hide) {
             window.CncLobbyTooltips.hide();
@@ -702,9 +853,13 @@
 
     function closePicker() {
         drag = null;
+        frameToken += 1;
+        frameQueued = false;
         hostEl = null;
         onPick = null;
+        closeOnPick = false;
         taken = [];
+        clearGeom();
         if (panel) {
             panel.style.display = 'none';
             panel.style.visibility = 'hidden';

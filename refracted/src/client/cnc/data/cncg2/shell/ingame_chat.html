@@ -1,11 +1,14 @@
 <!DOCTYPE html>
-<html ng-app="CCApp">
+<html ng-app="CCApp" data-au-page="chat" data-au-ref="630x245">
 <head>
     <meta charset="utf-8">
     <title>Command &amp; Conquer — Chat</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="lib/angular/angular.min.js"></script>
-    <link rel="stylesheet" href="css/ingame-chat.css">
+    <link rel="stylesheet" data-shell-css="classic" href="css/ingame-chat.css">
+    <link rel="stylesheet" data-shell-css="aurora" href="css/themes/aurora.css">
+    <link rel="stylesheet" data-shell-css="aurora-alt" href="css/themes/aurora-alt.css">
+    <script src="js/shell-theme.js"></script>
     <script src="js/ingame-chat.js"></script>
 </head>
 <body class="ingame-aurora" ng-controller="IngameChatController" ng-cloak>
@@ -15,7 +18,7 @@
             <span class="chat-header-title">Chat</span>
             <span class="chat-channel-btns">
                 <button type="button" class="chat-channel-btn" ng-class="{active: channel=='all'}" ng-click="setChannel('all')">All</button>
-                <button type="button" class="chat-channel-btn" ng-class="{active: channel=='team'}" ng-click="setChannel('team')">Team</button>
+                <button type="button" class="chat-channel-btn" ng-class="{active: channel=='team'}" ng-click="setChannel('team')" ng-disabled="spectator">Team</button>
             </span>
             <button type="button" class="chat-close-btn" ng-click="closeChat()">X</button>
         </div>
@@ -23,15 +26,21 @@
         <div id="chat-history" class="chat-history">
             <div class="chat-empty" ng-show="!hasVisible()">Type a message…</div>
             <div class="chat-line" ng-repeat="m in messages" ng-show="messageVisible(m)" ng-class="[m.kind, m.relation == 'o' ? 'spectator' : '']">
-                <span class="chat-from" ng-class="fromClass(m)" ng-show="m.from"><span ng-if="m.channel=='team'">(Team) </span>{{ m.from }}<span ng-if="m.relation=='o'"> (Spectator)</span>:</span>
+                <span class="chat-tag" ng-class="m.channel" ng-show="m.from">[{{ m.relation == 'o' ? 'Spec' : (m.channel == 'team' ? 'Team' : 'All') }}]</span>
+                <span class="chat-from" ng-class="fromClass(m)" ng-show="m.from"><span class="chat-from-prefix" ng-if="m.relation=='o'">(Spectator) </span><span class="chat-from-prefix" ng-if="m.channel=='team'">(Team) </span>{{ m.from }}<i class="chat-colon">:</i></span>
                 <span class="chat-text">{{ m.text }}</span>
             </div>
         </div>
 
         <form class="chat-input-row" ng-submit="send()">
-            <input id="chat-input" type="text" class="chat-input" ng-model="draft"
-                   maxlength="180" autocomplete="off" spellcheck="false"
-                   placeholder="Enter message">
+            <span class="chat-prompt" ng-class="channel">{{ channel == 'team' ? 'Team' : 'All' }} &gt;</span>
+            <span class="au-caret-field">
+                <input id="chat-input" type="text" class="chat-input" ng-model="draft"
+                       maxlength="180" autocomplete="off" spellcheck="false"
+                       placeholder="Enter message">
+                <!-- Blinking _ after the text while the box has focus -->
+                <span class="au-caret" aria-hidden="true"><span class="au-caret__text">{{ draft }}</span><i>_</i></span>
+            </span>
             <button type="submit" class="chat-send-btn" aria-label="Send">
                 <svg class="chat-send-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
                     <path fill="currentColor" d="M3.4 20.6L21 12 3.4 3.4l-.1 6.6L14 12 3.3 14z"/>

@@ -369,6 +369,10 @@ fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo>
             let observer = !p.is_ai && super::super::game_state::is_observer_attrs(&p.attribs);
             if !p.is_ai {
                 super::super::game_state::note_match_spectator(p.persona_id, observer);
+                if !observer {
+                    let faction = p.attribs.get("_faction").map(String::as_str).unwrap_or("APA");
+                    super::super::game_state::note_match_entry(p.persona_id, gid, general_id, faction);
+                }
             }
             // General must match that faction (APA Classic), whatever `_general` holds.
             let (faction, start_point, general_id) = if observer {

@@ -1,5 +1,19 @@
 /**
- * Shell UI theme — Classic vs Aurora.
+ * Shell UI theme — Classic, Aurora (Default), Aurora (Alternate).
+ *
+ * Stylesheets: every <link data-shell-css="..."> lists the themes it belongs to. Only the
+ * active theme's links stay in the document, so the classic stylesheets (Bootstrap included)
+ * and the Aurora ones never mix. Each Aurora theme is one generated stylesheet:
+ * css/themes/aurora.css and css/themes/aurora-alt.css (tools/cnc-shell-webdev/aurora).
+ * Both Aurora themes share the Aurora templates; the alternate also carries
+ * body.cc-theme--aurora-alt.
+ *
+ * Scale: the Aurora stylesheets are written in rem against a reference window
+ * (1920x1080, or <html data-au-ref="WxH">). fitRoot() sets the root font size to
+ * 16px x min(width/refW, height/refH), so the layout holds its proportions at any size.
+ *
+ * Requires the EAWebKit 16.4 engine (flexbox); there is no 13.x fallback.
+ *
  * Active theme: applied now. Default theme: used on next shell boot.
  * Persists in the shell WebKit profile localStorage (CNCO_DL\0\webkit on retail).
  */
@@ -10,6 +24,7 @@
             id: 'classic',
             label: 'Classic',
             bodyClass: 'cc-theme--classic',
+            family: 'classic',
             rootTemplate: 'view/roots/classic.html',
             homeTemplate: 'view/home.html',
             lobbyTemplate: 'view/lobby/lobby-classic.html',
@@ -17,30 +32,94 @@
         },
         aurora: {
             id: 'aurora',
-            label: 'Aurora',
+            label: 'Aurora (Default)',
             bodyClass: 'cc-theme--aurora',
+            family: 'aurora',
             rootTemplate: 'view/roots/aurora.html',
             homeTemplate: 'view/home-aurora.html',
             lobbyTemplate: 'view/lobby/lobby-aurora.html',
-            hint: 'Aurora is a modernised view of the shell layout built for the game client.'
+            hint: 'Aurora (Default) puts your general over the battlefield, in gunmetal with light blue accents.'
+        },
+        'aurora-alt': {
+            id: 'aurora-alt',
+            label: 'Aurora (Alternate)',
+            bodyClass: 'cc-theme--aurora cc-theme--aurora-alt',
+            family: 'aurora',
+            rootTemplate: 'view/roots/aurora.html',
+            homeTemplate: 'view/home-aurora.html',
+            lobbyTemplate: 'view/lobby/lobby-aurora.html',
+            hint: 'Aurora (Alternate) keeps the classic backdrop, with cyan readouts and a wide feature banner.'
         }
     };
     THEMES['cnc-alpha'] = THEMES.classic;
     var FACTORY_DEFAULT = 'aurora';
     var listeners = [];
+    var sheetSlots = null;
 
     function normalize(id) {
-        if (!id) {
-            return FACTORY_DEFAULT;
-        }
-        if (THEMES[id]) {
+        if (id && THEMES[id]) {
             return THEMES[id].id;
         }
         return FACTORY_DEFAULT;
     }
 
+    /** The theme that is drawn: the chosen one. */
+    function effective(id) {
+        return normalize(id);
+    }
+
+    /**
+     * Keep only the active theme's <link data-shell-css> elements in the document.
+     * A link that is out is replaced by a comment node holding its place.
+     */
+    function syncStylesheets(themeId) {
+        var doc = global.document;
+        var i;
+        if (!doc || !doc.getElementsByTagName) {
+            return;
+        }
+        if (!sheetSlots) {
+            sheetSlots = [];
+        }
+        var links = doc.getElementsByTagName('link');
+        for (i = 0; i < links.length; i++) {
+            if (links[i].getAttribute('data-shell-css') && !links[i]._cncSlot) {
+                links[i]._cncSlot = true;
+                sheetSlots.push({ link: links[i], mark: doc.createComment('shell-css'), on: true });
+            }
+        }
+        for (i = 0; i < sheetSlots.length; i++) {
+            var slot = sheetSlots[i];
+            var want = (' ' + slot.link.getAttribute('data-shell-css') + ' ').indexOf(' ' + themeId + ' ') !== -1;
+            if (want && !slot.on && slot.mark.parentNode) {
+                slot.mark.parentNode.replaceChild(slot.link, slot.mark);
+                slot.on = true;
+            } else if (!want && slot.on && slot.link.parentNode) {
+                slot.link.parentNode.replaceChild(slot.mark, slot.link);
+                slot.on = false;
+            }
+        }
+    }
+
+    /** Root font size for the rem-based Aurora stylesheets. */
+    function fitRoot() {
+        var doc = global.document;
+        var root = doc && doc.documentElement;
+        if (!root) {
+            return;
+        }
+        var ref = /^(\d+)x(\d+)$/.exec(root.getAttribute('data-au-ref') || '') || [0, 1920, 1080];
+        var w = global.innerWidth || root.clientWidth || 0;
+        var h = global.innerHeight || root.clientHeight || 0;
+        if (!w || !h) {
+            return;
+        }
+        var k = Math.min(w / Number(ref[1]), h / Number(ref[2]));
+        root.style.fontSize = (Math.round(k * 16 * 1000) / 1000) + 'px';
+    }
+
     function meta(id) {
-        return THEMES[normalize(id)];
+        return THEMES[effective(id)];
     }
 
     function emptyPrefs() {
@@ -103,15 +182,18 @@
         el.className = String(el.className)
             .replace(/\bcc-theme--cnc-alpha\b/g, '')
             .replace(/\bcc-theme--classic\b/g, '')
+            .replace(/\bcc-theme--aurora-alt\b/g, '')
             .replace(/\bcc-theme--aurora\b/g, '')
             .replace(/\s+/g, ' ')
             .replace(/^\s+|\s+$/g, '');
     }
 
     function apply(id) {
-        var themeId = normalize(id);
+        var themeId = effective(id);
         var m = meta(themeId);
         var body = global.document && global.document.body;
+        syncStylesheets(themeId);
+        fitRoot();
         if (!body) {
             return themeId;
         }
@@ -126,7 +208,7 @@
     }
 
     function get() {
-        return readLocalPrefs().theme;
+        return effective(readLocalPrefs().theme);
     }
 
     function getDefault() {
@@ -135,9 +217,9 @@
 
     function set(id) {
         var prefs = readLocalPrefs();
-        prefs.theme = apply(id);
+        prefs.theme = normalize(id);
         writeLocalPrefs(prefs);
-        return prefs.theme;
+        return apply(prefs.theme);
     }
 
     function setDefault(id) {
@@ -160,12 +242,22 @@
     function list() {
         return [
             { id: 'classic', label: THEMES.classic.label },
-            { id: 'aurora', label: THEMES.aurora.label }
+            { id: 'aurora', label: THEMES.aurora.label },
+            { id: 'aurora-alt', label: THEMES['aurora-alt'].label }
         ];
     }
 
     function hint(id) {
         return meta(id || get()).hint;
+    }
+
+    /** 'aurora' for both Aurora themes, 'classic' otherwise. */
+    function family(id) {
+        return meta(id || get()).family;
+    }
+
+    function bodyClass(id) {
+        return meta(id || get()).bodyClass;
     }
 
     function rootTemplate(id) {
@@ -192,13 +284,21 @@
         prefs.theme = bootId;
         prefs.defaultTheme = normalize(prefs.defaultTheme || bootId);
         writeLocalPrefs(prefs);
-        apply(bootId);
+        var drawn = apply(bootId);
         if (typeof done === 'function') {
-            done(bootId);
+            done(drawn);
         }
     }
 
+    if (global.addEventListener) {
+        global.addEventListener('resize', fitRoot, false);
+        global.addEventListener('load', fitRoot, false);
+    }
+
     if (global.document) {
+        // Runs in <head>, after the stylesheet links: drop the other themes' sheets before first paint.
+        syncStylesheets(effective(readLocalPrefs().theme));
+        fitRoot();
         if (global.document.body) {
             apply(readLocalPrefs().theme);
         } else if (global.document.addEventListener) {
@@ -225,11 +325,14 @@
         apply: apply,
         list: list,
         hint: hint,
+        family: family,
+        bodyClass: bodyClass,
         boot: boot,
         rootTemplate: rootTemplate,
         homeTemplate: homeTemplate,
         lobbyTemplate: lobbyTemplate,
         onChange: onChange,
-        normalize: normalize
+        normalize: normalize,
+        fitRoot: fitRoot
     };
 })(window);

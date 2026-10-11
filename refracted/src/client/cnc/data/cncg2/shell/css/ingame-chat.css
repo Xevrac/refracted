@@ -47,20 +47,20 @@ body.ingame-aurora.cc-theme--aurora:before {
     width: auto;
     height: auto;
     margin: 0;
-    background: rgba(8, 12, 14, 0.48);
-    border: 1px solid rgba(28, 42, 50, 0.65);
-    -webkit-box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.08), 0 10px 22px rgba(0, 0, 0, 0.28);
-    box-shadow: 0 0 0 1px rgba(0, 136, 255, 0.08), 0 10px 22px rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    -webkit-box-shadow: 0 0 0 1px rgba(217, 221, 226, 0.1), 0 10px 22px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 0 0 1px rgba(217, 221, 226, 0.1), 0 10px 22px rgba(0, 0, 0, 0.28);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
     z-index: 100;
+    background-color: rgba(10, 10, 11, 0.48);
 }
 
 .chat-header {
     height: 40px;
     padding: 0 10px;
-    border-bottom: 1px solid rgba(28, 42, 50, 0.55);
-    background: rgba(8, 12, 14, 0.28);
+    border-bottom: 0;
+    background: transparent;
     line-height: 40px;
     font-size: 16px;
     font-weight: bold;
@@ -69,15 +69,18 @@ body.ingame-aurora.cc-theme--aurora:before {
     text-shadow: 0 1px 2px #000;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
+    position: relative;
 }
 
 .chat-header-title {
     float: left;
+    display: none;
 }
 
 .chat-channel-btns {
-    float: left;
-    margin-left: 14px;
+    float: right;
+    margin-left: 0;
+    margin-right: 34px;
 }
 
 .chat-channel-btn {
@@ -85,9 +88,9 @@ body.ingame-aurora.cc-theme--aurora:before {
     height: 26px;
     margin: 7px 4px 0 0;
     padding: 0 10px;
-    border: 1px solid #1c2a32;
+    border: 1px solid rgba(217, 221, 226, 0.26);
     background: transparent;
-    color: #8b9aab;
+    color: #9da1a8;
     font-family: 'Eurostile-Hea', 'EurostileLTStdBold', Arial, sans-serif;
     font-size: 12px;
     font-weight: bold;
@@ -98,9 +101,9 @@ body.ingame-aurora.cc-theme--aurora:before {
     vertical-align: top;
 }
 .chat-channel-btn.active {
-    background: rgba(0, 136, 255, 0.16);
-    border-color: #3aa0ff;
-    color: #fff;
+    background: #d9dde2;
+    border-color: #d9dde2;
+    color: #0a0a0b;
 }
 .chat-channel-btn:hover,
 .chat-channel-btn:focus {
@@ -108,24 +111,39 @@ body.ingame-aurora.cc-theme--aurora:before {
     color: #fff;
     border-color: #555;
 }
+.chat-channel-btn:disabled,
+.chat-channel-btn[disabled] {
+    color: #5c6570;
+    border-color: #2a3036;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: default;
+}
+.chat-channel-btn:disabled:hover,
+.chat-channel-btn[disabled]:hover,
+.chat-channel-btn:disabled:focus,
+.chat-channel-btn[disabled]:focus {
+    color: #5c6570;
+    border-color: #2a3036;
+}
 
 .chat-close-btn {
-    float: right;
     width: 24px;
     height: 24px;
-    margin-top: 8px;
+    margin-top: 0;
     padding: 0;
-    border: 1px solid rgba(28, 42, 50, 0.75);
-    background: rgba(18, 22, 24, 0.55);
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background: rgba(20, 21, 22, 0.55);
     color: transparent;
     cursor: pointer;
     line-height: 20px;
-    position: relative;
+    position: absolute;
+    top: 8px;
+    right: 8px;
 }
 .chat-close-btn:hover,
 .chat-close-btn:focus {
     outline: none;
-    border-color: #3aa0ff;
+    border-color: #d9dde2;
 }
 .chat-close-btn:before,
 .chat-close-btn:after {
@@ -135,7 +153,7 @@ body.ingame-aurora.cc-theme--aurora:before {
     top: 5px;
     width: 1px;
     height: 13px;
-    background: #8b9aab;
+    background: #9da1a8;
 }
 .chat-close-btn:before { -webkit-transform: rotate(45deg); transform: rotate(45deg); }
 .chat-close-btn:after { -webkit-transform: rotate(-45deg); transform: rotate(-45deg); }
@@ -157,21 +175,21 @@ body.ingame-aurora.cc-theme--aurora:before {
     overflow-y: auto;
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    background: rgba(0, 0, 0, 0.10);
+    background: transparent;
 }
 .chat-history::-webkit-scrollbar {
     width: 8px;
 }
 .chat-history::-webkit-scrollbar-track {
-    background: rgba(12, 15, 13, 0.9);
-    border-left: 1px solid #1c2a32;
+    background: rgba(10, 10, 11, 0.9);
+    border-left: 1px solid rgba(217, 221, 226, 0.26);
 }
 .chat-history::-webkit-scrollbar-thumb {
-    background: #2a4a62;
-    border: 1px solid #1c2a32;
+    background: #4a4d52;
+    border: 1px solid rgba(217, 221, 226, 0.26);
 }
 .chat-history::-webkit-scrollbar-thumb:hover {
-    background: #3a6a8a;
+    background: #6b6f75;
 }
 .chat-history::-webkit-scrollbar-button {
     display: none;
@@ -207,6 +225,10 @@ body.ingame-aurora.cc-theme--aurora:before {
 .chat-line .chat-from.dev {
     color: #6f50a5;
 }
+.chat-line .chat-from.playtester {
+    color: #ffcf47;
+    font-weight: normal;
+}
 .chat-line .chat-text {
     color: #e8e8e8;
 }
@@ -237,10 +259,10 @@ body.ingame-aurora.cc-theme--aurora:before {
     height: 52px;
     padding: 0;
     overflow: hidden;
-    border-top: 1px solid rgba(28, 42, 50, 0.55);
+    border-top: 1px solid rgba(217, 221, 226, 0.26);
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
-    background: rgba(8, 12, 14, 0.42);
+    background: rgba(10, 10, 11, 0.42);
 }
 
 .chat-input {
@@ -252,9 +274,9 @@ body.ingame-aurora.cc-theme--aurora:before {
     height: 34px;
     margin: 0;
     padding: 0 10px;
-    border: 1px solid rgba(28, 42, 50, 0.75);
-    background: rgba(16, 20, 18, 0.72);
-    color: #e6edf5;
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background: rgba(13, 14, 15, 0.72);
+    color: #eceef0;
     font-family: 'Eurostile-Med', Arial, sans-serif;
     font-size: 15px;
     line-height: 32px;
@@ -265,7 +287,7 @@ body.ingame-aurora.cc-theme--aurora:before {
 }
 .chat-input:focus {
     outline: none;
-    border-color: #3aa0ff;
+    border-color: #d9dde2;
 }
 
 .chat-send-btn {
@@ -276,8 +298,8 @@ body.ingame-aurora.cc-theme--aurora:before {
     height: 34px;
     margin: 0;
     padding: 0;
-    border: 1px solid rgba(74, 85, 96, 0.85);
-    background-color: rgba(26, 30, 34, 0.72);
+    border: 1px solid rgba(217, 221, 226, 0.26);
+    background-color: rgba(28, 29, 31, 0.72);
     background-image:
         -webkit-linear-gradient(top, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.22) 100%);
     background-image:
@@ -295,10 +317,202 @@ body.ingame-aurora.cc-theme--aurora:before {
 .chat-send-btn:focus {
     outline: none;
     color: #fff;
-    border-color: #6a7a88;
-    background-color: rgba(36, 42, 48, 0.82);
+    border-color: #9da1a8;
+    background-color: rgba(46, 49, 54, 0.82);
     background-image:
         -webkit-linear-gradient(top, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.18) 100%);
     background-image:
         linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.18) 100%);
 }
+
+/* Corner ticks: eight solid-colour gradients, as on the shell panels. */
+.chat-panel {
+    background-image:
+        -webkit-linear-gradient(#3aa0ff, #3aa0ff), -webkit-linear-gradient(#3aa0ff, #3aa0ff),
+        -webkit-linear-gradient(#3aa0ff, #3aa0ff), -webkit-linear-gradient(#3aa0ff, #3aa0ff),
+        -webkit-linear-gradient(#3aa0ff, #3aa0ff), -webkit-linear-gradient(#3aa0ff, #3aa0ff),
+        -webkit-linear-gradient(#3aa0ff, #3aa0ff), -webkit-linear-gradient(#3aa0ff, #3aa0ff);
+    background-image:
+        linear-gradient(#3aa0ff, #3aa0ff), linear-gradient(#3aa0ff, #3aa0ff),
+        linear-gradient(#3aa0ff, #3aa0ff), linear-gradient(#3aa0ff, #3aa0ff),
+        linear-gradient(#3aa0ff, #3aa0ff), linear-gradient(#3aa0ff, #3aa0ff),
+        linear-gradient(#3aa0ff, #3aa0ff), linear-gradient(#3aa0ff, #3aa0ff);
+    background-repeat: no-repeat;
+    background-size: 18px 2px, 2px 18px, 18px 2px, 2px 18px, 18px 2px, 2px 18px, 18px 2px, 2px 18px;
+    background-position: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom;
+}
+
+/* ==== BEGIN generated palette (aurora-alt-palette.py) ==== */
+/* from css/ingame-chat.css */
+body.ingame-aurora.cc-theme--aurora-alt,
+body.ingame-aurora.cc-theme--aurora-alt.cc-theme,
+body.ingame-aurora.cc-theme--aurora-alt.cc-theme--aurora {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+}
+body.cc-theme--aurora-alt .chat-panel {
+    border: 1px solid rgba(95, 233, 255, 0.28);
+    -webkit-box-shadow: 0 0 0 1px rgba(95, 233, 255, 0.12), 0 10px 22px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 0 0 1px rgba(95, 233, 255, 0.12), 0 10px 22px rgba(0, 0, 0, 0.28);
+    background-color: rgba(5, 13, 17, 0.48);
+}
+body.cc-theme--aurora-alt .chat-header {
+    border-bottom: 0;
+    background: transparent;
+    text-shadow: 0 1px 2px #000;
+}
+body.cc-theme--aurora-alt .chat-channel-btn {
+    border: 1px solid rgba(95, 233, 255, 0.28);
+    background: transparent;
+    color: #6fa3ad;
+}
+body.cc-theme--aurora-alt .chat-channel-btn.active {
+    background: #5fe9ff;
+    border-color: #5fe9ff;
+    color: #05090c;
+}
+body.cc-theme--aurora-alt .chat-channel-btn:hover,
+body.cc-theme--aurora-alt .chat-channel-btn:focus {
+    outline: none;
+    color: #fff;
+    border-color: #555;
+}
+body.cc-theme--aurora-alt .chat-channel-btn:disabled,
+body.cc-theme--aurora-alt .chat-channel-btn[disabled] {
+    color: #5c6570;
+    border-color: #2a3036;
+    background: rgba(0, 0, 0, 0.25);
+}
+body.cc-theme--aurora-alt .chat-channel-btn:disabled:hover,
+body.cc-theme--aurora-alt .chat-channel-btn[disabled]:hover,
+body.cc-theme--aurora-alt .chat-channel-btn:disabled:focus,
+body.cc-theme--aurora-alt .chat-channel-btn[disabled]:focus {
+    color: #5c6570;
+    border-color: #2a3036;
+}
+body.cc-theme--aurora-alt .chat-close-btn {
+    border: 1px solid rgba(95, 233, 255, 0.28);
+    background: rgba(8, 26, 33, 0.55);
+    color: transparent;
+}
+body.cc-theme--aurora-alt .chat-close-btn:hover,
+body.cc-theme--aurora-alt .chat-close-btn:focus {
+    outline: none;
+    border-color: #5fe9ff;
+}
+body.cc-theme--aurora-alt .chat-close-btn:before,
+body.cc-theme--aurora-alt .chat-close-btn:after {
+    background: #6fa3ad;
+}
+body.cc-theme--aurora-alt .chat-close-btn:hover:before,
+body.cc-theme--aurora-alt .chat-close-btn:hover:after,
+body.cc-theme--aurora-alt .chat-close-btn:focus:before,
+body.cc-theme--aurora-alt .chat-close-btn:focus:after {
+    background: #fff;
+}
+body.cc-theme--aurora-alt .chat-history {
+    background: transparent;
+}
+body.cc-theme--aurora-alt .chat-history::-webkit-scrollbar-track {
+    background: rgba(5, 13, 17, 0.9);
+    border-left: 1px solid rgba(95, 233, 255, 0.28);
+}
+body.cc-theme--aurora-alt .chat-history::-webkit-scrollbar-thumb {
+    background: #1f5a68;
+    border: 1px solid rgba(95, 233, 255, 0.28);
+}
+body.cc-theme--aurora-alt .chat-history::-webkit-scrollbar-thumb:hover {
+    background: #3f6b74;
+}
+body.cc-theme--aurora-alt .chat-line {
+    text-shadow: 0 1px 2px #000;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from {
+    color: #7ec8ff;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from.ally {
+    color: #7ec8ff;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from.enemy {
+    color: #e85d5d;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from.team {
+    color: #8fdf7a;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from.self {
+    color: #7ec8ff;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from.dev {
+    color: #6f50a5;
+}
+body.cc-theme--aurora-alt .chat-line .chat-from.playtester {
+    color: #ffcf47;
+}
+body.cc-theme--aurora-alt .chat-line .chat-text {
+    color: #e8e8e8;
+}
+body.cc-theme--aurora-alt .chat-line.spectator .chat-from,
+body.cc-theme--aurora-alt .chat-line.spectator .chat-from.spectator,
+body.cc-theme--aurora-alt .chat-line.spectator .chat-text {
+    color: #9a9a9a;
+}
+body.cc-theme--aurora-alt .chat-line.system .chat-text {
+    color: #888;
+}
+body.cc-theme--aurora-alt .chat-empty {
+    color: #666;
+}
+body.cc-theme--aurora-alt .chat-input-row {
+    border-top: 1px solid rgba(95, 233, 255, 0.28);
+    background: rgba(5, 13, 17, 0.42);
+}
+body.cc-theme--aurora-alt .chat-input {
+    border: 1px solid rgba(95, 233, 255, 0.28);
+    background: rgba(5, 16, 21, 0.72);
+    color: #cfeff5;
+}
+body.cc-theme--aurora-alt .chat-input:focus {
+    outline: none;
+    border-color: #5fe9ff;
+}
+body.cc-theme--aurora-alt .chat-send-btn {
+    border: 1px solid rgba(95, 233, 255, 0.28);
+    background-color: rgba(10, 32, 41, 0.72);
+    background-image:
+        -webkit-linear-gradient(top, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.22) 100%);
+    background-image:
+        linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.22) 100%);
+    color: #d8d8d8;
+}
+body.cc-theme--aurora-alt .chat-send-btn:hover,
+body.cc-theme--aurora-alt .chat-send-btn:focus {
+    outline: none;
+    color: #fff;
+    border-color: #6fa3ad;
+    background-color: rgba(12, 46, 58, 0.82);
+    background-image:
+        -webkit-linear-gradient(top, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.18) 100%);
+    background-image:
+        linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.18) 100%);
+}
+body.cc-theme--aurora-alt .chat-panel {
+    background-image:
+        -webkit-linear-gradient(#5fe9ff, #5fe9ff), -webkit-linear-gradient(#5fe9ff, #5fe9ff),
+        -webkit-linear-gradient(#5fe9ff, #5fe9ff), -webkit-linear-gradient(#5fe9ff, #5fe9ff),
+        -webkit-linear-gradient(#5fe9ff, #5fe9ff), -webkit-linear-gradient(#5fe9ff, #5fe9ff),
+        -webkit-linear-gradient(#5fe9ff, #5fe9ff), -webkit-linear-gradient(#5fe9ff, #5fe9ff);
+    background-image:
+        linear-gradient(#5fe9ff, #5fe9ff), linear-gradient(#5fe9ff, #5fe9ff),
+        linear-gradient(#5fe9ff, #5fe9ff), linear-gradient(#5fe9ff, #5fe9ff),
+        linear-gradient(#5fe9ff, #5fe9ff), linear-gradient(#5fe9ff, #5fe9ff),
+        linear-gradient(#5fe9ff, #5fe9ff), linear-gradient(#5fe9ff, #5fe9ff);
+    background-repeat: no-repeat;
+    background-size: 18px 2px, 2px 18px, 18px 2px, 2px 18px, 18px 2px, 2px 18px, 18px 2px, 2px 18px;
+    background-position: left top, left top, right top, right top, left bottom, left bottom, right bottom, right bottom;
+}
+/* ==== END generated palette ==== */
+
+/* Aurora-only pieces of ingame_chat.html (styled in css/themes/aurora*.css) */
+.chat-tag, .chat-prompt { display: none; }
+.chat-colon { font-style: normal; }

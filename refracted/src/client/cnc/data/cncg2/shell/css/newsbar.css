@@ -109,15 +109,15 @@ body.cc-theme--cnc-alpha .cc-news-full-panel::-webkit-scrollbar-thumb:hover {
     background: #4a6a88;
 }
 body.cc-theme--aurora .cc-news-full-panel::-webkit-scrollbar-track {
-    background: rgba(12, 15, 13, 0.9);
-    border-left: 1px solid #1c2a32;
+    background: rgba(10, 10, 11, 0.9);
+    border-left: 1px solid rgba(217, 221, 226, 0.26);
 }
 body.cc-theme--aurora .cc-news-full-panel::-webkit-scrollbar-thumb {
-    background: #2a4a62;
-    border: 1px solid #1c2a32;
+    background: #4a4d52;
+    border: 1px solid rgba(217, 221, 226, 0.26);
 }
 body.cc-theme--aurora .cc-news-full-panel::-webkit-scrollbar-thumb:hover {
-    background: #3a6a8a;
+    background: #6b6f75;
 }
 
 .article-title {
@@ -177,6 +177,12 @@ body.cc-theme--aurora .cc-news-full-panel::-webkit-scrollbar-thumb:hover {
    3. FEED CONTENT (js/shell-news.js blocks)
    ========================================================================= */
 .news-item-pin { color: #d99525; font-size: 10px; margin-right: 6px; vertical-align: middle; position: relative; top: -2px; }
+/* Date and summary lines: the Aurora themes show them (css/themes/aurora.css). */
+.news-item-date,
+.news-item-summary {
+    display: none;
+}
+
 .news-item--empty { cursor: default; color: #8a8a8a; }
 .news-item--empty:hover { background: none; color: #8a8a8a; }
 

@@ -1,5 +1,27 @@
 CCApp.controller('OptionsController', function($scope, $timeout) {
-    $scope.optionsTab = 'GRAPHICS';
+    // Aurora (both variants) lays Options out as rows with Gameplay first, on the main shell and in the
+    // in-game pause menu (ingame_menu.html) alike. Classic keeps the original page.
+    function auroraFamily() {
+        return !!(window.CncShellTheme && CncShellTheme.family && CncShellTheme.family() === 'aurora');
+    }
+    $scope.auroraOptions = auroraFamily();
+    $scope.optionsTab = $scope.auroraOptions ? 'GAMEPLAY' : 'GRAPHICS';
+    if (window.CncShellTheme && CncShellTheme.onChange) {
+        CncShellTheme.onChange(function () {
+            var on = auroraFamily();
+            if (on === $scope.auroraOptions) {
+                return;
+            }
+            var set = function () {
+                $scope.auroraOptions = on;
+            };
+            if ($scope.$$phase || ($scope.$root && $scope.$root.$$phase)) {
+                set();
+            } else {
+                $scope.$apply(set);
+            }
+        });
+    }
     var systemWidth = (window.screen && (window.screen.availWidth || window.screen.width)) || 1920;
     var systemHeight = (window.screen && (window.screen.availHeight || window.screen.height)) || 1080;
     var STANDARD_RESOLUTIONS = [
@@ -178,8 +200,9 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         mastervolume: 30,
         edgepan: true,
         edgescrollspeed: 40,
+        // RMB drag scroll, so middle-click stays free to snap the camera home.
         middlemousecameradrag: false,
-        allowcamerarotation: false,
+        allowcamerarotation: true,
         movemodeattack: false,
         allowdeselect: true,
         usefriendorfoecolors: false,
@@ -209,7 +232,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
     $scope.cameraRotationLocked = false;
     $scope.shellThemeOptions = (window.CncShellTheme && CncShellTheme.list) ? CncShellTheme.list() : [
         { id: 'classic', label: 'Classic' },
-        { id: 'aurora', label: 'Aurora' }
+        { id: 'aurora', label: 'Aurora (Default)' }
     ];
     $scope.allowShellThemeSelect = !!$scope.$root.allowShellThemeSelect;
     $scope.lobbyFactionOptions = (window.CncLobbyDefaults && CncLobbyDefaults.factions)
@@ -346,6 +369,16 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         $scope.lobbyDefaults.random = ($scope.lobbyDefaultsMode === 'random');
     };
 
+    // Aurora draws these two as segmented buttons instead of dropdowns.
+    $scope.pickLobbyDefaultMode = function (id) {
+        $scope.lobbyDefaultsMode = id;
+        $scope.onLobbyDefaultModeChange();
+    };
+    $scope.pickChatVisibility = function (id) {
+        $scope.chatVisibility = id;
+        $scope.onChatVisibilityChange();
+    };
+
     refreshShellThemeHint();
 
     // Shell access layer returns JSON strings, not parsed objects — normalize once here.
@@ -433,7 +466,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         if ($scope.windowedResolutionOptions.indexOf($scope.settings.windowedResolution) === -1) {
             $scope.windowedResolutionOptions.unshift($scope.settings.windowedResolution);
         }
-        $scope.$applyAsync();
+        digestSettingsUi();
     }
 
     function executeShell(resource, extra, onResponse) {
@@ -509,7 +542,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         $scope.settings.brightnessPercent = Math.max(1, Math.round($scope.settings.brightness * 100));
     }
 
-    // In-game CEF often won't flush $applyAsync until input; force a digest.
+    // The shell answers outside a digest; queue one (Angular 1.1.5 has no $applyAsync).
     function digestSettingsUi() {
         $timeout(function() {}, 0);
     }

@@ -1,5 +1,5 @@
 <div class="options-modal-overlay" ng-show="optionsOpen">
-    <div class="options-modal-box" ng-controller="OptionsController">
+    <div class="options-modal-box" ng-controller="OptionsController" ng-class="{'opt-aurora': auroraOptions}">
         <button class="btn-options-close" ng-click="closeOptions()"></button>
 
         <div class="options-header">
@@ -9,10 +9,11 @@
         <div class="options-body-wrapper">
             <div class="options-sidebar">
                 <ul class="options-tabs">
+                    <li ng-show="auroraOptions" ng-class="{'active': optionsTab == 'GAMEPLAY'}"><a href="" ng-click="setOptionsTab('GAMEPLAY')">GAMEPLAY</a></li>
                     <li ng-class="{'active': optionsTab == 'GRAPHICS'}"><a href="" ng-click="setOptionsTab('GRAPHICS')">GRAPHICS</a></li>
                     <li ng-class="{'active': optionsTab == 'SOUND'}"><a href="" ng-click="setOptionsTab('SOUND')">SOUND</a></li>
                     <li ng-class="{'active': optionsTab == 'CONTROLS'}"><a href="" ng-click="setOptionsTab('CONTROLS')">CONTROLS</a></li>
-                    <li ng-class="{'active': optionsTab == 'GAMEPLAY'}"><a href="" ng-click="setOptionsTab('GAMEPLAY')">GAMEPLAY</a></li>
+                    <li ng-hide="auroraOptions" ng-class="{'active': optionsTab == 'GAMEPLAY'}"><a href="" ng-click="setOptionsTab('GAMEPLAY')">GAMEPLAY</a></li>
                     <li ng-show="allowShellThemeSelect" ng-class="{'active': optionsTab == 'INTERFACE'}"><a href="" ng-click="setOptionsTab('INTERFACE')">INTERFACE</a></li>
                 </ul>
                 <div class="options-restore-wrap">
@@ -22,17 +23,19 @@
 
             <div class="options-content" ng-class="{'opt-content--waiting': !settingsReady}">
                 <fieldset class="opt-fieldset" ng-disabled="!settingsReady">
+                <div class="opt-panes">
                 <div class="opt-pane" ng-show="optionsTab == 'GRAPHICS'">
+                    <h4 class="opt-section" ng-show="auroraOptions">Display</h4>
                     <div class="opt-group">
                         <label class="opt-label-main">Shell Display Mode</label>
-                        <label class="opt-radio"><input type="radio" name="shellMode" ng-value="true" ng-model="settings.shellfullscreen" ng-change="applyGraphicsMode()"> Fullscreen</label>
-                        <label class="opt-radio"><input type="radio" name="shellMode" ng-value="false" ng-model="settings.shellfullscreen" ng-change="applyGraphicsMode()"> Windowed</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.shellfullscreen == true}"><input type="radio" name="shellMode" ng-value="true" ng-model="settings.shellfullscreen" ng-change="applyGraphicsMode()"> Fullscreen</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.shellfullscreen == false}"><input type="radio" name="shellMode" ng-value="false" ng-model="settings.shellfullscreen" ng-change="applyGraphicsMode()"> Windowed</label>
                     </div>
 
                     <div class="opt-group">
                         <label class="opt-label-main">Game Display Mode</label>
-                        <label class="opt-radio"><input type="radio" name="gameMode" ng-value="true" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Full Screen</label>
-                        <label class="opt-radio"><input type="radio" name="gameMode" ng-value="false" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Windowed</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.gamefullscreen == true}"><input type="radio" name="gameMode" ng-value="true" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Full Screen</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.gamefullscreen == false}"><input type="radio" name="gameMode" ng-value="false" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Windowed</label>
                     </div>
 
                     <div class="opt-row clearfix">
@@ -46,6 +49,7 @@
                         </div>
                     </div>
 
+                    <h4 class="opt-section" ng-show="auroraOptions">Quality</h4>
                     <div class="opt-group opt-group--tight">
                         <label class="opt-label-main">Overall Graphics</label>
                         <select class="opt-select" ng-model="settings.overallgraphicsquality" ng-options="o.value as o.label for o in overallQualityOptions" ng-change="onOverallGraphicsChange()"></select>
@@ -92,6 +96,7 @@
                         </div>
                     </div>
 
+                    <h4 class="opt-section" ng-show="auroraOptions">Image</h4>
                     <div class="opt-group opt-group--tight">
                         <label class="opt-checkbox"><input type="checkbox" ng-model="settings.vsyncenabled" ng-change="onGraphicsDetailChange()"> VSync</label>
                         <label class="opt-checkbox"><input type="checkbox" ng-model="settings.motionblurenabled" ng-change="onGraphicsDetailChange()"> Motion Blur</label>
@@ -104,6 +109,7 @@
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'SOUND'">
+                    <h4 class="opt-section" ng-show="auroraOptions">Volume</h4>
                     <div class="opt-group">
                         <label class="opt-label-main">Master Volume <span class="opt-value">{{ settings.mastervolume }}%</span></label>
                         <input type="range" class="opt-slider" min="0" max="100" ng-model="settings.mastervolume" ng-change="applyVolume()">
@@ -111,17 +117,18 @@
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'CONTROLS'">
+                    <h4 class="opt-section" ng-show="auroraOptions">Camera</h4>
                     <div class="opt-group">
                         <label class="opt-checkbox"><input type="checkbox" ng-model="settings.edgepan" ng-change="applyControls()"> Edge Pan</label>
                     </div>
                     <div class="opt-group">
-                        <label class="opt-label-main">Edge Scroll Speed</label>
+                        <label class="opt-label-main">Edge Scroll Speed <span class="opt-value" ng-show="auroraOptions">{{ settings.edgescrollspeed }}</span></label>
                         <input type="range" class="opt-slider" min="0" max="100" ng-model="settings.edgescrollspeed" ng-change="applyControls()">
                     </div>
                     <div class="opt-group">
                         <label class="opt-label-main">Camera Drag Scroll</label>
-                        <label class="opt-radio"><input type="radio" name="dragScroll" ng-value="true" ng-model="settings.middlemousecameradrag" ng-change="applyControls()"> Middle Mouse Button</label>
-                        <label class="opt-radio"><input type="radio" name="dragScroll" ng-value="false" ng-model="settings.middlemousecameradrag" ng-change="applyControls()"> Right Mouse Button</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.middlemousecameradrag == true}"><input type="radio" name="dragScroll" ng-value="true" ng-model="settings.middlemousecameradrag" ng-change="applyControls()"> Middle Mouse Button</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.middlemousecameradrag == false}"><input type="radio" name="dragScroll" ng-value="false" ng-model="settings.middlemousecameradrag" ng-change="applyControls()"> Right Mouse Button</label>
                     </div>
                     <div class="opt-group">
                         <label class="opt-checkbox" ng-class="{'opt-checkbox--disabled': cameraRotationLocked}">
@@ -134,23 +141,26 @@
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'GAMEPLAY'">
+                    <h4 class="opt-section" ng-show="auroraOptions">Orders</h4>
                     <div class="opt-group">
                         <label class="opt-label-main">Move Mode</label>
-                        <label class="opt-radio"><input type="radio" name="moveMode" ng-value="true" ng-model="settings.movemodeattack" ng-change="applyGameplay()"> Attack Move</label>
-                        <label class="opt-radio"><input type="radio" name="moveMode" ng-value="false" ng-model="settings.movemodeattack" ng-change="applyGameplay()"> Standard Move</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.movemodeattack == true}"><input type="radio" name="moveMode" ng-value="true" ng-model="settings.movemodeattack" ng-change="applyGameplay()"> Attack Move</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.movemodeattack == false}"><input type="radio" name="moveMode" ng-value="false" ng-model="settings.movemodeattack" ng-change="applyGameplay()"> Standard Move</label>
                     </div>
                     <div class="opt-group">
                         <label class="opt-checkbox"><input type="checkbox" ng-model="settings.allowdeselect" ng-change="applyGameplay()"> Allow Deselect</label>
                     </div>
+                    <h4 class="opt-section" ng-show="auroraOptions">Unit colours</h4>
                     <div class="opt-group">
                         <label class="opt-label-main">Default Player Colours</label>
-                        <label class="opt-radio"><input type="radio" name="unitColors" ng-value="false" ng-model="settings.usefriendorfoecolors" ng-change="applyGameplay()"> House Colours</label>
-                        <label class="opt-radio"><input type="radio" name="unitColors" ng-value="true" ng-model="settings.usefriendorfoecolors" ng-change="applyGameplay()"> Friend or Foe</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.usefriendorfoecolors == false}"><input type="radio" name="unitColors" ng-value="false" ng-model="settings.usefriendorfoecolors" ng-change="applyGameplay()"> House Colours</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.usefriendorfoecolors == true}"><input type="radio" name="unitColors" ng-value="true" ng-model="settings.usefriendorfoecolors" ng-change="applyGameplay()"> Friend or Foe</label>
                         <p class="opt-hint">House Colours uses the colour chosen in the lobby. Friend or Foe tints your units by allegiance. Ctrl+F still toggles this in a match.</p>
                     </div>
                 </div>
 
                 <div class="opt-pane" ng-show="optionsTab == 'INTERFACE' && allowShellThemeSelect">
+                    <h4 class="opt-section" ng-show="auroraOptions">Theme</h4>
                     <div class="opt-group">
                         <label class="opt-label-main">Default Theme</label>
                         <select class="opt-select"
@@ -160,24 +170,43 @@
                                 ng-disabled="!settingsReady"></select>
                         <p class="opt-hint">{{ shellThemeHint }} Applies now and on the next shell start.</p>
                     </div>
+                    <h4 class="opt-section" ng-show="auroraOptions">In-game chat</h4>
                     <div class="opt-group">
-                        <label class="opt-label-main">In-Game Chat</label>
-                        <select class="opt-select"
+                        <label class="opt-label-main">{{ auroraOptions ? 'Show chat' : 'In-Game Chat' }}</label>
+                        <select class="opt-select" ng-hide="auroraOptions"
                                 ng-model="chatVisibility"
                                 ng-options="m.id as m.label for m in chatVisibilityOptions"
                                 ng-change="onChatVisibilityChange()"></select>
+                        <span class="opt-seg" ng-show="auroraOptions">
+                            <button type="button" ng-repeat="m in chatVisibilityOptions"
+                                    ng-class="{'opt-seg--on': chatVisibility === m.id}"
+                                    ng-click="pickChatVisibility(m.id)">{{ m.label }}</button>
+                        </span>
                         <p class="opt-hint">Show Always keeps the chat on screen. Active opens it for a few seconds whenever anyone chats. Never shows it only when you open it (Enter).</p>
                     </div>
+                </div>
+
+                <!-- Lobby defaults. Aurora shows them at the top of GAMEPLAY (the stylesheet orders this pane
+                     first); Classic keeps them at the end of INTERFACE. -->
+                <div class="opt-pane opt-pane--lobby-defaults"
+                     ng-show="auroraOptions ? optionsTab == 'GAMEPLAY' : (optionsTab == 'INTERFACE' && allowShellThemeSelect)">
+                    <h4 class="opt-section" ng-show="auroraOptions">Lobby defaults</h4>
                     <div class="opt-group opt-group--lobby-defaults">
-                        <label class="opt-label-main">Lobby Defaults</label>
+                        <label class="opt-label-main opt-label-main--section">Lobby Defaults</label>
                         <p class="opt-hint">Set your preferred defaults when starting a lobby.</p>
                         <div class="opt-row">
                             <label class="opt-label-main">Preference</label>
-                            <select class="opt-select"
+                            <select class="opt-select" ng-hide="auroraOptions"
                                     ng-model="lobbyDefaultsMode"
                                     ng-options="m.id as m.label for m in lobbyDefaultModeOptions"
                                     ng-change="onLobbyDefaultModeChange()"
                                     ng-disabled="!settingsReady"></select>
+                            <span class="opt-seg" ng-show="auroraOptions">
+                                <button type="button" ng-repeat="m in lobbyDefaultModeOptions"
+                                        ng-class="{'opt-seg--on': lobbyDefaultsMode === m.id}"
+                                        ng-click="pickLobbyDefaultMode(m.id)"
+                                        ng-disabled="!settingsReady">{{ m.label }}</button>
+                            </span>
                             <p class="opt-hint" ng-show="lobbyDefaultsMode === 'random'">
                                 Faction, general, and colour are rolled randomly each time you join a lobby.
                             </p>
@@ -199,12 +228,22 @@
                         </div>
                         <div class="opt-row">
                             <label class="opt-label-main">Preferred Colour</label>
-                            <select class="opt-select opt-select--colour"
+                            <select class="opt-select opt-select--colour" ng-hide="auroraOptions"
                                     ng-model="lobbyDefaults.color"
                                     ng-options="c.value as c.label for c in lobbyColorOptions"
                                     ng-disabled="!settingsReady || lobbyDefaultsMode === 'random'"></select>
+                            <span class="opt-swatches" ng-show="auroraOptions"
+                                  ng-class="{'opt-swatches--off': !settingsReady || lobbyDefaultsMode === 'random'}">
+                                <button type="button" ng-repeat="c in lobbyColorOptions"
+                                        ng-style="{'background-color': c.value}"
+                                        ng-class="{'opt-swatches--on': lobbyDefaults.color === c.value}"
+                                        ng-click="lobbyDefaults.color = c.value"
+                                        ng-disabled="!settingsReady || lobbyDefaultsMode === 'random'"
+                                        data-tip="{{ c.label }}"></button>
+                            </span>
                         </div>
                     </div>
+                </div>
                 </div>
                 </fieldset>
             </div>
@@ -213,7 +252,7 @@
         <div class="options-footer">
             <p class="opt-footer-status" ng-show="!settingsReady && !settingsLoadError">Loading saved settings…</p>
             <p class="opt-footer-status opt-footer-status--error" ng-show="settingsLoadError">Could not load saved settings. Cancel and reopen, or fix the shell bridge.</p>
-            <button class="btn-opt-action btn-opt-green" ng-click="actionSave()" ng-disabled="!settingsReady || settingsSaving">OK</button>
+            <button class="btn-opt-action btn-opt-green" ng-click="actionSave()" ng-disabled="!settingsReady || settingsSaving">{{ auroraOptions ? 'APPLY' : 'OK' }}</button>
             <button class="btn-opt-action btn-opt-yellow" ng-click="actionCancel()">CANCEL</button>
         </div>
     </div>

@@ -1,124 +1,102 @@
 <div class="au-lobby" ng-controller="ShellLobbyController" ng-click="closeMenus()">
-    <!-- Matchmake: pick criteria, then browse/join -->
+    <!-- Find a match: no map pick. This view is only the search; it joins the lowest-ping populated
+         server (an idle one when none is populated) and opens its lobby. -->
     <div class="au-lobby__body au-lobby__body--matchmake" ng-show="lobbyView == 'matchmake'">
-        <div class="au-lobby__main au-lobby__matchmake">
-            <div class="au-lobby__matchmake-panel">
-            <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-            <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
-            <div class="au-lobby__matchmake-head">
-                <h2>Find a Match</h2>
-                <p>Pick a map, then find a match. You’ll join a lobby with players when available, or an idle server.</p>
-            </div>
-            <div class="au-lobby__map-cards" ng-click="$event.stopPropagation()">
-                <button type="button"
-                        class="au-lobby__map-card"
-                        ng-repeat="m in maps"
-                        ng-class="{on: m.id == selectedMap.id, disabled: m.comingSoon || mapPlaytestBlocked(m)}"
-                        ng-style="mapCardStyle(m)"
-                        ng-attr-aria-disabled="{{(m.comingSoon || mapPlaytestBlocked(m)) ? 'true' : 'false'}}"
-                        ng-click="selectMap(m, $event)">
-                    <span class="au-lobby__map-card-veil" aria-hidden="true"></span>
-                    <span class="au-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
-                    <span class="au-lobby__map-card-badges">
-                        <span class="au-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
-                        <span class="au-lobby__map-card-status" ng-if="mapPlaytestBlocked(m)"
-                              data-tip="Not Available">Not Available</span>
-                        <span class="au-lobby__map-card-status" ng-if="!mapPlaytestBlocked(m) && m.comingSoon"
-                              title="Coming soon">SOON</span>
-                    </span>
-                    <span class="au-lobby__map-card-name">{{ m.label }}</span>
-                    <span class="au-lobby__map-card-check" ng-show="m.id == selectedMap.id" aria-hidden="true"></span>
-                </button>
-            </div>
-            <div class="au-lobby__matchmake-meta">
-                <span>Selected: {{ selectedMap.label }} ({{ mapModeLabel(selectedMap) }})</span>
-                <span>Players: {{ matchmakeMinPlayers }}–{{ matchmakeMaxPlayers }}</span>
-            </div>
-            </div>
-            <div class="au-lobby__actions">
-                <button type="button" class="au-btn au-btn--ghost" ng-click="exitLobby()">Exit</button>
-                <button type="button" class="au-btn au-btn--ghost" ng-click="findServers()"
-                        ng-disabled="_findingMatch">Browse</button>
-                <button type="button" class="au-btn au-btn--primary" ng-click="findMatch()"
-                        ng-disabled="_findingMatch">{{ _findingMatch ? 'Finding…' : 'Find Match' }}</button>
-            </div>
-            <div class="au-lobby__modal" ng-show="_findingMatch || _matchError || _joinStatus">
-                <div class="au-lobby__modal-box">
-                    <div ng-show="_findingMatch && !_matchError">Finding match..</div>
-                    <div ng-show="_joinStatus && !_findingMatch && !_matchError">{{ _joinStatus }}</div>
-                    <div ng-show="_matchError">{{ _matchError }}</div>
-                    <button type="button" class="au-btn au-btn--primary" ng-show="_matchError"
-                            ng-click="dismissMatchError()">OK</button>
-                </div>
-            </div>
-            <div class="au-lobby__modal" ng-show="serverLostError">
-                <div class="au-lobby__modal-box">
-                    <div>{{ serverLostError }}</div>
-                    <button type="button" class="au-btn au-btn--primary"
-                            ng-click="dismissServerLostError()">OK</button>
+        <div class="au-lobby__modal au-lobby__modal--search" ng-show="_findingMatch || _matchError || _joinStatus">
+            <div class="au-lobby__modal-box">
+                <h2 class="au-dialog__title">Find a match</h2>
+                <div class="au-lobby__search-line" ng-show="_findingMatch && !_matchError"><i class="au-spinner"></i>Finding the closest server..</div>
+                <div class="au-lobby__search-line" ng-show="_joinStatus && !_findingMatch && !_matchError"><i class="au-spinner"></i>{{ _joinStatus }}</div>
+                <div class="au-lobby__search-line" ng-show="_matchError">{{ _matchError }}</div>
+                <div class="au-lobby__options-actions" ng-show="_matchError">
+                    <button type="button" class="au-btn au-btn--primary" ng-click="dismissMatchError()">OK</button>
                 </div>
             </div>
         </div>
-        <aside class="au-lobby__side">
-            <div class="au-side__head">Social</div>
-            <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
-        </aside>
     </div>
 
-    <!-- GameRoom lobby after join (teams, AI, start battle) -->
-    <div class="au-lobby__body" ng-show="lobbyView == 'gameroom'">
-        <div class="au-lobby__main">
-            <div class="au-lobby__gameroom-head" ng-if="serverName">
-                <span class="au-lobby__gameroom-server">{{ serverName }}</span>
+    <!-- GameRoom lobby after join (teams, AI, start battle).
+         Three columns as on the concept sheet: Team 1 + spectator | map + chat | Team 2 + lobby options. -->
+    <div class="au-lobby__body au-lobby__body--room" ng-show="lobbyView == 'gameroom'">
+        <div class="au-lobby__head">
+            <h2 class="au-lobby__title">Skirmish lobby</h2>
+            <span class="au-lobby__server" ng-show="serverName">{{ serverName }}</span>
+            <span class="au-lobby__lock" ng-show="passwordProtected">Password protected</span>
+            <span class="au-lobby__vs">VS</span>
+        </div>
+
+        <div class="au-lobby__room">
+            <div class="au-lobby__col au-lobby__col--left">
+                <div class="au-lobby__team au-lobby__team--1">
+                    <div class="au-lobby__team-head">Team 1</div>
+                    <div class="au-lobby__slot"
+                         ng-repeat="slot in team1"
+                         ng-show="slot.occupied"
+                         ng-class="{'au-lobby__slot--local': slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
+                         ng-click="$event.stopPropagation()">
+                        <div class="au-lobby__slot-body" ng-init="teamNum = 1" ng-include="'view/lobby/slot-aurora.html'"></div>
+                    </div>
+                    <div class="au-lobby__team-actions" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
+                        <span class="au-lobby__open-seat">Open seat</span>
+                        <button type="button" class="au-btn au-btn--sm" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
+                        <button type="button" class="au-btn au-btn--sm" ng-show="canAddPlayers()" ng-click="addAi(1)">Add AI</button>
+                        <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--sm" disabled>Invite</button></span>
+                    </div>
+                </div>
+                <div class="au-lobby__spectator" ng-show="spectatorVisible()" ng-click="$event.stopPropagation()">
+                    <div class="au-lobby__spectator-head">Spectator</div>
+                    <div class="au-lobby__spectator-card" ng-show="spectatorSlot.occupied"
+                         ng-class="{'au-lobby__spectator-card--local': spectatorSlot.isLocal}">
+                        <div class="au-lobby__spectator-name" ng-class="nameTagClass(spectatorSlot)">{{ spectatorSlot.displayName }}</div>
+                        <button type="button" class="au-lobby__kick"
+                                ng-if="isLobbyHost() && !spectatorSlot.isLocal"
+                                ng-click="kickSpectator($event)"
+                                data-tip="Kick spectator from lobby">&times;</button>
+                    </div>
+                    <button type="button" class="au-btn au-btn--sm au-lobby__spectate-btn"
+                            ng-show="canSpectate()" ng-disabled="swapLocked()"
+                            ng-click="spectate($event)"
+                            data-tip="Watch the match from the spectator seat">Spectate</button>
+                </div>
             </div>
-            <div class="au-lobby__room">
-                <div class="au-lobby__stage">
-                    <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-                    <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-                    <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-                    <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
-                    <div class="au-lobby__banner">
-                    <div class="au-lobby__banner-tools" ng-click="$event.stopPropagation()">
-                        <button type="button" class="au-btn au-btn--ghost au-lobby__maps-btn"
+
+            <div class="au-lobby__col au-lobby__col--stage">
+                <!-- Map stage, 14:9. A war map (view/image/lobby-warmaps/<minimap name>.jpg) fills it;
+                     without one the square lobby minimap stands in the middle over its own blurred copy.
+                     Sizes: see "War maps" in the shell README. -->
+                <div class="au-lobby__map" ng-class="{'au-lobby__map--war': warMapSrc(selectedMap)}">
+                    <div class="au-lobby__map-fill" ng-style="mapFillStyle(selectedMap)"></div>
+                    <div class="au-lobby__map-field" ng-class="{'au-lobby__map-field--war': warMapSrc(selectedMap)}">
+                        <div class="au-lobby__map-crop" ng-hide="warMapSrc(selectedMap)">
+                            <img class="au-lobby__map-img" ng-src="{{ lobbyMinimapSrc(selectedMap) }}"
+                                 ng-style="minimapCropStyle(selectedMap)" alt="">
+                        </div>
+                        <span class="au-lobby__pip"
+                              ng-repeat="sp in mapStartpoints()"
+                              ng-style="stagePipStyle(sp)"
+                              ng-class="{taken: startpointOwner(sp.id), mine: startpointOwner(sp.id) && startpointOwner(sp.id).isLocal}"
+                              ng-click="pickStartpointOnMap(sp.id, $event)"
+                              data-tip="Start {{ sp.id }}">{{ startPipLabel(sp) }}</span>
+                    </div>
+                    <div class="au-lobby__map-grid"></div>
+                    <div class="au-lobby__map-name">
+                        <strong>{{ selectedMap.label }}</strong>
+                        <span>{{ mapTagLine(selectedMap) }}</span>
+                    </div>
+                    <div class="au-lobby__map-tools" ng-click="$event.stopPropagation()">
+                        <button type="button" class="au-btn au-btn--sm au-lobby__maps-btn"
                                 ng-click="openMapPicker($event)"
-                                ng-disabled="!isLobbyHost()">Maps</button>
-                        <button type="button" class="au-lobby__gear"
-                                ng-click="openLobbyOptions($event)"
-                                ng-disabled="!isLobbyHost()"
-                                ng-class="{on: lobbyOptionsOpen}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                                <path fill="none" stroke="#c8d4e0" stroke-width="1.8" stroke-linejoin="round"
-                                      d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/>
-                                <path fill="none" stroke="#c8d4e0" stroke-width="1.8" stroke-linejoin="round"
-                                      d="M19.4 13l1.6.9-2 3.4-1.9-.5c-.5.4-1 .7-1.6.9L15 20h-6l-.5-2.3c-.6-.2-1.1-.5-1.6-.9l-1.9.5-2-3.4 1.6-.9c-.1-.6-.1-1.2 0-1.8L3 10.3l2-3.4 1.9.5c.5-.4 1-.7 1.6-.9L9 4h6l.5 2.3c.6.2 1.1.5 1.6.9l1.9-.5 2 3.4-1.6.9c.1.6.1 1.2 0 1.8z"/>
-                            </svg>
-                        </button>
-                        <div class="au-lobby__banner-mapname">
-                            <strong>{{ selectedMap.label }}</strong>
-                            <span>{{ mapModeLabel(selectedMap) }}</span>
-                        </div>
+                                ng-disabled="!isLobbyHost()">Change map</button>
                     </div>
-                    <div class="au-lobby__banner-preview">
-                        <div class="au-lobby__map-frame au-lobby__map-frame--look">
-                            <div class="au-lobby__map-crop">
-                                <img class="au-lobby__map-img" ng-src="{{ lobbyMinimapSrc(selectedMap) }}"
-                                     ng-style="minimapCropStyle(selectedMap)" alt="">
-                            </div>
-                            <span class="au-lobby__pip"
-                                  ng-repeat="sp in mapStartpoints()"
-                                  ng-style="startPipStyle(sp)"
-                                  ng-class="{taken: startpointOwner(sp.id), mine: startpointOwner(sp.id) && startpointOwner(sp.id).isLocal}"
-                                  ng-click="pickStartpointOnMap(sp.id, $event)"
-                                  title="Start {{ sp.id }}">{{ startPipLabel(sp) }}</span>
-                        </div>
-                    </div>
-                    </div>
-                    <div class="au-lobby__chat au-lobby__chat--bar">
+                </div>
+
+                <div class="au-lobby__chat">
                     <div class="au-lobby__chat-log">
-                        <div class="au-lobby__chat-line" ng-repeat="msg in lobbyChat">
-                            <span class="au-lobby__chat-user" ng-class="chatUserClass(msg)">{{ msg.user }}</span>{{ msg.text }}
+                        <div class="au-lobby__chat-line" ng-repeat="msg in lobbyChat"
+                             ng-class="{'au-lobby__chat-line--system': msg.system}">
+                            <span class="au-lobby__chat-user" ng-hide="msg.system" ng-class="chatUserClass(msg)"
+                                  ng-style="chatUserStyle(msg)">{{ msg.user }}</span><span
+                                  class="au-lobby__chat-mark" ng-show="msg.system">&gt; </span>{{ msg.text }}
                         </div>
                         <div class="au-lobby__chat-empty" ng-show="!lobbyChat.length">
                             Messages are not logged. Do not share sensitive information.
@@ -127,125 +105,22 @@
                     <div class="au-lobby__chat-typing" ng-show="typingLabel()">{{ typingLabel() }}{{ typingDots }}</div>
                     <form class="au-lobby__chat-form" action="javascript:void(0)"
                           ng-submit="sendLobbyChat($event)" ng-click="$event.stopPropagation()">
-                        <input type="text" class="au-lobby__chat-input"
-                               ng-model="lobbyChatDraft"
-                               ng-change="noteLobbyTyping()"
-                               maxlength="200"
-                               autocomplete="off"
-                               placeholder="Message the lobby">
+                        <span class="au-lobby__chat-prompt" aria-hidden="true">&gt;</span>
+                        <span class="au-caret-field">
+                            <input type="text" class="au-lobby__chat-input"
+                                   ng-model="lobbyChatDraft"
+                                   ng-change="noteLobbyTyping()"
+                                   maxlength="200"
+                                   autocomplete="off"
+                                   placeholder="Message the lobby">
+                            <!-- Blinking _ after the text while the box has focus -->
+                            <span class="au-caret" aria-hidden="true"><span class="au-caret__text">{{ lobbyChatDraft }}</span><i>_</i></span>
+                        </span>
                     </form>
-                    </div>
                 </div>
-            <div class="au-lobby__roster">
-                <span class="au-hud-c au-hud-c--tl" aria-hidden="true"></span>
-                <span class="au-hud-c au-hud-c--tr" aria-hidden="true"></span>
-                <span class="au-hud-c au-hud-c--bl" aria-hidden="true"></span>
-                <span class="au-hud-c au-hud-c--br" aria-hidden="true"></span>
-            <div class="au-lobby__teams">
-                <div class="au-lobby__team au-lobby__team--1">
-                    <div class="au-lobby__team-head">Team 1</div>
-                    <div class="au-lobby__slot"
-                         ng-repeat="slot in team1"
-                         ng-show="slot.occupied"
-                         ng-class="{'au-lobby__slot--local': slot.isLocal, 'menu-open': slotMenu == slotMenuKey(1, $index)}"
-                         ng-click="$event.stopPropagation()">
-                        <div class="au-lobby__slot-body">
-                            <div class="au-lobby__avatar-wrap">
-                                <div class="au-lobby__avatar"
-                                     ng-class="{'au-lobby__avatar--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
-                                    <img ng-src="{{ generalAvatar(slot) }}" alt="">
-                                </div>
-                                <div class="au-lobby__color-ribbon" ng-if="!slot.invitePending"
-                                     ng-style="{'background-color': slot.color}"></div>
-                            </div>
-                            <div class="au-lobby__meta">
-                                <strong>{{ slot.codename }}</strong>
-                                <span ng-if="!slot.isAi" ng-class="{'lobby-name--dev': isDevName(slot.displayName)}">{{ slot.displayName }}</span>
-                                <div class="au-lobby__ai" ng-if="slot.isAi">
-                                    <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
-                                </div>
-                            </div>
-                            <div class="au-lobby__ready" ng-class="{on: slot.ready}"
-                                 ng-if="!slot.invitePending && !slot.isAi"
-                                 data-tip="{{ slot.ready ? 'Ready' : 'Not ready' }}"
-                                 data-tip-tone="{{ slot.ready ? 'ready' : 'not-ready' }}">
-                                <span class="au-lobby__ready-tick" ng-show="slot.ready"></span>
-                            </div>
-                            <button type="button" class="au-lobby__start-badge"
-                                    ng-if="!slot.invitePending"
-                                    ng-click="openStartModal(slot, $event)"
-                                    ng-disabled="!canChangeStartpoint(slot)"
-                                    data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
-                            <button type="button" class="au-lobby__menu-btn"
-                                    data-tip="Pick faction and colour"
-                                    ng-if="!slot.invitePending"
-                                    ng-click="toggleSlotMenu(1, $index, $event)"
-                                    ng-disabled="slotLocked(slot)"
-                                    ng-class="{open: slotMenu == slotMenuKey(1, $index)}">
-                                <span class="au-lobby__chevron"></span>
-                            </button>
-                            <button type="button" class="au-lobby__kick" ng-if="isLobbyHost()"
-                                    ng-class="{disabled: slot.isLocal}"
-                                    ng-click="clearSlot(1, $index, $event)"
-                                    data-tip="{{ kickTip(slot) }}">&times;</button>
-                            <ul class="au-lobby__slot-menu" ng-show="slotMenu == slotMenuKey(1, $index)" ng-click="$event.stopPropagation()">
-                                <li class="au-lobby__slot-menu-label">Faction</li>
-                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
-                                    <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
-                                </li>
-                                <li class="au-lobby__slot-menu-label">General</li>
-                                <li ng-repeat="g in availableGenerals(slot)"
-                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral(slot)}">
-                                    <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
-                                </li>
-                                <li class="au-lobby__slot-menu-label">Colour</li>
-                                <li class="au-lobby__slot-colors">
-                                    <button type="button" class="au-lobby__swatch" ng-repeat="c in colors"
-                                            ng-style="{'background-color': c}"
-                                            ng-class="{on: sameHouseColor(slot.color, c), taken: colorTaken(c, slot)}"
-                                            ng-disabled="colorTaken(c, slot) || !canChangeColor(slot)"
-                                            ng-click="setColor(slot, c, $event)"></button>
-                                    <button type="button" class="au-lobby__swatch au-lobby__swatch--rainbow"
-                                            ng-class="{on: isCustomHouseColor(slot)}"
-                                            ng-disabled="!canChangeColor(slot)"
-                                            ng-click="openCustomColorPicker(slot, $event)"
-                                            data-tip="Custom colour"
-                                            data-tip-pos="below"></button>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="au-lobby__team-actions" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
-                        <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
-                        <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
-                        <button type="button" class="au-btn au-btn--primary" ng-show="canAddPlayers()" ng-click="addAi(1)">Add AI</button>
-                    </div>
-                </div>
+            </div>
 
-                <div class="au-lobby__vs">
-                    <span>VS</span>
-                    <div class="au-lobby__spectator" ng-show="spectatorVisible()" ng-click="$event.stopPropagation()">
-                        <div class="au-lobby__spectator-head">Spectator</div>
-                        <div class="au-lobby__spectator-card" ng-show="spectatorSlot.occupied"
-                             ng-class="{'au-lobby__spectator-card--local': spectatorSlot.isLocal}">
-                            <button type="button" class="au-lobby__kick"
-                                    ng-if="isLobbyHost() && !spectatorSlot.isLocal"
-                                    ng-click="kickSpectator($event)"
-                                    data-tip="Kick spectator from lobby">&times;</button>
-                            <div class="au-lobby__avatar"
-                                 ng-class="{'au-lobby__avatar--host': spectatorSlot.isHost || (spectatorSlot.isLocal && isLobbyHost())}">
-                                <img ng-src="{{ generalAvatar(spectatorSlot) }}"
-                                     cc-fallback-src="{{ spectatorAvatarFallback }}" alt="">
-                            </div>
-                            <div class="au-lobby__spectator-name">{{ spectatorSlot.displayName }}</div>
-                        </div>
-                        <button type="button" class="au-btn au-btn--ghost au-lobby__spectate-btn"
-                                ng-show="canSpectate()" ng-disabled="swapLocked()"
-                                ng-click="spectate($event)"
-                                data-tip="Watch the match from the spectator seat">Spectate</button>
-                    </div>
-                </div>
-
+            <div class="au-lobby__col au-lobby__col--right">
                 <div class="au-lobby__team au-lobby__team--2">
                     <div class="au-lobby__team-head">Team 2</div>
                     <div class="au-lobby__slot"
@@ -253,93 +128,42 @@
                          ng-show="slot.occupied"
                          ng-class="{'au-lobby__slot--local': slot.isLocal, 'menu-open': slotMenu == slotMenuKey(2, $index)}"
                          ng-click="$event.stopPropagation()">
-                        <div class="au-lobby__slot-body">
-                            <div class="au-lobby__avatar-wrap">
-                                <div class="au-lobby__avatar"
-                                     ng-class="{'au-lobby__avatar--host': slot.isHost || (slot.isLocal && isLobbyHost())}">
-                                    <img ng-src="{{ generalAvatar(slot) }}" alt="">
-                                </div>
-                                <div class="au-lobby__color-ribbon" ng-if="!slot.invitePending"
-                                     ng-style="{'background-color': slot.color}"></div>
-                            </div>
-                            <div class="au-lobby__meta">
-                                <strong>{{ slot.codename }}</strong>
-                                <span ng-if="!slot.isAi" ng-class="{'lobby-name--dev': isDevName(slot.displayName)}">{{ slot.displayName }}</span>
-                                <div class="au-lobby__ai" ng-if="slot.isAi">
-                                    <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
-                                </div>
-                            </div>
-                            <div class="au-lobby__ready" ng-class="{on: slot.ready}"
-                                 ng-if="!slot.invitePending && !slot.isAi"
-                                 data-tip="{{ slot.ready ? 'Ready' : 'Not ready' }}"
-                                 data-tip-tone="{{ slot.ready ? 'ready' : 'not-ready' }}">
-                                <span class="au-lobby__ready-tick" ng-show="slot.ready"></span>
-                            </div>
-                            <button type="button" class="au-lobby__start-badge"
-                                    ng-if="!slot.invitePending"
-                                    ng-click="openStartModal(slot, $event)"
-                                    ng-disabled="!canChangeStartpoint(slot)"
-                                    data-tip="Choose start location">{{ startpointLabel(slot.startpoint) }}</button>
-                            <button type="button" class="au-lobby__menu-btn"
-                                    data-tip="Pick faction and colour"
-                                    ng-if="!slot.invitePending"
-                                    ng-click="toggleSlotMenu(2, $index, $event)"
-                                    ng-disabled="slotLocked(slot)"
-                                    ng-class="{open: slotMenu == slotMenuKey(2, $index)}">
-                                <span class="au-lobby__chevron"></span>
-                            </button>
-                            <button type="button" class="au-lobby__kick" ng-if="isLobbyHost()"
-                                    ng-class="{disabled: slot.isLocal}"
-                                    ng-click="clearSlot(2, $index, $event)"
-                                    data-tip="{{ kickTip(slot) }}">&times;</button>
-                            <ul class="au-lobby__slot-menu" ng-show="slotMenu == slotMenuKey(2, $index)" ng-click="$event.stopPropagation()">
-                                <li class="au-lobby__slot-menu-label">Faction</li>
-                                <li ng-repeat="f in availableFactions()" ng-class="{active: slot.faction == f.code, disabled: !canChangeFaction(slot)}">
-                                    <a href="" ng-click="setFaction(slot, f.code, $event)">{{ f.label }}</a>
-                                </li>
-                                <li class="au-lobby__slot-menu-label">General</li>
-                                <li ng-repeat="g in availableGenerals(slot)"
-                                    ng-class="{active: slot.general == g.id, disabled: !canChangeGeneral(slot)}">
-                                    <a href="" ng-click="setGeneral(slot, g.id, $event)">{{ g.label }}</a>
-                                </li>
-                                <li class="au-lobby__slot-menu-label">Colour</li>
-                                <li class="au-lobby__slot-colors">
-                                    <button type="button" class="au-lobby__swatch" ng-repeat="c in colors"
-                                            ng-style="{'background-color': c}"
-                                            ng-class="{on: sameHouseColor(slot.color, c), taken: colorTaken(c, slot)}"
-                                            ng-disabled="colorTaken(c, slot) || !canChangeColor(slot)"
-                                            ng-click="setColor(slot, c, $event)"></button>
-                                    <button type="button" class="au-lobby__swatch au-lobby__swatch--rainbow"
-                                            ng-class="{on: isCustomHouseColor(slot)}"
-                                            ng-disabled="!canChangeColor(slot)"
-                                            ng-click="openCustomColorPicker(slot, $event)"
-                                            data-tip="Custom colour"
-                                            data-tip-pos="below"></button>
-                                </li>
-                            </ul>
-                        </div>
+                        <div class="au-lobby__slot-body" ng-init="teamNum = 2" ng-include="'view/lobby/slot-aurora.html'"></div>
                     </div>
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
-                        <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--ghost" disabled>Invite</button></span>
-                        <button type="button" class="au-btn au-btn--ghost" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
-                        <button type="button" class="au-btn au-btn--primary" ng-show="canAddPlayers()" ng-click="addAi(2)">Add AI</button>
+                        <span class="au-lobby__open-seat">Open seat</span>
+                        <button type="button" class="au-btn au-btn--sm" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
+                        <button type="button" class="au-btn au-btn--sm" ng-show="canAddPlayers()" ng-click="addAi(2)">Add AI</button>
+                        <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--sm" disabled>Invite</button></span>
                     </div>
                 </div>
+                <!-- Lobby options in one line, the size of the spectator box. Host: opens the options;
+                     others: lists what the host changed. -->
+                <div class="au-lobby__summary"
+                     ng-class="{'au-lobby__summary--click': isLobbyHost() || lobbyCustomized(), 'au-lobby__summary--custom': lobbyCustomized()}"
+                     ng-click="openLobbySummary($event)"
+                     data-tip="{{ isLobbyHost() ? 'Change lobby options' : '' }}">
+                    <span class="au-lobby__summary-line" ng-hide="lobbyCustomized()">Vanilla game, default options set.</span>
+                    <span class="au-lobby__summary-line" ng-show="lobbyCustomized()"><svg class="au-lobby__spanner" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><u>Custom game, click to learn more!</u></span>
+                </div>
             </div>
-            </div>
-            </div>
+        </div>
 
-            <div class="au-lobby__actions">
+        <div class="au-lobby__actions">
+            <div class="au-lobby__actions-in">
                 <button type="button" class="au-btn au-btn--ghost" ng-click="leaveGameRoom()">Leave</button>
-                <button type="button" class="au-btn au-btn--ghost au-lobby__ready-btn"
+                <button type="button" class="au-lobby__actions-link" ng-click="openOptions()">Options</button>
+                <button type="button" class="au-btn au-lobby__ready-btn"
                         ng-click="toggleReady()"
                         ng-show="!isLobbyHost() && !localIsSpectator()"
-                        ng-class="{'au-btn--ready': localReady}">{{ localReady ? 'Unready' : 'Ready' }}</button>
+                        ng-class="{'au-btn--ready': !localReady, 'au-btn--ready-on': localReady}">{{ localReady ? 'Unready' : 'Ready' }}</button>
                 <button type="button" class="au-btn au-btn--primary au-lobby__start-battle"
                         ng-click="startBattle()"
                         ng-show="isLobbyHost()"
-                        ng-disabled="_starting">Start Battle</button>
+                        ng-disabled="_starting">Start battle</button>
             </div>
+        </div>
+
             <div class="au-lobby__modal au-lobby__modal--options" ng-show="lobbyOptionsOpen"
                  ng-click="closeLobbyOptions()">
                 <div class="au-lobby__modal-box au-lobby__options" ng-click="$event.stopPropagation()">
@@ -460,24 +284,21 @@
                                            data-tip-pos="below"
                                            data-tip="Structure sell completes in ~0.01 seconds">
                                         <input type="checkbox"
-                                               ng-model="lobbyOptions.enableInstantSelling"
-                                               ng-change="applyLobbyMatchOptions()">
+                                               ng-model="lobbyOptions.enableInstantSelling">
                                         Instant Selling
                                     </label>
                                     <label class="au-lobby__options-check"
                                            data-tip-pos="below"
                                            data-tip="Allow rebuilding of destroyed oil derricks">
                                         <input type="checkbox"
-                                               ng-model="lobbyOptions.enableRebuildableDerricks"
-                                               ng-change="applyLobbyMatchOptions()">
+                                               ng-model="lobbyOptions.enableRebuildableDerricks">
                                         Rebuildable Derricks
                                     </label>
                                     <label class="au-lobby__options-check"
                                            data-tip-pos="below"
                                            data-tip="Close the spectator seat for this lobby">
                                         <input type="checkbox"
-                                               ng-model="lobbyOptions.disallowSpectators"
-                                               ng-change="applyLobbyMatchOptions()">
+                                               ng-model="lobbyOptions.disallowSpectators">
                                         Disallow Spectators
                                     </label>
                                     <label class="au-lobby__options-check au-lobby__options-check--disabled"
@@ -571,6 +392,19 @@
                     </div>
                 </div>
             </div>
+            <!-- Players other than the host: what the host changed from the defaults. -->
+            <div class="au-lobby__modal" ng-show="lobbyRulesOpen" ng-click="lobbyRulesOpen = false">
+                <div class="au-lobby__modal-box au-lobby__rules" ng-click="$event.stopPropagation()">
+                    <h3 class="au-dialog__title">Custom game</h3>
+                    <p class="au-lobby__rules-copy">The host changed these options from the defaults:</p>
+                    <div class="au-lobby__summary-row" ng-repeat="d in lobbyOptionDefs" ng-show="optionChanged(d)">
+                        <span>{{ d.label }}</span><b>{{ optionValue(d) ? 'On' : 'Off' }} <em>(default {{ d.def ? 'On' : 'Off' }})</em></b>
+                    </div>
+                    <div class="au-lobby__options-actions">
+                        <button type="button" class="au-btn au-btn--primary" ng-click="lobbyRulesOpen = false">OK</button>
+                    </div>
+                </div>
+            </div>
             <div class="au-lobby__modal" ng-show="_lobbyFullError">
                 <div class="au-lobby__modal-box">
                     <div>{{ _lobbyFullError }}</div>
@@ -598,12 +432,6 @@
                             ng-click="dismissServerLostError()">OK</button>
                 </div>
             </div>
-        </div>
-
-        <aside class="au-lobby__side">
-            <div class="au-side__head">Social</div>
-            <div class="au-lobby__side-body" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
-        </aside>
     </div>
 
     <div class="au-lobby__browser" ng-show="lobbyView == 'browser'" ng-include="'view/lobby/server-browser-aurora.html'"></div>

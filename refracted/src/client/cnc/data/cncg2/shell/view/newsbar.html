@@ -17,9 +17,11 @@
                 <img ng-src="{{ news.image }}" alt="">
             </div>
             
+            <span class="news-item-date">{{ news.date }}</span>
             <div class="news-item-text" ng-class="{'has-thumb': news.hasImage}">
                 <span class="news-item-pin" ng-if="news.pinned">&#9650;</span>{{ news.title }}
             </div>
+            <span class="news-item-summary" ng-show="news.summary">{{ news.summary }}</span>
         </li>
         <li class="news-item news-item--empty" ng-hide="newsEntries.length">No news right now.</li>
     </ul>
