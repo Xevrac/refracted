@@ -919,7 +919,7 @@ input[type="text"], input[type="password"] {
     position: absolute;
     left: 1.4375rem;
     top: 100%;
-    width: 32.5rem;
+    width: 29.5625rem; /* the main menu cards' width; left edge lines up with them too */
     margin-top: 0.625rem;
     padding: 1.5rem 1.75rem;
     background-color: rgba(4, 12, 16, 0.98);

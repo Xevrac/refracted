@@ -56,7 +56,15 @@
     var listeners = [];
     var sheetSlots = null;
 
+    /** Closed beta playtest (DebugShell, devWrapper.html): Aurora (Default) only. */
+    function playtestLocked() {
+        return global.__CNC_PLAYTEST === true;
+    }
+
     function normalize(id) {
+        if (playtestLocked()) {
+            return FACTORY_DEFAULT;
+        }
         if (id && THEMES[id]) {
             return THEMES[id].id;
         }
@@ -239,11 +247,13 @@
         return prefs.theme;
     }
 
+    /** Themes for the OPTIONS picker; `locked` ones are shown greyed out (playtest: all but Default). */
     function list() {
+        var lock = playtestLocked();
         return [
-            { id: 'classic', label: THEMES.classic.label },
-            { id: 'aurora', label: THEMES.aurora.label },
-            { id: 'aurora-alt', label: THEMES['aurora-alt'].label }
+            { id: 'classic', label: THEMES.classic.label, locked: lock },
+            { id: 'aurora', label: THEMES.aurora.label, locked: false },
+            { id: 'aurora-alt', label: THEMES['aurora-alt'].label, locked: lock }
         ];
     }
 

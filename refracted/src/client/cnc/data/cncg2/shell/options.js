@@ -956,6 +956,13 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             return;
         }
         var id = $scope.settings.shellUiThemeDefault || 'aurora';
+        var i;
+        for (i = 0; i < $scope.shellThemeOptions.length; i++) {
+            if ($scope.shellThemeOptions[i].id === id && $scope.shellThemeOptions[i].locked) {
+                id = 'aurora';
+                $scope.settings.shellUiThemeDefault = id;
+            }
+        }
         $scope.settings.shellUiTheme = id;
         // Preview only until OK — persist both active + default on save.
         if (window.CncShellTheme && CncShellTheme.apply) {

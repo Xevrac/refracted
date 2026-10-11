@@ -165,10 +165,14 @@
                         <label class="opt-label-main">Default Theme</label>
                         <select class="opt-select"
                                 ng-model="settings.shellUiThemeDefault"
-                                ng-options="theme.id as theme.label for theme in shellThemeOptions"
                                 ng-change="onDefaultThemeChange()"
-                                ng-disabled="!settingsReady"></select>
+                                ng-disabled="!settingsReady">
+                            <option ng-repeat="theme in shellThemeOptions" value="{{ theme.id }}"
+                                    ng-disabled="theme.locked"
+                                    ng-selected="settings.shellUiThemeDefault == theme.id">{{ theme.label }}{{ theme.locked ? ' (not in this playtest)' : '' }}</option>
+                        </select>
                         <p class="opt-hint">{{ shellThemeHint }} Applies now and on the next shell start.</p>
+                        <p class="opt-hint" ng-show="playtest">The closed beta uses Aurora (Default); the other themes return after the playtest.</p>
                     </div>
                     <h4 class="opt-section" ng-show="auroraOptions">In-game chat</h4>
                     <div class="opt-group">

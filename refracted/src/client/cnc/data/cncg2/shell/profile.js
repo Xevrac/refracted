@@ -112,16 +112,23 @@ CCApp.controller('ProfileController', function($scope, $rootScope, $timeout) {
         return out;
     }
 
-    function applyProfile(data) {
+    /** Record totals: from /cnc/profile, or from /cnc/match-record (matchRecord) when that is all the
+        server offers (Refracted builds before the profile endpoint). */
+    function applyRecord(data) {
         var o = $scope.profileOverview;
         o.wins = data.wins || 0;
         o.losses = data.losses || 0;
         o.winStreak = data.winStreak || 0;
         o.lossStreak = data.lossStreak || 0;
         o.winRate = (o.wins + o.losses) ? Math.round(o.wins / (o.wins + o.losses) * 100) : 0;
-        o.shortestMatch = clock(data.shortestMatchSecs);
-        o.bestWin = clock(data.bestWinSecs);
+        o.shortestMatch = data.shortestMatchSecs ? clock(data.shortestMatchSecs) : NONE;
+        o.bestWin = data.bestWinSecs ? clock(data.bestWinSecs) : NONE;
         o.lastGeneral = generalName(data.lastGeneralId) || NONE;
+    }
+
+    function applyProfile(data) {
+        var o = $scope.profileOverview;
+        applyRecord(data);
 
         var history = data.history || [];
         var recent = [];
@@ -200,7 +207,12 @@ CCApp.controller('ProfileController', function($scope, $rootScope, $timeout) {
     }
 
     // Reload when the record changes (a reported match) and whenever Profile is opened.
-    $rootScope.$watch('matchRecord', function () { $timeout(loadProfile, 0); }, true);
+    $rootScope.$watch('matchRecord', function (rec) {
+        if (rec) {
+            applyRecord(rec);
+        }
+        $timeout(loadProfile, 0);
+    }, true);
     $scope.$watch('activeTab', function (tab) {
         if (tab === 'PROFILE') {
             loadProfile();
