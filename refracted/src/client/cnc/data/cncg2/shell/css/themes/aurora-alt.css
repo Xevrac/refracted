@@ -400,6 +400,16 @@ input[type="text"], input[type="password"] {
     text-transform: uppercase;
     color: #ffffff;
 }
+
+/* Status dots, "... .. . .. ..." in five 0.34 s frames: the first dot stays, the second and
+   third switch off and on. The hidden dots keep their width, so the centred text does not shift. */
+.cc-pre-landing__dots i { font-style: normal; }
+.cc-pre-landing__dots i + i { -webkit-animation: cc-dot-2 1.7s steps(1) infinite; animation: cc-dot-2 1.7s steps(1) infinite; }
+.cc-pre-landing__dots i + i + i { -webkit-animation-name: cc-dot-3; animation-name: cc-dot-3; }
+@-webkit-keyframes cc-dot-2 { 0% { opacity: 1; } 40% { opacity: 0; } 60% { opacity: 1; } }
+@keyframes cc-dot-2 { 0% { opacity: 1; } 40% { opacity: 0; } 60% { opacity: 1; } }
+@-webkit-keyframes cc-dot-3 { 0% { opacity: 1; } 20% { opacity: 0; } 80% { opacity: 1; } }
+@keyframes cc-dot-3 { 0% { opacity: 1; } 20% { opacity: 0; } 80% { opacity: 1; } }
 /* ---- 10-home.css ---- */
 /* =========================================================================
    Main menu. Positions are the concept sheet's, measured on a 1920x1080 frame:
@@ -553,13 +563,13 @@ input[type="text"], input[type="password"] {
 }
 
 /* ---- News ---- */
-.au-news { padding: 1.25rem 1.75rem 0.375rem; }
+.au-news { padding: 1.375rem 1.875rem 0.5rem; }
 
 .au-news__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 0.75rem;
+    padding-bottom: 0.875rem;
     border-bottom: 1px dashed rgba(95, 233, 255, 0.2);
 }
 .au-news__title {
@@ -572,37 +582,54 @@ input[type="text"], input[type="password"] {
 .au-news__refresh svg { display: block; width: 100%; height: 100%; }
 .au-news__refresh:hover { color: #eaf6f8; }
 .au-news__refresh.is-cooling { opacity: 0.35; pointer-events: none; }
-.au-news__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* overflow-x: the hover nudge (60-motion.css) must not raise a horizontal scrollbar. */
+.au-news__list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+/* The date sits on its own line above the title: the feed sends a full date ("Sat Oct 03 2026"),
+   which never fitted a side column and ran into the title. */
 .au-news__item {
-    display: flex;
-    padding: 1.125rem 0 1.25rem;
+    display: block;
+    padding: 1.25rem 1rem 1.375rem 0;
     border-bottom: 1px dashed rgba(95, 233, 255, 0.2);
     cursor: pointer;
 }
 .au-news__item:last-child { border-bottom: 0; }
 .au-news__date {
-    flex: 0 0 5.75rem;
-    padding-top: 0.1875rem;
-    font-size: 1.1875rem;
+    display: block;
+    margin-bottom: 0.4375rem;
+    font-size: 0.9375rem;
+    line-height: 1.25rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: #46abbb;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.au-news__text { flex: 1 1 auto; min-width: 0; }
 .au-news__text strong {
     display: block;
     font-size: 1.5rem;
-    line-height: 1.2;
+    line-height: 1.25;
     color: #ffffff;
     transition: color 0.12s;
 }
 .au-news__text span {
     display: block;
-    margin-top: 0.625rem;
-    font-size: 1.25rem;
+    margin-top: 0.5625rem;
+    font-size: 1.1875rem;
     line-height: 1.5;
     color: #46abbb;
 }
-.au-news__pin { margin-right: 0.5rem; font-size: 0.6875rem; color: #3d9eff; vertical-align: 0.1875rem; }
+.au-news__pin {
+    display: inline-block;
+    margin-right: 0.625rem;
+    padding: 0 0.4375rem;
+    border: 1px solid rgba(61, 158, 255, 0.55);
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.14em;
+    color: #3d9eff;
+    vertical-align: top;
+}
 .au-news__item:hover .au-news__text strong { color: #7cc0ff; }
 .au-news__item--empty { cursor: default; color: #38626b; }
 
@@ -747,50 +774,78 @@ input[type="text"], input[type="password"] {
 .au-news__item {
     flex: 1 1 0;
     min-width: 0;
-    padding: 0.5rem 1.375rem 0 1.375rem;
+    padding: 0.3125rem 1.375rem 0 1.375rem;
     border-bottom: 0;
     border-left: 1px dashed rgba(95, 233, 255, 0.26);
 }
 .au-news__item:nth-child(n+4) { display: none; }
-.au-news__date { flex: 0 0 4.875rem; color: #46abbb; }
-.au-news__text strong { font-size: 1.375rem; }
-.au-news__text span { margin-top: 0.5rem; font-size: 1.1875rem; line-height: 1.5; }
+/* 8.25rem of strip: date, a one-line title, two lines of summary. */
+.au-news__date { margin-bottom: 0.25rem; font-size: 0.875rem; }
+.au-news__text strong { font-size: 1.375rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Two lines of summary, then an ellipsis (max-height is the fallback: a third line is cut, not squeezed in). */
+.au-news__text span {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    max-height: 3.2625rem;
+    margin-top: 0.375rem;
+    overflow: hidden;
+    font-size: 1.125rem;
+    line-height: 1.45;
+}
 
 
-/* ---- News article ---- */
-.au-article {
-    position: absolute;
-    top: 15.0625rem;
-    left: 4.625rem;
-    bottom: 7.875rem;
-    width: 73.75rem;
-    z-index: 5;
-    padding: 2.125rem 2.5rem 1.875rem;
+/* ---- News article: a dialog over the main menu. The veil darkens the menu, which stays
+        drawn underneath; a click on the veil, Close or Escape shuts it. ---- */
+.au-article-veil {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 6000;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.76);
+}
+/* Plain block layout with a capped scroll area (no flex column, no percentage heights): the box
+   is as tall as the article needs and at most head + 45.75rem, which always fits the 67.5rem frame. */
+.au-article {
+    flex: 0 0 auto;
+    width: 62.5rem;
+    padding-bottom: 0.75rem;
+    background-color: rgba(4, 12, 16, 0.98);
+    cursor: default;
 }
 .au-article__head {
     display: flex;
     align-items: flex-start;
-    justify-content: space-between;
-    padding-bottom: 1.375rem;
+    padding: 1.875rem 2.5rem 1.5rem;
     border-bottom: 1px dashed rgba(95, 233, 255, 0.2);
 }
+.au-article__heading { flex: 1 1 auto; min-width: 0; padding-right: 1.875rem; }
+.au-article__date {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9375rem;
+    line-height: 1.25rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3d9eff;
+}
 .au-article__title { font-family: 'AuBold', Arial, sans-serif; font-size: 2.25rem; font-weight: normal; line-height: 1.15; color: #ffffff; }
-.au-article__date { display: block; margin-top: 0.5rem; font-size: 1rem; color: #3d9eff; }
+.au-article__close { flex: 0 0 auto; }
 .au-article__scroll {
-    flex: 1 1 auto;
-    min-height: 0;
+    max-height: 45rem;
+    overflow-x: hidden;
     overflow-y: auto;
-    padding: 1.5rem 1.25rem 0 0;
-    font-size: 1.1875rem;
+    padding: 1.875rem 2.5rem 1.375rem;
+    font-size: 1.25rem;
     line-height: 1.6;
     color: #46abbb;
     -webkit-user-select: text;
     user-select: text;
 }
-.au-article__image { display: block; max-width: 100%; margin-bottom: 1.5rem; border: 1px solid rgba(95, 233, 255, 0.2); }
-.au-article__summary { margin-bottom: 1.25rem; font-size: 1.3125rem; color: #eaf6f8; }
+.au-article__image { display: block; max-width: 100%; margin: 0 auto 1.625rem; border: 1px solid rgba(95, 233, 255, 0.2); }
+.au-article__summary { margin-bottom: 1.25rem; font-size: 1.375rem; line-height: 1.5; color: #eaf6f8; }
 .au-article__scroll p { margin-bottom: 1rem; }
 .au-article__scroll h3 {
     margin: 1.625rem 0 0.75rem;
@@ -1055,6 +1110,9 @@ input[type="text"], input[type="password"] {
 .au-lobby__team--1 .au-lobby__team-head { border-bottom-color: #5fe9ff; color: #5fe9ff; }
 
 .au-lobby__team--2 .au-lobby__team-head { border-bottom-color: #3d9eff; color: #3d9eff; }
+/* Friend or Foe, from the local player's seat (teamRelationClass): your team green, the other red. */
+.au-lobby__team.au-lobby__team--friend .au-lobby__team-head { border-bottom-color: #7dff9b; color: #7dff9b; }
+.au-lobby__team.au-lobby__team--foe .au-lobby__team-head { border-bottom-color: #ff5a52; color: #ff5a52; }
 
 .au-lobby__slot {
     height: 6.5rem;
@@ -1097,7 +1155,7 @@ input[type="text"], input[type="password"] {
     display: block;
     font-size: 1.625rem;
     line-height: 1.25;
-    color: #ffffff;
+    color: #b0b0b0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1124,9 +1182,11 @@ input[type="text"], input[type="password"] {
 
 .au-lobby__general i { color: #5fe9ff; }
 
-/* Nexus name tags */
-.name-tag--developer, .chat-user--developer { color: #c58bff !important; }
-.name-tag--playtester, .chat-user--playtester { color: #ffcf47 !important; }
+/* Player names, on the cards and in chat: developer purple, playtester yellow, everyone else the
+   plain grey (#b0b0b0). Never the house colour: that is the ribbon's job. */
+/* (the lobby script emits lobby-name--dev / chat-user--dev; the --developer names are kept for older markup) */
+.name-tag--developer, .chat-user--developer, .lobby-name--dev, .chat-user--dev { color: #c58bff !important; }
+.name-tag--playtester, .chat-user--playtester, .lobby-name--playtester { color: #ffcf47 !important; }
 
 .au-lobby__slot-side {
     flex: 0 0 auto;
@@ -1303,8 +1363,7 @@ input[type="text"], input[type="password"] {
 }
 .au-lobby__spectator-head { flex: 1 1 auto; }
 .au-lobby__spectator-card { display: flex; align-items: center; }
-.au-lobby__spectator-name { font-size: 1.25rem; color: #eaf6f8; }
-.au-lobby__spectator-card--local .au-lobby__spectator-name { color: #ffffff; }
+.au-lobby__spectator-name { font-size: 1.25rem; color: #b0b0b0; }
 .au-lobby__spectator .au-lobby__kick { margin-left: 0.75rem; }
 .au-lobby__spectate-btn { margin-left: 0.75rem; }
 
@@ -1458,7 +1517,7 @@ input[type="text"], input[type="password"] {
     user-select: text;
 }
 .au-lobby__chat-line--system { color: #3d9eff; }
-.au-lobby__chat-user { margin-right: 0.5rem; font-family: 'AuBold', Arial, sans-serif; color: #eaf6f8; }
+.au-lobby__chat-user { margin-right: 0.5rem; font-family: 'AuBold', Arial, sans-serif; color: #b0b0b0; }
 .au-lobby__chat-empty, .au-lobby__chat-typing { font-size: 1.0625rem; color: #38626b; }
 .au-lobby__chat-typing { padding: 0 0.375rem; line-height: 1.5rem; }
 .au-lobby__chat-form {
@@ -2567,15 +2626,16 @@ html[data-au-page="ingame"] body { background: rgba(0, 0, 0, 0.42) !important; }
     padding: 9.5625rem 3.5rem 0 3.5625rem;
     display: flex;
     flex-direction: column;
-    border-left: 1px solid #5fe9ff;
-    background: rgba(4, 12, 16, 0.97);
+    /* Left edge: dashed, a grey a step lighter than the panel. The panel lets a little of the match through. */
+    border-left: 2px dashed rgba(95, 233, 255, 0.34);
+    background: rgba(4, 12, 16, 0.86);
     box-shadow: -1.875rem 0 5rem rgba(0, 0, 0, 0.5);
 }
 .pause-menu-title {
     order: 0;
     margin-bottom: 6.5rem;
     font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
-    font-size: 2.9375rem;
+    font-size: 2.7906rem;
     font-weight: normal;
     line-height: 1.2;
     letter-spacing: 0.12em;
@@ -2590,7 +2650,7 @@ html[data-au-page="ingame"] body { background: rgba(0, 0, 0, 0.42) !important; }
     border: 1px solid rgba(95, 233, 255, 0.26);
     background: rgba(0, 0, 0, 0.25);
     font-family: 'AuDisplay', 'AuBold', Arial, sans-serif;
-    font-size: 1.75rem;
+    font-size: 1.6625rem;
     letter-spacing: 0.12em;
     text-align: left;
     text-transform: uppercase;
@@ -2672,7 +2732,8 @@ html[data-au-page="chat"] body { font-size: 0.875rem; }
 .chat-from.ally { color: #7ec8ff; }
 .chat-from.enemy { color: #ff7468; }
 .chat-from.team { color: #8fdf7a; }
-.chat-from.self { color: #ffcf47; }
+/* Friend or foe, as the reader sees it: your own name is on your side, so it is the ally blue. */
+.chat-from.self { color: #7ec8ff; }
 .chat-from.dev { color: #c58bff; }
 .chat-from.playtester { color: #ffcf47; }
 .chat-text { flex: 1 1 auto; min-width: 0; word-wrap: break-word; }
@@ -2755,9 +2816,8 @@ html[data-au-page="chat"] body { font-size: 0.875rem; }
 .au-play__btn { transition: background-color 0.12s, border-color 0.12s, box-shadow 0.16s, transform 0.16s ease-out; }
 .au-play__btn:hover { transform: translateX(0.375rem); }
 .au-play__btn[disabled]:hover { transform: none; }
-.au-news__text { transition: transform 0.16s ease-out; }
-.au-news__item:hover .au-news__text { transform: translateX(0.3125rem); }
-.au-news__item--empty:hover .au-news__text { transform: none; }
+.au-news__date, .au-news__text { transition: transform 0.16s ease-out; }
+.au-news__item:hover .au-news__date, .au-news__item:hover .au-news__text { transform: translateX(0.3125rem); }
 
 /* Bar buttons: an accent line draws across the top edge */
 .au-nav__item { position: relative; }
@@ -2776,9 +2836,12 @@ html[data-au-page="chat"] body { font-size: 0.875rem; }
 .au-nav__item--on:after, .au-nav__item[disabled]:after { display: none; }
 .au-nav__item--quit:after { background: #ff5a52; }
 
-/* Section pages and the news article */
+/* Section pages */
 .au-subnav { animation: au-fade 0.3s ease-out backwards; }
-.au-page, .au-article { animation: au-rise 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+.au-page { animation: au-rise 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
+/* News article: the veil fades in, the box pops, like the other dialogs */
+.au-article-veil { animation: au-fade 0.16s ease-out backwards; }
+.au-article { animation: au-pop 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) backwards; }
 .au-page__host { animation: au-fade 0.24s ease-out backwards; }
 
 /* ---- Primary buttons: a sheen crosses on hover ---- */

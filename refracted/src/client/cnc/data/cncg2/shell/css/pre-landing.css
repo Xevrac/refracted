@@ -169,3 +169,13 @@
     min-height: 100%;
     position: relative;
 }
+
+/* Status dots, "... .. . .. ..." in five 0.34 s frames: the first dot stays, the second and
+   third switch off and on. The hidden dots keep their width, so the centred text does not shift. */
+.cc-pre-landing__dots i { font-style: normal; }
+.cc-pre-landing__dots i + i { -webkit-animation: cc-dot-2 1.7s steps(1) infinite; animation: cc-dot-2 1.7s steps(1) infinite; }
+.cc-pre-landing__dots i + i + i { -webkit-animation-name: cc-dot-3; animation-name: cc-dot-3; }
+@-webkit-keyframes cc-dot-2 { 0% { opacity: 1; } 40% { opacity: 0; } 60% { opacity: 1; } }
+@keyframes cc-dot-2 { 0% { opacity: 1; } 40% { opacity: 0; } 60% { opacity: 1; } }
+@-webkit-keyframes cc-dot-3 { 0% { opacity: 1; } 20% { opacity: 0; } 80% { opacity: 1; } }
+@keyframes cc-dot-3 { 0% { opacity: 1; } 20% { opacity: 0; } 80% { opacity: 1; } }

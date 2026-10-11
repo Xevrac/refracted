@@ -170,12 +170,14 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
             return;
         }
         CncPreLanding.run({
-            setStatus: function (line) {
+            setStatus: function (line, dots) {
                 if ($rootScope.$$phase) {
                     $rootScope.preLandingStatus = line;
+                    $rootScope.preLandingDots = !!dots;
                 } else {
                     $rootScope.$apply(function () {
                         $rootScope.preLandingStatus = line;
+                        $rootScope.preLandingDots = !!dots;
                     });
                 }
             },
@@ -743,6 +745,11 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         }
         $scope.activeNewsArticle = article;
         $scope.mapOpen = false;
+        // One shared scroll box: a new article starts at its top.
+        var box = document.querySelector('.au-article__scroll');
+        if (box) {
+            box.scrollTop = 0;
+        }
     };
     $scope.closeArticle = function() { $scope.activeNewsArticle = null; };
 

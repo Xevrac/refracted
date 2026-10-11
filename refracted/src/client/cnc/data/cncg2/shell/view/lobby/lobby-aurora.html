@@ -27,7 +27,7 @@
 
         <div class="au-lobby__room">
             <div class="au-lobby__col au-lobby__col--left">
-                <div class="au-lobby__team au-lobby__team--1">
+                <div class="au-lobby__team au-lobby__team--1" ng-class="teamRelationClass(1)">
                     <div class="au-lobby__team-head">Team 1</div>
                     <div class="au-lobby__slot"
                          ng-repeat="slot in team1"
@@ -94,8 +94,7 @@
                     <div class="au-lobby__chat-log">
                         <div class="au-lobby__chat-line" ng-repeat="msg in lobbyChat"
                              ng-class="{'au-lobby__chat-line--system': msg.system}">
-                            <span class="au-lobby__chat-user" ng-hide="msg.system" ng-class="chatUserClass(msg)"
-                                  ng-style="chatUserStyle(msg)">{{ msg.user }}</span><span
+                            <span class="au-lobby__chat-user" ng-hide="msg.system" ng-class="chatUserClass(msg)">{{ msg.user }}</span><span
                                   class="au-lobby__chat-mark" ng-show="msg.system">&gt; </span>{{ msg.text }}
                         </div>
                         <div class="au-lobby__chat-empty" ng-show="!lobbyChat.length">
@@ -121,7 +120,7 @@
             </div>
 
             <div class="au-lobby__col au-lobby__col--right">
-                <div class="au-lobby__team au-lobby__team--2">
+                <div class="au-lobby__team au-lobby__team--2" ng-class="teamRelationClass(2)">
                     <div class="au-lobby__team-head">Team 2</div>
                     <div class="au-lobby__slot"
                          ng-repeat="slot in team2"

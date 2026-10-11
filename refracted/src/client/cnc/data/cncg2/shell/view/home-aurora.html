@@ -5,7 +5,7 @@
          Art and sizes: see "General art" in the shell README. -->
     <div class="au-general" ng-if="shellUiTheme == 'aurora' && generalArt"
          ng-class="{'au-general--bust': generalArt.bust, 'au-general--fit': generalArt.fit}"
-         ng-show="activeTab == 'LIVE' && !activeNewsArticle" aria-hidden="true">
+         ng-show="activeTab == 'LIVE'" aria-hidden="true">
         <img ng-src="{{ generalArt.src }}" ng-style="generalArt.style" alt="">
     </div>
 
@@ -33,7 +33,7 @@
         </div>
     </div>
 
-    <div class="au-live" ng-show="activeTab == 'LIVE' && !activeNewsArticle">
+    <div class="au-live" ng-show="activeTab == 'LIVE'">
         <div class="au-live__play">
             <div class="au-play">
                 <button type="button" class="au-play__btn au-play__btn--main" ng-click="quickMatch()">
@@ -84,9 +84,9 @@
                 </div>
                 <ul class="au-news__list">
                     <li class="au-news__item" ng-repeat="news in newsEntries" ng-click="openArticle(news)">
-                        <span class="au-news__date">{{ news.date }}</span>
+                        <span class="au-news__date"><i class="au-news__pin" ng-if="news.pinned">Pinned</i>{{ news.date }}</span>
                         <div class="au-news__text">
-                            <strong><i class="au-news__pin" ng-if="news.pinned">&#9650;</i>{{ news.title }}</strong>
+                            <strong>{{ news.title }}</strong>
                             <span ng-show="news.summary">{{ news.summary }}</span>
                         </div>
                     </li>
@@ -106,14 +106,16 @@
         </div>
     </div>
 
-    <!-- News article -->
-    <div class="au-panel au-article" ng-show="activeTab == 'LIVE' && activeNewsArticle">
+    <!-- News article: a dialog over the main menu (the veil darkens it). A click on the veil,
+         Close or Escape shuts it. -->
+    <div class="au-article-veil" ng-show="activeTab == 'LIVE' && activeNewsArticle" ng-click="closeArticle()">
+    <div class="au-panel au-article" ng-click="$event.stopPropagation()">
         <div class="au-article__head">
-            <div>
-                <h1 class="au-article__title">{{ activeNewsArticle.title }}</h1>
+            <div class="au-article__heading">
                 <span class="au-article__date">{{ activeNewsArticle.date }}</span>
+                <h1 class="au-article__title">{{ activeNewsArticle.title }}</h1>
             </div>
-            <button type="button" class="au-btn au-btn--ghost" ng-click="closeArticle()">Back</button>
+            <button type="button" class="au-btn au-btn--ghost au-article__close" ng-click="closeArticle()">Close</button>
         </div>
         <div class="au-article__scroll">
             <img class="au-article__image" ng-if="activeNewsArticle.hasImage" ng-src="{{ activeNewsArticle.image }}" alt="">
@@ -133,6 +135,7 @@
                 <hr ng-switch-when="divider">
             </div>
         </div>
+    </div>
     </div>
 
     <!-- Section pages -->

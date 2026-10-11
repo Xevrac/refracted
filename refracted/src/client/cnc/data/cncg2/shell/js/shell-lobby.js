@@ -1664,7 +1664,11 @@
             var cur = $scope.lobbyChat || [];
             var k, i, overlap;
             // The server has not caught up with a line sent from here yet: keep what is shown.
-            for (i = 0; i < next.length && i < cur.length && sameChatLine(cur[i], next[i]); i++) { /* scan */ }
+            for (i = 0; i < next.length && i < cur.length && sameChatLine(cur[i], next[i]); i++) {
+                // The server line carries the speaker's Nexus name tag; a line sent from here
+                // (shown before the server echoed it) has none until now.
+                cur[i].tag = next[i].tag;
+            }
             if (i === next.length && next.length <= cur.length) {
                 return false;
             }
@@ -1683,6 +1687,9 @@
                 }
             }
             overlap = cur.length - k;
+            for (i = 0; i < overlap; i++) {
+                cur[k + i].tag = next[i].tag;
+            }
             if (k === 0 && overlap === next.length) {
                 return false;
             }
@@ -1701,27 +1708,6 @@
             }
             if (tag === 'playtester') {
                 return { 'lobby-name--playtester': true };
-            }
-            return {};
-        };
-
-        // Lobby chat names take the speaker's house colour (Aurora).
-        $scope.chatUserStyle = function (msg) {
-            if (!msg || msg.system || !msg.user) {
-                return {};
-            }
-            var want = String(msg.user).toLowerCase();
-            var lists = [$scope.team1 || [], $scope.team2 || []];
-            var li;
-            var i;
-            for (li = 0; li < lists.length; li++) {
-                for (i = 0; i < lists[li].length; i++) {
-                    var slot = lists[li][i];
-                    if (slot && slot.occupied && !slot.isAi && slot.color &&
-                            String(slot.displayName || '').toLowerCase() === want) {
-                        return { color: slot.color };
-                    }
-                }
             }
             return {};
         };
@@ -2537,6 +2523,25 @@
             return $scope.team1[0];
         }
         $scope.localSlot = localSlot;
+
+        /** Team head colour from the local player's view, like Friend or Foe in a match: your team
+            green, the other red. A spectator (or no seat yet) sees both neutral. */
+        $scope.teamRelationClass = function (teamNum) {
+            var teams = { 1: $scope.team1 || [], 2: $scope.team2 || [] };
+            var mine = 0;
+            var t, i;
+            for (t = 1; t <= 2; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    if (teams[t][i] && teams[t][i].isLocal && teams[t][i].occupied && !teams[t][i].isSpectator) {
+                        mine = t;
+                    }
+                }
+            }
+            if (!mine) {
+                return '';
+            }
+            return mine === teamNum ? 'au-lobby__team--friend' : 'au-lobby__team--foe';
+        };
 
         function loginKey() {
             return (window.CncPreLanding && CncPreLanding.getLoginKey)

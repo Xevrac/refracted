@@ -229,6 +229,12 @@ Lobby slot menu (Aurora): as wide as the player card; faction buttons, general t
 portrait (`view/image/generals/`), colour swatches. Chat polls merge into the lines already shown, so a
 poll no longer re-renders (and re-animates) the log.
 
+Player name colours (Nexus name tags, `users.name_tag`): developer purple, playtester yellow `#ffcf47`,
+everyone else plain grey `#b0b0b0` (`name` token in Aurora, the same grey in Classic), on the lobby name
+cards, the spectator card and in lobby chat. Never the house colour: that is the colour ribbon's job.
+In-game chat is friend or foe as the reader sees it: you and your allies blue, enemies red, team channel
+green, spectators grey; a developer or playtester tag wins over that.
+
 ## News (NEWS panel)
 
 Articles come from the Aurora site (`refracted_cnc/frontend`, admin page `/news`), not from this
@@ -248,6 +254,16 @@ stays on the server and is only needed on the playtest server.
 
 Articles are typed blocks (`paragraph`, `heading`, `list` with one nested level, `divider`), never
 HTML; `view/newsbar.html` (Classic) and `view/home-aurora.html` (Aurora) render them with text bindings only.
+
+Aurora layout: in the panel (Default) and the strip (Alternate) the date is a small line above the title,
+with a `Pinned` tag in front of it for pinned articles; the feed sends a full date ("Sat Oct 03 2026"), which
+does not fit a side column. An article opens as a dialog over the main menu (`.au-article-veil` darkens the
+menu, `.au-article` is the 1000u box centred on it): the box is as tall as the article needs and its body
+scrolls past 720u. Close, Escape or a click on the veil shuts it.
+
+Sign-in screen: the dots after "Communicating with Refracted" are CSS (`.cc-pre-landing__dots`, three `<i>`,
+"... .. . .. ..." in five 0.34 s frames) and run until the screen goes. Do not stop them when the login
+answers: the screen stays up for `MIN_PRE_LANDING_MS` after that.
 
 ## Test browser
 

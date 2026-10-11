@@ -81,8 +81,8 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         }, 0);
     }
 
-    // All chat: Nexus name tags (developer purple, playtester #ffcf47). Otherwise
-    // viewer-relative ally blue / enemy red / self gold. Team channel keeps its
+    // All chat: Nexus name tags (developer purple, playtester #ffcf47). Otherwise friend or
+    // foe as the reader sees it: you and your allies blue, enemies red. Team channel keeps its
     // green tint. A spectator's line is grey for every reader, whatever the channel.
     $scope.fromClass = function (m) {
         if (!m || m.kind === 'system') {

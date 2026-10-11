@@ -8,8 +8,6 @@
     var DEFAULT_PASSWORD = 'test';
     var AUTH_STEP_MS = 8000;
     var MIN_PRE_LANDING_MS = 8000;
-    var STATUS_DOT_FRAMES = ['...', '..', '.', '..', '...'];
-    var STATUS_DOT_MS = 340;
 
     function scheduleDone(onDone, tStart) {
         var now = (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
@@ -310,47 +308,22 @@
     }
 
     function createStatusAnimator(setStatus) {
-        var timer = null;
         var base = '';
-        var frame = 0;
         var animating = false;
 
-        function render() {
-            if (!animating) {
-                setStatus(base);
-                return;
-            }
-            setStatus(base + STATUS_DOT_FRAMES[frame]);
-            frame = (frame + 1) % STATUS_DOT_FRAMES.length;
-        }
-
+        // The dots are drawn by CSS ("... .. . .. ..."): setStatus(text, true) shows them after the text.
+        // CSS keeps them moving even while a shell call holds the script thread.
         return {
             setLine: function (line) {
-                if (shouldAnimateStatus(line)) {
-                    base = stripTrailingDots(line);
-                    frame = 0;
-                    animating = true;
-                    render();
-                    if (timer !== null) {
-                        clearInterval(timer);
-                    }
-                    timer = setInterval(render, STATUS_DOT_MS);
-                } else {
-                    animating = false;
-                    base = line || '';
-                    if (timer !== null) {
-                        clearInterval(timer);
-                        timer = null;
-                    }
-                    setStatus(base);
-                }
+                animating = shouldAnimateStatus(line);
+                base = animating ? stripTrailingDots(line) : (line || '');
+                setStatus(base, animating);
             },
             stop: function () {
-                if (timer !== null) {
-                    clearInterval(timer);
-                    timer = null;
+                if (animating) {
+                    animating = false;
+                    setStatus(base, false);
                 }
-                animating = false;
             }
         };
     }
@@ -370,7 +343,8 @@
             var tStart = (typeof Date !== 'undefined' && Date.now) ? Date.now() : 0;
             var statusAnimator = createStatusAnimator(setStatus);
             function done() {
-                statusAnimator.stop();
+                // No statusAnimator.stop() here: the screen stays up for MIN_PRE_LANDING_MS, long
+                // after the login has answered, and the dots keep moving until it goes.
                 markSessionDone();
                 scheduleDone(onDone, tStart);
             }
