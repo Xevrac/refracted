@@ -30,7 +30,7 @@
                         ng-click="selectBrowserGame(g)">
                     <span class="au-browser__col au-browser__col--flag">
                         <img class="au-browser__flag" ng-show="browserFlagUrl(g)" ng-src="{{ browserFlagUrl(g) }}"
-                             alt="{{ g.region }}" title="{{ g.region }}" onerror="this.style.visibility='hidden'">
+                             alt="" data-tip="{{ g.region }}" onerror="this.style.visibility='hidden'">
                     </span>
                     <span class="au-browser__col au-browser__col--lock">
                         <span class="au-browser__padlock" ng-show="g.passwordProtected" data-tip="Password protected">
