@@ -2,36 +2,16 @@
 //! and Refracted fetches the Aurora site (`CNC_NEWS_URL`) over HTTPS. EAWebKit cannot complete the
 //! site's TLS handshake, and the playtest feed key (`CNC_NEWS_DEV_KEY`) never reaches the client.
 
-use parking_lot::Mutex;
-use std::collections::HashMap;
-use std::io::Read;
-use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use super::remote_fetch::{cached_fetch, error_response};
 use crate::http::handlers::handlers_module::HttpResponse;
 
 const FEED_TTL: Duration = Duration::from_secs(30);
 const IMAGE_TTL: Duration = Duration::from_secs(600);
-const FETCH_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_FEED_BYTES: u64 = 512 * 1024;
 const MAX_IMAGE_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_CACHED_IMAGES: usize = 64;
-
-struct Cached {
-    at: Instant,
-    content_type: String,
-    body: Vec<u8>,
-}
-
-fn cache() -> &'static Mutex<HashMap<String, Cached>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, Cached>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-fn agent() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| ureq::AgentBuilder::new().timeout(FETCH_TIMEOUT).build())
-}
 
 fn env_non_empty(name: &str) -> Option<String> {
     std::env::var(name)
@@ -94,87 +74,6 @@ fn query_param(query: Option<&str>, key: &str) -> Option<String> {
         .and_then(|(_, v)| percent_decode(v))
 }
 
-fn error_response(status: u16, message: &str) -> HttpResponse {
-    let body = serde_json::json!({ "error": message }).to_string().into_bytes();
-    let mut response = HttpResponse::new(status, "application/json", body);
-    response
-        .headers
-        .insert("Cache-Control".to_string(), "no-store".to_string());
-    response
-}
-
-fn log(message: String) {
-    crate::console_println!("\x1b[38;2;100;200;255m[CNC]\x1b[0m news proxy: {message}");
-}
-
-/// GET `url`; returns (status, content type, body) for any HTTP status, Err on transport failure.
-fn fetch(url: &str, max_bytes: u64) -> Result<(u16, String, Vec<u8>), String> {
-    let response = match agent().get(url).call() {
-        Ok(r) | Err(ureq::Error::Status(_, r)) => r,
-        Err(e) => return Err(e.to_string()),
-    };
-    let status = response.status();
-    let content_type = response.content_type().to_string();
-    let mut body = Vec::new();
-    response
-        .into_reader()
-        .take(max_bytes + 1)
-        .read_to_end(&mut body)
-        .map_err(|e| e.to_string())?;
-    if body.len() as u64 > max_bytes {
-        return Err(format!("response larger than {max_bytes} bytes"));
-    }
-    Ok((status, content_type, body))
-}
-
-/// Serves a fresh cache entry, otherwise fetches; on upstream failure falls back to a stale entry.
-fn cached_fetch(
-    key: &str,
-    url: &str,
-    ttl: Duration,
-    max_bytes: u64,
-    accept: fn(&str) -> bool,
-) -> Result<(String, Vec<u8>), (u16, String)> {
-    if let Some(hit) = cache().lock().get(key) {
-        if hit.at.elapsed() < ttl {
-            return Ok((hit.content_type.clone(), hit.body.clone()));
-        }
-    }
-
-    let failure = match fetch(url, max_bytes) {
-        Ok((200, content_type, body)) if accept(&content_type) => {
-            let mut map = cache().lock();
-            if !map.contains_key(key) && key.starts_with("image:") {
-                let images = map.keys().filter(|k| k.starts_with("image:")).count();
-                if images >= MAX_CACHED_IMAGES {
-                    let oldest = map
-                        .iter()
-                        .filter(|(k, _)| k.starts_with("image:"))
-                        .min_by_key(|(_, v)| v.at)
-                        .map(|(k, _)| k.clone());
-                    if let Some(oldest) = oldest {
-                        map.remove(&oldest);
-                    }
-                }
-            }
-            map.insert(
-                key.to_string(),
-                Cached { at: Instant::now(), content_type: content_type.clone(), body: body.clone() },
-            );
-            return Ok((content_type, body));
-        }
-        Ok((200, content_type, _)) => (502, format!("unexpected content type {content_type}")),
-        Ok((status, _, _)) => (if status == 404 { 404 } else { 502 }, format!("upstream HTTP {status}")),
-        Err(e) => (502, e),
-    };
-
-    log(format!("{key} failed: {}", failure.1));
-    if let Some(stale) = cache().lock().get(key) {
-        return Ok((stale.content_type.clone(), stale.body.clone()));
-    }
-    Err(failure)
-}
-
 /// GET /cnc/news/{prod|dev}
 pub fn handle_feed(realm: &str) -> HttpResponse {
     if realm != "prod" && realm != "dev" {
@@ -191,7 +90,7 @@ pub fn handle_feed(realm: &str) -> HttpResponse {
         }
     }
 
-    match cached_fetch(&format!("feed:{realm}"), &url, FEED_TTL, MAX_FEED_BYTES, |ct| {
+    match cached_fetch(&format!("news-feed:{realm}"), &url, FEED_TTL, MAX_FEED_BYTES, None, |ct| {
         ct.eq_ignore_ascii_case("application/json")
     }) {
         Ok((_, body)) => {
@@ -220,7 +119,7 @@ pub fn handle_image(query: Option<&str>) -> HttpResponse {
         return error_response(403, "image is not on the news site");
     }
 
-    match cached_fetch(&format!("image:{url}"), &url, IMAGE_TTL, MAX_IMAGE_BYTES, |ct| {
+    match cached_fetch(&format!("news-image:{url}"), &url, IMAGE_TTL, MAX_IMAGE_BYTES, Some(MAX_CACHED_IMAGES), |ct| {
         ct.to_ascii_lowercase().starts_with("image/")
     }) {
         Ok((content_type, body)) => {

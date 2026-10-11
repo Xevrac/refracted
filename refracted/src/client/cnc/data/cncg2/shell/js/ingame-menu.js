@@ -375,14 +375,130 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
 
 
 
-    $scope.returnToGame = function () {
+    var MENU_LEAVE_MS = 300;
+    var menuLeaving = false;
+    var menuNeedsReplay = false;
 
+    function pausePanel() {
+        var nodes = document.getElementsByClassName('pause-menu');
+        return (nodes && nodes.length) ? nodes[0] : null;
+    }
+
+    function hasClass(el, name) {
+        return !!(el && (' ' + el.className + ' ').indexOf(' ' + name + ' ') !== -1);
+    }
+
+    function addClass(el, name) {
+        if (!el || hasClass(el, name)) {
+            return;
+        }
+        el.className = (el.className ? el.className + ' ' : '') + name;
+    }
+
+    function stripClass(el, name) {
+        if (!el || !el.className) {
+            return;
+        }
+        el.className = String(el.className)
+            .replace(new RegExp('\\b' + name + '\\b', 'g'), ' ')
+            .replace(/\s+/g, ' ')
+            .replace(/^\s+|\s+$/g, '');
+    }
+
+    function motionNodes() {
+        var panel = pausePanel();
+        var nodes = [];
+        var i;
+        if (!panel) {
+            return nodes;
+        }
+        nodes.push(panel);
+        var titles = panel.getElementsByTagName('h2');
+        var buttons = panel.getElementsByTagName('button');
+        for (i = 0; i < titles.length; i++) {
+            nodes.push(titles[i]);
+        }
+        for (i = 0; i < buttons.length; i++) {
+            nodes.push(buttons[i]);
+        }
+        return nodes;
+    }
+
+    function holdMotion() {
+        var nodes = motionNodes();
+        var i;
+        for (i = 0; i < nodes.length; i++) {
+            nodes[i].style.webkitAnimation = 'none';
+            nodes[i].style.animation = 'none';
+        }
+    }
+
+    function replayPauseEntrance() {
+        if (!menuNeedsReplay) {
+            return;
+        }
+        menuNeedsReplay = false;
+        menuLeaving = false;
+        var body = document.body;
+        // Changing the veil's animation name restarts its fade with the panel.
+        addClass(body, 'pause-leaving');
+        if (body) {
+            body.offsetWidth;
+        }
+        stripClass(body, 'pause-leaving');
+        stripClass(pausePanel(), 'is-leaving');
+        var nodes = motionNodes();
+        var i;
+        for (i = 0; i < nodes.length; i++) {
+            nodes[i].style.webkitAnimation = 'none';
+            nodes[i].style.animation = 'none';
+        }
+        if (nodes.length) {
+            nodes[0].offsetWidth;
+        }
+        for (i = 0; i < nodes.length; i++) {
+            nodes[i].style.webkitTransform = '';
+            nodes[i].style.transform = '';
+            nodes[i].style.webkitAnimation = '';
+            nodes[i].style.animation = '';
+        }
+    }
+
+    function hidePauseMenu() {
+        if (menuLeaving || $scope.quittingOpen) {
+            return;
+        }
+        menuLeaving = true;
         clearConfirms();
-
         $scope.optionsOpen = false;
+        addClass(pausePanel(), 'is-leaving');
+        addClass(document.body, 'pause-leaving');
+        setTimeout(function () {
+            runGame('SetPauseMenuVisibility false');
+            // Freeze before dropping the leave class, so the entrance does not restart off-screen.
+            holdMotion();
+            stripClass(document.body, 'pause-leaving');
+            stripClass(pausePanel(), 'is-leaving');
+            menuLeaving = false;
+            menuNeedsReplay = true;
+        }, MENU_LEAVE_MS);
+    }
 
-        runGame('SetPauseMenuVisibility false');
+    function onPauseShown() {
+        replayPauseEntrance();
+    }
 
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') {
+            return;
+        }
+        onPauseShown();
+    });
+    window.addEventListener('focus', onPauseShown);
+    window.addEventListener('pageshow', onPauseShown);
+
+    $scope.returnToGame = function () {
+        hidePauseMenu();
     };
 
 
@@ -421,7 +537,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
 
         runGame('RtsClient.surrenderGame');
 
-        runGame('SetPauseMenuVisibility false');
+        hidePauseMenu();
 
     };
 

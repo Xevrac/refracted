@@ -72,6 +72,76 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         } catch (e) { /* ignore */ }
     }
 
+    var CHAT_FADE_MS = 260;
+    var chatHideTimer = null;
+    var chatVisToken = 0;
+
+    function chatPanel() {
+        var nodes = document.getElementsByClassName('chat-panel');
+        return (nodes && nodes.length) ? nodes[0] : null;
+    }
+
+    function hasClass(el, name) {
+        return !!(el && (' ' + el.className + ' ').indexOf(' ' + name + ' ') !== -1);
+    }
+
+    function setChatShown(on) {
+        var panel = chatPanel();
+        if (!panel) {
+            return;
+        }
+        if (on) {
+            if (!hasClass(panel, 'is-shown')) {
+                panel.className += ' is-shown';
+            }
+            return;
+        }
+        if (!hasClass(panel, 'is-shown')) {
+            return;
+        }
+        panel.className = String(panel.className)
+            .replace(/\bis-shown\b/g, ' ')
+            .replace(/\s+/g, ' ')
+            .replace(/^\s+|\s+$/g, '');
+    }
+
+    // The view is shown while the panel is still transparent, then the class fades it in.
+    function revealChat() {
+        if (chatHideTimer) {
+            $timeout.cancel(chatHideTimer);
+            chatHideTimer = null;
+        }
+        var token = ++chatVisToken;
+        runGame('SetChatVisibility true');
+        $timeout(function () {
+            if (token !== chatVisToken) {
+                return;
+            }
+            setChatShown(true);
+        }, 32);
+    }
+
+    function concealChat() {
+        // Bump the token first so a fade-in still waiting to add .is-shown does not bring it back.
+        var token = ++chatVisToken;
+        if (chatHideTimer) {
+            $timeout.cancel(chatHideTimer);
+            chatHideTimer = null;
+        }
+        if (!hasClass(chatPanel(), 'is-shown')) {
+            runGame('SetChatVisibility false');
+            return;
+        }
+        setChatShown(false);
+        chatHideTimer = $timeout(function () {
+            chatHideTimer = null;
+            if (token !== chatVisToken) {
+                return;
+            }
+            runGame('SetChatVisibility false');
+        }, CHAT_FADE_MS);
+    }
+
     function scrollHistory() {
         $timeout(function () {
             var el = document.getElementById('chat-history');
@@ -304,7 +374,7 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
             activeHideTimer = null;
             if (shownByActivity && !chatUiOpen && visibilityMode() === 'active') {
                 shownByActivity = false;
-                runGame('SetChatVisibility false');
+                concealChat();
             }
         }, ACTIVE_SHOW_MS);
     }
@@ -315,7 +385,7 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         if (mode === 'never' || chatUiOpen) {
             return;
         }
-        runGame('SetChatVisibility true');
+        revealChat();
         if (mode === 'active') {
             shownByActivity = true;
             hideAfterActivity();
@@ -475,13 +545,13 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
         shownByActivity = false;
         releaseChatFocus();
         if (visibilityMode() !== 'always') {
-            runGame('SetChatVisibility false');
+            concealChat();
         }
     };
 
     $scope.openChat = function () {
         markOpened();
-        runGame('SetChatVisibility true');
+        revealChat();
         scheduleFocus();
     };
 
@@ -565,7 +635,7 @@ CCApp.controller('IngameChatController', function ($scope, $timeout) {
     } catch (e) { /* ignore */ }
 
     if (visibilityMode() === 'always') {
-        runGame('SetChatVisibility true');
+        revealChat();
     }
     pollServer();
 

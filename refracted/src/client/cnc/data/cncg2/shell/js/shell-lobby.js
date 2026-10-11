@@ -1963,6 +1963,34 @@
             if (!$rootScope.lobbyOpen) {
                 return;
             }
+            // An error dialog left by a held step: Esc is its OK button, it does not walk back past it.
+            if ($scope._startError) {
+                $scope.dismissStartError();
+                packet.handled = true;
+                return;
+            }
+            if ($scope._matchError) {
+                $scope.dismissMatchError();
+                packet.handled = true;
+                return;
+            }
+            if ($scope._lobbyFullError) {
+                $scope.dismissLobbyFull();
+                packet.handled = true;
+                return;
+            }
+            // A held step (finding a server, joining a lobby, starting the match) has no way back:
+            // leaving half-way through strands the seat or the match on the server. Esc is ignored
+            // until the step ends or fails.
+            if ($scope._starting || $scope._findingMatch || $scope._joinStatus) {
+                packet.handled = true;
+                return;
+            }
+            if ($scope._joinPasswordPrompt) {
+                $scope.cancelJoinPassword();
+                packet.handled = true;
+                return;
+            }
             if (window.CncLobbyColorPicker && CncLobbyColorPicker.isOpen && CncLobbyColorPicker.isOpen()) {
                 CncLobbyColorPicker.close();
                 packet.handled = true;
@@ -2743,6 +2771,92 @@
             stopRosterPoll();
         }
 
+        // ---- Server version parity (H476) ----
+        // A server runs one Prism build and only a client on that build can play on it. The server
+        // reports its prism.core.dll version (`g.version`); this client's is the build-info one.
+        function prismBuildKey(v) {
+            var m = String(v || '').match(/^\s*(\d+)\.(\d+)\.(\d+)/);
+            return m ? (m[1] + '.' + m[2] + '.' + m[3]) : '';
+        }
+
+        function compareBuildKeys(a, b) {
+            var x = a.split('.');
+            var y = b.split('.');
+            var i;
+            for (i = 0; i < 3; i++) {
+                var d = (Number(x[i]) || 0) - (Number(y[i]) || 0);
+                if (d !== 0) {
+                    return d;
+                }
+            }
+            return 0;
+        }
+
+        function localPrismBuild() {
+            var v = '';
+            try {
+                v = window.__PRISM_VERSION || '';
+            } catch (e) { /* ignore */ }
+            return prismBuildKey(v || $rootScope.buildPrism);
+        }
+
+        // 'ok' | 'outdated' (server older, or too old to report) | 'newer' (server ahead of this client).
+        function serverVersionState(g) {
+            var mine = localPrismBuild();
+            if (!mine) {
+                return 'ok';   // this client's build is unknown: nothing to compare against
+            }
+            var theirs = prismBuildKey(g && g.version);
+            if (!theirs) {
+                return 'outdated';
+            }
+            var d = compareBuildKeys(theirs, mine);
+            return d === 0 ? 'ok' : (d < 0 ? 'outdated' : 'newer');
+        }
+
+        // Marks rows this client cannot play on as not joinable, so the browser greys them out and
+        // the Join button, the Joinable filter and Find a match all skip them.
+        function annotateServerVersions(games) {
+            var i;
+            for (i = 0; i < (games || []).length; i++) {
+                var g = games[i];
+                if (!g) {
+                    continue;
+                }
+                g.versionState = serverVersionState(g);
+                if (g.versionState !== 'ok') {
+                    g.joinable = false;
+                }
+            }
+            return games || [];
+        }
+
+        $scope.browserStateLabel = function (g) {
+            if (g && g.versionState === 'outdated') {
+                return 'Outdated';
+            }
+            if (g && g.versionState === 'newer') {
+                return 'Update required';
+            }
+            return (g && g.phase) || '';
+        };
+
+        $scope.browserVersionTip = function (g) {
+            if (!g || !g.versionState || g.versionState === 'ok') {
+                return '';
+            }
+            var theirs = prismBuildKey(g.version) || 'an older build';
+            return g.versionState === 'newer'
+                ? 'This server runs Prism ' + theirs + '. Update your client to join.'
+                : 'This server runs ' + (prismBuildKey(g.version) ? 'Prism ' + theirs : theirs) +
+                    ' and cannot be joined from Prism ' + localPrismBuild() + '.';
+        };
+
+        $scope.browserFlagUrl = function (g) {
+            var cc = g && g.region ? String(g.region) : '';
+            return /^[A-Za-z]{2}$/.test(cc) ? '/cnc/flag/' + cc.toLowerCase() + '.png' : '';
+        };
+
         function gameHasRoom(g) {
             if (!g || g.joinable === false || !(g.gid > 0)) {
                 return false;
@@ -2919,7 +3033,15 @@
 
             httpRequest('GET', '/cnc/dedicated-pool').then(function (pool) {
                 httpRequest('GET', '/cnc/game-list').then(function (data) {
-                    var joinable = joinableMatchRows((data && data.games) ? data.games : []);
+                    var rows = annotateServerVersions((data && data.games) ? data.games : []);
+                    var joinable = joinableMatchRows(rows);
+                    var otherBuild = 0;
+                    var r;
+                    for (r = 0; r < rows.length; r++) {
+                        if (rows[r] && rows[r].versionState && rows[r].versionState !== 'ok') {
+                            otherBuild++;
+                        }
+                    }
                     probeMatchPings(joinable, 1500, function () {
                         $timeout(function () {
                             if (!$scope._findingMatch) {
@@ -2931,7 +3053,10 @@
                             var populated = !!(target && (Number(target.humans) || 0) > 0);
 
                             if (!populated && (idlePool <= 0 || !target)) {
-                                if (stabilizingIn > 0) {
+                                if (!target && otherBuild > 0) {
+                                    failFind('No servers on your version (Prism ' + localPrismBuild() +
+                                        ') are available, check back later.');
+                                } else if (stabilizingIn > 0) {
                                     failFind('Server is still recycling — try again in a moment.');
                                 } else {
                                     failFind('No idle servers found, check back later.');
@@ -4190,7 +4315,7 @@
             httpRequest('GET', '/cnc/game-list').then(function (data) {
                 $timeout(function () {
                     if (data && data.games) {
-                        var filtered = applyBrowserFilter(data.games);
+                        var filtered = applyBrowserFilter(annotateServerVersions(data.games));
                         $scope.browserGames = filtered;
                         syncBrowserSelection($scope.visibleBrowserGames());
                         refreshPingForRows(filtered);

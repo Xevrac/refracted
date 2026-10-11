@@ -44,7 +44,7 @@
                         <span class="cc-lobby-browser__ping" ng-class="pingTone(g)"></span>
                         {{ formatPing(g) }}
                     </span>
-                    <span class="cc-lobby-browser__col cc-lobby-browser__col--state">{{ g.phase }}</span>
+                    <span class="cc-lobby-browser__col cc-lobby-browser__col--state" data-tip="{{ browserVersionTip(g) }}">{{ browserStateLabel(g) }}</span>
                 </button>
                 <div class="cc-lobby-browser__empty" ng-show="!visibleBrowserGames().length">No servers match this filter.</div>
             </div>
@@ -63,7 +63,8 @@
                 <ul class="cc-lobby-browser__stats">
                     <li><span>PLAYERS</span><strong>{{ selectedBrowserGame.humans }}/{{ selectedBrowserGame.maxPlayers || 8 }}</strong></li>
                     <li><span>PING</span><strong>{{ formatPing(selectedBrowserGame) }}</strong></li>
-                    <li><span>STATE</span><strong>{{ selectedBrowserGame.phase }}</strong></li>
+                    <li><span>STATE</span><strong>{{ browserStateLabel(selectedBrowserGame) }}</strong></li>
+                    <li><span>VERSION</span><strong>{{ selectedBrowserGame.version || 'UNKNOWN' }}</strong></li>
                     <li><span>PASSWORD</span><strong>{{ selectedBrowserGame.passwordProtected ? 'YES' : 'NO' }}</strong></li>
                     <li><span>ID</span><strong>{{ selectedBrowserGame.gid || '—' }}</strong></li>
                 </ul>

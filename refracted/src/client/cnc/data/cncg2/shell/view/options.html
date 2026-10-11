@@ -34,13 +34,13 @@
 
                     <div class="opt-group">
                         <label class="opt-label-main">Game Display Mode</label>
-                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.gamefullscreen == true}"><input type="radio" name="gameMode" ng-value="true" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Full Screen</label>
+                        <label class="opt-radio" ng-class="{'opt-radio--on': settings.gamefullscreen == true}"><input type="radio" name="gameMode" ng-value="true" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Fullscreen</label>
                         <label class="opt-radio" ng-class="{'opt-radio--on': settings.gamefullscreen == false}"><input type="radio" name="gameMode" ng-value="false" ng-model="settings.gamefullscreen" ng-change="applyGraphicsMode()"> Windowed</label>
                     </div>
 
                     <div class="opt-row clearfix">
                         <div class="opt-col-half">
-                            <label class="opt-label-main">Full Screen Resolution</label>
+                            <label class="opt-label-main">Fullscreen Resolution</label>
                             <select class="opt-select" ng-model="settings.fullscreenResolution" ng-options="r for r in fullscreenResolutionOptions" ng-change="applyFullscreenResolution()"></select>
                         </div>
                         <div class="opt-col-half">

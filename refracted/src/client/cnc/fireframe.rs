@@ -562,15 +562,20 @@ pub fn pushes_after_update_mesh_connection(gid: i64, pid: i64) -> BlazeResult<Ve
     }])
 }
 
-pub fn pushes_player_join_completed(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
-    let body = super::build_game_manager_notify_player_join_completed(gid)?;
+/// (H471) JoinCompleted names the persona whose client reported mesh. "The host of `gid`" is the
+/// same player only while the lobby host is the one being answered.
+pub fn pushes_player_join_completed(gid: i64, pid: i64) -> BlazeResult<Vec<OutgoingPush>> {
+    super::game_state::mark_host_join_completed(gid);
+    let mut body = Vec::new();
+    body.extend_from_slice(&crate::blaze::tdf::TdfEncoder::encode_long("GID ", gid));
+    body.extend_from_slice(&crate::blaze::tdf::TdfEncoder::encode_long("PID ", pid));
     let wire = notification_envelope(0x0004, 0x001E, &body);
     let pl = wire.len();
     Ok(vec![OutgoingPush {
         wire,
         component: 0x0004,
         command: 0x001E,
-        tdf_body: body.to_vec(),
+        tdf_body: body,
         blaze_send_label: "NotifyPlayerJoinCompleted after updateMeshConnection",
         info_log_line: format!(
             "[Blaze→Client] GameManager.NotifyPlayerJoinCompleted Component=4, Command=30, Size={}, MsgType=NOTIFICATION, MsgNum=0",

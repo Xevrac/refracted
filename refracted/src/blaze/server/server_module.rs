@@ -567,7 +567,7 @@ impl BlazeProtocolServer {
             .map(|g| g.protocol)
             .unwrap_or_else(|| "Fire2Frame".to_string());
         if protocol.eq_ignore_ascii_case("fireframe") {
-            match Self::handle_blaze_protocol_fireframe(stream, addr, name, &mut state).await {
+            match crate::session::session_module::scope_blaze_session(Some(sid), Self::handle_blaze_protocol_fireframe(stream, addr, name, &mut state)).await {
                 Ok(()) => {}
                 Err(BlazeError::InvalidPacket(msg))
                     if msg == "fireframe parser mismatch with incoming stream" =>
@@ -582,7 +582,7 @@ impl BlazeProtocolServer {
                 Err(e) => return Err(e),
             }
         } else {
-            Self::handle_blaze_protocol(stream, addr, name, &mut state).await?;
+            crate::session::session_module::scope_blaze_session(Some(sid), Self::handle_blaze_protocol(stream, addr, name, &mut state)).await?;
         }
 
         Ok(())
@@ -608,7 +608,7 @@ impl BlazeProtocolServer {
             .map(|g| g.protocol)
             .unwrap_or_else(|| "Fire2Frame".to_string());
         if protocol.eq_ignore_ascii_case("fireframe") {
-            match Self::handle_blaze_protocol_fireframe(stream, addr, name, &mut state).await {
+            match crate::session::session_module::scope_blaze_session(Some(sid), Self::handle_blaze_protocol_fireframe(stream, addr, name, &mut state)).await {
                 Ok(()) => {}
                 Err(BlazeError::InvalidPacket(msg))
                     if msg == "fireframe parser mismatch with incoming stream" =>
@@ -622,7 +622,7 @@ impl BlazeProtocolServer {
                 Err(e) => return Err(e),
             }
         } else {
-            Self::handle_blaze_protocol(stream, addr, name, &mut state).await?;
+            crate::session::session_module::scope_blaze_session(Some(sid), Self::handle_blaze_protocol(stream, addr, name, &mut state)).await?;
         }
 
         Ok(())
@@ -2419,6 +2419,10 @@ impl BlazeProtocolServer {
                 let _request_qtype = u16::from_be_bytes([buffer[8], buffer[9]]);
                 let packet_id = u16::from_be_bytes([buffer[10], buffer[11]]);
                 let payload = buffer[12..total_packet_size].to_vec();
+                // (H471) The session id is a thread-local on a multi-thread runtime: it holds only for
+                // the synchronous stretch after it is set. Set it before anything reads it (the reset
+                // pre-reply below does) and again after every await in this packet's handling.
+                crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
                 if let Some(sid) = state.blaze_session_id {
                     crate::session::blaze_sessions::note_clnt_if_preauth(
                         sid,
@@ -2698,6 +2702,8 @@ impl BlazeProtocolServer {
                 if !blaze_send(&mut stream, &response_data, addr, name, "REPLY").await? {
                     return Ok(());
                 }
+                // (H471) Awaited: the joinGame / reset follow-ups below read the session again.
+                crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
 
                 if crate::common::game::get_current_game_id() == "cnc" {
                     if let Some(sid) = state.blaze_session_id {
@@ -2790,6 +2796,7 @@ impl BlazeProtocolServer {
                     && component == 0x0004
                     && command == 0x0008
                 {
+                    crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
                     if let Some((gid, pid, attrs)) =
                         crate::client::cnc::game_state::take_last_attr_change()
                     {
@@ -2837,6 +2844,7 @@ impl BlazeProtocolServer {
                             );
                         }
 
+                        crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
                         if attrs.contains_key("_startpoint") {
                             crate::client::cnc::game_state::fanout_player_attrib_change(
                                 gid,
@@ -2939,11 +2947,18 @@ impl BlazeProtocolServer {
                         let gid = crate::blaze::tdf::TdfEncoder::find_long_field(&payload, "GID ")
                             .or_else(|| crate::blaze::tdf::TdfEncoder::find_long_field(&payload, "GID"))
                             .unwrap_or(1);
-                        let local_pid = {
-                            let s = crate::session::get_user_session();
-                            if s.persona_id == 0 { 1000 } else { s.persona_id as i64 }
-                        };
                         crate::session::session_module::set_current_blaze_session_id(Some(sid));
+                        // (H471) The persona of the connection that sent this report. The process-wide
+                        // session is some other player as soon as two clients are connected, and the
+                        // ACTIVE_CONNECTED built from it was dropped by the client it was sent to.
+                        let local_pid = crate::session::blaze_sessions::get_session(sid)
+                            .and_then(|s| s.persona_id)
+                            .filter(|&p| p != 0)
+                            .map(|p| p as i64)
+                            .unwrap_or_else(|| {
+                                let (p, _) = crate::client::cnc::cnc_game_client_identity();
+                                if p == 0 { 1000 } else { p as i64 }
+                            });
                         let mesh_result = match crate::client::cnc::game_state::is_lobby_player_session(gid, sid) {
                             Some(player_pid) => crate::client::cnc::game_state::MeshUpdateResult::Push(
                                 crate::client::cnc::game_state::on_player_mesh_update(gid, player_pid),
@@ -3006,6 +3021,7 @@ impl BlazeProtocolServer {
                     && component == 0x0004
                     && command == 0x000F
                 {
+                    crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
                     if let Some((gid, pid, blobs)) =
                         crate::client::cnc::game_state::take_last_custom_data_change()
                     {
@@ -3060,6 +3076,7 @@ impl BlazeProtocolServer {
                     && component == 0x0004
                     && command == 0x000F
                 {
+                    crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
                     let gid = crate::blaze::tdf::TdfEncoder::find_long_field(&payload, "GID ")
                         .or_else(|| crate::blaze::tdf::TdfEncoder::find_long_field(&payload, "GID"))
                         .unwrap_or(1);
@@ -3140,6 +3157,7 @@ impl BlazeProtocolServer {
                     && component == 0x0004
                     && command == 0x0026
                 {
+                    crate::session::session_module::set_current_blaze_session_id(state.blaze_session_id);
                     if let Some((gid, player)) =
                         crate::client::cnc::game_state::take_last_add_queued()
                     {

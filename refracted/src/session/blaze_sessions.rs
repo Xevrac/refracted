@@ -154,7 +154,15 @@ pub fn register(peer: std::net::SocketAddr, listener: &str) -> u64 {
 
 /// Copy LSX/global user fields into every active Blaze row (for Sessions UI). Safe to call often.
 pub fn sync_all_from_global_session() {
-    let snapshot = clone_user_session_if_set();
+    // (H471) Headless mysql: every game client is bound to its own persona by its own Blaze login
+    // (`set_client_identity`). Copying the process-wide session here gave each new connection the
+    // persona of whoever signed in first, and a connection that closed before it logged in then took
+    // that player out of their lobby (`unregister` -> `purge_persona_from_lobbies`).
+    let snapshot = if crate::nexus::identity::client_join_requires_login() {
+        None
+    } else {
+        clone_user_session_if_set()
+    };
     let mut m = registry().lock();
     if let Some(s) = snapshot {
         for e in m.values_mut() {

@@ -3,10 +3,12 @@
 
 pub mod dedicated_pool;
 pub mod fireframe;
+mod flags;
 pub mod game_reporting;
 pub mod game_state;
 pub mod msgsystem;
 mod news_proxy;
+mod remote_fetch;
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -282,6 +284,10 @@ fn content_type_for(path: &Path) -> &'static str {
 
 /// CNC probe HTTP routes (`/cnc/probe-dump`, `/cnc/online-count`, `/cnc/build-info`).
 pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<HttpResponse> {
+    // (H471) A shell request is not a Blaze connection. The worker thread may still hold the session
+    // id of the last Blaze packet it served; without this the handlers below resolved "the current
+    // player" to whoever that packet belonged to.
+    crate::session::session_module::set_current_blaze_session_id(None);
     let is_post = method.eq_ignore_ascii_case("POST");
     let is_get = method.eq_ignore_ascii_case("GET");
     if !is_post && !is_get {
@@ -302,6 +308,12 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
         }
         if base == "cnc/news-image" {
             return Some(news_proxy::handle_image(query));
+        }
+    }
+    // GET /cnc/flag/{cc}.png -- server browser region flags.
+    if is_get {
+        if let Some(file) = base.strip_prefix("cnc/flag/") {
+            return Some(flags::handle_flag(file));
         }
     }
     if base == "cnc/online-count" && is_get {
@@ -1404,6 +1416,8 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     let mut simu_cloud: u16 = 0;
     let mut qos: u16 = 0;
     let mut name = String::new();
+    let mut version = String::new();
+    let mut region = String::new();
     let parse_u16 = |v: &str| percent_decode_plus(v).parse().unwrap_or(0);
     let parse_kv = |k: &str,
                     v: &str,
@@ -1432,6 +1446,14 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
             if let Some((k, v)) = pair.split_once('=') {
                 if k == "name" {
                     name = percent_decode_plus(v).chars().take(32).collect();
+                    continue;
+                }
+                if k == "version" {
+                    version = percent_decode_plus(v);
+                    continue;
+                }
+                if k == "region" {
+                    region = percent_decode_plus(v);
                     continue;
                 }
                 parse_kv(
@@ -1531,6 +1553,7 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
         (simu_cloud != 0).then_some(simu_cloud),
         (qos != 0).then_some(qos),
         (!name.trim().is_empty()).then_some(name.as_str()),
+        &dedicated_pool::ServerBuildLabel::from_raw(&version, &region),
     );
     match note {
         dedicated_pool::EnginePeerNote::Rejected => HttpResponse::new(
@@ -1630,6 +1653,11 @@ fn handle_cnc_leave_game(query: Option<&str>) -> HttpResponse {
             }
         }
     }
+    // (H473) A leave is always the requesting shell's own. Its login key says who that is; `pid`
+    // is only trusted when no key came with the request.
+    if let Some((persona, _)) = request_identity(query, &[]) {
+        pid = persona;
+    }
     if pid <= 0 {
         let (persona, _) = cnc_game_client_identity();
         if persona != 0 {
@@ -1642,6 +1670,13 @@ fn handle_cnc_leave_game(query: Option<&str>) -> HttpResponse {
             "application/json",
             br#"{"ok":false,"error":"gid required"}"#.to_vec(),
         );
+    }
+    if pid <= 0 && crate::nexus::identity::client_join_requires_login() {
+        // On a shared server an anonymous leave has nobody to remove. It used to fall through to
+        // `force` with pid 0, which empties the lobby of every human.
+        crate::console_println!("[CNC] leave-game gid={} ignored: no login key and no pid", gid);
+        let body = serde_json::json!({ "ok": false, "error": "pid required", "gid": gid });
+        return HttpResponse::new(400, "application/json", body.to_string().into_bytes());
     }
     let body = game_state::leave_gameroom_ex(gid, pid, force || pid <= 0);
     crate::debug_println!(
@@ -2503,6 +2538,11 @@ pub fn cnc_game_client_identity() -> (u64, String) {
             }
         }
     }
+    // (H471) Headless mysql has no process-wide player. A caller with no persona of its own (not
+    // signed in yet, a dedicated server, a shell request) must not borrow another player's.
+    if crate::nexus::identity::client_join_requires_login() {
+        return (0, "Player".to_string());
+    }
     let s = get_user_session();
     let persona = if s.persona_id == 0 { 1000 } else { s.persona_id };
     let name = if s.display_name.is_empty() {
@@ -2527,6 +2567,9 @@ fn cnc_effective_email() -> String {
             }
         }
     }
+    if crate::nexus::identity::client_join_requires_login() {
+        return String::new();
+    }
     get_user_session().email
 }
 
@@ -2547,6 +2590,11 @@ pub fn cnc_effective_identity() -> (u64, String) {
                 }
             }
         }
+    }
+    // (H471) Headless mysql has no process-wide player. A caller with no persona of its own (not
+    // signed in yet, a dedicated server, a shell request) must not borrow another player's.
+    if crate::nexus::identity::client_join_requires_login() {
+        return (0, "Player".to_string());
     }
     let s = get_user_session();
     let persona = if s.persona_id == 0 { 1000 } else { s.persona_id };
@@ -4124,11 +4172,12 @@ fn extract_attr_level(create_request: &[u8]) -> Option<String> {
 
 /// Host persona for replicated GAME fields; full 64-bit (Nexus persona ids exceed i32).
 fn cnc_notify_host_persona() -> i64 {
-    let session = crate::session::get_user_session();
-    if session.persona_id == 0 {
+    // (H471) The connection being served, not the process-wide session.
+    let (persona, _) = cnc_game_client_identity();
+    if persona == 0 {
         1000
     } else {
-        session.persona_id as i64
+        persona as i64
     }
 }
 
@@ -4178,7 +4227,16 @@ fn build_client_replicated_game_data(
     gid: i64,
 ) -> BlazeResult<Vec<u8>> {
     let session = crate::session::get_user_session();
-    let uid = cnc_notify_host_persona();
+    // (H471) ADMN is this game's host, as on the join path below. `seed_from_reset` has run by the
+    // time the Setup is built, so the row is there; the requester is the fallback.
+    let uid = {
+        let host = game_state::host_persona_for_gid(gid);
+        if host != 0 {
+            host
+        } else {
+            cnc_notify_host_persona()
+        }
+    };
     let dedicated = dedicated_pool::host_for_gid(gid);
     let topology_persona = dedicated.map(|d| d.persona_id).unwrap_or(uid);
     let _display_name = if session.display_name.is_empty() {

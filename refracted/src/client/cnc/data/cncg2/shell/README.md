@@ -235,6 +235,12 @@ cards, the spectator card and in lobby chat. Never the house colour: that is the
 In-game chat is friend or foe as the reader sees it: you and your allies blue, enemies red, team channel
 green, spectators grey; a developer or playtester tag wins over that.
 
+Esc in the lobby (`cnc:escape` in `js/shell-lobby.js`): while a held step is showing (finding a server,
+joining a lobby, starting the match: `_findingMatch`, `_joinStatus`, `_starting`) Esc is ignored, since
+backing out half-way strands the seat or the match on the server. On the error dialog such a step leaves
+(`_startError`, `_matchError`, `_lobbyFullError`) Esc is the OK button. Quitting (`quittingOpen`) already
+ignores Esc in the shell and in the pause menu. Any new held dialog must be added to that check.
+
 ## News (NEWS panel)
 
 Articles come from the Aurora site (`refracted_cnc/frontend`, admin page `/news`), not from this

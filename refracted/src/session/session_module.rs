@@ -177,6 +177,37 @@ pub fn current_blaze_session_id() -> Option<u64> {
     CURRENT_BLAZE_SESSION_ID.with(|c| c.get())
 }
 
+/// (H474) Runs a connection's whole handler with its Blaze session id set on every poll.
+///
+/// The id is a thread-local and the runtime is multi-threaded: after any `.await` the handler can
+/// resume on another worker, where the id belonged to whichever connection ran there last. That
+/// put one player's persona on another player's join (ACTIVE_CONNECTED, JoinCompleted, ADMN).
+/// Setting it per poll, and putting the previous value back afterwards, makes it follow the task.
+pub fn scope_blaze_session<F: std::future::Future>(id: Option<u64>, inner: F) -> BlazeSessionScope<F> {
+    BlazeSessionScope { id, inner: Box::pin(inner) }
+}
+
+pub struct BlazeSessionScope<F> {
+    id: Option<u64>,
+    inner: std::pin::Pin<Box<F>>,
+}
+
+impl<F: std::future::Future> std::future::Future for BlazeSessionScope<F> {
+    type Output = F::Output;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<F::Output> {
+        struct Restore(Option<u64>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                CURRENT_BLAZE_SESSION_ID.with(|c| c.set(self.0));
+            }
+        }
+        let this = self.get_mut();
+        let _restore = Restore(CURRENT_BLAZE_SESSION_ID.with(|c| c.replace(this.id)));
+        std::future::Future::poll(this.inner.as_mut(), cx)
+    }
+}
+
 /// Increment updateNetworkInfo call count and return the count
 pub fn increment_update_network_info_count() -> u32 {
     let mut global = GLOBAL_SESSION.lock();

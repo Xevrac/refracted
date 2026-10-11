@@ -26,6 +26,8 @@ struct PendingEnginePeer {
     peer_host: Option<String>,
     noted_at_unix: u64,
     name: Option<String>,
+    version: Option<String>,
+    region: Option<String>,
 }
 
 fn pool() -> &'static Mutex<HashMap<u64, DedicatedServerEntry>> {
@@ -208,6 +210,45 @@ pub struct DedicatedServerEntry {
     /// Server name from the dedicated's `-name`
     #[serde(default)]
     pub configured_name: Option<String>,
+    /// (H476) The dedicated's prism.core.dll file version, as the client shell shows its own.
+    /// A client only joins servers on its own build; `None` is a server older than the report.
+    #[serde(default)]
+    pub version: Option<String>,
+    /// (H476) Two-letter country code of the server (`-Prism.Region`, else its Windows region).
+    #[serde(default)]
+    pub region: Option<String>,
+}
+
+/// (H476) Version and region as reported by the dedicated (`/cnc/dedicated-engine-peer`).
+#[derive(Debug, Clone, Default)]
+pub struct ServerBuildLabel {
+    pub version: Option<String>,
+    pub region: Option<String>,
+}
+
+impl ServerBuildLabel {
+    pub fn from_raw(version: &str, region: &str) -> Self {
+        let version = version.trim();
+        let version = (!version.is_empty()
+            && version.len() <= 64
+            && version
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+')))
+        .then(|| version.to_string());
+        let region = region.trim();
+        let region = (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
+            .then(|| region.to_ascii_uppercase());
+        Self { version, region }
+    }
+}
+
+fn apply_build_label_on_entry(e: &mut DedicatedServerEntry, label: &ServerBuildLabel) {
+    if label.version.is_some() {
+        e.version = label.version.clone();
+    }
+    if label.region.is_some() {
+        e.region = label.region.clone();
+    }
 }
 
 /// Seconds to wait after unload before sending cmd 220.
@@ -690,6 +731,13 @@ fn apply_pending_on_entry(e: &mut DedicatedServerEntry, pending: &PendingEngineP
     if pending.name.is_some() {
         e.configured_name = pending.name.clone();
     }
+    apply_build_label_on_entry(
+        e,
+        &ServerBuildLabel {
+            version: pending.version.clone(),
+            region: pending.region.clone(),
+        },
+    );
     apply_prism_tcp_on_entry(e, pending.msg_sys, pending.simu_cloud, pending.qos);
     e.last_event_unix_secs = now_secs();
 }
@@ -764,6 +812,7 @@ fn stash_pending_engine_peer(
     simu_cloud: Option<u16>,
     qos: Option<u16>,
     name: Option<&str>,
+    label: &ServerBuildLabel,
 ) {
     if !is_usable_dedicated_game_udp_port(port) {
         return;
@@ -792,6 +841,8 @@ fn stash_pending_engine_peer(
         peer_host: host.clone(),
         noted_at_unix: now_secs(),
         name: name.map(str::to_string),
+        version: label.version.clone(),
+        region: label.region.clone(),
     });
     crate::debug_println!(
         "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m EnginePeer UDP :{} msgsys={:?} simucloud={:?} pending (pool not ready yet; peer={})",
@@ -886,6 +937,7 @@ pub fn note_dedicated_engine_peer_report(
     simu_cloud: Option<u16>,
     qos: Option<u16>,
     name: Option<&str>,
+    label: &ServerBuildLabel,
 ) -> EnginePeerNote {
     if !is_usable_dedicated_game_udp_port(port) {
         return EnginePeerNote::Rejected;
@@ -896,6 +948,9 @@ pub fn note_dedicated_engine_peer_report(
         attach_prism_tcp_ports(sid, msg_sys, simu_cloud, qos);
         if let Some(n) = name {
             set_configured_name(sid, n);
+        }
+        if let Some(e) = pool().lock().get_mut(&sid) {
+            apply_build_label_on_entry(e, label);
         }
         EnginePeerNote::Applied { session: sid }
     };
@@ -916,7 +971,7 @@ pub fn note_dedicated_engine_peer_report(
     if let Some(sid) = note_dedicated_engine_peer_udp_sole(port) {
         return attach(sid);
     }
-    stash_pending_engine_peer(port, peer_host, msg_sys, simu_cloud, qos, name);
+    stash_pending_engine_peer(port, peer_host, msg_sys, simu_cloud, qos, name, label);
     EnginePeerNote::Pending
 }
 
@@ -1066,6 +1121,8 @@ fn ensure_pool_entry(blaze_session_id: u64) {
             display_name: s.display_name,
             server_hostname: None,
             configured_name: None,
+            version: None,
+            region: None,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1092,6 +1149,8 @@ fn ensure_pool_entry(blaze_session_id: u64) {
             display_name: None,
             server_hostname: None,
             configured_name: None,
+            version: None,
+            region: None,
             persona_id: None,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1822,6 +1881,8 @@ pub fn sync_from_blaze_sessions() {
             display_name: s.display_name.clone(),
             server_hostname: None,
             configured_name: None,
+            version: None,
+            region: None,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,

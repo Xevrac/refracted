@@ -293,7 +293,10 @@ fn kick_clients_on_match_lost(gid: i64, reason: i32) {
     } else {
         Vec::new()
     };
-    let fallback_pid = {
+    // (H471) The process-wide session is one arbitrary player on a shared server: no fallback there.
+    let fallback_pid = if crate::nexus::identity::client_join_requires_login() {
+        0
+    } else {
         let s = crate::session::get_user_session();
         if s.persona_id == 0 {
             0
@@ -681,6 +684,7 @@ pub fn on_player_mesh_update(gid: i64, pid: i64) -> Vec<super::fireframe::Outgoi
 fn schedule_synthetic_player_mesh(gid: i64, sid: u64, pid: i64) {
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        crate::session::session_module::set_current_blaze_session_id(None);
         let pushes = on_player_mesh_update(gid, pid);
         if !pushes.is_empty() {
             super::fireframe::enqueue_pending_pushes(sid, pushes);
@@ -714,6 +718,10 @@ fn resolve_joining_client_pid(gid: i64, client_sid: u64) -> i64 {
         .map(|p| p as i64)
         .filter(|p| *p != 0)
         .or_else(|| {
+            // (H471) Not on a shared server: that session is some other player.
+            if crate::nexus::identity::client_join_requires_login() {
+                return None;
+            }
             let s = crate::session::get_user_session();
             (s.persona_id != 0).then_some(s.persona_id as i64)
         })
@@ -730,6 +738,7 @@ fn resolve_joining_client_pid(gid: i64, client_sid: u64) -> i64 {
 fn schedule_synthetic_client_mesh_if_needed(gid: i64, client_sid: u64, pid: i64) {
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        crate::session::session_module::set_current_blaze_session_id(None);
         let already = orchestration()
             .lock()
             .get(&gid)
@@ -849,6 +858,16 @@ pub fn complete_dedicated_host_setup(
 
 /// Client reported mesh via `updateMeshConnection`. Defer until host setup when orchestrating reset.
 pub fn on_client_mesh_update(gid: i64, pid: i64) -> MeshUpdateResult {
+    // (H468) Once the match is running, a mesh report from the orchestrating client is that client
+    // connecting to a late joiner, not its own join. Answering it with the join burst again
+    // (ACTIVE_CONNECTED, NotifyPlayerJoinCompleted for the host) re-ran join completion on a client
+    // that was already in game and took it down. The RPC itself is still acknowledged.
+    if get_phase(gid) == GamePhase::InGame {
+        super::msgsystem::log::log_orch_milestone(&format!(
+            "Mesh update from the in-game client ignored (game {gid}): the match has started"
+        ));
+        return MeshUpdateResult::Push(Vec::new());
+    }
     note_client_mesh_connected(gid);
     let mut m = orchestration().lock();
     let Some(entry) = m.get_mut(&gid) else {
@@ -868,7 +887,7 @@ pub fn on_client_mesh_update(gid: i64, pid: i64) -> MeshUpdateResult {
     drop(m);
     let mut out = mesh_active_connected_and_game_ready_pushes(gid, pid).unwrap_or_default();
     // JoinCompleted after InitiateConnections, not on the same tick.
-    if let Ok(join_done) = super::fireframe::pushes_player_join_completed(gid) {
+    if let Ok(join_done) = super::fireframe::pushes_player_join_completed(gid, pid) {
         if let Some(connected_at) = out
             .iter()
             .position(|p| p.component == 0x0004 && p.command == 116)
@@ -2982,7 +3001,17 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         .map(|g| g.host_persona)
         .filter(|&h| h > 0)
         .unwrap_or_else(host_persona);
-    let host_name = host_display_name();
+    // (H471) The name follows the host persona. The requester's own name is only right when the
+    // requester is that host, or when no row exists yet.
+    let seated_host_name = games().lock().get(&gid).and_then(|g| {
+        g.players
+            .iter()
+            .find(|p| !p.is_ai && p.persona_id == host)
+            .map(|p| p.display_name.clone())
+    });
+    let host_name = seated_host_name
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(host_display_name);
     let uuid = resolve_uuid(request_payload);
     let map_path = get_map_path(gid);
     let map_for_defaults = if map_path.is_empty() {
@@ -3004,7 +3033,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
     merge_pending_into_player(gid, &mut host_player, map_for_defaults, true);
     let mut players = vec![host_player];
     players.extend(lobby_occupants_for_handoff(gid, host));
-    materialize_pending_humans(gid, host, map_for_defaults, &mut players);
+    report_unseated_pending_humans(gid, host, &players);
     let human_n = players.iter().filter(|p| !p.is_ai).count();
     let ai_n = players.iter().filter(|p| p.is_ai).count();
     tracing::info!(
@@ -3110,12 +3139,11 @@ fn lobby_occupants_for_handoff(gid: i64, host: i64) -> Vec<CncPlayer> {
     out
 }
 
-fn materialize_pending_humans(
-    gid: i64,
-    host: i64,
-    map_path: &str,
-    players: &mut Vec<CncPlayer>,
-) {
+/// (H472) Pending `/cnc/player-attrs` rows do not seat anyone. A seat is made by the game client's
+/// Blaze `joinGame` (`ensure_client_player`); a shell that only posted attrs has no client in the
+/// game, and seating it put a "PlayerN" nobody controls into the match. The rows are kept, so a
+/// join that lands later still picks its attrs up (`merge_pending_into_player`).
+fn report_unseated_pending_humans(gid: i64, host: i64, players: &[CncPlayer]) {
     let extra: Vec<i64> = games()
         .lock()
         .iter()
@@ -3124,41 +3152,30 @@ fn materialize_pending_humans(
         .collect();
     let mut source = vec![gid];
     source.extend(extra);
-    let pending = pending_player_attrs().lock();
-    let mut rows: Vec<(i64, IndexMap<String, String>)> = Vec::new();
-    for src in source {
-        if let Some(by_pid) = pending.get(&src) {
+    let mut unseated: Vec<i64> = Vec::new();
+    {
+        let pending = pending_player_attrs().lock();
+        for src in source {
+            let Some(by_pid) = pending.get(&src) else {
+                continue;
+            };
             for (pid, attrs) in by_pid {
-                rows.push((*pid, attrs.clone()));
+                if *pid <= 0 || *pid == host || attrs_mark_ai(attrs) {
+                    continue;
+                }
+                if players.iter().any(|p| p.persona_id == *pid) || unseated.contains(pid) {
+                    continue;
+                }
+                unseated.push(*pid);
             }
         }
     }
-    drop(pending);
-    for (pid, attrs) in rows {
-        if pid <= 0 || pid == host || attrs_mark_ai(&attrs) {
-            continue;
-        }
-        if players.iter().any(|p| p.persona_id == pid) {
-            continue;
-        }
-        let slot = next_free_slot(players);
-        let team = attrs
-            .get("_team")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or_else(|| balanced_join_team(players));
-        let mut player = CncPlayer {
-            persona_id: pid,
-            display_name: format!("Player{}", slot + 1),
-            slot,
-            team,
-            is_ai: false,
-            ready: false,
-            attribs: default_human_attribs_for_map(map_path, slot, team),
-            custom_data: IndexMap::new(),
-            stat: PROS_STAT_ACTIVE_CONNECTING,
-        };
-        merge_pending_into_player(gid, &mut player, map_path, false);
-        players.push(player);
+    if !unseated.is_empty() {
+        crate::console_println!(
+            "[CNC] seed_from_reset gid={} not seated (lobby attrs but no Blaze join): {:?}",
+            gid,
+            unseated
+        );
     }
 }
 
@@ -3717,7 +3734,11 @@ pub fn clear_lobby_humans(gid: i64) {
 }
 
 pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_json::Value {
-    let session_pid = {
+    // (H473) "The session's player" only exists on a single-user desktop. On a shared server it is
+    // one arbitrary player, and a leave with no pid removed them.
+    let session_pid = if crate::nexus::identity::client_join_requires_login() {
+        0
+    } else {
         let s = get_user_session();
         if s.persona_id == 0 {
             0
@@ -4996,12 +5017,11 @@ pub fn browser_game_list_json() -> serde_json::Value {
         } else if game.is_standby || humans == 0 {
             ("Standby", assignable)
         } else {
+            // (H469) A running match is listed but cannot be joined: nothing seats a newcomer in a
+            // match in progress, and the join notifies reached the players who were in it.
             (
                 game.phase.label(),
-                matches!(
-                    game.phase,
-                    GamePhase::PreGame | GamePhase::Resetable | GamePhase::InGame
-                ),
+                matches!(game.phase, GamePhase::PreGame | GamePhase::Resetable),
             )
         };
         let ping_host = pool_entry.as_ref().map(|e| {
@@ -5035,6 +5055,9 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "isStandby": game.is_standby,
             "passwordProtected": !game.password.is_empty(),
             "passwordAttr": "_password",
+            // (H476) The shell compares `version` with its own Prism build; `region` is the flag.
+            "version": pool_entry.as_ref().and_then(|e| e.version.clone()),
+            "region": pool_entry.as_ref().and_then(|e| e.region.clone()),
         }));
     }
     drop(map);
@@ -5085,6 +5108,8 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "pingPort": crate::client::cnc::dedicated_pool::msg_sys_port(&entry),
             "isStandby": true,
             "passwordProtected": false,
+            "version": entry.version.clone(),
+            "region": entry.region.clone(),
         }));
     }
 
@@ -5118,13 +5143,20 @@ pub fn gids_for_human_persona(persona_id: i64) -> Vec<i64> {
 
 /// Dedicated reset host: move local player out of `ACTIVE_CONNECTING` after platform-host init.
 pub fn mark_host_join_completed(gid: i64) {
-    let host = host_persona();
+    let ambient = host_persona();
     let mut games = games().lock();
     let Some(game) = games.get_mut(&gid) else {
         return;
     };
+    // (H471) Only this game's host. Matching "the connection being served" as well moved a second
+    // player to slot 0 whenever this ran on another player's connection or on a timer.
+    let host = if game.host_persona != 0 {
+        game.host_persona
+    } else {
+        ambient
+    };
     for player in &mut game.players {
-        if player.persona_id == host || player.persona_id == game.host_persona {
+        if player.persona_id == host {
             player.stat = PROS_STAT_ACTIVE_CONNECTING;
             player.slot = 0;
         }
@@ -5138,9 +5170,11 @@ pub fn host_player_for_gid(gid: i64) -> CncPlayer {
         .lock()
         .get(&gid)
         .and_then(|g| {
+            // (H471) The recorded host first; the connection being served only when there is none.
             g.players
                 .iter()
-                .find(|p| p.persona_id == g.host_persona || p.persona_id == host)
+                .find(|p| p.persona_id == g.host_persona)
+                .or_else(|| g.players.iter().find(|p| p.persona_id == host))
                 .cloned()
         })
         .unwrap_or_else(|| CncPlayer {
