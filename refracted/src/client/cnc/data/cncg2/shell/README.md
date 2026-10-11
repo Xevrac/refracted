@@ -89,7 +89,8 @@ Aurora (Default) shows the preferred general (OPTIONS → GAMEPLAY → Lobby def
 bust portraits on lobby cards. The general shown is the one the player last played (Refracted
 records it with each game report: `/cnc/match-record` `lastGeneralId`), else the preferred general.
 `js/shell-general-art.js` maps a general to its menu art (next section); the lobby busts come from the
-game's `UTFWinAssets\images\UserPortraits` through `/cnc/utfwin/...`.
+game's `UTFWinAssets\images\UserPortraits`, copied into the shell at `view/image/portraits/` (the two
+misspelled game files renamed to their icon names: `AG_UrbanCombat_01_UP.png`, `EG_RapidAssault_01_UP.png`).
 
 ### General art (main menu)
 
@@ -200,8 +201,8 @@ pieces that differ (section heads, segmented buttons and colour swatches in plac
 
 The Aurora server browser lists every server (there is no map pick to filter by).
 
-The menu art ships with the shell (`images/general-art/`). Lobby busts, minimaps, the spectator icon and the
-Marauder fallback come from the game's `UTFWinAssets` through `/cnc/utfwin/...` (`CNC_GAME_DIR` or `CNC_UTFWIN_DIR`).
+The menu art (`images/general-art/`) and the lobby busts (`view/image/portraits/`) ship with the shell.
+Minimaps, the spectator icon and the Marauder fallback come from the game's `UTFWinAssets` through `/cnc/utfwin/...` (`CNC_GAME_DIR` or `CNC_UTFWIN_DIR`).
 
 Refracted serves the shell from its build output (`target\<profile>\data\client\cnc`), which the build
 copies from `src\client\cnc\data`. After editing the shell, rebuild Refracted or copy the changed files

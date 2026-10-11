@@ -280,9 +280,10 @@
         ]
     };
     var GENERAL_ICON_DIR = 'view/image/generals/';
-    var BUST_DIR = '/cnc/utfwin/images/UserPortraits/';
-    // The game's bust files misspell two generals.
-    var BUST_FILE_FIXES = { AG_UrbanCombat_01: 'AG_UrbanConbat_01', EG_RapidAssault_01: 'EG_RapidAssult_01' };
+    // Lobby card busts: the game's UTFWinAssets/images/UserPortraits, shipped with the shell so they
+    // show whether or not the backend can see a game directory. The two files the game misspells
+    // (AG_UrbanConbat_01, EG_RapidAssult_01) are stored under their general's icon name.
+    var BUST_DIR = 'view/image/portraits/';
     var FACTION_ICON = {
         APA: 'view/image/Factionlogos/APA_sm.png',
         EU: 'view/image/Factionlogos/EU_sm.png',
@@ -801,8 +802,8 @@
             return avatarForSlot(slot);
         };
 
-        // Aurora (Default) lobby cards show the game's bust portrait (UTFWinAssets/images/UserPortraits);
-        // the square icon stays the <img cc-fallback-src> when the backend cannot see the game directory.
+        // Aurora (Default) lobby cards show the game's bust portrait (view/image/portraits, copied from
+        // UTFWinAssets/images/UserPortraits); the square icon stays the <img cc-fallback-src>.
         $scope.slotPortrait = function (slot) {
             var icon = avatarForSlot(slot);
             if ($rootScope.shellUiTheme !== 'aurora') {
@@ -812,7 +813,7 @@
             if (!m) {
                 return icon;
             }
-            return BUST_DIR + (BUST_FILE_FIXES[m[1]] || m[1]) + '_UP.png';
+            return BUST_DIR + m[1] + '_UP.png';
         };
 
         $scope.mapCardStyle = function (map) {
@@ -4311,11 +4312,59 @@
             }
         };
 
+        function browserRowKey(g) {
+            return String(g.dedicatedSessionId != null ? g.dedicatedSessionId : '') + '|' + String(g.gid);
+        }
+
+        // Each poll returns new row objects. Handing those to ng-repeat rebuilt every row, which
+        // replayed the row entrance animation and reloaded the flags every 2 s. A row that is still
+        // listed keeps its object (and its DOM node); only its fields are updated.
+        function mergeBrowserRows(prev, next) {
+            var byKey = {};
+            var i;
+            for (i = 0; i < (prev || []).length; i++) {
+                if (prev[i]) {
+                    byKey[browserRowKey(prev[i])] = prev[i];
+                }
+            }
+            var out = [];
+            for (i = 0; i < next.length; i++) {
+                var fresh = next[i];
+                if (!fresh) {
+                    continue;
+                }
+                var row = byKey[browserRowKey(fresh)];
+                if (!row) {
+                    out.push(fresh);
+                    continue;
+                }
+                var k;
+                for (k in row) {
+                    if (row.hasOwnProperty(k) && k !== '$$hashKey' && k !== 'pingMs' && !fresh.hasOwnProperty(k)) {
+                        delete row[k];
+                    }
+                }
+                for (k in fresh) {
+                    if (!fresh.hasOwnProperty(k)) {
+                        continue;
+                    }
+                    // The list never carries a ping; keep the last measured one until the probe answers.
+                    if (k === 'pingMs' && fresh.pingMs == null) {
+                        continue;
+                    }
+                    row[k] = fresh[k];
+                }
+                out.push(row);
+            }
+            return out;
+        }
+
         $scope.refreshGameList = function () {
             httpRequest('GET', '/cnc/game-list').then(function (data) {
                 $timeout(function () {
                     if (data && data.games) {
-                        var filtered = applyBrowserFilter(annotateServerVersions(data.games));
+                        var filtered = mergeBrowserRows($scope.browserGames,
+                            applyBrowserFilter(annotateServerVersions(data.games)));
                         $scope.browserGames = filtered;
                         syncBrowserSelection($scope.visibleBrowserGames());
                         refreshPingForRows(filtered);
