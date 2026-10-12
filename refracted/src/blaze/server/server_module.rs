@@ -2547,9 +2547,10 @@ impl BlazeProtocolServer {
                                 blaze_error = crate::client::cnc::dedicated_pool
                                     ::GAMEMANAGER_ERR_NO_DEDICATED_SERVER_FOUND;
                                 crate::client::cnc::dedicated_pool::note_no_dedicated_server();
-                                crate::debug_println!(
-                                    "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m pre-reply: no idle pooled dedicated (gid={}) -- replying GAMEMANAGER_ERR_NO_DEDICATED_SERVER_FOUND ({})",
+                                crate::console_println!(
+                                    "[Lobby] gid={} REJECTED start: no free dedicated server -- {} (replied GAMEMANAGER_ERR_NO_DEDICATED_SERVER_FOUND {})",
                                     gid,
+                                    crate::client::cnc::dedicated_pool::pool_summary(),
                                     blaze_error
                                 );
                             }

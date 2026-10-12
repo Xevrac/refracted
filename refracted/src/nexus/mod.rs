@@ -7,6 +7,7 @@
 
 pub mod backend;
 pub mod identity;
+pub mod live_games;
 pub mod log;
 
 pub use backend::NexusBackend;

@@ -182,6 +182,7 @@ pub fn colorize_channel_tags(message: &str) -> String {
         ),
         ("[GOS]", "\x1b[38;2;150;150;255m[GOS]\x1b[0m"),
         ("[CNC]", "\x1b[38;2;255;215;0m[CNC]\x1b[0m"),
+        ("[Lobby]", "\x1b[38;2;255;150;60m[Lobby]\x1b[0m"),
         ("[QoS]", "\x1b[38;2;80;200;120m[QoS]\x1b[0m"),
         ("[Nexus → Blaze]", "\x1b[38;2;180;140;255m[Nexus → Blaze]\x1b[0m"),
         ("[Blaze → Nexus]", "\x1b[38;2;180;140;255m[Blaze → Nexus]\x1b[0m"),

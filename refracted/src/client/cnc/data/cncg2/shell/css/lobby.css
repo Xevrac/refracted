@@ -1382,6 +1382,161 @@
     margin-top: 10px;
 }
 
+/* Presets: one per row, the active one lit; star = default for lobbies you set up. */
+.cc-lobby__preset-list {
+    max-height: 168px;
+    overflow-y: auto;
+    border: 1px solid rgba(74, 144, 200, 0.28);
+    background: rgba(12, 22, 34, 0.92);
+}
+
+.cc-lobby__preset {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    height: 34px;
+    padding: 0 6px 0 12px;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+}
+
+.cc-lobby__preset:last-child {
+    border-bottom: 0;
+}
+
+.cc-lobby__preset.on {
+    background: rgba(74, 144, 200, 0.22);
+    -webkit-box-shadow: inset 3px 0 0 #4a90c8;
+    box-shadow: inset 3px 0 0 #4a90c8;
+}
+
+.cc-lobby__preset-name {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #ececec;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.cc-lobby__preset-star,
+.cc-lobby__preset-del {
+    width: 24px;
+    height: 24px;
+    margin-left: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #6a6250;
+    font-size: 18px;
+    line-height: 24px;
+    cursor: pointer;
+}
+
+.cc-lobby__preset-star:hover,
+.cc-lobby__preset-del:hover {
+    color: #fff;
+}
+
+.cc-lobby__preset-star.on {
+    color: #e6b322;
+}
+
+.cc-lobby__preset-blurb {
+    margin-top: 8px;
+}
+
+.cc-lobby__tweaks-toggle {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #a89a78;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+}
+
+.cc-lobby__tweaks-toggle:after {
+    content: " \25B8";
+}
+
+.cc-lobby__tweaks-toggle.open:after {
+    content: " \25BE";
+}
+
+.cc-lobby__tweaks-toggle:hover {
+    color: #e8e0c8;
+}
+
+.cc-lobby__tweaks-body {
+    padding-top: 10px;
+}
+
+.cc-lobby__options .cc-lobby__tweaks-search {
+    margin-bottom: 8px;
+}
+
+/* Scrolls once the list outgrows six rows of two. */
+.cc-lobby__tweaks-list {
+    max-height: 132px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 8px 10px;
+    border: 1px solid rgba(74, 144, 200, 0.28);
+    background: rgba(12, 22, 34, 0.92);
+}
+
+.cc-lobby__tweaks-list .cc-lobby__options-check:last-child {
+    margin-bottom: 8px;
+}
+
+.cc-lobby__tweaks-empty {
+    float: left;
+    width: 100%;
+}
+
+.cc-lobby__tweaks-list .cc-lobby__options-check {
+    float: left;
+    width: 50%;
+}
+
+.cc-lobby__preset-save {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    margin-top: 12px;
+}
+
+.cc-lobby__options .cc-lobby__preset-save .cc-lobby__password-input {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1 1 auto;
+    flex: 1 1 auto;
+    width: auto;
+}
+
+.cc-lobby__preset-save .cc-lobby__btn {
+    min-width: 0;
+    height: 32px;
+    margin-left: 8px;
+    padding: 0 14px;
+}
+
+.cc-lobby__preset-error {
+    margin-top: 6px;
+    color: #e05a4f;
+    font-size: 12px;
+}
+
 .cc-lobby__modal-box.cc-lobby__maps-modal {
     top: 10%;
     left: 50%;

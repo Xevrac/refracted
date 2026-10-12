@@ -355,133 +355,81 @@
                     </div>
                 </div>
 
-                <div class="cc-lobby__options-grid">
-                    <div class="cc-lobby__options-row">
-                        <div class="cc-lobby__options-cell cc-lobby__options-row--stub">
-                            <div class="cc-lobby__options-cell-head">
-                                <span>STARTING CASH</span>
-                                <em class="cc-lobby__options-stub">SOON</em>
-                            </div>
-                            <select ng-model="lobbyOptions.startingCash"
-                                    ng-disabled="true"
+                <div class="cc-lobby__options-section">
+                    <label class="cc-lobby__options-check"
+                           data-tip-pos="below"
+                           data-tip="Close the spectator seat for this lobby">
+                        <input type="checkbox"
+                               ng-model="lobbyOptions.disallowSpectators"
+                               ng-change="applyLobbyMatchOptions()">
+                        DISALLOW SPECTATORS
+                    </label>
+                </div>
+
+                <!-- Presets cascade the tweaks: pick one, or open Tweaks to adjust and save your own. -->
+                <div class="cc-lobby__options-section">
+                    <div class="cc-lobby__options-section-label">PRESET</div>
+                    <div class="cc-lobby__preset-list">
+                        <div class="cc-lobby__preset"
+                             ng-repeat="p in lobbyPresets()"
+                             ng-class="{on: presetIsActive(p)}"
+                             ng-click="selectPreset(p); applyLobbyMatchOptions()">
+                            <span class="cc-lobby__preset-name">{{ p.label }}</span>
+                            <button type="button" class="cc-lobby__preset-star"
+                                    ng-class="{on: presetIsDefault(p)}"
+                                    ng-click="setDefaultPreset(p, $event)"
                                     data-tip-pos="below"
-                                    data-tip="Coming soon">
-                                <option value="low">LOW</option>
-                                <option value="standard">STANDARD</option>
-                                <option value="high">HIGH</option>
-                            </select>
-                        </div>
-                        <div class="cc-lobby__options-cell cc-lobby__options-row--stub">
-                            <div class="cc-lobby__options-cell-head">
-                                <span>STARTING UNITS</span>
-                                <em class="cc-lobby__options-stub">SOON</em>
-                            </div>
-                            <select ng-model="lobbyOptions.startingUnits"
-                                    ng-disabled="true"
+                                    data-tip="{{ presetIsDefault(p) ? 'Default for lobbies you set up' : 'Make default for lobbies you set up' }}"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.5l2.9 6.2 6.6.7-5 4.5 1.4 6.6L12 17.1l-5.9 3.4 1.4-6.6-5-4.5 6.6-.7z"/></svg></button>
+                            <button type="button" class="cc-lobby__preset-del"
+                                    ng-if="!p.builtin"
+                                    ng-click="deletePreset(p, $event)"
                                     data-tip-pos="below"
-                                    data-tip="Coming soon">
-                                <option value="none">NONE</option>
-                                <option value="standard">STANDARD</option>
-                                <option value="many">MANY</option>
-                            </select>
+                                    data-tip="Delete preset">&times;</button>
                         </div>
                     </div>
-                    <div class="cc-lobby__options-row">
-                        <div class="cc-lobby__options-cell cc-lobby__options-row--stub">
-                            <div class="cc-lobby__options-cell-head">
-                                <span>MODES</span>
-                                <em class="cc-lobby__options-stub">SOON</em>
-                            </div>
-                            <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
+                    <div class="cc-lobby__options-note cc-lobby__preset-blurb">{{ activePreset() ? (activePreset().blurb || 'Your saved preset.') : 'Custom tweaks, not saved as a preset.' }}</div>
+                </div>
+
+                <div class="cc-lobby__options-section">
+                    <button type="button" class="cc-lobby__tweaks-toggle"
+                            ng-class="{open: presetUi.tweaksOpen}"
+                            ng-click="togglePresetTweaks()">TWEAKS</button>
+                    <div class="cc-lobby__tweaks-body" ng-show="presetUi.tweaksOpen">
+                        <input type="text" class="cc-lobby__password-input cc-lobby__tweaks-search"
+                               ng-model="presetUi.query"
+                               autocomplete="off"
+                               placeholder="Search tweaks">
+                        <div class="cc-lobby__tweaks-list">
+                            <label class="cc-lobby__options-check"
+                                   ng-repeat="t in presetTweaks | filter:tweakMatches"
                                    data-tip-pos="below"
-                                   data-tip="Coming soon">
+                                   data-tip="{{ t.tip }}">
                                 <input type="checkbox"
-                                       ng-model="lobbyOptions.noBaseBuilding"
-                                       ng-disabled="true">
-                                NO BASE BUILDING
+                                       ng-model="lobbyOptions[t.key]"
+                                       ng-change="applyLobbyMatchOptions()">
+                                {{ t.label | uppercase }}
                             </label>
-                            <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                   data-tip-pos="below"
-                                   data-tip="Coming soon">
-                                <input type="checkbox"
-                                       ng-model="lobbyOptions.noFogOfWar"
-                                       ng-disabled="true">
-                                NO FOG OF WAR
-                            </label>
-                        </div>
-                        <div class="cc-lobby__options-cell">
-                            <div class="cc-lobby__options-cell-head">
-                                <span>TWEAKS</span>
-                            </div>
-                            <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                   data-tip-pos="below"
-                                   data-tip="Coming soon!">
-                                <input type="checkbox"
-                                       ng-model="lobbyOptions.enableSpecialAbilities"
-                                       ng-disabled="true">
-                                SPECIAL ABILITIES
-                            </label>
-                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                       data-tip-pos="below"
-                                       data-tip="Coming soon!">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableTechTree"
-                                           ng-disabled="true">
-                                    TECH TREE
-                                </label>
-                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                       data-tip-pos="below"
-                                       data-tip="Coming soon!">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableUnlockFullFactionRoster"
-                                           ng-disabled="true">
-                                    FACTIONS ONLY
-                                </label>
-                                <label class="cc-lobby__options-check"
-                                       data-tip-pos="below"
-                                       data-tip="Structure sell completes in ~0.01 seconds">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableInstantSelling"
-                                           ng-change="applyLobbyMatchOptions()">
-                                    INSTANT SELLING
-                                </label>
-                                <label class="cc-lobby__options-check"
-                                       data-tip-pos="below"
-                                       data-tip="Allow rebuilding of destroyed oil derricks">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableRebuildableDerricks"
-                                           ng-change="applyLobbyMatchOptions()">
-                                    REBUILDABLE DERRICKS
-                                </label>
-                                <label class="cc-lobby__options-check"
-                                       data-tip-pos="below"
-                                       data-tip="Close the spectator seat for this lobby">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.disallowSpectators"
-                                           ng-change="applyLobbyMatchOptions()">
-                                    DISALLOW SPECTATORS
-                                </label>
-                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                       data-tip-pos="below"
-                                       data-tip="Coming soon">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableOilEconomy"
-                                           ng-disabled="true">
-                                    OIL ECONOMY
-                                </label>
-                                <label class="cc-lobby__options-check cc-lobby__options-check--disabled"
-                                       data-tip-pos="below"
-                                       data-tip="Coming soon">
-                                    <input type="checkbox"
-                                           ng-model="lobbyOptions.enableInfiniteResourceCenters"
-                                           ng-disabled="true">
-                                    INFINITE RESOURCE CENTERS
-                                </label>
+                            <div class="cc-lobby__options-note cc-lobby__tweaks-empty"
+                                 ng-show="!(presetTweaks | filter:tweakMatches).length">NO TWEAKS MATCH "{{ presetUi.query | uppercase }}".</div>
                         </div>
                     </div>
+                    <form class="cc-lobby__preset-save" ng-show="presetUi.saving"
+                          action="javascript:void(0)" ng-submit="confirmSavePreset()">
+                        <input type="text" class="cc-lobby__password-input"
+                               ng-model="presetUi.name"
+                               maxlength="24"
+                               autocomplete="off"
+                               placeholder="Preset name">
+                        <button type="submit" class="cc-lobby__btn">SAVE</button>
+                        <button type="button" class="cc-lobby__btn" ng-click="cancelSavePreset()">CANCEL</button>
+                    </form>
+                    <div class="cc-lobby__preset-error" ng-show="presetUi.error">{{ presetUi.error }}</div>
                 </div>
 
                 <div class="cc-lobby__options-actions">
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--browse cc-lobby__preset-save-btn"
+                            ng-hide="presetUi.saving"
+                            ng-click="beginSavePreset()">SAVE AS PRESET</button>
                     <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
                             ng-click="closeLobbyOptions()">DONE</button>
                 </div>

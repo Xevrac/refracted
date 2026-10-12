@@ -1938,6 +1938,126 @@
             }
             return false;
         };
+        // Presets (js/shell-lobby-presets.js): the active preset is whichever one the tweaks match.
+        var Presets = window.CncLobbyPresets;
+        $scope.presetTweaks = [];
+        if (Presets) {
+            angular.forEach(Presets.TWEAKS, function (t) {
+                if (!t.soon) {
+                    $scope.presetTweaks.push(t);
+                }
+            });
+        }
+        $scope.presetUi = { tweaksOpen: false, saving: false, name: '', error: '', query: '' };
+        /** Tweaks search: every word must appear in the label or its description. */
+        $scope.tweakMatches = function (t) {
+            var q = String($scope.presetUi.query || '').toLowerCase().replace(/^\s+|\s+$/g, '');
+            var hay = (t.label + ' ' + (t.tip || '')).toLowerCase();
+            var words = q ? q.split(/\s+/) : [];
+            var i;
+            for (i = 0; i < words.length; i++) {
+                if (hay.indexOf(words[i]) < 0) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $scope.lobbyPresets = function () {
+            return Presets ? Presets.list() : [];
+        };
+        $scope.activePreset = function () {
+            return Presets ? Presets.match($scope.lobbyOptions) : null;
+        };
+        $scope.presetIsActive = function (p) {
+            var a = $scope.activePreset();
+            return !!(a && p && a.id === p.id);
+        };
+        $scope.presetIsDefault = function (p) {
+            return !!(Presets && p && Presets.getDefault().id === p.id);
+        };
+        $scope.presetSummary = function () {
+            var a = $scope.activePreset();
+            return a ? a.label : 'Custom tweaks';
+        };
+        $scope.selectPreset = function (p) {
+            if (!Presets || !p) {
+                return;
+            }
+            Presets.apply(p, $scope.lobbyOptions);
+            $scope.presetUi.saving = false;
+            $scope.presetUi.error = '';
+        };
+        $scope.togglePresetTweaks = function () {
+            $scope.presetUi.tweaksOpen = !$scope.presetUi.tweaksOpen;
+        };
+        $scope.beginSavePreset = function () {
+            var a = $scope.activePreset();
+            $scope.presetUi.saving = true;
+            $scope.presetUi.error = '';
+            $scope.presetUi.name = (a && !a.builtin) ? a.label : '';
+        };
+        $scope.cancelSavePreset = function () {
+            $scope.presetUi.saving = false;
+            $scope.presetUi.error = '';
+        };
+        $scope.confirmSavePreset = function () {
+            if (!Presets) {
+                return;
+            }
+            var name = String($scope.presetUi.name || '').replace(/^\s+|\s+$/g, '');
+            var i;
+            if (!name) {
+                $scope.presetUi.error = 'Name the preset.';
+                return;
+            }
+            for (i = 0; i < Presets.list().length; i++) {
+                if (Presets.list()[i].builtin && Presets.list()[i].label.toLowerCase() === name.toLowerCase()) {
+                    $scope.presetUi.error = 'That name belongs to an Aurora preset.';
+                    return;
+                }
+            }
+            if (!Presets.save(name, $scope.lobbyOptions)) {
+                $scope.presetUi.error = 'Preset limit reached (' + Presets.MAX_CUSTOM + '). Delete one first.';
+                return;
+            }
+            $scope.presetUi.saving = false;
+            $scope.presetUi.error = '';
+        };
+        $scope.setDefaultPreset = function (p, $event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if (Presets && p) {
+                Presets.setDefault(p.id);
+            }
+        };
+        $scope.deletePreset = function (p, $event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if (Presets && p && !p.builtin) {
+                Presets.remove(p.id);
+            }
+        };
+
+        /** A lobby the local player set up (joined empty) opens on their default preset once the
+            server confirms them as host. */
+        function applyDefaultPresetIfPending() {
+            if (!Presets || !$scope._defaultPresetGid || $scope._defaultPresetGid !== String($scope.gameId)) {
+                return;
+            }
+            if (!$scope._localIsLobbyHost) {
+                return;
+            }
+            $scope._defaultPresetGid = '';
+            var p = Presets.getDefault();
+            if ($scope.presetIsActive(p)) {
+                return;
+            }
+            Presets.apply(p, $scope.lobbyOptions);
+            $scope.applyLobbyMatchOptions();
+        }
+
         $scope.lobbyRulesOpen = false;
         $scope.openLobbySummary = function ($event) {
             if ($scope.isLobbyHost && $scope.isLobbyHost()) {
@@ -2594,8 +2714,11 @@
         $scope.localSlot = localSlot;
 
         /** Team head colour from the local player's view, like Friend or Foe in a match: your team
-            green, the other red. A spectator (or no seat yet) sees both neutral. */
+            green, the other red. A spectator sees both grey; no seat yet, both neutral. */
         $scope.teamRelationClass = function (teamNum) {
+            if ($scope.localIsSpectator && $scope.localIsSpectator()) {
+                return 'au-lobby__team--spectating';
+            }
             var teams = { 1: $scope.team1 || [], 2: $scope.team2 || [] };
             var mine = 0;
             var t, i;
@@ -3812,6 +3935,7 @@
             var players = data.players || [];
             if (data.self && Number(data.admin) > 0) {
                 $scope._localIsLobbyHost = Number(data.admin) === Number(data.self);
+                applyDefaultPresetIfPending();
             }
             if (data.kicked && localPid > 0) {
                 var k;
@@ -4630,6 +4754,7 @@
             $scope._localIsLobbyHost = (!g.humans || g.humans === 0) ||
                 !(g.admin > 0) ||
                 (localPid > 0 && Number(g.admin) === Number(localPid));
+            $scope._defaultPresetGid = (!g.humans || g.humans === 0) ? String(gid) : '';
             $scope._joinedGameroom = true;
             $scope.localReady = !!$scope._localIsLobbyHost;
             $scope.allHumansReady = !!$scope._localIsLobbyHost;

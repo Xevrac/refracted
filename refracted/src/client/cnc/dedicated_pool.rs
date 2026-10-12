@@ -1986,6 +1986,24 @@ pub fn on_session_gone(blaze_session_id: u64) {
     }
 }
 
+/// One-line pool state for log lines: `2 servers: #12 in use (gid 5), #14 recycling (unload)`.
+pub fn pool_summary() -> String {
+    let entries = list_entries();
+    if entries.is_empty() {
+        return "no dedicated servers connected".to_string();
+    }
+    let parts: Vec<String> = entries
+        .iter()
+        .map(|e| match e.current_gid {
+            Some(gid) if e.state == DedicatedPoolState::InUse => {
+                format!("#{} {} (gid {})", e.blaze_session_id, e.state.label(), gid)
+            }
+            _ => format!("#{} {}", e.blaze_session_id, e.state.label()),
+        })
+        .collect();
+    format!("{} server(s): {}", entries.len(), parts.join(", "))
+}
+
 pub fn list_entries() -> Vec<DedicatedServerEntry> {
     sync_from_blaze_sessions();
     let mut v: Vec<_> = pool().lock().values().cloned().collect();

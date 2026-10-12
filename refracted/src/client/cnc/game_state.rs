@@ -276,26 +276,38 @@ pub fn notify_shell_match_lost(gid: i64, pid: i64) {
 }
 
 /// Resolve gid when the request sent 0.
+/// (H503) A lost signal with no gid names its match only when one candidate exists: with several
+/// servers, "the highest gid" was another server's match, and its players were kicked.
 fn resolve_active_match_gid(hint: i64) -> i64 {
     if hint > 0 {
         return hint;
     }
-    if let Some(gid) = orchestration()
+    let mut candidates: HashSet<i64> = orchestration()
         .lock()
         .iter()
         .filter(|(_, o)| o.client_session_id > 0)
         .map(|(gid, _)| *gid)
-        .max()
-    {
-        return gid;
+        .collect();
+    if candidates.is_empty() {
+        candidates = games()
+            .lock()
+            .iter()
+            .filter(|(_, g)| !g.is_standby && g.phase == GamePhase::InGame)
+            .map(|(gid, _)| *gid)
+            .collect();
     }
-    games()
-        .lock()
-        .iter()
-        .filter(|(_, g)| !g.is_standby && g.phase == GamePhase::InGame)
-        .map(|(gid, _)| *gid)
-        .max()
-        .unwrap_or(0)
+    if candidates.len() == 1 {
+        return candidates.into_iter().next().unwrap_or(0);
+    }
+    if !candidates.is_empty() {
+        let mut gids: Vec<i64> = candidates.into_iter().collect();
+        gids.sort_unstable();
+        tracing::warn!(
+            target: "cnc",
+            "[CNC] match lost signal without a gid is ambiguous ({gids:?}) -- no match kicked"
+        );
+    }
+    0
 }
 
 /// Notify players so they leave the match.
@@ -3900,6 +3912,37 @@ pub fn note_client_left_match(gid: i64, persona_id: i64) {
     );
 }
 
+/// (H502) A Blaze client is in one game at a time: joining `gid` ends its seat in any other
+/// lobby. A crashed client's or an unsent leave left that seat behind, so the old lobby kept the
+/// player in its roster and pushed it that lobby's notices.
+pub fn leave_other_lobbies_on_join(gid: i64, persona_id: i64) {
+    if persona_id <= 0 {
+        return;
+    }
+    let stale: Vec<i64> = {
+        let m = games().lock();
+        m.iter()
+            .filter(|(other, g)| {
+                **other != gid
+                    && g.players
+                        .iter()
+                        .any(|p| !p.is_ai && p.persona_id == persona_id)
+            })
+            .map(|(other, _)| *other)
+            .collect()
+    };
+    for other in stale {
+        let body = leave_gameroom_impl(other, persona_id, false, true);
+        crate::console_println!(
+            "[CNC] pid={} joined gid={} -- left its stale seat in gid={} -> {}",
+            persona_id,
+            gid,
+            other,
+            body
+        );
+    }
+}
+
 pub fn purge_persona_from_lobbies(persona_id: i64) {
     if persona_id <= 0 {
         return;
@@ -4525,6 +4568,56 @@ pub fn startpoint_taken_by_other(gid: i64, persona_id: i64, startpoint: i32) -> 
         .iter()
         .filter(|p| p.persona_id != persona_id && !is_observer_attrs(&p.attribs))
         .any(|p| effective_startpoint_for_player(gid, p) == startpoint)
+}
+
+/// `name (pid N)` for log lines; `pid N` when the persona is not in the lobby.
+pub fn player_label(gid: i64, persona_id: i64) -> String {
+    games()
+        .lock()
+        .get(&gid)
+        .and_then(|g| g.players.iter().find(|p| p.persona_id == persona_id))
+        .map(|p| format!("{} (pid {})", p.display_name, persona_id))
+        .unwrap_or_else(|| format!("pid {persona_id}"))
+}
+
+/// Who else holds start point `startpoint`, for the rejection log line.
+pub fn startpoint_holder(gid: i64, persona_id: i64, startpoint: i32) -> Option<String> {
+    let game = get_game(gid)?;
+    game.players
+        .iter()
+        .filter(|p| p.persona_id != persona_id && !is_observer_attrs(&p.attribs))
+        .find(|p| effective_startpoint_for_player(gid, p) == startpoint)
+        .map(|p| format!("{} (pid {})", p.display_name, p.persona_id))
+}
+
+/// Seats on `team` taken by others, out of [`LOBBY_TEAM_CAPACITY`].
+pub fn team_occupancy(gid: i64, persona_id: i64, team: i32) -> usize {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| team_size(&g.players, team, persona_id))
+        .unwrap_or(0)
+}
+
+/// `players 6/6, spectator seat taken` -- why a newcomer finds no seat.
+pub fn seat_summary(gid: i64) -> String {
+    let m = games().lock();
+    let Some(game) = m.get(&gid) else {
+        return "no game row".to_string();
+    };
+    let spectator = if game.disallow_spectators {
+        "spectators off"
+    } else if spectator_seat_open(gid, game, 0) {
+        "spectator seat open"
+    } else {
+        "spectator seat taken"
+    };
+    format!(
+        "players {}/{}, {}",
+        seated_player_count(game, 0),
+        lobby_capacity(gid, game),
+        spectator
+    )
 }
 
 pub fn is_lobby_host(gid: i64, persona_id: i64) -> bool {
@@ -5604,6 +5697,164 @@ pub fn plst_entries_for_gid(gid: i64) -> Vec<Vec<u8>> {
             };
             vec![build_plst_entry(&p)]
         })
+}
+
+/// One roster row of a [`LiveGame`].
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct LiveGamePlayer {
+    pub persona: i64,
+    pub name: String,
+    pub team: i32,
+    pub slot: i32,
+    pub ai: bool,
+    pub ready: bool,
+    pub spectator: bool,
+    pub faction: Option<String>,
+}
+
+/// A lobby or match as Nexus shows it: what it is, who is in it, and how far it has got.
+#[derive(Debug, Clone)]
+pub struct LiveGame {
+    pub gid: i64,
+    pub name: String,
+    pub map: String,
+    pub map_path: String,
+    /// `Lobby`, `Starting`, `InGame`, `PostGame`, `Standby`, `Recycling`.
+    pub phase: &'static str,
+    /// Where the game is up to, in words (`Lobby: 2/3 ready`, `Starting: players connecting`).
+    pub stage: String,
+    pub players: usize,
+    pub humans: usize,
+    pub spectators: usize,
+    pub max_players: usize,
+    pub host_persona: i64,
+    pub host_name: Option<String>,
+    pub dedicated_session: Option<u64>,
+    pub region: Option<String>,
+    pub version: Option<String>,
+    pub password_protected: bool,
+    /// Seconds since StartGame, when the match was seen to start.
+    pub match_secs: Option<u64>,
+    pub roster: Vec<LiveGamePlayer>,
+}
+
+/// Every game with a dedicated server behind it, for the Nexus live games list.
+pub fn live_games_snapshot() -> Vec<LiveGame> {
+    let games_now: Vec<CncGame> = {
+        let mut v: Vec<CncGame> = games()
+            .lock()
+            .values()
+            .filter(|g| g.dedicated_session_id.is_some())
+            .cloned()
+            .collect();
+        v.sort_by_key(|g| g.gid);
+        v
+    };
+    // (dedicated host ready, mesh connected, simucloud ready) per orchestrated gid.
+    let orch: HashMap<i64, (bool, bool, bool)> = orchestration()
+        .lock()
+        .iter()
+        .map(|(gid, o)| {
+            (*gid, (o.dedicated_host_ready, o.mesh_active_connected, o.simucloud_match_ready))
+        })
+        .collect();
+    let started: HashMap<i64, u64> = {
+        let mut m: HashMap<i64, u64> = HashMap::new();
+        for e in match_entries().lock().values() {
+            if let Some(t) = e.started {
+                let secs = t.elapsed().as_secs();
+                let slot = m.entry(e.gid).or_insert(secs);
+                *slot = (*slot).max(secs);
+            }
+        }
+        m
+    };
+
+    let mut out = Vec::new();
+    for game in games_now {
+        let Some(sid) = game.dedicated_session_id else { continue };
+        let pool = super::dedicated_pool::get_entry(sid);
+        let Some(entry) = pool.as_ref().filter(|e| e.creator_registered) else { continue };
+        let humans = game.players.iter().filter(|p| !p.is_ai).count();
+        let spectators = spectator_count(&game, 0);
+        let seated = game.players.len() - spectators;
+        let recycling = matches!(entry.state, super::dedicated_pool::DedicatedPoolState::Recycling);
+        let match_secs = started.get(&game.gid).copied();
+        let (phase, stage) = if recycling {
+            ("Recycling", "Recycling: server unloading".to_string())
+        } else if game.is_standby || humans == 0 {
+            ("Standby", "Standby: waiting for a host".to_string())
+        } else {
+            match game.phase {
+                GamePhase::InGame => (
+                    "InGame",
+                    match match_secs {
+                        Some(s) => format!("In match: {}:{:02}", s / 60, s % 60),
+                        None => "In match".to_string(),
+                    },
+                ),
+                GamePhase::PostGame => ("PostGame", "Post-game: results".to_string()),
+                GamePhase::PreGame | GamePhase::Resetable => match orch.get(&game.gid) {
+                    Some((false, _, _)) => ("Starting", "Starting: server loading map".to_string()),
+                    Some((true, false, _)) => ("Starting", "Starting: players connecting".to_string()),
+                    Some((true, true, false)) => ("Starting", "Starting: simulation setup".to_string()),
+                    Some((true, true, true)) => ("Starting", "Starting: waiting for StartGame".to_string()),
+                    None => {
+                        let players: Vec<&CncPlayer> =
+                            game.players.iter().filter(|p| !p.is_ai && !is_spectator(p)).collect();
+                        let ready = players.iter().filter(|p| p.ready).count();
+                        ("Lobby", format!("Lobby: {}/{} ready", ready, players.len()))
+                    }
+                },
+            }
+        };
+        let map_leaf = game
+            .map_path
+            .rsplit('/')
+            .next()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(if game.is_standby { "Standby" } else { "Unknown" })
+            .to_string();
+        let roster = game
+            .players
+            .iter()
+            .map(|p| LiveGamePlayer {
+                persona: p.persona_id,
+                name: p.display_name.clone(),
+                team: p.team,
+                slot: p.slot,
+                ai: p.is_ai,
+                ready: p.ready,
+                spectator: is_spectator(p),
+                faction: p.attribs.get("_faction").cloned(),
+            })
+            .collect();
+        out.push(LiveGame {
+            gid: game.gid,
+            name: super::dedicated_pool::browser_server_name(entry),
+            map: map_leaf,
+            map_path: game.map_path.clone(),
+            phase,
+            stage,
+            players: seated,
+            humans,
+            spectators,
+            max_players: lobby_capacity(game.gid, &game),
+            host_persona: game.host_persona,
+            host_name: game
+                .players
+                .iter()
+                .find(|p| p.persona_id == game.host_persona)
+                .map(|p| p.display_name.clone()),
+            dedicated_session: Some(sid),
+            region: entry.region.clone(),
+            version: entry.version.clone(),
+            password_protected: !game.password.is_empty(),
+            match_secs,
+            roster,
+        });
+    }
+    out
 }
 
 #[cfg(test)]

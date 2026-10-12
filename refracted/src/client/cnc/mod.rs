@@ -987,43 +987,69 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     }
     if pid > 0 && !is_ai_attrs && game_state::lobby_full_for(gid, pid) {
         // Pending attrs for an unseated persona would be materialised into the match.
+        crate::console_println!(
+            "[Lobby] gid={} REJECTED seat for {}: lobby full ({})",
+            gid,
+            game_state::player_label(gid, pid),
+            game_state::seat_summary(gid)
+        );
         let body = serde_json::json!({ "ok": false, "gid": gid, "pid": pid, "rejected": ["lobby_full"] });
         return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
     }
     let mut rejected: Vec<&str> = Vec::new();
+    // Human-readable reason per rejection code, for the backend log only.
+    let mut why: Vec<String> = Vec::new();
     if pid != 0 {
         if let Some(team) = attrs.get("_team").and_then(|t| t.parse::<i32>().ok()) {
             if !game_state::team_has_room(gid, pid, team) {
                 attrs.shift_remove("_team");
                 rejected.push("team_full");
+                why.push(format!(
+                    "team {} full ({}/{})",
+                    team,
+                    game_state::team_occupancy(gid, pid, team),
+                    game_state::LOBBY_TEAM_CAPACITY
+                ));
             }
         }
         if let Some(sp) = attrs.get("_startpoint").and_then(|t| t.parse::<i32>().ok()) {
             if game_state::startpoint_taken_by_other(gid, pid, sp) {
                 attrs.shift_remove("_startpoint");
                 rejected.push("startpoint_taken");
+                why.push(match game_state::startpoint_holder(gid, pid, sp) {
+                    Some(holder) => format!("start {} in use by {}", sp, holder),
+                    None => format!("start {} in use", sp),
+                });
             }
         }
         if is_ai_attrs && game_state::is_observer_attrs(&attrs) {
             attrs.shift_remove("_faction");
             rejected.push("spectator_unavailable");
-        } else if let Some(why) = game_state::check_spectator_change(gid, pid, &mut attrs) {
-            rejected.push(why);
+            why.push("AI cannot spectate".to_string());
+        } else if let Some(code) = game_state::check_spectator_change(gid, pid, &mut attrs) {
+            rejected.push(code);
+            why.push(match code {
+                "spectator_unavailable" => format!(
+                    "spectator seat unavailable ({})",
+                    game_state::seat_summary(gid)
+                ),
+                "lobby_full" => format!("no player seat to leave spectating for ({})", game_state::seat_summary(gid)),
+                other => other.to_string(),
+            });
         }
     }
+    let who = game_state::player_label(gid, pid);
     if attrs.is_empty() || (!rejected.is_empty() && attrs.keys().all(|k| k == "_isai")) {
-        crate::console_println!("[CNC] player-attrs gid={} pid={} rejected={:?}", gid, pid, rejected);
+        crate::console_println!("[Lobby] gid={} REJECTED change by {}: {}", gid, who, why.join("; "));
         let body = serde_json::json!({ "ok": false, "gid": gid, "pid": pid, "rejected": rejected });
         return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
     }
 
-    crate::console_println!(
-        "[CNC] player-attrs gid={} pid={} attrs={:?} rejected={:?}",
-        gid,
-        pid,
-        attrs,
-        rejected
-    );
+    if !why.is_empty() {
+        crate::console_println!("[Lobby] gid={} PARTLY REJECTED change by {}: {}", gid, who, why.join("; "));
+    }
+    let changed: Vec<String> = attrs.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    crate::console_println!("[Lobby] gid={} {} set {}", gid, who, changed.join(" "));
     // A player who changes their own seat (team, start, faction, general, colour) is no longer
     // ready, so they confirm the new setup. Only that player, and only for their own change: the
     // host publishing leftover start points at match start does not unready anyone.
@@ -1107,9 +1133,15 @@ fn handle_cnc_kick_player(query: Option<&str>, body: &[u8]) -> HttpResponse {
         let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
         return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
     }
+    let kicked = game_state::player_label(gid, pid);
     game_state::mark_kicked(gid, pid);
     remove_player_from_game(gid, pid, PLAYER_REMOVED_REASON_PLAYER_LEFT);
-    crate::console_println!("[CNC] kick-player gid={} pid={} by={}", gid, pid, persona);
+    crate::console_println!(
+        "[Lobby] gid={} {} kicked by host {}",
+        gid,
+        kicked,
+        game_state::player_label(gid, persona)
+    );
     let body = serde_json::json!({ "ok": true, "gid": gid, "pid": pid });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
@@ -1444,12 +1476,11 @@ fn handle_cnc_verify_game_password(query: Option<&str>, body: &[u8]) -> HttpResp
     }
     let resp = game_state::verify_game_password(gid, pid, &password);
     let ok = resp.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-    crate::debug_println!(
-        "\x1b[38;2;255;215;0m[CNC]\x1b[0m verify-game-password gid={} pid={} ok={}",
-        gid,
-        pid,
-        ok
-    );
+    if ok {
+        crate::debug_println!("[CNC] verify-game-password gid={} pid={} ok", gid, pid);
+    } else {
+        crate::console_println!("[Lobby] gid={} REJECTED password from pid {}: wrong password", gid, pid);
+    }
     HttpResponse::new(
         if ok { 200 } else { 403 },
         "application/json",
@@ -3307,28 +3338,35 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
     let (pid_u, name) = cnc_game_client_identity();
     let pid = if pid_u == 0 { 1000_i64 } else { pid_u as i64 };
     if !game_state::join_password_allowed(gid, pid) {
-        crate::debug_println!(
-            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (password required - verify via shell / ATTR _password)",
+        crate::console_println!(
+            "[Lobby] gid={} REJECTED join by {} \"{}\": password required (not verified via the shell)",
             gid,
-            pid
+            pid,
+            name
         );
         return Err(crate::common::error::BlazeError::AuthorizationRequired);
     }
     if game_state::join_denied_for(gid, pid) {
-        crate::debug_println!(
-            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame REJECTED gid={} pid={} (lobby full: no player or spectator slot available)",
+        crate::console_println!(
+            "[Lobby] gid={} REJECTED join by {} \"{}\": lobby full ({})",
             gid,
-            pid
+            pid,
+            name,
+            game_state::seat_summary(gid)
         );
         return Err(crate::common::error::BlazeError::GameFull);
     }
+    if pid_u != 0 {
+        game_state::leave_other_lobbies_on_join(gid, pid);
+    }
     if let Some(player) = game_state::ensure_client_player(gid, pid, &name) {
         game_state::clear_match_connection_lost(gid);
-        crate::debug_println!(
-            "\x1b[38;2;255;215;0m[CNC]\x1b[0m joinGame gid={} pid={} host={} (GameRoom lobby)",
+        crate::console_println!(
+            "[Lobby] gid={} {} joined (host {}; {})",
             gid,
-            pid,
-            game_state::host_persona_for_gid(gid)
+            game_state::player_label(gid, pid),
+            game_state::player_label(gid, game_state::host_persona_for_gid(gid)),
+            game_state::seat_summary(gid)
         );
         dedicated_pool::note_client_msgsys_route_from_current_session(gid, pid);
         let _ = player;
