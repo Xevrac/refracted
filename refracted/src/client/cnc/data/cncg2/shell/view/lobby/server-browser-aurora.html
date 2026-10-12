@@ -17,6 +17,7 @@
             <div class="au-browser__row au-browser__row--head">
                 <span class="au-browser__col au-browser__col--flag"></span>
                 <span class="au-browser__col au-browser__col--lock"></span>
+                <span class="au-browser__col au-browser__col--custom"></span>
                 <span class="au-browser__col au-browser__col--server">Server</span>
                 <span class="au-browser__col au-browser__col--map">Map</span>
                 <span class="au-browser__col au-browser__col--players">Players</span>
@@ -35,6 +36,11 @@
                     <span class="au-browser__col au-browser__col--lock">
                         <span class="au-browser__padlock" ng-show="g.passwordProtected" data-tip="Password protected">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg>
+                        </span>
+                    </span>
+                    <span class="au-browser__col au-browser__col--custom">
+                        <span class="au-browser__custom" ng-show="g.customTweaks" data-tip="Custom tweaks applied">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="2.4 1.8" d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5"/></svg>
                         </span>
                     </span>
                     <span class="au-browser__col au-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>

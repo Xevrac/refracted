@@ -1451,6 +1451,14 @@
     color: #e6b322;
 }
 
+/* Built-in presets: the cross stays for alignment, greyed and inert. */
+.cc-lobby__preset-del.cc-lobby__preset-del--locked,
+.cc-lobby__preset-del.cc-lobby__preset-del--locked:hover {
+    color: #6a6250;
+    opacity: 0.45;
+    cursor: default;
+}
+
 .cc-lobby__preset-blurb {
     margin-top: 8px;
 }
@@ -1525,6 +1533,9 @@
 }
 
 .cc-lobby__preset-save .cc-lobby__btn {
+    -webkit-box-flex: 0;
+    -webkit-flex: 0 0 auto;
+    flex: 0 0 auto;
     min-width: 0;
     height: 32px;
     margin-left: 8px;
@@ -1990,7 +2001,23 @@
 }
 
 .cc-lobby-browser__col--lock { width: 4%; text-align: center; }
-.cc-lobby-browser__col--server { width: 30%; }
+.cc-lobby-browser__col--custom { width: 4%; text-align: center; }
+.cc-lobby-browser__col--server { width: 26%; }
+
+/* Dashed cube: the game runs custom tweaks (Generals Classic or a custom mix). */
+.cc-lobby-browser__custom {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-top: 10px;
+    color: #c9a227;
+    vertical-align: top;
+}
+.cc-lobby-browser__custom svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
 .cc-lobby-browser__col--map { width: 24%; }
 .cc-lobby-browser__col--players { width: 12%; }
 .cc-lobby-browser__col--ping { width: 14%; }

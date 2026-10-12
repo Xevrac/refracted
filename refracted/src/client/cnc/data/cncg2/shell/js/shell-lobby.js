@@ -1824,18 +1824,27 @@
             });
         };
 
+        /** (H505) Start Battle asks Refracted whether every human is ready. All ready: the start
+            goes ahead. Otherwise Refracted posts "Ready up" to the lobby chat (at most every 5 s). */
         function requestStartFromPlayers() {
-            var now = Date.now();
-            if (($scope._startRequestAt || 0) + 5000 > now) {
+            if ($scope._startCheckInFlight) {
                 return;
             }
-            $scope._startRequestAt = now;
+            $scope._startCheckInFlight = true;
             var gid = lobbyGid();
             httpRequest('POST', withKey('/cnc/lobby-chat?gid=' + encodeURIComponent(gid)), {
                 gid: gid,
                 requestStart: true
             }).then(function (data) {
                 $timeout(function () {
+                    $scope._startCheckInFlight = false;
+                    if (data && data.allReady === true) {
+                        $scope.allHumansReady = true;
+                        $scope._startReadyConfirmed = true;
+                        $scope.startBattle();
+                        return;
+                    }
+                    $scope.allHumansReady = false;
                     applyLobbyChat(data);
                 });
             });
@@ -3949,7 +3958,6 @@
             var localStillIn = false;
             // Local resync runs after arrangeFromRoster so it never re-sends the pre-roster team.
             var resyncLocal = null;
-            var remotes = [];
             var i;
             for (i = 0; i < players.length; i++) {
                 var p = players[i];
@@ -4019,8 +4027,6 @@
                             resyncLocal = 'attrs';
                         }
                     }
-                } else {
-                    remotes.push(p);
                 }
             }
             if ($scope._rosterSawSelf && !localStillIn && $scope._joinedGameroom
@@ -4052,18 +4058,6 @@
                 localSlot().ready = true;
                 localSlot().isHost = true;
                 $scope.localReady = true;
-            }
-            if ($scope.isLobbyHost()) {
-                var playerNotReady = false;
-                for (i = 0; i < remotes.length; i++) {
-                    if (remotes[i] && !remotes[i].ready && !remotes[i].isHost) {
-                        playerNotReady = true;
-                        break;
-                    }
-                }
-                if (!playerNotReady) {
-                    $scope.allHumansReady = true;
-                }
             }
         }
 
@@ -4138,12 +4132,9 @@
             return !$scope.isSoloMap() && $scope.isLobbyHost();
         };
 
-        $scope.canStartBattle = function () {
-            if (!$scope.isLobbyHost()) {
-                return false;
-            }
+        function remoteHumanCount() {
             if ($scope.isSoloMap()) {
-                return true;
+                return 0;
             }
             var remotes = 0;
             eachOccupiedSlot(function (slot) {
@@ -4151,10 +4142,17 @@
                     remotes += 1;
                 }
             });
-            if (remotes === 0) {
-                return true;
+            if ($scope.spectatorSlot && $scope.spectatorSlot.occupied && !$scope.spectatorSlot.isLocal) {
+                remotes += 1;
             }
-            return !!$scope.allHumansReady;
+            return remotes;
+        }
+
+        $scope.canStartBattle = function () {
+            if (!$scope.isLobbyHost()) {
+                return false;
+            }
+            return remoteHumanCount() === 0 || !!$scope.allHumansReady;
         };
 
         function syncMapToServer() {
@@ -4298,10 +4296,11 @@
             if ($scope._joinedGameroom && !$scope.isLobbyHost()) {
                 return;
             }
-            if ($scope._joinedGameroom && !$scope.canStartBattle()) {
+            if ($scope._joinedGameroom && !$scope._startReadyConfirmed && remoteHumanCount() > 0) {
                 requestStartFromPlayers();
                 return;
             }
+            $scope._startReadyConfirmed = false;
             if ($scope._starting) {
                 return;
             }

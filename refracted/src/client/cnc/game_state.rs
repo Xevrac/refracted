@@ -1270,6 +1270,16 @@ pub struct CncPlayer {
 }
 
 #[derive(Clone, Debug)]
+/// Gameplay tweaks differ from Generals 2 (the shell's built-in "Generals 2" preset): Generals
+/// Classic or a custom mix. Lobby rules (password, spectators) do not count.
+fn game_tweaks_customized(game: &CncGame) -> bool {
+    !game.enable_special_abilities
+        || !game.enable_tech_tree
+        || game.enable_unlock_full_faction_roster
+        || game.enable_instant_selling
+        || !game.enable_rebuildable_derricks
+}
+
 pub struct CncGame {
     pub gid: i64,
     pub name: String,
@@ -5405,6 +5415,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
                 .unwrap_or(crate::client::cnc::dedicated_pool::DEDICATED_PING_TCP_PORT),
             "isStandby": game.is_standby,
             "passwordProtected": !game.password.is_empty(),
+            "customTweaks": game_tweaks_customized(game),
             "passwordAttr": "_password",
             // (H476) The shell compares `version` with its own Prism build; `region` is the flag.
             "version": pool_entry.as_ref().and_then(|e| e.version.clone()),

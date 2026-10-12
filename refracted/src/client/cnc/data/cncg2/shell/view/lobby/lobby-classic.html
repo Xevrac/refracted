@@ -381,10 +381,11 @@
                                     data-tip-pos="below"
                                     data-tip="{{ presetIsDefault(p) ? 'Default for lobbies you set up' : 'Make default for lobbies you set up' }}"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.5l2.9 6.2 6.6.7-5 4.5 1.4 6.6L12 17.1l-5.9 3.4 1.4-6.6-5-4.5 6.6-.7z"/></svg></button>
                             <button type="button" class="cc-lobby__preset-del"
-                                    ng-if="!p.builtin"
+                                    ng-class="{'cc-lobby__preset-del--locked': p.builtin}"
+                                    ng-attr-aria-disabled="{{p.builtin ? 'true' : 'false'}}"
                                     ng-click="deletePreset(p, $event)"
                                     data-tip-pos="below"
-                                    data-tip="Delete preset">&times;</button>
+                                    data-tip="{{ p.builtin ? 'You cannot delete the default presets.' : 'Delete preset' }}">&times;</button>
                         </div>
                     </div>
                     <div class="cc-lobby__options-note cc-lobby__preset-blurb">{{ activePreset() ? (activePreset().blurb || 'Your saved preset.') : 'Custom tweaks, not saved as a preset.' }}</div>
@@ -494,12 +495,6 @@
                 </div>
             </div>
         </div>
-        <div class="cc-lobby__modal" ng-show="_lobbyFullError">
-            <div class="cc-lobby__modal-box">
-                <div>{{ _lobbyFullError }}</div>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-click="dismissLobbyFull()">OK</button>
-            </div>
-        </div>
         <div class="cc-lobby__modal" ng-show="_joinStatus && !_starting && !serverLostError">
             <div class="cc-lobby__modal-box">
                 <div>{{ _joinStatus }}</div>
@@ -523,4 +518,12 @@
     </div>
 
     <div class="cc-lobby__browser" ng-show="lobbyView == 'browser'" ng-include="'view/lobby/server-browser-classic.html'"></div>
+
+    <!-- Outside the game-room body: a full lobby is refused from the server browser. -->
+    <div class="cc-lobby__modal" ng-show="_lobbyFullError">
+        <div class="cc-lobby__modal-box">
+            <div>{{ _lobbyFullError }}</div>
+            <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-click="dismissLobbyFull()">OK</button>
+        </div>
+    </div>
 </div>

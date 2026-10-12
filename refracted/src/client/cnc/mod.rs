@@ -1926,10 +1926,18 @@ fn handle_cnc_lobby_chat(is_post: bool, query: Option<&str>, body: &[u8]) -> Htt
             let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
         }
-        let json = game_state::lobby_chat_push_system(
+        // (H505) The start gate: Refracted's roster decides, not the host shell's copy of it.
+        if game_state::all_humans_ready(gid) {
+            let body = serde_json::json!({ "ok": true, "gid": gid, "allReady": true });
+            return HttpResponse::new(200, "application/json", body.to_string().into_bytes());
+        }
+        let mut json = game_state::lobby_chat_push_system(
             gid,
             "Lobby host has requested to Start Battle! Ready up.",
         );
+        if let Some(obj) = json.as_object_mut() {
+            obj.insert("allReady".to_string(), serde_json::Value::Bool(false));
+        }
         return HttpResponse::new(200, "application/json", json.to_string().into_bytes());
     }
     if user.is_empty() {

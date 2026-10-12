@@ -46,10 +46,10 @@
 
     var BUILTIN = [
         { id: 'generals2', label: 'Generals 2', builtin: true,
-          blurb: 'The Generals 2 rules as built.',
+          blurb: 'The Command & Conquer 2013 experience, or \'Generals 2\' as it\'s also called. Faithfully restored and preserved.',
           values: factoryValues() },
         { id: 'classic', label: 'Generals Classic', builtin: true,
-          blurb: 'Generals 1 rules: a destroyed oil derrick stays destroyed.',
+          blurb: 'All game rules and gameplay changes inspired by Generals and Zero Hour are turned ON, get the best of both worlds.',
           values: withValues({ enableRebuildableDerricks: false }) }
     ];
 
