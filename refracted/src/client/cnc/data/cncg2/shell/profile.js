@@ -175,7 +175,14 @@ CCApp.controller('ProfileController', function($scope, $rootScope, $timeout) {
                 key = CncPreLanding.getLoginKey() || '';
             }
         } catch (e) { /* ignore */ }
-        var url = '/cnc/profile' + (key ? '?key=' + encodeURIComponent(key) : '');
+        var pid = 0;
+        try {
+            if (window.CncBlazeState && CncBlazeState.getPersonaId) {
+                pid = CncBlazeState.getPersonaId() || 0;
+            }
+        } catch (e2) { /* ignore */ }
+        var url = '/cnc/profile?key=' + encodeURIComponent(key) +
+            '&pid=' + encodeURIComponent(String(pid || ''));
         try {
             var xhr = new XMLHttpRequest();
             xhr.open('GET', url, true);

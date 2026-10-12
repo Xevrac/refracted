@@ -1961,12 +1961,8 @@ fn match_record_persona(query: Option<&str>) -> Option<i64> {
             (k == "pid").then(|| percent_decode_plus(v))
         })
     });
-    if let Some(pid) = pid.and_then(|s| s.parse::<i64>().ok()).filter(|id| *id > 0) {
-        return Some(pid);
-    }
-    crate::nexus::identity::current_bound_session()
-        .map(|s| s.persona_id)
-        .filter(|id| *id > 0)
+    // Not current_bound_session(): that is the last client to bind on this host, not the caller.
+    pid.and_then(|s| s.parse::<i64>().ok()).filter(|id| *id > 0)
 }
 
 fn handle_cnc_match_record(query: Option<&str>) -> HttpResponse {

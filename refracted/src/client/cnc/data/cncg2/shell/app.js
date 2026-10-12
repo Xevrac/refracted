@@ -364,15 +364,9 @@ CCApp.controller('RootController', function($scope, $document, $rootScope, $time
                 key = CncPreLanding.getLoginKey() || '';
             }
         } catch (e) { /* ignore */ }
-        var url = '/cnc/match-record';
-        if (key) {
-            url += '?key=' + encodeURIComponent(key);
-        } else {
-            var pid = localShellPersonaId();
-            if (pid) {
-                url += '?pid=' + encodeURIComponent(String(pid));
-            }
-        }
+        var pid = localShellPersonaId();
+        var url = '/cnc/match-record?key=' + encodeURIComponent(key) +
+            '&pid=' + encodeURIComponent(String(pid || ''));
         try {
             var xhr = new XMLHttpRequest();
             xhr.open('GET', url, true);
