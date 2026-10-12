@@ -51,7 +51,10 @@
 
         <div class="au-lobby-browser__detail">
             <div class="au-browser__detail-in" ng-show="selectedBrowserGame">
-                <div class="au-browser__art" ng-style="browserMapArtStyle(selectedBrowserGame)">
+                <div class="au-browser__art" ng-class="browserArtStateClass(selectedBrowserGame)"
+                        ng-style="browserMapArtStyle(selectedBrowserGame)">
+                    <div class="au-browser__art-fx" aria-hidden="true"><i class="au-browser__art-sweep"></i><i class="au-browser__art-spin"></i></div>
+                    <div class="au-browser__art-state" ng-show="browserArtStateLabel(selectedBrowserGame)"><i></i>{{ browserArtStateLabel(selectedBrowserGame) }}</div>
                     <div class="au-browser__art-meta">
                         <strong>{{ browserMapLabel(selectedBrowserGame) }}</strong>
                         <span>{{ browserMapMode(selectedBrowserGame) }}</span>

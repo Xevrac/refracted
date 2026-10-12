@@ -1943,6 +1943,85 @@ input[type="text"], input[type="password"] {
 .au-browser__art-meta { max-width: 26.875rem; overflow: hidden; }
 .au-browser__art-meta strong { font-size: 1.5rem; color: #ffffff; white-space: nowrap; }
 .au-browser__art-meta span { margin-left: 1rem; font-size: 1.0625rem; color: #46abbb; }
+
+/* Details-panel preview per server state (browserArtStateClass). */
+.au-browser__art { overflow: hidden; }
+.au-browser__art-fx { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: none; }
+.au-browser__art-fx i { position: absolute; display: block; }
+.au-browser__art-state {
+    position: absolute;
+    left: 0.875rem;
+    top: 0.875rem;
+    height: 1.875rem;
+    padding: 0 0.75rem 0 0.625rem;
+    background: rgba(4, 12, 16, 0.9);
+    border: 1px solid rgba(95, 233, 255, 0.26);
+    line-height: 1.875rem;
+    font-size: 0.9375rem;
+    letter-spacing: 0.125rem;
+    text-transform: uppercase;
+    color: #eaf6f8;
+}
+.au-browser__art-state i {
+    display: inline-block;
+    width: 0.5625rem;
+    height: 0.5625rem;
+    margin-right: 0.5625rem;
+    border-radius: 50%;
+    vertical-align: 0.0625rem;
+    background: #46abbb;
+}
+/* In game: the map, darkened toward the label, and a pulsing live tag. */
+.au-browser__art--ingame .au-browser__art-fx {
+    display: block;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.55) 100%);
+}
+.au-browser__art--ingame .au-browser__art-state i { background: #ff5a52; animation: au-art-pulse 1.6s ease-in-out infinite; }
+/* Idle: no level loaded. A dark tactical grid, range rings and a slow sweep. */
+.au-browser__art--idle {
+    background-color: #07090c;
+    background-image:
+        radial-gradient(circle at 50% 50%, rgba(61, 158, 255, 0.16) 0, rgba(61, 158, 255, 0) 62%),
+        repeating-linear-gradient(0deg, rgba(217, 221, 226, 0.06) 0, rgba(217, 221, 226, 0.06) 1px, transparent 1px, transparent 1.75rem),
+        repeating-linear-gradient(90deg, rgba(217, 221, 226, 0.06) 0, rgba(217, 221, 226, 0.06) 1px, transparent 1px, transparent 1.75rem);
+}
+.au-browser__art--idle .au-browser__art-fx {
+    display: block;
+    background: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 2.875rem, rgba(61, 158, 255, 0.18) 2.9375rem, transparent 3rem);
+}
+.au-browser__art--idle .au-browser__art-sweep {
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 3.75rem;
+    background: linear-gradient(to bottom, rgba(61, 158, 255, 0) 0, rgba(61, 158, 255, 0.22) 100%);
+    border-bottom: 1px solid rgba(124, 192, 255, 0.55);
+    animation: au-art-sweep 4.5s linear infinite;
+}
+.au-browser__art--idle .au-browser__art-state i { background: #7dff9b; }
+/* Recycling: the server is unloading its last match. Moving hazard stripes and a spinner. */
+.au-browser__art--recycling {
+    background-color: #0b0b0c;
+    background-image: repeating-linear-gradient(-45deg, rgba(255, 196, 0, 0.1) 0, rgba(255, 196, 0, 0.1) 1.125rem, transparent 1.125rem, transparent 2.25rem);
+    background-size: 3.1875rem 3.1875rem;
+    animation: au-art-stripes 1.4s linear infinite;
+}
+.au-browser__art--recycling .au-browser__art-fx { display: block; background: rgba(0, 0, 0, 0.35); }
+.au-browser__art--recycling .au-browser__art-spin {
+    left: 50%;
+    top: 50%;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: -2.375rem 0 0 -1.375rem;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 196, 0, 0.25);
+    border-top-color: rgba(255, 196, 0, 0.9);
+    animation: au-spin 1s linear infinite;
+}
+.au-browser__art--recycling .au-browser__art-state i { background: #ffc400; }
+@keyframes au-art-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@keyframes au-art-sweep { from { transform: translateY(-3.75rem); } to { transform: translateY(14.4375rem); } }
+@keyframes au-art-stripes { from { background-position: 0 0; } to { background-position: 3.1875rem 0; } }
 .au-browser__name {
     margin: 1.5rem 0.875rem 0.75rem;
     font-family: 'AuBold', Arial, sans-serif;

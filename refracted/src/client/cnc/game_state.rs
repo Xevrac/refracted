@@ -3692,6 +3692,40 @@ pub fn leave_gameroom(gid: i64, persona_id: i64) -> serde_json::Value {
     leave_gameroom_ex(gid, persona_id, false)
 }
 
+/// (H488) `persona_id` closed its MsgSys connection to running match `gid` (hub relay): it left
+/// the match. The last human leaving reclaims the dedicated (Recycling, then Idle) exactly as an
+/// explicit leave-game does. Before InGame the join handshake owns the seat, so it is left alone.
+pub fn note_client_left_match(gid: i64, persona_id: i64) {
+    let seated = games()
+        .lock()
+        .get(&gid)
+        .map(|g| {
+            !g.is_standby
+                && g.players
+                    .iter()
+                    .any(|p| !p.is_ai && p.persona_id == persona_id)
+        })
+        .unwrap_or(false);
+    if !seated {
+        return;
+    }
+    if get_phase(gid) != GamePhase::InGame {
+        crate::console_println!(
+            "[CNC] MsgSys closed by pid={} before match start (gid={}) -- seat kept for the join",
+            persona_id,
+            gid
+        );
+        return;
+    }
+    let body = leave_gameroom_ex(gid, persona_id, false);
+    crate::console_println!(
+        "[CNC] pid={} left match gid={} (MsgSys connection closed by client) -> {}",
+        persona_id,
+        gid,
+        body
+    );
+}
+
 pub fn purge_persona_from_lobbies(persona_id: i64) {
     if persona_id <= 0 {
         return;

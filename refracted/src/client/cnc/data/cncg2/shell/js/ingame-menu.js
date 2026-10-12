@@ -263,13 +263,32 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
 
 
 
+    // (H488) The front end's per-launch login key (session cookie set by cnc-pre-landing.js).
+    // A shared server only acts on a leave it can attribute; read it, never mint a new one here.
+    function existingLoginKey() {
+        try {
+            var s = sessionStorage.getItem('cnc_login_key');
+            if (s) {
+                return s;
+            }
+        } catch (e) { /* ignore */ }
+        try {
+            var m = /(?:^|;\s*)cnc_login_key=([0-9a-f]{24})/.exec(document.cookie || '');
+            return m ? m[1] : '';
+        } catch (e2) {
+            return '';
+        }
+    }
+
     function postLeaveGame(gid, pid, cb) {
 
         var leaveUrl = '/cnc/leave-game?gid=' + encodeURIComponent(gid) +
 
             '&pid=' + encodeURIComponent(pid || 0) +
 
-            '&force=1';
+            '&force=1' +
+
+            (existingLoginKey() ? '&key=' + encodeURIComponent(existingLoginKey()) : '');
 
         var done = false;
 
@@ -518,6 +537,12 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
     document.addEventListener('mousemove', onPauseShown, true);
     document.addEventListener('mousedown', onPauseShown, true);
     document.addEventListener('keydown', onPauseShown, true);
+
+    // The game loads this view hidden at match start, so the CSS entrance has already run by
+    // the first Esc: the first open showed a finished menu (a "pop"), and only later opens --
+    // parked by hidePauseMenu -- slid in. Start parked, exactly as after a close.
+    parkMotion();
+    menuNeedsReplay = true;
 
     $scope.returnToGame = function () {
         hidePauseMenu();

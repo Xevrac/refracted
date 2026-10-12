@@ -162,6 +162,8 @@ pub async fn relay_pair(
         &format!("Client?Server (upstream {upstream_peer})"),
     );
 
+    // (H488) The player on this connection, from its ClientHello (u64 PlayerId).
+    let hello_persona = std::sync::atomic::AtomicU64::new(0);
     let client_to_server = async {
         relay_direction(
             &mut client_read,
@@ -169,6 +171,7 @@ pub async fn relay_pair(
             client_peer,
             RelayLog::ClientToServer,
             None,
+            Some(&hello_persona),
         )
         .await
     };
@@ -180,6 +183,7 @@ pub async fn relay_pair(
             upstream_peer,
             RelayLog::ServerToClient,
             match_gid,
+            None,
         )
         .await;
         // Upstream died — close the client side.
@@ -187,9 +191,12 @@ pub async fn relay_pair(
         result
     };
 
+    // A reset by the client (it quit or went back to the front end) is still the client leaving.
     let closed_by = tokio::select! {
         r = client_to_server => {
-            r?;
+            if let Err(e) = r {
+                log_rts_system(client_peer, &format!("client side ended: {e}"));
+            }
             RelayClosedBy::Client
         }
         r = server_to_client => {
@@ -199,6 +206,19 @@ pub async fn relay_pair(
     };
 
     super::log::flush_relay_log_compactor();
+
+    if matches!(closed_by, RelayClosedBy::Client) {
+        // (H488) The client closed its MsgSys connection to the match: it left (Quit, or the
+        // Defeat/Victory screen back to the front end). Nothing else reports a surrender's exit:
+        // the client goes back to its own lobby without a leave-game, so the player stayed
+        // seated and the row stayed InGame after the dedicated had unloaded.
+        let pid = hello_persona.load(std::sync::atomic::Ordering::Relaxed) as i64;
+        if let Some(gid) = match_gid.filter(|g| *g > 0) {
+            if pid > 0 {
+                super::super::game_state::note_client_left_match(gid, pid);
+            }
+        }
+    }
 
     if matches!(closed_by, RelayClosedBy::Server) {
         super::super::game_state::signal_lost_game_server(match_gid.unwrap_or(0));
@@ -225,6 +245,7 @@ async fn relay_direction<R, W>(
     peer: SocketAddr,
     direction: RelayLog,
     start_gid: Option<i64>,
+    hello_persona: Option<&std::sync::atomic::AtomicU64>,
 ) -> std::io::Result<()>
 where
     R: AsyncReadExt + Unpin,
@@ -244,6 +265,11 @@ where
 
         parse_buf.extend_from_slice(&chunk[..n]);
         while let Ok(Some((frame, consumed))) = SimpleFrame::try_read(&parse_buf) {
+            if frame.type_id == CLIENT_HELLO_TYPE_ID {
+                if let (Some(out), Some(pid)) = (hello_persona, decode_client_hello(&frame.payload)) {
+                    out.store(pid, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
             // (H415) Dedicated→client StartGame is the match start; lobby phase leaves PreGame here
             if frame.type_id == START_GAME_TYPE_ID {
                 if let Some(gid) = start_gid.filter(|g| *g > 0) {

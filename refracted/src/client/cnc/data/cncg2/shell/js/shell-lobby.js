@@ -2452,7 +2452,9 @@
 
         $scope.browserMapArtStyle = function (g) {
             var resolved = resolveBrowserMap(g);
-            if (!g || g.isStandby || g.kind === 'standby' || g.map === 'Standby') {
+            if (!g || g.isStandby || g.kind === 'standby' || g.map === 'Standby' ||
+                    browserArtState(g) === 'recycling') {
+                // Idle and recycling draw their own preview (CSS); no map is loaded.
                 return {};
             }
             return {
@@ -2461,6 +2463,44 @@
                 'background-repeat': 'no-repeat',
                 'background-size': 'cover'
             };
+        };
+
+        // Details-panel preview per server state: in game (map art, live tag), idle (no map loaded:
+        // radar), recycling (unloading: hazard stripes). Lobby rows keep the plain map art.
+        function browserArtState(g) {
+            if (!g) {
+                return '';
+            }
+            var phase = String(g.phase || '').toLowerCase();
+            if (/recycl/.test(phase)) {
+                return 'recycling';
+            }
+            if (phase === 'ingame' || phase === 'postgame') {
+                return 'ingame';
+            }
+            if (phase === 'standby' || phase === 'idle' || g.isStandby || g.kind === 'standby') {
+                return 'idle';
+            }
+            return '';
+        }
+
+        $scope.browserArtStateClass = function (g) {
+            var state = browserArtState(g);
+            return state ? 'au-browser__art--' + state : '';
+        };
+
+        $scope.browserArtStateLabel = function (g) {
+            var state = browserArtState(g);
+            if (state === 'ingame') {
+                return String((g && g.phase) || '').toLowerCase() === 'postgame' ? 'Match ending' : 'Live';
+            }
+            if (state === 'idle') {
+                return 'Idle';
+            }
+            if (state === 'recycling') {
+                return 'Recycling';
+            }
+            return '';
         };
 
         $scope.browserMapMode = function (g) {
@@ -3147,9 +3187,10 @@
             var gid = $scope.gameId || '1';
             var localPid = localPersonaId();
             stopRosterPoll();
-            var leaveUrl = '/cnc/leave-game?gid=' + encodeURIComponent(gid) +
+            // (H488) withKey: a shared server ignores a leave it cannot attribute.
+            var leaveUrl = withKey('/cnc/leave-game?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0) +
-                '&force=1';
+                '&force=1');
             if (window.CncProbe && CncProbe.log) {
                 CncProbe.log('Lobby LEAVE: POST ' + leaveUrl);
             }
@@ -4441,8 +4482,8 @@
                 }
                 var gid = $scope.gameId || '1';
                 var localPid = localPersonaId() || 0;
-                var url = '/cnc/leave-game?gid=' + encodeURIComponent(gid) +
-                    '&pid=' + encodeURIComponent(localPid) + '&force=1';
+                var url = withKey('/cnc/leave-game?gid=' + encodeURIComponent(gid) +
+                    '&pid=' + encodeURIComponent(localPid) + '&force=1');
                 try {
                     if (navigator.sendBeacon) {
                         navigator.sendBeacon(url);
