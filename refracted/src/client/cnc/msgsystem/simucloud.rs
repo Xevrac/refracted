@@ -87,7 +87,8 @@ fn create_game_options(
     options
 }
 
-const CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
+/// H498: whole budget for reaching the dedicated's SimuCloud host. Each attempt gets
+/// `MAX_SERVER_RTT` (was 500 ms, which cancelled every handshake to a farther server).
 const CONNECT_BUDGET: Duration = Duration::from_secs(12);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// Cold dedicated load can exceed 45s; wait up to this for GameReady.
@@ -526,16 +527,21 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
     let deadline = Instant::now() + CONNECT_BUDGET;
     let mut stream = None;
+    let mut last_err = String::from("no attempt");
     while Instant::now() < deadline {
-        match timeout(CONNECT_TIMEOUT, TcpStream::connect(upstream)).await {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match timeout(remaining.min(super::MAX_SERVER_RTT), TcpStream::connect(upstream)).await {
             Ok(Ok(s)) => {
                 stream = Some(s);
                 break;
             }
             Ok(Err(e)) => {
+                last_err = e.to_string();
                 log_sim_debug(&format!("Connect to {upstream} failed ({e}); retrying"));
             }
-            Err(_) => {}
+            Err(_) => {
+                last_err = "no answer to the TCP handshake (firewall or unreachable host)".into();
+            }
         }
         sleep(Duration::from_millis(200)).await;
     }
@@ -546,10 +552,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::ConnectionRefused,
                 format!(
-                    "SimuCloud host not listening on {upstream} within {:?} \
-                     -- deploy prism.cnc.network.dll (with SimuCloudChannelHost) next to \
-                     cnc.server.exe; dedicated RuntimeLog should show \
-                     [.NET] co-starting SimuCloud and [RTS/simucloud] host listening",
+                    "could not connect to the dedicated's SimuCloud host {upstream} within {:?}: {last_err}",
                     CONNECT_BUDGET
                 ),
             ));

@@ -237,6 +237,29 @@ pub fn signal_lost_game_server(gid: i64) {
     );
 }
 
+/// H500: one player's client could not reach its match's server after leaving the lobby
+/// (hub → ServerHost connect failed, or no route). Same outcome as the server closing mid-match
+/// for that player: marked lost (shell shows the lost-connection modal) and its client is told
+/// the game was destroyed, so it returns to the menu instead of waiting on the loading screen.
+pub fn signal_client_lost_game_server(gid: i64, pid: i64) {
+    if pid <= 0 {
+        if gid > 0 {
+            signal_lost_game_server(gid);
+        }
+        return;
+    }
+    note_persona_lost(pid, gid);
+    if gid > 0 {
+        note_server_lost(gid);
+        crate::client::cnc::fireframe::request_client_local_game_teardown(
+            gid,
+            pid,
+            crate::client::cnc::PLAYER_REMOVED_REASON_GAME_DESTROYED,
+        );
+    }
+    tracing::info!(target: "cnc", "[CNC] gid={gid} pid={pid} could not reach its match server -- returned to menu (lost connection)");
+}
+
 /// POST `/cnc/lost-game-server`. Marks that persona, or the match's humans if pid is 0.
 pub fn notify_shell_match_lost(gid: i64, pid: i64) {
     if pid > 0 {
@@ -609,6 +632,88 @@ pub fn start_in_progress(gid: i64) -> bool {
     orchestration_fresh(gid) && get_phase(gid) != GamePhase::InGame
 }
 
+/// H499: last failed Start Battle per lobby gid: (sequence, reason). The roster reports it so
+/// every shell in that lobby (host and members) leaves "Starting game.." with the reason,
+/// instead of waiting on a start that will never complete.
+static START_FAILURES: OnceLock<Mutex<HashMap<i64, (u64, String)>>> = OnceLock::new();
+static START_FAILURE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn start_failures() -> &'static Mutex<HashMap<i64, (u64, String)>> {
+    START_FAILURES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn start_failure_json(gid: i64) -> serde_json::Value {
+    start_failures()
+        .lock()
+        .get(&gid)
+        .map(|(seq, reason)| serde_json::json!({ "seq": seq, "reason": reason }))
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// H499: end a Start Battle that cannot complete. Clears the orchestration and the "starting"
+/// latch (this lobby and the host's other lobbies), un-readies the other humans, posts the
+/// reason to lobby chat and publishes it on the roster. The lobby, its seats and its server stay;
+/// Start Battle can be pressed again.
+pub fn abort_match_start(gid: i64, reason: &str) {
+    if get_phase(gid) == GamePhase::InGame {
+        return;
+    }
+    clear_orchestration(gid);
+    let seq = START_FAILURE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let lobbies: Vec<i64> = {
+        let mut m = games().lock();
+        let host = m.get(&gid).map(|g| g.host_persona).unwrap_or(0);
+        let mut out = Vec::new();
+        for (g, game) in m.iter_mut() {
+            if *g == gid || (host > 0 && game.host_persona == host && game.phase != GamePhase::InGame) {
+                game.starting = false;
+                out.push(*g);
+            }
+        }
+        out
+    };
+    {
+        let mut f = start_failures().lock();
+        for g in &lobbies {
+            f.insert(*g, (seq, reason.to_string()));
+        }
+    }
+    unready_all_but_host(gid);
+    let _ = lobby_chat_push_system(gid, &format!("Battle could not start: {reason}"));
+    super::msgsystem::log::log_orch_milestone(&format!(
+        "Start Battle aborted (game {gid}, lobbies {lobbies:?}): {reason}"
+    ));
+}
+
+/// H499: hard upper bound on a start. If the match has not reached InGame by `START_HOLD`
+/// after this orchestration began, it is aborted, whatever step it is stuck on.
+static STARTS_REACHED_INGAME: OnceLock<Mutex<HashMap<i64, std::time::Instant>>> = OnceLock::new();
+
+fn starts_reached_ingame() -> &'static Mutex<HashMap<i64, std::time::Instant>> {
+    STARTS_REACHED_INGAME.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn spawn_start_watchdog(gid: i64, started_at: std::time::Instant) {
+    tokio::spawn(async move {
+        tokio::time::sleep(START_HOLD).await;
+        let same_start = orchestration()
+            .lock()
+            .get(&gid)
+            .map(|o| o.started_at == started_at)
+            .unwrap_or(false);
+        let reached = starts_reached_ingame().lock().get(&gid) == Some(&started_at);
+        if same_start && !reached && get_phase(gid) != GamePhase::InGame {
+            // H500: clients already sent to match loading (GameReady pushed) are past the lobby
+            // watch: return them to the menu with the lost-connection modal.
+            let loading = game_ready_pushed().lock().contains(&gid);
+            abort_match_start(gid, "the match took too long to start. Try again.");
+            if loading {
+                signal_lost_game_server(gid);
+            }
+        }
+    });
+}
+
 /// Roster `starting` (caller holds the games lock): the latch, but only while a start is
 /// actually running -- for this gid or, for the host's own lobby (gid 1, latched by
 /// `mark_match_starting`), for the pool match that host started.
@@ -962,6 +1067,9 @@ pub fn on_cmd220_delivered_to_dedicated(gid: i64) {
         started_at: std::time::Instant::now(),
     });
 
+    if let Some(started_at) = orchestration().lock().get(&gid).map(|o| o.started_at) {
+        spawn_start_watchdog(gid, started_at);
+    }
     let gid_spawn = gid;
     tokio::spawn(async move {
         let dedicated_sid = super::dedicated_pool::peek_dedicated_for_gid(gid_spawn);
@@ -988,10 +1096,15 @@ pub fn on_cmd220_delivered_to_dedicated(gid: i64) {
                     }
                 }
             }
-            Err(e) => super::msgsystem::log::log_orch_milestone(&format!(
-                "Match orchestration failed (game {gid_spawn}): {e} \
-                 — Blaze GameReady held; client stays on lobby until retry"
-            )),
+            Err(e) => {
+                super::msgsystem::log::log_orch_milestone(&format!(
+                    "Match orchestration failed (game {gid_spawn}): {e}"
+                ));
+                abort_match_start(
+                    gid_spawn,
+                    "the server could not be reached. Try again or choose another server.",
+                );
+            }
         }
     });
 }
@@ -3335,6 +3448,9 @@ pub fn note_match_started(gid: i64) {
         }
     };
     if changed {
+        if let Some(at) = orchestration().lock().get(&gid).map(|o| o.started_at) {
+            starts_reached_ingame().lock().insert(gid, at);
+        }
         note_match_entries_started(gid);
         tracing::info!(
             target: "cnc",
@@ -4148,6 +4264,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "map": if game.map_path.is_empty() { get_map_path_locked(gid) } else { game.map_path.clone() },
         "startCount": game.start_count,
         "starting": roster_starting_locked(&m, gid),
+        "startFailure": start_failure_json(gid),
         "players": players,
         "kicked": kicked_for_gid(gid),
         "serverLost": false,

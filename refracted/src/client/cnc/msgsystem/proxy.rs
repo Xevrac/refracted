@@ -22,7 +22,10 @@ use super::wire::SimpleFrame;
 
 pub const DEDICATED_SERVERHOST_PORT: u16 = 18387;
 
-const UPSTREAM_CONNECT_TIMEOUT: Duration = Duration::from_millis(200);
+// H498: a 200 ms per-attempt cap cancelled every handshake to a server farther than 200 ms
+// round trip (overseas over the VPN), so it could never connect. Each attempt now gets
+// `MAX_SERVER_RTT` (1200 ms, the supported maximum); a lost SYN or "refused" (ServerHost not
+// listening yet) is retried with a fresh attempt until the budget ends.
 const UPSTREAM_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 /// Wait for ServerHost (load-complete / cmd 220).
 const UPSTREAM_WAIT_BUDGET: Duration = Duration::from_secs(8);
@@ -35,7 +38,8 @@ pub async fn try_connect_upstream_to(upstream: SocketAddr) -> Option<TcpStream> 
 
     while Instant::now() < deadline {
         attempts += 1;
-        match timeout(UPSTREAM_CONNECT_TIMEOUT, TcpStream::connect(upstream)).await {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match timeout(remaining.min(super::MAX_SERVER_RTT), TcpStream::connect(upstream)).await {
             Ok(Ok(stream)) => {
                 // MsgSys frames are small and latency-bound; Nagle + delayed ACK stalls each hop.
                 let _ = stream.set_nodelay(true);

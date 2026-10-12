@@ -120,6 +120,7 @@ async fn handle_conn(
     peer: SocketAddr,
     pinned_serverhost: Option<u16>,
 ) -> std::io::Result<()> {
+    let mut client_persona: Option<u64> = None;
     let (upstream, prefix, match_gid) = if let Some(serverhost) = pinned_serverhost {
         log_rts_system(
             peer,
@@ -147,6 +148,7 @@ async fn handle_conn(
         // for a client that sent none (H483).
         log_rts_system(peer, "client connected -- identifying match session");
         let id = peek_protocol_version_identity(&mut client, PROTOCOL_VERSION_WAIT).await?;
+        client_persona = id.persona;
         if let Some(hex) = id.protocol_version_hex.as_deref() {
             // (H491) Info, not debug: these lines are how a refused join is diagnosed.
             info!(
@@ -191,6 +193,11 @@ async fn handle_conn(
             "{RTS_TAG} {peer} closing -- no per-session MsgSys route \
              (refusing to splice onto another dedicated's sim)"
         );
+        // H500: a seated client is on the loading screen; send it back to the menu (lost
+        // connection). A client with no match at all has nothing to return from.
+        if let (Some(pid), Some(gid)) = (client_persona, match_gid) {
+            super::super::game_state::signal_client_lost_game_server(gid, pid as i64);
+        }
         return Ok(());
     };
 
@@ -205,9 +212,14 @@ async fn handle_conn(
     }
 
     log_upstream_missing(peer, Some(upstream));
-    warn!(
-        "{RTS_TAG} {peer} closing -- dedicated Prism ServerHost required \
-         (no embedded join host; production MsgSys is owned by prism.cnc.network.dll)"
-    );
+    warn!("{RTS_TAG} {peer} closing -- could not connect to its match ServerHost {upstream}");
+    // H500: same as the server closing mid-match: back to the menu with the lost-connection modal.
+    match (client_persona, match_gid) {
+        (Some(pid), gid) => {
+            super::super::game_state::signal_client_lost_game_server(gid.unwrap_or(0), pid as i64)
+        }
+        (None, Some(gid)) => super::super::game_state::signal_lost_game_server(gid),
+        (None, None) => {}
+    }
     Ok(())
 }

@@ -668,17 +668,32 @@ pub fn probe_host_rtt_ms(host: &str, port: Option<u16>) -> Option<u32> {
     const PROBE_TTL: Duration = Duration::from_secs(10);
     static PROBES: OnceLock<Mutex<HashMap<SocketAddr, (Instant, Option<u32>)>>> = OnceLock::new();
     let probes = PROBES.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(&(at, ms)) = probes.lock().get(&addr) {
-        if at.elapsed() < PROBE_TTL {
-            return ms;
+    // H498: the probe runs off the HTTP worker and waits up to `MAX_SERVER_RTT` (1200 ms, the
+    // supported maximum): a 500 ms cap reported every server farther than 500 ms round trip as
+    // unreachable ("—"). The row shows the last measured value while a new probe is in flight.
+    const PROBE_CONNECT: Duration = crate::client::cnc::msgsystem::MAX_SERVER_RTT;
+    let previous = {
+        let mut m = probes.lock();
+        match m.get(&addr) {
+            Some(&(at, ms)) if at.elapsed() < PROBE_TTL => return ms,
+            Some(&(_, ms)) => {
+                m.insert(addr, (Instant::now(), ms));
+                ms
+            }
+            None => {
+                m.insert(addr, (Instant::now(), None));
+                None
+            }
         }
-    }
-    let start = Instant::now();
-    let ms = TcpStream::connect_timeout(&addr, Duration::from_millis(500))
-        .ok()
-        .map(|_stream| (start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32).clamp(1, 9999));
-    probes.lock().insert(addr, (Instant::now(), ms));
-    ms
+    };
+    std::thread::spawn(move || {
+        let start = Instant::now();
+        let ms = TcpStream::connect_timeout(&addr, PROBE_CONNECT).ok().map(|_stream| {
+            (start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32).clamp(1, 9999)
+        });
+        probes.lock().insert(addr, (Instant::now(), ms));
+    });
+    previous
 }
 
 pub fn probe_server_rtt_ms(peer: &str) -> Option<u32> {

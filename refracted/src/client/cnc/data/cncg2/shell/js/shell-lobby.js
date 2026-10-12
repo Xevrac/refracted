@@ -3673,12 +3673,92 @@
             });
         };
 
+        // H499: a failed Start Battle is published on the roster (startFailure.seq/reason).
+        // Seq seen while not starting is the baseline; a higher seq during a start ends it.
+        function noteStartFailure(data) {
+            var f = data && data.startFailure;
+            var seq = (f && f.seq) ? Number(f.seq) : 0;
+            if (!$scope._starting) {
+                $scope._startFailureSeq = seq;
+                return;
+            }
+            if (seq > ($scope._startFailureSeq || 0)) {
+                $scope._startFailureSeq = seq;
+                endStartWithError('Battle could not start: ' + (f.reason || 'unknown error'));
+            }
+        }
+
+        function endStartWithError(msg) {
+            if ($scope._startTimer) {
+                $timeout.cancel($scope._startTimer);
+                $scope._startTimer = null;
+            }
+            if ($scope._poolPollTimer) {
+                $timeout.cancel($scope._poolPollTimer);
+                $scope._poolPollTimer = null;
+            }
+            stopStartWatch();
+            CncProbe.onLobbyStartResult = null;
+            CncProbe._pendingBlazeCreate = false;
+            CncProbe._inBlazeGame = false;
+            CncProbe._matchWatchArmed = false;
+            $scope._starting = false;
+            $scope._startError = msg;
+            if ($scope._joinedGameroom) {
+                startRosterPoll();
+            }
+        }
+
+        // While "Starting game.." the roster poll is off; this watch reads only the outcome.
+        function stopStartWatch() {
+            if ($scope._startWatch) {
+                $timeout.cancel($scope._startWatch);
+                $scope._startWatch = null;
+            }
+        }
+
+        function pollStartWatch() {
+            $scope._startWatch = null;
+            if (!$scope._starting || !$scope._joinedGameroom) {
+                return;
+            }
+            var gid = $scope.gameId || '1';
+            var rosterKey = (window.CncPreLanding && CncPreLanding.getLoginKey) ? CncPreLanding.getLoginKey() : '';
+            httpRequest('GET', '/cnc/lobby-roster?gid=' + encodeURIComponent(gid) +
+                (rosterKey ? '&key=' + encodeURIComponent(rosterKey) : '')).then(function (data) {
+                $timeout(function () {
+                    if (!$scope._starting) {
+                        return;
+                    }
+                    if (data && data.serverLost) {
+                        stopStartWatch();
+                        forceServerLostKick(data.message || 'Server connection lost.');
+                        return;
+                    }
+                    if (data && data.ok) {
+                        noteStartFailure(data);
+                    }
+                    if ($scope._starting && !$scope._startWatch) {
+                        $scope._startWatch = $timeout(pollStartWatch, 1500);
+                    }
+                });
+            });
+        }
+
+        function ensureStartWatch() {
+            if (!$scope._startWatch) {
+                $scope._startWatch = $timeout(pollStartWatch, 1500);
+            }
+        }
+
         function applyRosterFlags(data) {
             if (!data || !data.ok) {
                 return;
             }
+            noteStartFailure(data);
             if (data.starting) {
                 $scope._starting = true;
+                ensureStartWatch();
             }
             if (data.admin != null) {
                 $scope.lobbyAdminPersona = data.admin;
@@ -4119,6 +4199,7 @@
             }
             $scope.closeLobbyOptions();
             $scope._starting = true;
+            ensureStartWatch();
             $scope._startError = '';
             if ($rootScope.serverLostError) {
                 $rootScope.serverLostError = '';
