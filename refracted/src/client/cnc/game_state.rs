@@ -1269,7 +1269,6 @@ pub struct CncPlayer {
     pub stat: i32,
 }
 
-#[derive(Clone, Debug)]
 /// Gameplay tweaks differ from Generals 2 (the shell's built-in "Generals 2" preset): Generals
 /// Classic or a custom mix. Lobby rules (password, spectators) do not count.
 fn game_tweaks_customized(game: &CncGame) -> bool {
@@ -1280,6 +1279,7 @@ fn game_tweaks_customized(game: &CncGame) -> bool {
         || !game.enable_rebuildable_derricks
 }
 
+#[derive(Clone, Debug)]
 pub struct CncGame {
     pub gid: i64,
     pub name: String,
