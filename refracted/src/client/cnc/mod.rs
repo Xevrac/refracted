@@ -636,8 +636,52 @@ fn request_identity(query: Option<&str>, body: &[u8]) -> Option<(i64, String)> {
             .ok()
             .and_then(|v| v.get("key").and_then(|k| k.as_str()).map(|k| k.to_string()))
             .filter(|k| !k.is_empty())
-    })?;
-    identity_for_login_key(&key).filter(|(pid, _)| *pid > 0)
+    });
+    if let Some(found) = key.as_deref().and_then(identity_for_login_key).filter(|(pid, _)| *pid > 0) {
+        return Some(found);
+    }
+    // H494: the key map is in-memory, and a shell whose login carried no key (or predates a
+    // backend restart) is still the one signed-in game client behind this HTTP peer.
+    let found = identity_for_http_peer()?;
+    if let Some(key) = key.as_deref() {
+        note_login_key_persona(Some(key), found.0, &found.1);
+    }
+    Some(found)
+}
+
+/// H494: the signed-in game client (not a pooled dedicated) whose Blaze peer IP equals the
+/// current HTTP peer IP — only when exactly one persona matches.
+fn identity_for_http_peer() -> Option<(i64, String)> {
+    let ip = handlers_http_peer_ip()?;
+    let mut found: Option<(i64, String)> = None;
+    for s in crate::session::blaze_sessions::list_sessions() {
+        let Some(persona) = s.persona_id.filter(|&p| p != 0).map(|p| p as i64) else {
+            continue;
+        };
+        if dedicated_pool::dedicated_identity_for_session(s.id).is_some()
+            || s.clnt.as_deref().is_some_and(dedicated_pool::clnt_qualifies_for_pool)
+        {
+            continue;
+        }
+        let same = s
+            .peer
+            .parse::<std::net::SocketAddr>()
+            .map(|a| a.ip().to_canonical() == ip)
+            .unwrap_or(false);
+        if !same {
+            continue;
+        }
+        match &found {
+            Some((p, _)) if *p != persona => return None,
+            Some(_) => {}
+            None => found = Some((persona, s.display_name.clone().unwrap_or_default())),
+        }
+    }
+    found
+}
+
+fn handlers_http_peer_ip() -> Option<std::net::IpAddr> {
+    crate::http::handlers::handlers_module::current_http_peer().map(|a| a.ip().to_canonical())
 }
 
 fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
@@ -920,6 +964,11 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let identity = request_identity(query, body);
     if identity.is_none() {
         crate::console_println!("[CNC] player-attrs gid={} pid={} without a known login key", gid, pid);
+        // H494: an unidentified human shell must not seat a pid-0 "Guest" in a real lobby.
+        if !is_ai_attrs && pid <= 0 && crate::nexus::identity::client_join_requires_login() {
+            let body = serde_json::json!({ "ok": false, "gid": gid, "error": "unknown_login_key" });
+            return HttpResponse::new(401, "application/json", body.to_string().into_bytes());
+        }
     }
     let requester = identity.as_ref().map(|(p, _)| *p);
     if let Some((persona, _)) = identity {
@@ -1418,6 +1467,7 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     let mut name = String::new();
     let mut version = String::new();
     let mut region = String::new();
+    let mut instance = String::new();
     let parse_u16 = |v: &str| percent_decode_plus(v).parse().unwrap_or(0);
     let parse_kv = |k: &str,
                     v: &str,
@@ -1454,6 +1504,10 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
                 }
                 if k == "region" {
                     region = percent_decode_plus(v);
+                    continue;
+                }
+                if k == "instance" {
+                    instance = percent_decode_plus(v).trim().to_string();
                     continue;
                 }
                 parse_kv(
@@ -1545,9 +1599,8 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
             br#"{"ok":false,"error":"port required"}"#.to_vec(),
         );
     }
-    // (H482) Prism reports only ports. Several dedicateds can share a UDP port (every default
-    // server binds :25200), so the port alone does not name the reporter: identify it by the
-    // HTTP connection's source address, the same machine that holds its Blaze session.
+    // Source address: logging only. H497: the reporter is named by `instance` (the key its Blaze
+    // login carried), never by address or port.
     if peer.is_empty() {
         if let Some(addr) = crate::http::handlers::handlers_module::current_http_peer() {
             peer = addr.ip().to_canonical().to_string();
@@ -1555,6 +1608,7 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     }
     let note = dedicated_pool::note_dedicated_engine_peer_report(
         (session != 0).then_some(session),
+        (!instance.is_empty()).then_some(instance.as_str()),
         (!peer.is_empty()).then_some(peer.as_str()),
         port,
         (msg_sys != 0).then_some(msg_sys),
@@ -1569,10 +1623,16 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
             "application/json",
             br#"{"ok":false,"error":"port not usable (qos ephemeral or invalid)"}"#.to_vec(),
         ),
+        dedicated_pool::EnginePeerNote::NoInstance => HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"instance required (update prism.cnc.server.dll)"}"#.to_vec(),
+        ),
         dedicated_pool::EnginePeerNote::Pending => {
             let body = serde_json::json!({
                 "ok": true,
                 "pending": true,
+                "instance": instance,
                 "port": port,
                 "msgsys": msg_sys,
                 "simucloud": simu_cloud,
@@ -2018,14 +2078,8 @@ fn handle_cnc_lobby_roster(query: Option<&str>) -> HttpResponse {
         }
     }
     let mut body = game_state::lobby_roster_json(gid);
-    // Which roster entry is the requesting shell (login key from its TOKN), so it never renders itself twice.
-    let key = query.and_then(|q| {
-        q.split('&').find_map(|pair| {
-            let (k, v) = pair.split_once('=')?;
-            (k == "key").then(|| percent_decode_plus(v))
-        })
-    });
-    if let (Some(persona), Some(obj)) = (key.as_deref().and_then(persona_for_login_key), body.as_object_mut()) {
+    // Which roster entry is the requesting shell (login key, else its HTTP peer), so it never renders itself twice.
+    if let (Some(persona), Some(obj)) = (request_identity(query, &[]).map(|(p, _)| p), body.as_object_mut()) {
         obj.insert("self".into(), serde_json::json!(persona));
     }
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
@@ -2803,7 +2857,7 @@ fn handle_cnc_auth_refusal(query: Option<&str>) -> HttpResponse {
             (k == "key").then(|| percent_decode_plus(v))
         })
     });
-    let identity = key.as_deref().and_then(identity_for_login_key);
+    let identity = request_identity(query, &[]);
     let mut body = match (key, AUTH_REFUSALS.lock()) {
         (Some(key), Ok(map)) => match map.get(&key).filter(|r| r.at.elapsed() < AUTH_REFUSAL_TTL) {
             Some(r) if r.banned => serde_json::json!({
@@ -2867,6 +2921,9 @@ pub fn handle_auth_login(payload: &[u8]) -> BlazeResult<Bytes> {
         if let Some(sid) = sid {
             let (name, persona) = dedicated_pool::allocate_dedicated_identity(sid);
             crate::session::blaze_sessions::set_dedicated_identity(sid, &name, persona);
+            // H497: `TOKN = <token>:<instance key>` names this server process; its engine-peer
+            // report carries the same key.
+            dedicated_pool::note_dedicated_instance_key(sid, key);
         }
     } else if crate::nexus::identity::client_join_requires_login() {
         use crate::common::error::BlazeError;

@@ -107,6 +107,24 @@ impl AsyncWrite for BufferedStream {
     }
 }
 
+/// H496: Blaze inactivity timeout. Clients and dedicated servers ping every `pingPeriod` (30 s);
+/// a peer that sent nothing for four periods is gone (half-open TCP over a VPN, killed process) and
+/// its session — lobby seat, pool row, standby game — must be released like a closed socket.
+const BLAZE_INACTIVITY_TIMEOUT: Duration = Duration::from_secs(120);
+
+fn blaze_peer_silent(last_rx: std::time::Instant, addr: SocketAddr, listener: &str) -> bool {
+    let silent = last_rx.elapsed() >= BLAZE_INACTIVITY_TIMEOUT;
+    if silent {
+        warn!(
+            "[Blaze] [{}] {} sent nothing for {}s -- closing session (inactivity timeout)",
+            listener,
+            addr,
+            last_rx.elapsed().as_secs()
+        );
+    }
+    silent
+}
+
 async fn blaze_send(
     stream: &mut (impl AsyncWriteExt + Unpin),
     data: &[u8],
@@ -644,8 +662,12 @@ impl BlazeProtocolServer {
 
         let mut chunk = vec![0u8; 4096];
         let mut inject_rx = crate::blaze::server::inject_bus::subscribe();
+        let mut last_rx = std::time::Instant::now();
 
         loop {
+            if blaze_peer_silent(last_rx, addr, name) {
+                break;
+            }
             sync_blaze_log_peer_tags(&mut info_coalesce, &mut ping_burst, state.blaze_session_id);
             tokio::select! {
                 recv_inj = inject_rx.recv() => {
@@ -822,6 +844,7 @@ impl BlazeProtocolServer {
                 break;
             }
 
+            last_rx = std::time::Instant::now();
             crate::debug_println!("\x1b[38;2;150;150;255m[Blaze]\x1b[0m Read {} bytes from {}", n, addr);
             buffer.extend_from_slice(&chunk[..n]);
             if let Some(sid) = state.blaze_session_id {
@@ -2198,7 +2221,11 @@ impl BlazeProtocolServer {
         sync_blaze_log_peer_tags(&mut info_coalesce, &mut ping_burst, state.blaze_session_id);
         let mut inject_rx = crate::blaze::server::inject_bus::subscribe();
         let mut chunk = vec![0u8; 4096];
+        let mut last_rx = std::time::Instant::now();
         loop {
+            if blaze_peer_silent(last_rx, addr, name) {
+                return Ok(());
+            }
             sync_blaze_log_peer_tags(&mut info_coalesce, &mut ping_burst, state.blaze_session_id);
             tokio::select! {
                 recv_inj = inject_rx.recv() => {
@@ -2398,6 +2425,7 @@ impl BlazeProtocolServer {
                     if n == 0 {
                         return Ok(());
                     }
+                    last_rx = std::time::Instant::now();
                     buffer.extend_from_slice(&chunk[..n]);
 
             // Legacy FireFrame envelope:

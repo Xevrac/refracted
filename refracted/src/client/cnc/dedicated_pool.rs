@@ -13,7 +13,7 @@ use crate::blaze::tdf::TdfEncoder;
 static POOL: OnceLock<Mutex<HashMap<u64, DedicatedServerEntry>>> = OnceLock::new();
 static ASSIGNMENTS: OnceLock<Mutex<HashMap<i64, GameAssignment>>> = OnceLock::new();
 static IDENTITIES: OnceLock<Mutex<HashMap<u64, DedicatedIdentity>>> = OnceLock::new();
-/// EnginePeer reports that arrive before the dedicated is in the pool.
+/// EnginePeer reports that arrive before their server's Blaze login (keyed by instance).
 static PENDING_ENGINE_PEER: OnceLock<Mutex<Vec<PendingEnginePeer>>> = OnceLock::new();
 static LAST_NO_DEDICATED_UNIX: AtomicU64 = AtomicU64::new(0);
 
@@ -23,7 +23,8 @@ struct PendingEnginePeer {
     msg_sys: Option<u16>,
     simu_cloud: Option<u16>,
     qos: Option<u16>,
-    peer_host: Option<String>,
+    /// H497: the reporting server's instance key (its Blaze login carries the same key).
+    instance: String,
     noted_at_unix: u64,
     name: Option<String>,
     version: Option<String>,
@@ -796,22 +797,6 @@ fn apply_prism_tcp_on_entry(
     }
 }
 
-fn apply_pending_on_entry(e: &mut DedicatedServerEntry, pending: &PendingEnginePeer) {
-    e.engine_peer_udp_port = Some(pending.port);
-    if pending.name.is_some() {
-        e.configured_name = pending.name.clone();
-    }
-    apply_build_label_on_entry(
-        e,
-        &ServerBuildLabel {
-            version: pending.version.clone(),
-            region: pending.region.clone(),
-        },
-    );
-    apply_prism_tcp_on_entry(e, pending.msg_sys, pending.simu_cloud, pending.qos);
-    e.last_event_unix_secs = now_secs();
-}
-
 fn attach_prism_tcp_ports(
     blaze_session_id: u64,
     msg_sys: Option<u16>,
@@ -851,182 +836,103 @@ fn set_configured_name(blaze_session_id: u64, name: &str) {
     }
 }
 
-/// (H482) Pool entry already bound to this game UDP port **on the reporting host**. Every
-/// default dedicated listens on :25200, so without the host a second server's report claimed
-/// the first server's session: it took that session's name, version and Prism ports, its lobby
-/// row showed the wrong build, and Start Battle reset the other machine's server.
-fn find_session_by_game_udp(port: i32, peer_host: Option<&str>) -> Option<u64> {
-    pool()
-        .lock()
-        .values()
-        .find(|e| {
-            e.engine_peer_udp_port == Some(port)
-                && peer_host.map_or(true, |h| same_peer_host(&e.peer, h))
-        })
-        .map(|e| e.blaze_session_id)
+/// H497: server instance key (sent as `TOKN = <token>:<key>` on the dedicated's Blaze login and
+/// as `instance=` on its engine-peer report) → that server's Blaze session. The one identity a
+/// report and a session share; no address, port or "only candidate" matching.
+static INSTANCE_SESSIONS: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
+
+fn instance_sessions() -> &'static Mutex<HashMap<String, u64>> {
+    INSTANCE_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn peer_host_key(peer: &str) -> String {
-    let host = peer
-        .rsplit_once(':')
-        .filter(|(h, _)| !h.contains(':') || h.starts_with('['))
-        .map(|(h, _)| h)
-        .unwrap_or(peer);
-    host.trim_start_matches('[')
-        .trim_end_matches(']')
-        .to_string()
+fn session_for_instance(key: &str) -> Option<u64> {
+    instance_sessions().lock().get(key).copied()
 }
 
-/// Same reporter for pending-report replacement; an unknown host only matches an unknown host.
-fn same_reporter(a: Option<&str>, b: Option<&str>) -> bool {
-    match (a, b) {
-        (Some(a), Some(b)) => same_peer_host(a, b),
-        (None, None) => true,
-        _ => false,
-    }
-}
+const PENDING_REPORT_TTL_SECS: u64 = 600;
 
-/// Same machine: equal host text, or both loopback (127.0.0.1 vs ::1 / ::ffff:127.0.0.1).
-fn same_peer_host(a: &str, b: &str) -> bool {
-    let (a, b) = (peer_host_key(a), peer_host_key(b));
-    if a.eq_ignore_ascii_case(&b) {
-        return true;
-    }
-    let loopback = |h: &str| {
-        h.parse::<IpAddr>()
-            .map(|ip| ip.to_canonical().is_loopback())
-            .unwrap_or(false)
+/// Bind the dedicated's Blaze session to its instance key, then apply any report it already sent.
+pub fn note_dedicated_instance_key(blaze_session_id: u64, key: Option<&str>) {
+    let Some(key) = key.map(str::trim).filter(|k| !k.is_empty()) else {
+        crate::console_println!(
+            "[Dedicated pool] session #{} logged in without an instance key -- its engine-peer report cannot be bound (update prism.cnc.server.dll)",
+            blaze_session_id
+        );
+        return;
     };
-    loopback(&a) && loopback(&b)
-}
-
-fn entry_needs_engine_peer(e: &DedicatedServerEntry) -> bool {
-    e.engine_peer_udp_port
-        .filter(|&p| is_usable_dedicated_game_udp_port(p))
-        .is_none()
-}
-
-fn stash_pending_engine_peer(
-    port: i32,
-    peer_host: Option<&str>,
-    msg_sys: Option<u16>,
-    simu_cloud: Option<u16>,
-    qos: Option<u16>,
-    name: Option<&str>,
-    label: &ServerBuildLabel,
-) {
-    if !is_usable_dedicated_game_udp_port(port) {
-        return;
+    {
+        let mut m = instance_sessions().lock();
+        m.retain(|_, sid| *sid != blaze_session_id);
+        m.insert(key.to_string(), blaze_session_id);
     }
-    let host = peer_host
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| peer_host_key(s));
-    let mut q = pending_engine_peer().lock();
-    // Replace an older report from the same host and UDP port; keep other hosts' reports
-    // (H482: two machines can both report :25200).
-    q.retain(|p| !(p.port == port && same_reporter(p.peer_host.as_deref(), host.as_deref())));
-    q.push(PendingEnginePeer {
-        port,
-        msg_sys,
-        simu_cloud,
-        qos,
-        peer_host: host.clone(),
-        noted_at_unix: now_secs(),
-        name: name.map(str::to_string),
-        version: label.version.clone(),
-        region: label.region.clone(),
-    });
-    crate::debug_println!(
-        "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m EnginePeer UDP :{} msgsys={:?} simucloud={:?} pending (pool not ready yet; peer={})",
-        port,
-        msg_sys,
-        simu_cloud,
-        host.as_deref().unwrap_or("-")
+    crate::console_println!("[Dedicated pool] session #{} instance {}", blaze_session_id, key);
+    let parked: Vec<PendingEnginePeer> = {
+        let mut q = pending_engine_peer().lock();
+        let now = now_secs();
+        q.retain(|p| now.saturating_sub(p.noted_at_unix) < PENDING_REPORT_TTL_SECS);
+        let (mine, rest): (Vec<_>, Vec<_>) = q.drain(..).partition(|p| p.instance == key);
+        *q = rest;
+        mine
+    };
+    // A server reports once per bind; the newest parked report is the current one.
+    if let Some(report) = parked.last() {
+        bind_engine_peer_report(blaze_session_id, report);
+    }
+}
+
+fn forget_instance_session(blaze_session_id: u64) {
+    instance_sessions().lock().retain(|_, sid| *sid != blaze_session_id);
+}
+
+/// Apply one server's own report to its own session.
+fn bind_engine_peer_report(blaze_session_id: u64, report: &PendingEnginePeer) -> bool {
+    if !note_dedicated_engine_peer_udp(blaze_session_id, report.port) {
+        return false;
+    }
+    attach_prism_tcp_ports(blaze_session_id, report.msg_sys, report.simu_cloud, report.qos);
+    if let Some(n) = report.name.as_deref() {
+        set_configured_name(blaze_session_id, n);
+    }
+    if let Some(e) = pool().lock().get_mut(&blaze_session_id) {
+        apply_build_label_on_entry(
+            e,
+            &ServerBuildLabel {
+                version: report.version.clone(),
+                region: report.region.clone(),
+            },
+        );
+    }
+    crate::console_println!(
+        "[Dedicated pool] session #{} instance {} report: udp={} msgsys={:?} simucloud={:?} name={:?} version={:?} region={:?}",
+        blaze_session_id,
+        report.instance,
+        report.port,
+        report.msg_sys,
+        report.simu_cloud,
+        report.name,
+        report.version,
+        report.region
     );
+    true
 }
 
-/// Attach stashed EnginePeer ports to matching or sole pool entries.
-fn apply_pending_engine_peers_locked(m: &mut HashMap<u64, DedicatedServerEntry>) {
-    let mut q = pending_engine_peer().lock();
-    if q.is_empty() || m.is_empty() {
-        return;
-    }
-    let mut kept = Vec::new();
-    for pending in q.drain(..) {
-        let mut applied = false;
-        if let Some(e) = m.values_mut().find(|e| {
-            e.engine_peer_udp_port == Some(pending.port)
-                && pending
-                    .peer_host
-                    .as_deref()
-                    .map_or(true, |h| same_peer_host(&e.peer, h))
-        }) {
-            apply_pending_on_entry(e, &pending);
-            crate::debug_println!(
-                "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} EnginePeer UDP :{} (claimed pending same-game-udp)",
-                e.blaze_session_id,
-                pending.port
-            );
-            applied = true;
-        }
-        if !applied {
-            if let Some(ref host) = pending.peer_host {
-                if let Some(e) = m.values_mut().find(|e| {
-                    entry_needs_engine_peer(e) && same_peer_host(&e.peer, host)
-                }) {
-                    apply_pending_on_entry(e, &pending);
-                    crate::debug_println!(
-                        "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} EnginePeer UDP :{} (claimed pending peer {})",
-                        e.blaze_session_id,
-                        pending.port,
-                        host
-                    );
-                    applied = true;
-                }
-            }
-        }
-        if !applied {
-            let needy: Vec<u64> = m
-                .values()
-                .filter(|e| entry_needs_engine_peer(e))
-                .map(|e| e.blaze_session_id)
-                .collect();
-            if needy.len() == 1 {
-                if let Some(e) = m.get_mut(&needy[0]) {
-                    apply_pending_on_entry(e, &pending);
-                    crate::debug_println!(
-                        "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} EnginePeer UDP :{} (claimed pending sole)",
-                        e.blaze_session_id,
-                        pending.port
-                    );
-                    applied = true;
-                }
-            }
-        }
-        if !applied {
-            // Drop pending older than 10 minutes.
-            if now_secs().saturating_sub(pending.noted_at_unix) < 600 {
-                kept.push(pending);
-            }
-        }
-    }
-    *q = kept;
-}
-
-/// Result of `/cnc/dedicated-engine-peer`: applied now, or pending until the pool registers.
+/// Result of `/cnc/dedicated-engine-peer`: applied now, or parked until that server's Blaze login.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnginePeerNote {
     Applied { session: u64 },
     Pending,
     Rejected,
+    /// H497: report without `instance=` (pre-H497 prism.cnc.server.dll) — not bindable.
+    NoInstance,
 }
 
-/// EnginePeer report (session and/or peer optional).
+/// EnginePeer report. Bound by explicit `session`, else by `instance` (exact key match).
 /// `msg_sys` / `simu_cloud` / `qos` are listen ports for this instance.
+#[allow(clippy::too_many_arguments)]
 pub fn note_dedicated_engine_peer_report(
     blaze_session_id: Option<u64>,
-    peer_host: Option<&str>,
+    instance: Option<&str>,
+    reporter: Option<&str>,
     port: i32,
     msg_sys: Option<u16>,
     simu_cloud: Option<u16>,
@@ -1037,44 +943,47 @@ pub fn note_dedicated_engine_peer_report(
     if !is_usable_dedicated_game_udp_port(port) {
         return EnginePeerNote::Rejected;
     }
-    sync_from_blaze_sessions();
-    let name = name.map(str::trim).filter(|n| !n.is_empty());
-    let peer_host = peer_host.map(str::trim).filter(|s| !s.is_empty());
-    let attach = |sid: u64| {
-        attach_prism_tcp_ports(sid, msg_sys, simu_cloud, qos);
-        if let Some(n) = name {
-            set_configured_name(sid, n);
-        }
-        if let Some(e) = pool().lock().get_mut(&sid) {
-            apply_build_label_on_entry(e, label);
-        }
-        // (H481) A report parked for this UDP port before is older than this one: typically the
-        // previous run of a restarted server (same -ServerPort). Left parked, it was applied on
-        // top of this report when the pool next claimed pending reports, and the browser showed
-        // the old build's version.
-        pending_engine_peer()
-            .lock()
-            .retain(|p| !(p.port == port && same_reporter(p.peer_host.as_deref(), peer_host)));
-        EnginePeerNote::Applied { session: sid }
+    let report = PendingEnginePeer {
+        port,
+        msg_sys,
+        simu_cloud,
+        qos,
+        instance: instance.map(str::trim).unwrap_or("").to_string(),
+        noted_at_unix: now_secs(),
+        name: name.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string),
+        version: label.version.clone(),
+        region: label.region.clone(),
     };
     if let Some(sid) = blaze_session_id.filter(|&s| s != 0) {
-        if note_dedicated_engine_peer_udp(sid, port) {
-            return attach(sid);
+        return if bind_engine_peer_report(sid, &report) {
+            EnginePeerNote::Applied { session: sid }
+        } else {
+            EnginePeerNote::Rejected
+        };
+    }
+    if report.instance.is_empty() {
+        crate::console_println!(
+            "[Dedicated pool] engine-peer report from {} (udp {}) has no instance key -- ignored (update prism.cnc.server.dll)",
+            reporter.unwrap_or("-"),
+            port
+        );
+        return EnginePeerNote::NoInstance;
+    }
+    if let Some(sid) = session_for_instance(&report.instance) {
+        if bind_engine_peer_report(sid, &report) {
+            return EnginePeerNote::Applied { session: sid };
         }
     }
-    if let Some(sid) = find_session_by_game_udp(port, peer_host) {
-        let _ = note_dedicated_engine_peer_udp(sid, port);
-        return attach(sid);
-    }
-    if let Some(host) = peer_host {
-        if let Some(sid) = note_dedicated_engine_peer_udp_by_peer_host(host, port) {
-            return attach(sid);
-        }
-    }
-    if let Some(sid) = note_dedicated_engine_peer_udp_sole(port) {
-        return attach(sid);
-    }
-    stash_pending_engine_peer(port, peer_host, msg_sys, simu_cloud, qos, name, label);
+    // Reported before its Blaze login: park under its key; the login binds it.
+    let mut q = pending_engine_peer().lock();
+    q.retain(|p| p.instance != report.instance);
+    crate::console_println!(
+        "[Dedicated pool] instance {} report parked until its Blaze login (from {}, udp {})",
+        report.instance,
+        reporter.unwrap_or("-"),
+        port
+    );
+    q.push(report);
     EnginePeerNote::Pending
 }
 
@@ -1209,7 +1118,6 @@ fn ensure_pool_entry(blaze_session_id: u64) {
     {
         let mut m = pool().lock();
         if m.contains_key(&blaze_session_id) {
-            apply_pending_engine_peers_locked(&mut m);
             return;
         }
     }
@@ -1276,7 +1184,6 @@ fn ensure_pool_entry(blaze_session_id: u64) {
     {
         let mut m = pool().lock();
         m.insert(blaze_session_id, entry);
-        apply_pending_engine_peers_locked(&mut m);
     }
 }
 
@@ -1397,81 +1304,7 @@ pub fn note_dedicated_engine_peer_udp(blaze_session_id: u64, port: i32) -> bool 
     true
 }
 
-/// Match a dedicated by Blaze peer host when the report only has a listen IP.
-pub fn note_dedicated_engine_peer_udp_by_peer_host(peer_host: &str, port: i32) -> Option<u64> {
-    if !is_usable_dedicated_game_udp_port(port) {
-        return None;
-    }
-    sync_from_blaze_sessions();
-    let host = peer_host.trim();
-    if host.is_empty() {
-        return None;
-    }
-    let mut m = pool().lock();
-    let mut needy_sid = None;
-    let mut any_sid = None;
-    for e in m.values() {
-        if !same_peer_host(&e.peer, host) {
-            continue;
-        }
-        any_sid = Some(e.blaze_session_id);
-        if entry_needs_engine_peer(e) {
-            needy_sid = Some(e.blaze_session_id);
-            break;
-        }
-    }
-    let sid = needy_sid.or(any_sid)?;
-    if let Some(e) = m.get_mut(&sid) {
-        e.engine_peer_udp_port = Some(port);
-        e.last_event_unix_secs = now_secs();
-        crate::debug_println!(
-            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} EnginePeer UDP :{} (matched peer host {})",
-            sid,
-            port,
-            host
-        );
-    }
-    Some(sid)
-}
-
-/// When the report is `port=` only, attach to the sole pool dedicated that still needs it.
-pub fn note_dedicated_engine_peer_udp_sole(port: i32) -> Option<u64> {
-    if !is_usable_dedicated_game_udp_port(port) {
-        return None;
-    }
-    sync_from_blaze_sessions();
-    let mut m = pool().lock();
-    apply_pending_engine_peers_locked(&mut m);
-    let needy: Vec<u64> = m
-        .values()
-        .filter(|e| entry_needs_engine_peer(e))
-        .map(|e| e.blaze_session_id)
-        .collect();
-    let sid = if needy.len() == 1 {
-        needy[0]
-    } else if m.len() == 1 {
-        *m.keys().next()?
-    } else {
-        return None;
-    };
-    if let Some(e) = m.get_mut(&sid) {
-        e.engine_peer_udp_port = Some(port);
-        e.last_event_unix_secs = now_secs();
-        crate::debug_println!(
-            "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} EnginePeer UDP :{} (sole/needy pool entry)",
-            sid,
-            port
-        );
-    }
-    Some(sid)
-}
-
 fn resolve_dedicated_game_ports(entry: &DedicatedServerEntry) -> (i32, i32) {
-    // Claim any pending report for this dedicated before reading ports.
-    {
-        let mut m = pool().lock();
-        apply_pending_engine_peers_locked(&mut m);
-    }
     let fresh = get_entry(entry.blaze_session_id).unwrap_or_else(|| entry.clone());
     let from_engine = fresh
         .engine_peer_udp_port
@@ -2006,7 +1839,6 @@ pub fn sync_from_blaze_sessions() {
         });
         upsert_from_blaze_session(entry, &s);
     }
-    apply_pending_engine_peers_locked(&mut m);
     promote_all_recycling(&mut m);
 }
 
@@ -2050,10 +1882,6 @@ pub fn on_register_creator(blaze_session_id: u64, register_payload: &[u8]) {
         }
         hostname
     };
-    {
-        let mut m = pool().lock();
-        apply_pending_engine_peers_locked(&mut m);
-    }
     let hostname = get_entry(blaze_session_id)
         .map(|e| browser_server_name(&e))
         .unwrap_or(hostname);
@@ -2127,6 +1955,7 @@ pub fn on_session_gone(blaze_session_id: u64) {
         })
     };
     pool().lock().remove(&blaze_session_id);
+    forget_instance_session(blaze_session_id);
     assignments()
         .lock()
         .retain(|_, a| a.dedicated_session_id != blaze_session_id);

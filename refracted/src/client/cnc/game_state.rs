@@ -5141,14 +5141,12 @@ pub fn browser_game_list_json() -> serde_json::Value {
                     )
             })
             .unwrap_or(false);
-        let display_name = if game.is_standby || humans == 0 {
-            pool_entry
-                .as_ref()
-                .map(|e| crate::client::cnc::dedicated_pool::browser_server_name(e))
-                .unwrap_or_else(|| game.name.clone())
-        } else {
-            game.name.clone()
-        };
+        // H495: a dedicated row is the server, whoever is seated: the host's lobby name (Guest,
+        // a shell-encoded GNAM) is not the server's name.
+        let display_name = pool_entry
+            .as_ref()
+            .map(|e| crate::client::cnc::dedicated_pool::browser_server_name(e))
+            .unwrap_or_else(|| game.name.clone());
         // Standby / reclaim rows must not report PreGame as browser "Lobby".
         let (phase_label, joinable) = if recycling {
             ("Recycling", false)
@@ -5157,8 +5155,13 @@ pub fn browser_game_list_json() -> serde_json::Value {
         } else {
             // (H469) A running match is listed but cannot be joined: nothing seats a newcomer in a
             // match in progress, and the join notifies reached the players who were in it.
+            // H495: Resetable is the GSTA of a lobby a client reset onto this dedicated — a lobby.
             (
-                game.phase.label(),
+                match game.phase {
+                    GamePhase::PreGame | GamePhase::Resetable => "Lobby",
+                    GamePhase::InGame => "InGame",
+                    GamePhase::PostGame => "PostGame",
+                },
                 matches!(game.phase, GamePhase::PreGame | GamePhase::Resetable),
             )
         };
