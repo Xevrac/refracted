@@ -952,6 +952,11 @@ pub fn note_dedicated_engine_peer_report(
         if let Some(e) = pool().lock().get_mut(&sid) {
             apply_build_label_on_entry(e, label);
         }
+        // (H481) A report parked for this UDP port before is older than this one: typically the
+        // previous run of a restarted server (same -ServerPort). Left parked, it was applied on
+        // top of this report when the pool next claimed pending reports, and the browser showed
+        // the old build's version.
+        pending_engine_peer().lock().retain(|p| p.port != port);
         EnginePeerNote::Applied { session: sid }
     };
     if let Some(sid) = blaze_session_id.filter(|&s| s != 0) {
