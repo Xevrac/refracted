@@ -4612,6 +4612,37 @@ pub fn auth_token_custom_data_blob() -> Vec<u8> {
     CNC_AUTH_TOKEN.as_bytes().to_vec()
 }
 
+/// (H486) Per-player MsgSys auth token: the persona id's 8 bytes, little-endian -- what the
+/// dedicated's SimuCloud `GameReady` reports per player (`SimuCloud.cs`:
+/// `Token = BitConverter.GetBytes(roster[i].PlayerID)`).
+pub fn msgsys_auth_token_bytes(persona_id: i64) -> [u8; 8] {
+    (persona_id as u64).to_le_bytes()
+}
+
+/// `AuthToken` player attribute: the token as hex. On `GameReady` the client decodes it in
+/// byte pairs (`sub_1204D70`, odd length is rejected) and hands the bytes to ClientNetWrapper,
+/// which sends them as `ProtocolVersion`'s auth token -- the first frame on the MsgSys TCP.
+/// That is how the hub tells two clients behind one address apart.
+pub fn msgsys_auth_token_hex(persona_id: i64) -> String {
+    msgsys_auth_token_bytes(persona_id)
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect()
+}
+
+/// Player's wire attributes with its `AuthToken` (humans only).
+fn wire_player_attribs(player: &CncPlayer) -> std::borrow::Cow<'_, IndexMap<String, String>> {
+    if player.is_ai || player.persona_id <= 0 {
+        return std::borrow::Cow::Borrowed(&player.attribs);
+    }
+    let mut attribs = player.attribs.clone();
+    attribs.insert(
+        "AuthToken".to_string(),
+        msgsys_auth_token_hex(player.persona_id),
+    );
+    std::borrow::Cow::Owned(attribs)
+}
+
 pub fn ensure_auth_token_in_custom_data(blobs: &mut IndexMap<String, Vec<u8>>) {
     blobs
         .entry("AuthToken".to_string())
@@ -4769,10 +4800,11 @@ fn append_pros_core_fields(out: &mut Vec<u8>, player: &CncPlayer, gid: i64, gfgd
     out.extend_from_slice(&TdfEncoder::encode_long("GID ", gid));
     out.extend_from_slice(&TdfEncoder::encode_int("LOC ", 0));
     out.extend_from_slice(&TdfEncoder::encode_string("NAME", &player.display_name));
-    if !player.attribs.is_empty() {
+    let attribs = wire_player_attribs(player);
+    if !attribs.is_empty() {
         out.extend_from_slice(&TdfEncoder::encode_string_string_map_ordered(
             "PATT",
-            &player.attribs,
+            &attribs,
         ));
     }
     out.extend_from_slice(&TdfEncoder::encode_long("PID ", player.persona_id));

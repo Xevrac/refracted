@@ -13,8 +13,11 @@ use tracing::{error, info, warn};
 
 use super::log::{log_rts_system, RTS_TAG};
 use super::proxy::{
-    log_upstream_missing, peek_client_hello_persona, relay_pair, try_connect_upstream_to,
+    log_upstream_missing, peek_protocol_version_identity, relay_pair, try_connect_upstream_to,
 };
+
+/// How long the hub waits for the client's `ProtocolVersion` (sent right after connect).
+const PROTOCOL_VERSION_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 
 fn listening_hubs() -> &'static Mutex<HashSet<u16>> {
     static HUBS: OnceLock<Mutex<HashSet<u16>>> = OnceLock::new();
@@ -131,28 +134,47 @@ async fn handle_conn(
     } else if let Some(up) =
         crate::client::cnc::dedicated_pool::resolve_unambiguous_msgsys_upstream()
     {
-        // One live match: splice immediately. ClientHello arrives after ConnectSuccess.
+        // One live ServerHost: nothing to choose, splice now.
         log_rts_system(
             peer,
-            &format!("client connected -- unambiguous ServerHost {up} (no ClientHello peek)"),
+            &format!("client connected -- sole ServerHost {up} (no identification needed)"),
         );
         let gid = crate::client::cnc::dedicated_pool::gid_for_msgsys_upstream(up);
         (Some(up), Vec::new(), gid)
     } else {
+        // (H486) Several servers: the client's ProtocolVersion auth token (its AuthToken
+        // attribute, the persona id) names the player; the source address is the fallback
+        // for a client that sent none (H483).
         log_rts_system(peer, "client connected -- identifying match session");
-        let (prefix, persona) = peek_client_hello_persona(&mut client).await?;
-        if let Some(pid) = persona {
-            log_rts_system(peer, &format!("ClientHello persona={pid}"));
-        }
-        let up = crate::client::cnc::dedicated_pool::resolve_client_msgsys_upstream(peer, persona);
-        match up {
-            Some(addr) => log_rts_system(peer, &format!("session route → {addr}")),
-            None => log_rts_system(
+        let id = peek_protocol_version_identity(&mut client, PROTOCOL_VERSION_WAIT).await?;
+        if let Some(hex) = id.protocol_version_hex.as_deref() {
+            log_rts_system(
                 peer,
-                "no session route (need joinGame for this persona / dedicated bind)",
+                &format!(
+                    "ProtocolVersion payload={hex} auth persona={}",
+                    id.persona.map(|p| p.to_string()).unwrap_or_else(|| "-".into())
+                ),
+            );
+        }
+        let up = crate::client::cnc::dedicated_pool::resolve_client_msgsys_upstream(peer, id.persona);
+        match (up, id.persona) {
+            (Some(addr), Some(pid)) => {
+                log_rts_system(peer, &format!("session route persona={pid} → {addr}"))
+            }
+            (Some(addr), None) => {
+                log_rts_system(peer, &format!("session route by client address → {addr}"))
+            }
+            (None, Some(pid)) => log_rts_system(
+                peer,
+                &format!("no session route for persona={pid} (not seated in an assigned match)"),
+            ),
+            (None, None) => log_rts_system(
+                peer,
+                "no session route (no auth token; client address ambiguous or unknown)",
             ),
         }
-        let gid = persona
+        let gid = id
+            .persona
             .and_then(|pid| {
                 let gids = super::super::game_state::gids_for_human_persona(pid as i64);
                 if gids.len() == 1 {
@@ -162,7 +184,7 @@ async fn handle_conn(
                 }
             })
             .or_else(|| up.and_then(crate::client::cnc::dedicated_pool::gid_for_msgsys_upstream));
-        (up, prefix, gid)
+        (up, id.prefix, gid)
     };
 
     let Some(upstream) = upstream else {

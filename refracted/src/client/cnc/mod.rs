@@ -1545,6 +1545,14 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
             br#"{"ok":false,"error":"port required"}"#.to_vec(),
         );
     }
+    // (H482) Prism reports only ports. Several dedicateds can share a UDP port (every default
+    // server binds :25200), so the port alone does not name the reporter: identify it by the
+    // HTTP connection's source address, the same machine that holds its Blaze session.
+    if peer.is_empty() {
+        if let Some(addr) = crate::http::handlers::handlers_module::current_http_peer() {
+            peer = addr.ip().to_canonical().to_string();
+        }
+    }
     let note = dedicated_pool::note_dedicated_engine_peer_report(
         (session != 0).then_some(session),
         (!peer.is_empty()).then_some(peer.as_str()),

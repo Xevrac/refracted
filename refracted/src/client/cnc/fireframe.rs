@@ -481,9 +481,10 @@ pub fn pushes_auth_token_custom_data(gid: i64, pid: i64) -> BlazeResult<Vec<Outg
     );
     let mut out = pushes_after_set_player_custom_data(gid, pid, &blobs)?;
     let mut attrs = indexmap::IndexMap::new();
+    // (H486) Same per-player token the roster (`PROS.PATT`) carries; not the shared literal.
     attrs.insert(
         "AuthToken".to_string(),
-        super::game_state::CNC_AUTH_TOKEN.to_string(),
+        super::game_state::msgsys_auth_token_hex(pid),
     );
     out.extend(pushes_after_set_player_attributes(gid, pid, &attrs)?);
     Ok(out)

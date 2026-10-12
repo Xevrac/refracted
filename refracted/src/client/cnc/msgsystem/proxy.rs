@@ -14,8 +14,9 @@ use super::log::{
     RTS_TAG,
 };
 use super::messages::{
-    decode_client_hello, decode_load_map_id, ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID,
-    LOAD_MAP_TYPE_ID, PLACED_BUILD_COMPLETED_TYPE_ID, START_GAME_TYPE_ID,
+    decode_client_hello, decode_load_map_id, decode_protocol_version_auth_token,
+    ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID, LOAD_MAP_TYPE_ID,
+    PLACED_BUILD_COMPLETED_TYPE_ID, PROTOCOL_VERSION_TYPE_ID, START_GAME_TYPE_ID,
 };
 use super::wire::SimpleFrame;
 
@@ -61,32 +62,69 @@ pub async fn try_connect_upstream_to(upstream: SocketAddr) -> Option<TcpStream> 
     None
 }
 
-/// Buffer until `ClientHello` so this TCP can bind to one match session.
-pub async fn peek_client_hello_persona(
+/// What the client's opening bytes say about who it is.
+pub struct ClientIdentity {
+    /// Bytes read so far; forwarded to the ServerHost before splicing.
+    pub prefix: Vec<u8>,
+    /// Persona from `ProtocolVersion`'s auth token (H486), if it carried one.
+    pub persona: Option<u64>,
+    /// Hex of the `ProtocolVersion` payload, for the hub log.
+    pub protocol_version_hex: Option<String>,
+}
+
+/// (H486) Read the client's first frame. The client speaks first on the client channel: its
+/// `ProtocolVersion` carries the auth token the server's `authenticationFunc` checks, before
+/// the server answers with ConnectSuccess. Refracted's `AuthToken` attribute makes that token
+/// the persona id, so this one frame names the player even when several share an address.
+pub async fn peek_protocol_version_identity(
     client: &mut TcpStream,
-) -> std::io::Result<(Vec<u8>, Option<u64>)> {
+    wait: Duration,
+) -> std::io::Result<ClientIdentity> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; RELAY_CHUNK];
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + wait;
     loop {
-        if let Some(pid) = persona_from_hello_buf(&buf) {
-            return Ok((buf, Some(pid)));
+        if let Ok(Some((frame, _))) = SimpleFrame::try_read(&buf) {
+            let (persona, hex) = if frame.type_id == PROTOCOL_VERSION_TYPE_ID {
+                (
+                    decode_protocol_version_auth_token(&frame.payload)
+                        .map(u64::from_le_bytes)
+                        .filter(|&p| p != 0),
+                    Some(hex::encode(&frame.payload)),
+                )
+            } else {
+                (persona_from_hello_buf(&buf), None)
+            };
+            return Ok(ClientIdentity {
+                prefix: buf,
+                persona,
+                protocol_version_hex: hex,
+            });
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            let persona = persona_from_hello_buf(&buf);
-            return Ok((buf, persona));
+            return Ok(ClientIdentity {
+                prefix: buf,
+                persona: None,
+                protocol_version_hex: None,
+            });
         }
         match timeout(remaining, client.read(&mut chunk)).await {
             Ok(Ok(0)) => {
-                let persona = persona_from_hello_buf(&buf);
-                return Ok((buf, persona));
+                return Ok(ClientIdentity {
+                    prefix: buf,
+                    persona: None,
+                    protocol_version_hex: None,
+                })
             }
             Ok(Ok(n)) => buf.extend_from_slice(&chunk[..n]),
             Ok(Err(e)) => return Err(e),
             Err(_) => {
-                let persona = persona_from_hello_buf(&buf);
-                return Ok((buf, persona));
+                return Ok(ClientIdentity {
+                    prefix: buf,
+                    persona: None,
+                    protocol_version_hex: None,
+                })
             }
         }
     }

@@ -517,7 +517,13 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         return Ok(());
     }
     let game_id = uuid_to_guid_bytes(&game.uuid);
-    let upstream = crate::client::cnc::dedicated_pool::simucloud_upstream_for_gid(gid);
+    let Some(upstream) = crate::client::cnc::dedicated_pool::simucloud_upstream_for_gid(gid)
+    else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("no dedicated bound to gid={gid}; CreateGame not sent"),
+        ));
+    };
     let deadline = Instant::now() + CONNECT_BUDGET;
     let mut stream = None;
     while Instant::now() < deadline {

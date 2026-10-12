@@ -443,6 +443,20 @@ pub fn note_client_msgsys_route(gid: i64, persona_id: i64, client_ip: Option<IpA
     }
     let blaze_session_id = crate::session::current_blaze_session_id();
     let dedicated_session_id = bound_dedicated_for_gid(gid);
+    let mut routes = client_msgsys_routes().lock();
+    // (H483) Start Battle re-notes every human with no IP (`note_human_msgsys_routes_for_gid`,
+    // not on the joiner's session). Keep the IP the join recorded: it is how the shared hub
+    // tells this player's MsgSys TCP apart from other matches'.
+    let client_ip = client_ip.map(canonical_ip).or_else(|| {
+        routes
+            .get(&persona_id)
+            .and_then(|r| r.client_ip)
+    });
+    let blaze_session_id = blaze_session_id.or_else(|| {
+        routes
+            .get(&persona_id)
+            .and_then(|r| r.blaze_session_id)
+    });
     let route = ClientMsgsysRoute {
         gid,
         persona_id,
@@ -450,7 +464,8 @@ pub fn note_client_msgsys_route(gid: i64, persona_id: i64, client_ip: Option<IpA
         dedicated_session_id,
         client_ip,
     };
-    client_msgsys_routes().lock().insert(persona_id, route);
+    routes.insert(persona_id, route);
+    drop(routes);
     crate::debug_println!(
         "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m MsgSys route persona={persona_id} blaze={blaze_session_id:?} → gid={gid} dedicated={dedicated_session_id:?} ip={client_ip:?}"
     );
@@ -496,10 +511,10 @@ pub fn gid_for_msgsys_upstream(upstream: SocketAddr) -> Option<i64> {
             return Some(route.gid);
         }
     }
-    let port = upstream.port();
+    // (H484) Address, not port: every default dedicated's ServerHost is :18387.
     list_entries()
         .into_iter()
-        .find(|e| msg_sys_port(e) == port)
+        .find(|e| SocketAddr::new(peer_ip_addr(e), msg_sys_port(e)) == upstream)
         .and_then(|e| e.current_gid)
 }
 
@@ -520,33 +535,51 @@ pub fn resolve_client_msgsys_upstream(
         return None;
     }
 
-    if peer.ip().is_loopback() {
-        // Loopback without ClientHello: only when a single match is live.
-        return resolve_unambiguous_msgsys_upstream();
-    }
-    let matches: Vec<ClientMsgsysRoute> = client_msgsys_routes()
-        .lock()
-        .values()
-        .filter(|r| r.client_ip == Some(peer.ip()))
-        .cloned()
-        .collect();
-    if matches.len() == 1 {
-        return upstream_for_route(&matches[0]);
-    }
-    resolve_unambiguous_msgsys_upstream()
+    resolve_msgsys_upstream_by_client_ip(peer.ip()).or_else(resolve_unambiguous_msgsys_upstream)
 }
 
-/// Splice immediately when only one ServerHost / join route is live.
-/// ClientHello arrives after ConnectSuccess, so do not wait for it here.
+fn canonical_ip(ip: IpAddr) -> IpAddr {
+    ip.to_canonical()
+}
+
+/// Same machine: equal address, or both loopback.
+fn same_client_ip(a: IpAddr, b: IpAddr) -> bool {
+    let (a, b) = (canonical_ip(a), canonical_ip(b));
+    a == b || (a.is_loopback() && b.is_loopback())
+}
+
+/// (H483) ServerHost for a hub connection from the client's source address -- the fallback
+/// when its `ProtocolVersion` carried no auth token (H486). Every route recorded for that address (one per persona joined
+/// from it) must lead to the same ServerHost: two players on one PC or one NAT in the same
+/// match are fine, in two different matches they are ambiguous and get no guess.
+pub fn resolve_msgsys_upstream_by_client_ip(ip: IpAddr) -> Option<SocketAddr> {
+    let routes: Vec<ClientMsgsysRoute> = client_msgsys_routes()
+        .lock()
+        .values()
+        .filter(|r| r.client_ip.is_some_and(|c| same_client_ip(c, ip)))
+        .cloned()
+        .collect();
+    let mut ups: Vec<SocketAddr> = routes.iter().filter_map(upstream_for_route).collect();
+    ups.sort();
+    ups.dedup();
+    if ups.len() == 1 {
+        return Some(ups[0]);
+    }
+    if ups.len() > 1 {
+        crate::debug_println!(
+            "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m MsgSys hub: client {ip} has routes to {} ServerHosts {:?} -- ambiguous, no route",
+            ups.len(),
+            ups
+        );
+    }
+    None
+}
+
+/// Splice immediately when only one ServerHost is live (one dedicated: nothing to choose).
+/// (H483) No longer "only one join route": a lone route says nothing about who is connecting,
+/// and with several servers it spliced an unidentified client into that route's match.
 pub fn resolve_unambiguous_msgsys_upstream() -> Option<SocketAddr> {
     sync_from_blaze_sessions();
-
-    let routes: Vec<ClientMsgsysRoute> = client_msgsys_routes().lock().values().cloned().collect();
-    if routes.len() == 1 {
-        if let Some(up) = upstream_for_route(&routes[0]) {
-            return Some(up);
-        }
-    }
 
     let with_host: Vec<DedicatedServerEntry> = list_entries()
         .into_iter()
@@ -564,14 +597,11 @@ pub fn resolve_unambiguous_msgsys_upstream() -> Option<SocketAddr> {
     None
 }
 
-/// SimuCloud host for `CreateGame` on this gid.
-pub fn simucloud_upstream_for_gid(gid: i64) -> SocketAddr {
-    if let Some(sid) = bound_dedicated_for_gid(gid) {
-        if let Some(e) = get_entry(sid) {
-            return SocketAddr::new(peer_ip_addr(&e), simu_cloud_port(&e));
-        }
-    }
-    SocketAddr::from(([127, 0, 0, 1], crate::client::cnc::msgsystem::simucloud::SIMUCLOUD_PORT))
+/// SimuCloud host for `CreateGame` on this gid. (H484) `None` when no dedicated is bound:
+/// the old 127.0.0.1:18388 fallback sent the match to whichever server ran on this host.
+pub fn simucloud_upstream_for_gid(gid: i64) -> Option<SocketAddr> {
+    let e = get_entry(bound_dedicated_for_gid(gid)?)?;
+    Some(SocketAddr::new(peer_ip_addr(&e), simu_cloud_port(&e)))
 }
 
 /// Whether `host:port` is the ServerHost of a registered dedicated -- the only thing the
@@ -604,10 +634,24 @@ pub fn probe_host_rtt_ms(host: &str, port: Option<u16>) -> Option<u32> {
         return Some(1);
     }
     let addr = SocketAddr::new(ip, port.unwrap_or(DEDICATED_PING_TCP_PORT));
+    // (H485) One probe per ServerHost per PROBE_TTL, shared by every browser. The probe is a
+    // blocking connect (up to 500 ms) on the HTTP task's runtime worker -- the same workers that
+    // relay match traffic -- and each browser polled every row, so viewers x servers probes
+    // (and as many accepted-then-dropped ServerHost sockets) per poll.
+    const PROBE_TTL: Duration = Duration::from_secs(10);
+    static PROBES: OnceLock<Mutex<HashMap<SocketAddr, (Instant, Option<u32>)>>> = OnceLock::new();
+    let probes = PROBES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(&(at, ms)) = probes.lock().get(&addr) {
+        if at.elapsed() < PROBE_TTL {
+            return ms;
+        }
+    }
     let start = Instant::now();
-    let _stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500)).ok()?;
-    let ms = start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
-    Some(ms.max(1).min(9999))
+    let ms = TcpStream::connect_timeout(&addr, Duration::from_millis(500))
+        .ok()
+        .map(|_stream| (start.elapsed().as_millis().min(u128::from(u32::MAX)) as u32).clamp(1, 9999));
+    probes.lock().insert(addr, (Instant::now(), ms));
+    ms
 }
 
 pub fn probe_server_rtt_ms(peer: &str) -> Option<u32> {
@@ -781,22 +825,53 @@ fn set_configured_name(blaze_session_id: u64, name: &str) {
     }
 }
 
-fn find_session_by_game_udp(port: i32) -> Option<u64> {
+/// (H482) Pool entry already bound to this game UDP port **on the reporting host**. Every
+/// default dedicated listens on :25200, so without the host a second server's report claimed
+/// the first server's session: it took that session's name, version and Prism ports, its lobby
+/// row showed the wrong build, and Start Battle reset the other machine's server.
+fn find_session_by_game_udp(port: i32, peer_host: Option<&str>) -> Option<u64> {
     pool()
         .lock()
         .values()
-        .find(|e| e.engine_peer_udp_port == Some(port))
+        .find(|e| {
+            e.engine_peer_udp_port == Some(port)
+                && peer_host.map_or(true, |h| same_peer_host(&e.peer, h))
+        })
         .map(|e| e.blaze_session_id)
 }
 
 fn peer_host_key(peer: &str) -> String {
     let host = peer
         .rsplit_once(':')
+        .filter(|(h, _)| !h.contains(':') || h.starts_with('['))
         .map(|(h, _)| h)
         .unwrap_or(peer);
     host.trim_start_matches('[')
         .trim_end_matches(']')
         .to_string()
+}
+
+/// Same reporter for pending-report replacement; an unknown host only matches an unknown host.
+fn same_reporter(a: Option<&str>, b: Option<&str>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => same_peer_host(a, b),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// Same machine: equal host text, or both loopback (127.0.0.1 vs ::1 / ::ffff:127.0.0.1).
+fn same_peer_host(a: &str, b: &str) -> bool {
+    let (a, b) = (peer_host_key(a), peer_host_key(b));
+    if a.eq_ignore_ascii_case(&b) {
+        return true;
+    }
+    let loopback = |h: &str| {
+        h.parse::<IpAddr>()
+            .map(|ip| ip.to_canonical().is_loopback())
+            .unwrap_or(false)
+    };
+    loopback(&a) && loopback(&b)
 }
 
 fn entry_needs_engine_peer(e: &DedicatedServerEntry) -> bool {
@@ -822,17 +897,9 @@ fn stash_pending_engine_peer(
         .filter(|s| !s.is_empty())
         .map(|s| peer_host_key(s));
     let mut q = pending_engine_peer().lock();
-    // Keep the latest bind for the same host / UDP, or an orphan pending.
-    q.retain(|p| {
-        if p.port == port {
-            return false;
-        }
-        match (&host, &p.peer_host) {
-            (Some(h), Some(ph)) => !ph.eq_ignore_ascii_case(h) || p.port != port,
-            (None, None) => false,
-            _ => true,
-        }
-    });
+    // Replace an older report from the same host and UDP port; keep other hosts' reports
+    // (H482: two machines can both report :25200).
+    q.retain(|p| !(p.port == port && same_reporter(p.peer_host.as_deref(), host.as_deref())));
     q.push(PendingEnginePeer {
         port,
         msg_sys,
@@ -862,10 +929,13 @@ fn apply_pending_engine_peers_locked(m: &mut HashMap<u64, DedicatedServerEntry>)
     let mut kept = Vec::new();
     for pending in q.drain(..) {
         let mut applied = false;
-        if let Some(e) = m
-            .values_mut()
-            .find(|e| e.engine_peer_udp_port == Some(pending.port))
-        {
+        if let Some(e) = m.values_mut().find(|e| {
+            e.engine_peer_udp_port == Some(pending.port)
+                && pending
+                    .peer_host
+                    .as_deref()
+                    .map_or(true, |h| same_peer_host(&e.peer, h))
+        }) {
             apply_pending_on_entry(e, &pending);
             crate::debug_println!(
                 "\x1b[38;2;100;200;255m[Dedicated pool]\x1b[0m session #{} EnginePeer UDP :{} (claimed pending same-game-udp)",
@@ -877,8 +947,7 @@ fn apply_pending_engine_peers_locked(m: &mut HashMap<u64, DedicatedServerEntry>)
         if !applied {
             if let Some(ref host) = pending.peer_host {
                 if let Some(e) = m.values_mut().find(|e| {
-                    entry_needs_engine_peer(e)
-                        && peer_host_key(&e.peer).eq_ignore_ascii_case(host)
+                    entry_needs_engine_peer(e) && same_peer_host(&e.peer, host)
                 }) {
                     apply_pending_on_entry(e, &pending);
                     crate::debug_println!(
@@ -944,6 +1013,7 @@ pub fn note_dedicated_engine_peer_report(
     }
     sync_from_blaze_sessions();
     let name = name.map(str::trim).filter(|n| !n.is_empty());
+    let peer_host = peer_host.map(str::trim).filter(|s| !s.is_empty());
     let attach = |sid: u64| {
         attach_prism_tcp_ports(sid, msg_sys, simu_cloud, qos);
         if let Some(n) = name {
@@ -956,7 +1026,9 @@ pub fn note_dedicated_engine_peer_report(
         // previous run of a restarted server (same -ServerPort). Left parked, it was applied on
         // top of this report when the pool next claimed pending reports, and the browser showed
         // the old build's version.
-        pending_engine_peer().lock().retain(|p| p.port != port);
+        pending_engine_peer()
+            .lock()
+            .retain(|p| !(p.port == port && same_reporter(p.peer_host.as_deref(), peer_host)));
         EnginePeerNote::Applied { session: sid }
     };
     if let Some(sid) = blaze_session_id.filter(|&s| s != 0) {
@@ -964,11 +1036,11 @@ pub fn note_dedicated_engine_peer_report(
             return attach(sid);
         }
     }
-    if let Some(sid) = find_session_by_game_udp(port) {
+    if let Some(sid) = find_session_by_game_udp(port, peer_host) {
         let _ = note_dedicated_engine_peer_udp(sid, port);
         return attach(sid);
     }
-    if let Some(host) = peer_host.map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(host) = peer_host {
         if let Some(sid) = note_dedicated_engine_peer_udp_by_peer_host(host, port) {
             return attach(sid);
         }
@@ -1313,7 +1385,7 @@ pub fn note_dedicated_engine_peer_udp_by_peer_host(peer_host: &str, port: i32) -
     let mut needy_sid = None;
     let mut any_sid = None;
     for e in m.values() {
-        if !peer_host_key(&e.peer).eq_ignore_ascii_case(host) {
+        if !same_peer_host(&e.peer, host) {
             continue;
         }
         any_sid = Some(e.blaze_session_id);

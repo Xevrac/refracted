@@ -144,6 +144,25 @@ pub fn decode_ping_query(payload: &[u8]) -> Option<u32> {
     r.read_u32().ok()
 }
 
+/// (H486) Auth token of a client-channel `ProtocolVersion` (u32 version, then a byte-array
+/// reference: present marker 1 + length + bytes). Retail serializes an empty token as
+/// `01 00 00` (`frames/client_protocol_version.bin`), which fits either a u16 length or a
+/// zigzag-varint length plus one more byte, so both length forms are accepted. Only the
+/// 8-byte token Refracted hands out (persona id, little-endian) is returned.
+pub fn decode_protocol_version_auth_token(payload: &[u8]) -> Option<[u8; 8]> {
+    let body = payload.get(4..)?;
+    if body.first() != Some(&1) {
+        return None;
+    }
+    let body = &body[1..];
+    let token = match body {
+        [8, 0, rest @ ..] if rest.len() >= 8 => &rest[..8],
+        [16, rest @ ..] if rest.len() >= 8 => &rest[..8],
+        _ => return None,
+    };
+    token.try_into().ok()
+}
+
 pub fn decode_client_hello(payload: &[u8]) -> Option<u64> {
     let mut r = WireReader::new(payload);
     r.read_u64().ok()
@@ -172,6 +191,26 @@ mod tests {
     use super::super::wire::SimpleFrame;
 
     const ALPHA_TUTORIAL: &str = "levels/SP/Alpha_Tutorial/Alpha_Tutorial";
+
+    #[test]
+    fn protocol_version_auth_token_both_length_forms() {
+        let pid: u64 = 3_518_586_227_867;
+        let tok = pid.to_le_bytes();
+        let mut u16_form = vec![2, 0, 0, 0, 1, 8, 0];
+        u16_form.extend_from_slice(&tok);
+        assert_eq!(decode_protocol_version_auth_token(&u16_form), Some(tok));
+        let mut varint_form = vec![2, 0, 0, 0, 1, 16];
+        varint_form.extend_from_slice(&tok);
+        varint_form.push(0);
+        assert_eq!(decode_protocol_version_auth_token(&varint_form), Some(tok));
+        // Retail empty token, null ref, legacy 3-byte "ABC123": no persona token.
+        assert_eq!(decode_protocol_version_auth_token(&[2, 0, 0, 0, 1, 0, 0]), None);
+        assert_eq!(decode_protocol_version_auth_token(&[2, 0, 0, 0, 0]), None);
+        assert_eq!(
+            decode_protocol_version_auth_token(&[2, 0, 0, 0, 1, 3, 0, 0xAB, 0xC1, 0x23]),
+            None
+        );
+    }
 
     #[test]
     fn load_map_matches_retail_dump() {

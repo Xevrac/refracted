@@ -13,6 +13,17 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+thread_local! {
+    static CURRENT_HTTP_PEER: std::cell::Cell<Option<std::net::SocketAddr>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Remote address of the HTTP/1.1 request being handled on this thread, if the server set it.
+/// Valid only inside `HttpHandler::handle_request_from` (the handler is synchronous).
+pub fn current_http_peer() -> Option<std::net::SocketAddr> {
+    CURRENT_HTTP_PEER.with(|c| c.get())
+}
+
 /// HTTP request handler for EA services
 #[derive(Clone)]
 pub struct HttpHandler {
@@ -285,6 +296,22 @@ impl HttpHandler {
         }
 
         None
+    }
+
+    /// `handle_request` with the connection's remote address visible to routes via
+    /// `current_http_peer()` (e.g. `/cnc/dedicated-engine-peer`, which identifies the reporter).
+    pub fn handle_request_from(
+        &self,
+        peer: std::net::SocketAddr,
+        host: &str,
+        path: &str,
+        method: &str,
+        body: &[u8],
+    ) -> BlazeResult<HttpResponse> {
+        let prev = CURRENT_HTTP_PEER.with(|c| c.replace(Some(peer)));
+        let result = self.handle_request(host, path, method, body);
+        CURRENT_HTTP_PEER.with(|c| c.set(prev));
+        result
     }
 
     /// Handle HTTP request based on host and path
