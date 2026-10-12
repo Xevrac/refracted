@@ -1686,7 +1686,12 @@ fn handle_cnc_leave_game(query: Option<&str>) -> HttpResponse {
         let body = serde_json::json!({ "ok": false, "error": "pid required", "gid": gid });
         return HttpResponse::new(400, "application/json", body.to_string().into_bytes());
     }
+    let was_seated = human_seated(gid, pid);
+    let members = other_human_members(gid, pid);
     let body = game_state::leave_gameroom_ex(gid, pid, force || pid <= 0);
+    if was_seated && !human_seated(gid, pid) {
+        notify_seat_left(gid, pid, &members);
+    }
     crate::debug_println!(
         "\x1b[38;2;255;215;0m[CNC]\x1b[0m leave-game gid={} pid={} force={} ? {}",
         gid,
@@ -3518,6 +3523,35 @@ pub fn remove_player_from_game(gid: i64, pid: i64, reason: i32) {
             );
         }
     }
+}
+
+/// (H492) A seat dropped outside Blaze `removePlayer` (shell leave-game, MsgSys close): tell the
+/// leaver's own client (BlazeSDK destroys its local game) and the remaining members, exactly as
+/// `remove_player_from_game` does. Without it the SDK kept the old local game: a later
+/// `joinGame` for that gid was never sent ("Joining game(10002)" and nothing), the player was not
+/// seated, and lobby actions such as Spectate were parked for an unseated persona.
+pub(crate) fn notify_seat_left(gid: i64, pid: i64, members: &[i64]) {
+    if gid <= 0 || pid <= 0 {
+        return;
+    }
+    fireframe::request_client_local_game_teardown(gid, pid, PLAYER_REMOVED_REASON_PLAYER_LEFT);
+    enqueue_player_removed_to_members(gid, pid, members);
+}
+
+/// Humans seated in `gid` other than `pid`.
+pub(crate) fn other_human_members(gid: i64, pid: i64) -> Vec<i64> {
+    game_state::players_for_gid(gid)
+        .iter()
+        .filter(|p| !p.is_ai && p.persona_id != pid)
+        .map(|p| p.persona_id)
+        .collect()
+}
+
+fn human_seated(gid: i64, pid: i64) -> bool {
+    pid > 0
+        && game_state::players_for_gid(gid)
+            .iter()
+            .any(|p| !p.is_ai && p.persona_id == pid)
 }
 
 /// `NotifyPlayerRemoved` for a leaver to every remaining member's client (not the dedicated).

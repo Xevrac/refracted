@@ -3766,7 +3766,16 @@ pub fn note_client_left_match(gid: i64, persona_id: i64) {
         );
         return;
     }
+    let members = super::other_human_members(gid, persona_id);
     let body = leave_gameroom_ex(gid, persona_id, false);
+    let still_seated = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.players.iter().any(|p| !p.is_ai && p.persona_id == persona_id))
+        .unwrap_or(false);
+    if !still_seated {
+        super::notify_seat_left(gid, persona_id, &members);
+    }
     crate::console_println!(
         "[CNC] pid={} left match gid={} (MsgSys connection closed by client) -> {}",
         persona_id,
