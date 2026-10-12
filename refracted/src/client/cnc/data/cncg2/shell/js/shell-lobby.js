@@ -263,10 +263,10 @@
         EU: [
             { id: 232716472, key: 'EU_ClassicGeneral', label: 'Classic', icon: 'EG_Basic_01.png' },
             { id: 76852445, key: 'EU_AirforceGeneral', label: 'Airforce', icon: 'EG_Airforce_01.png' },
-            { id: 162564633, key: 'EU_LaserGeneral', label: 'Laser', icon: 'EG_Railgun_01.png' },
+            { id: 162564633, key: 'EU_LaserGeneral', label: 'Laser', icon: 'EG_ExperimentalWeapons_01.png' },
             { id: 1523019091, key: 'EU_RapidAssaultGeneral', label: 'Rapid Assault', icon: 'EG_RapidAssault_01.png' },
             { id: 2373292237, key: 'EU_ReconGeneral', label: 'Recon', icon: 'EG_Recon_01.png' },
-            { id: 3943761922, key: 'EU_ScienceGeneral', label: 'Science', icon: 'EG_ExperimentalWeapons_01.png' },
+            { id: 3943761922, key: 'EU_ScienceGeneral', label: 'Science', icon: 'EG_Railgun_01.png' },
             { id: 3463861546, key: 'EU_TutorialGeneral', label: 'Tutorial', icon: 'EG_Basic_01.png' }
         ],
         GLA: [

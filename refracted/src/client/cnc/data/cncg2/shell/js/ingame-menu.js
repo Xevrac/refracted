@@ -424,13 +424,25 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         return nodes;
     }
 
-    function holdMotion() {
+    // While the view is hidden the menu waits in the first frame of its entrance: panel off the
+    // right edge, title and buttons transparent, veil faded out. The game shows the view before
+    // the page hears about it, so whatever is on screen at that moment is what gets painted
+    // first. Parked in the finished position, that was a fully open menu for a frame or two,
+    // then the slide-in from off-screen: the menu appeared twice.
+    function parkMotion() {
         var nodes = motionNodes();
         var i;
         for (i = 0; i < nodes.length; i++) {
             nodes[i].style.webkitAnimation = 'none';
             nodes[i].style.animation = 'none';
+            if (i === 0) {
+                nodes[i].style.webkitTransform = 'translateX(100%)';
+                nodes[i].style.transform = 'translateX(100%)';
+            } else {
+                nodes[i].style.opacity = '0';
+            }
         }
+        addClass(document.body, 'pause-leaving');
     }
 
     function replayPauseEntrance() {
@@ -459,6 +471,7 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         for (i = 0; i < nodes.length; i++) {
             nodes[i].style.webkitTransform = '';
             nodes[i].style.transform = '';
+            nodes[i].style.opacity = '';
             nodes[i].style.webkitAnimation = '';
             nodes[i].style.animation = '';
         }
@@ -475,9 +488,8 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         addClass(document.body, 'pause-leaving');
         setTimeout(function () {
             runGame('SetPauseMenuVisibility false');
-            // Freeze before dropping the leave class, so the entrance does not restart off-screen.
-            holdMotion();
-            stripClass(document.body, 'pause-leaving');
+            // Park at the start of the entrance (the body keeps .pause-leaving: veil stays out).
+            parkMotion();
             stripClass(pausePanel(), 'is-leaving');
             menuLeaving = false;
             menuNeedsReplay = true;
@@ -490,12 +502,22 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
 
     document.addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'hidden') {
+            // Hidden by the game itself (not through Return to game): park for the next show.
+            if (!menuLeaving) {
+                parkMotion();
+                menuNeedsReplay = true;
+            }
             return;
         }
         onPauseShown();
     });
     window.addEventListener('focus', onPauseShown);
     window.addEventListener('pageshow', onPauseShown);
+    // A parked menu is off-screen, so it must never miss its entrance: any input reaching the
+    // view also plays it (a no-op unless parked).
+    document.addEventListener('mousemove', onPauseShown, true);
+    document.addEventListener('mousedown', onPauseShown, true);
+    document.addEventListener('keydown', onPauseShown, true);
 
     $scope.returnToGame = function () {
         hidePauseMenu();

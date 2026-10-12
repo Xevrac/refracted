@@ -2703,7 +2703,7 @@ html[data-au-page="ingame"] .options-modal-overlay { background: rgba(0, 0, 0, 0
 
 /* ---- In-game chat ---- */
 html[data-au-page="chat"] { font-size: 2.54vw; }
-html[data-au-page="chat"] body { font-size: 1rem; }
+html[data-au-page="chat"] body { font-size: 0.875rem; }
 .chat-panel {
     position: absolute;
     top: 0; right: 0; bottom: 0; left: 0;
@@ -2724,26 +2724,26 @@ html[data-au-page="chat"] body { font-size: 1rem; }
 .chat-header-title { display: none; }
 .chat-channel-btns { display: flex; }
 .chat-channel-btn {
-    height: 1.625rem;
+    height: 1.5rem;
     padding: 0 0.75rem;
     margin-left: -1px;
     border: 1px solid rgba(95, 233, 255, 0.3);
     background: rgba(0, 0, 0, 0.4);
     font-size: 0.75rem;
-    line-height: 1.5rem;
+    line-height: 1.375rem;
     color: #46abbb;
 }
 .chat-channel-btn:hover { color: #ffffff; }
 .chat-channel-btn.active { position: relative; border-color: #5fe9ff; background: #5fe9ff; color: #03141a; }
 .chat-channel-btn[disabled] { opacity: 0.4; }
 .chat-close-btn {
-    width: 1.625rem;
-    height: 1.625rem;
+    width: 1.5rem;
+    height: 1.5rem;
     margin-left: 0.375rem;
     border: 1px solid rgba(95, 233, 255, 0.3);
     background: rgba(0, 0, 0, 0.4);
-    font-size: 0.75rem;
-    line-height: 1.5rem;
+    font-size: 0.6875rem;
+    line-height: 1.375rem;
     color: #46abbb;
 }
 .chat-close-btn:hover { border-color: #ff5a52; color: #ff5a52; }
@@ -2756,8 +2756,8 @@ html[data-au-page="chat"] body { font-size: 1rem; }
     user-select: text;
 }
 .chat-history::-webkit-scrollbar { width: 0.25rem; }
-.chat-line { display: flex; align-items: baseline; font-size: 1rem; line-height: 1.4375rem; color: #eaf6f8; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
-.chat-tag { flex: 0 0 3.25rem; font-size: 0.75rem; color: #38626b; }
+.chat-line { display: flex; align-items: baseline; font-size: 0.9062rem; line-height: 1.5625rem; color: #eaf6f8; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+.chat-tag { flex: 0 0 2.875rem; font-size: 0.6875rem; color: #38626b; }
 .chat-tag.team { color: #5fc27a; }
 .chat-from { flex: 0 0 auto; margin-right: 0.625rem; font-family: 'AuBold', Arial, sans-serif; color: #7ec8ff; }
 .chat-from-prefix, .chat-colon { display: none; }
@@ -2771,33 +2771,33 @@ html[data-au-page="chat"] body { font-size: 1rem; }
 .chat-text { flex: 1 1 auto; min-width: 0; word-wrap: break-word; }
 .chat-line.spectator .chat-from, .chat-line.spectator .chat-text { color: #9a9da2; }
 .chat-line.system .chat-text { color: #3d9eff; }
-.chat-empty { font-size: 0.9375rem; line-height: 1.4375rem; color: #38626b; }
+.chat-empty { font-size: 0.8125rem; line-height: 1.5625rem; color: #38626b; }
 .chat-input-row {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    height: 2.75rem;
+    height: 2.25rem;
     margin: 0.25rem 0 0;
     border-top: 1px solid rgba(95, 233, 255, 0.3);
 }
-.chat-input-row .au-caret-field { font-size: 0.9375rem; color: #ffffff; }
-.chat-prompt { flex: 0 0 auto; margin-right: 0.625rem; font-size: 0.8125rem; color: #46abbb; }
+.chat-input-row .au-caret-field { font-size: 0.9062rem; color: #ffffff; }
+.chat-prompt { flex: 0 0 auto; margin-right: 0.625rem; font-size: 0.6875rem; color: #46abbb; }
 .chat-prompt.team { color: #5fc27a; }
 .chat-input {
     flex: 1 1 auto;
     min-width: 0;
-    height: 2.125rem;
+    height: 1.75rem;
     padding: 0;
     border: 0;
     background: none;
-    font-size: 0.9375rem;
+    font-size: 0.9062rem;
     color: #ffffff;
 }
-.chat-send-btn { flex: 0 0 auto; width: 1.875rem; height: 1.875rem; color: #38626b; }
+.chat-send-btn { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; color: #38626b; }
 .chat-send-btn:hover { color: #ffffff; }
-.chat-send-icon { display: block; width: 1.125rem; height: 1.125rem; margin: 0 auto; }
+.chat-send-icon { display: block; width: 1rem; height: 1rem; margin: 0 auto; }
 /* Keep the first lines clear of the All / Team switch in the top right corner. */
-.chat-history:before { content: ''; float: right; width: 10rem; height: 1.875rem; }
+.chat-history:before { content: ''; float: right; width: 9.375rem; height: 1.625rem; }
 /* ---- 60-motion.css ---- */
 /* =========================================================================
    Motion. Entrances play once when an element is first drawn or shown again
@@ -2962,6 +2962,4 @@ html[data-au-page="chat"] body { font-size: 1rem; }
 .pause-menu-btn--quit { animation-delay: 0.37s; }
 .pause-menu.is-leaving .pause-menu-title,
 .pause-menu.is-leaving .pause-menu-btn { animation: none; }
-.chat-panel { opacity: 0; transition: opacity 0.2s ease-in; }
-.chat-panel.is-shown { opacity: 1; transition: opacity 0.24s ease-out; }
 .chat-line { animation: au-rise-s 0.18s ease-out backwards; }

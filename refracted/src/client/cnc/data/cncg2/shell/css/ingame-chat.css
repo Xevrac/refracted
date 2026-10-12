@@ -516,15 +516,3 @@ body.cc-theme--aurora-alt .chat-panel {
 /* Aurora-only pieces of ingame_chat.html (styled in css/themes/aurora*.css) */
 .chat-tag, .chat-prompt { display: none; }
 .chat-colon { font-style: normal; }
-
-/* Open and close fade. The panel stays invisible until ingame-chat.js marks it shown. */
-.chat-panel {
-    opacity: 0;
-    -webkit-transition: opacity 0.2s ease-in;
-    transition: opacity 0.2s ease-in;
-}
-.chat-panel.is-shown {
-    opacity: 1;
-    -webkit-transition: opacity 0.24s ease-out;
-    transition: opacity 0.24s ease-out;
-}

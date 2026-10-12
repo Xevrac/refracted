@@ -11,6 +11,8 @@
  * Scale: the Aurora stylesheets are written in rem against a reference window
  * (1920x1080, or <html data-au-ref="WxH">). fitRoot() sets the root font size to
  * 16px x min(width/refW, height/refH), so the layout holds its proportions at any size.
+ * <html data-au-scale="N"> multiplies that: everything drawn inside the page (text, icons,
+ * buttons) grows by N while the window the game gives the page keeps its size.
  *
  * Requires the EAWebKit 16.4 engine (flexbox); there is no 13.x fallback.
  *
@@ -123,6 +125,10 @@
             return;
         }
         var k = Math.min(w / Number(ref[1]), h / Number(ref[2]));
+        var extra = parseFloat(root.getAttribute('data-au-scale') || '');
+        if (extra > 0 && extra < 4) {
+            k *= extra;
+        }
         root.style.fontSize = (Math.round(k * 16 * 1000) / 1000) + 'px';
     }
 
