@@ -1870,16 +1870,23 @@ input[type="text"], input[type="password"] {
 }
 .au-browser__art--ingame .au-browser__art-state i { background: #ff5a52; animation: au-art-pulse 1.6s ease-in-out infinite; }
 /* Idle: no level loaded. A dark tactical grid, range rings and a slow sweep. */
+/* Tiled plain gradients only: the shell engine draws repeating-*-gradient unreliably. */
 .au-browser__art--idle {
     background-color: #07090c;
     background-image:
-        radial-gradient(circle at 50% 50%, rgba(61, 158, 255, 0.16) 0, rgba(61, 158, 255, 0) 62%),
-        repeating-linear-gradient(0deg, rgba(217, 221, 226, 0.06) 0, rgba(217, 221, 226, 0.06) 1px, transparent 1px, transparent 1.75rem),
-        repeating-linear-gradient(90deg, rgba(217, 221, 226, 0.06) 0, rgba(217, 221, 226, 0.06) 1px, transparent 1px, transparent 1.75rem);
+        radial-gradient(circle at 50% 50%, rgba(61, 158, 255, 0.18) 0, rgba(61, 158, 255, 0) 62%),
+        linear-gradient(to right, rgba(217, 221, 226, 0.08) 1px, rgba(217, 221, 226, 0) 1px),
+        linear-gradient(to bottom, rgba(217, 221, 226, 0.08) 1px, rgba(217, 221, 226, 0) 1px);
+    background-size: 100% 100%, 1.75rem 1.75rem, 1.75rem 1.75rem;
+    background-repeat: no-repeat, repeat, repeat;
+    background-position: center center, center center, center center;
 }
 .au-browser__art--idle .au-browser__art-fx {
     display: block;
-    background: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 2.875rem, rgba(61, 158, 255, 0.18) 2.9375rem, transparent 3rem);
+    background: radial-gradient(circle at 50% 50%,
+        transparent 2.75rem, rgba(61, 158, 255, 0.3) 2.8125rem, transparent 2.9375rem,
+        transparent 5.5625rem, rgba(61, 158, 255, 0.22) 5.625rem, transparent 5.75rem,
+        transparent 8.375rem, rgba(61, 158, 255, 0.14) 8.4375rem, transparent 8.5625rem);
 }
 .au-browser__art--idle .au-browser__art-sweep {
     left: 0;
@@ -1894,11 +1901,19 @@ input[type="text"], input[type="password"] {
 /* Recycling: the server is unloading its last match. Moving hazard stripes and a spinner. */
 .au-browser__art--recycling {
     background-color: #0b0b0c;
-    background-image: repeating-linear-gradient(-45deg, rgba(255, 196, 0, 0.1) 0, rgba(255, 196, 0, 0.1) 1.125rem, transparent 1.125rem, transparent 2.25rem);
-    background-size: 3.1875rem 3.1875rem;
+    background-image: linear-gradient(45deg,
+        rgba(255, 196, 0, 0.2) 25%, rgba(255, 196, 0, 0) 25%,
+        rgba(255, 196, 0, 0) 50%, rgba(255, 196, 0, 0.2) 50%,
+        rgba(255, 196, 0, 0.2) 75%, rgba(255, 196, 0, 0) 75%);
+    background-size: 3rem 3rem;
+    background-repeat: repeat;
     animation: au-art-stripes 1.4s linear infinite;
 }
-.au-browser__art--recycling .au-browser__art-fx { display: block; background: rgba(0, 0, 0, 0.35); }
+/* A soft centre shade so the spinner reads over the stripes; the stripes stay visible around it. */
+.au-browser__art--recycling .au-browser__art-fx {
+    display: block;
+    background: radial-gradient(circle at 50% 42%, rgba(11, 11, 12, 0.85) 0, rgba(11, 11, 12, 0.85) 2.5rem, rgba(11, 11, 12, 0) 6.875rem);
+}
 .au-browser__art--recycling .au-browser__art-spin {
     left: 50%;
     top: 50%;
@@ -1913,7 +1928,7 @@ input[type="text"], input[type="password"] {
 .au-browser__art--recycling .au-browser__art-state i { background: #ffc400; }
 @keyframes au-art-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 @keyframes au-art-sweep { from { transform: translateY(-3.75rem); } to { transform: translateY(14.4375rem); } }
-@keyframes au-art-stripes { from { background-position: 0 0; } to { background-position: 3.1875rem 0; } }
+@keyframes au-art-stripes { from { background-position: 0 0; } to { background-position: 3rem 0; } }
 .au-browser__name {
     margin: 1.5rem 0.875rem 0.75rem;
     font-family: 'AuBold', Arial, sans-serif;

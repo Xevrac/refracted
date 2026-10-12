@@ -526,13 +526,37 @@ pub fn resolve_client_msgsys_upstream(
     sync_from_blaze_sessions();
     if let Some(pid) = persona.filter(|&p| p != 0) {
         if let Some(route) = client_msgsys_routes().lock().get(&(pid as i64)).cloned() {
-            return upstream_for_route(&route);
+            if let Some(up) = upstream_for_route(&route) {
+                return Some(up);
+            }
         }
+        // (H491) No usable route: the player's seats. A seat left over in a finished match (its
+        // leave never arrived) made this two gids and the hub refused the join -> the client
+        // waited for LoadMap on a black screen. The match being joined right now is the one
+        // whose orchestration is running and has not started yet.
         let gids = super::game_state::gids_for_human_persona(pid as i64);
-        if gids.len() == 1 {
-            return msgsys_upstream_for_gid(gids[0]);
+        let joining: Vec<i64> = gids
+            .iter()
+            .copied()
+            .filter(|&g| {
+                super::game_state::has_orchestration(g)
+                    && super::game_state::get_phase(g) != super::game_state::GamePhase::InGame
+                    && bound_dedicated_for_gid(g).is_some()
+            })
+            .collect();
+        let pick = if gids.len() == 1 {
+            Some(gids[0])
+        } else if joining.len() == 1 {
+            Some(joining[0])
+        } else {
+            None
+        };
+        if let Some(up) = pick.and_then(msgsys_upstream_for_gid) {
+            return Some(up);
         }
-        return None;
+        tracing::info!(
+            "[Dedicated pool] MsgSys hub: persona {pid} has no route; seats={gids:?} joining={joining:?} -- trying client address"
+        );
     }
 
     resolve_msgsys_upstream_by_client_ip(peer.ip()).or_else(resolve_unambiguous_msgsys_upstream)
@@ -566,10 +590,12 @@ pub fn resolve_msgsys_upstream_by_client_ip(ip: IpAddr) -> Option<SocketAddr> {
         return Some(ups[0]);
     }
     if ups.len() > 1 {
-        crate::debug_println!(
-            "\x1b[38;2;255;180;100m[Dedicated pool]\x1b[0m MsgSys hub: client {ip} has routes to {} ServerHosts {:?} -- ambiguous, no route",
+        let personas: Vec<i64> = routes.iter().map(|r| r.persona_id).collect();
+        tracing::info!(
+            "[Dedicated pool] MsgSys hub: client {ip} has routes to {} ServerHosts {:?} (personas {:?}) -- ambiguous, no route",
             ups.len(),
-            ups
+            ups,
+            personas
         );
     }
     None

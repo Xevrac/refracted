@@ -148,29 +148,27 @@ async fn handle_conn(
         log_rts_system(peer, "client connected -- identifying match session");
         let id = peek_protocol_version_identity(&mut client, PROTOCOL_VERSION_WAIT).await?;
         if let Some(hex) = id.protocol_version_hex.as_deref() {
-            log_rts_system(
-                peer,
-                &format!(
-                    "ProtocolVersion payload={hex} auth persona={}",
-                    id.persona.map(|p| p.to_string()).unwrap_or_else(|| "-".into())
-                ),
+            // (H491) Info, not debug: these lines are how a refused join is diagnosed.
+            info!(
+                "{RTS_TAG} {peer} ProtocolVersion payload={hex} auth persona={}",
+                id.persona.map(|p| p.to_string()).unwrap_or_else(|| "-".into())
             );
         }
         let up = crate::client::cnc::dedicated_pool::resolve_client_msgsys_upstream(peer, id.persona);
+        if id.protocol_version_hex.is_none() {
+            info!(
+                "{RTS_TAG} {peer} first client frame was not ProtocolVersion ({} bytes read)",
+                id.prefix.len()
+            );
+        }
         match (up, id.persona) {
-            (Some(addr), Some(pid)) => {
-                log_rts_system(peer, &format!("session route persona={pid} → {addr}"))
-            }
-            (Some(addr), None) => {
-                log_rts_system(peer, &format!("session route by client address → {addr}"))
-            }
-            (None, Some(pid)) => log_rts_system(
-                peer,
-                &format!("no session route for persona={pid} (not seated in an assigned match)"),
+            (Some(addr), Some(pid)) => info!("{RTS_TAG} {peer} session route persona={pid} → {addr}"),
+            (Some(addr), None) => info!("{RTS_TAG} {peer} session route by client address → {addr}"),
+            (None, Some(pid)) => info!(
+                "{RTS_TAG} {peer} no session route for persona={pid} (not seated in an assigned match)"
             ),
-            (None, None) => log_rts_system(
-                peer,
-                "no session route (no auth token; client address ambiguous or unknown)",
+            (None, None) => info!(
+                "{RTS_TAG} {peer} no session route (no auth token; client address ambiguous or unknown)"
             ),
         }
         let gid = id

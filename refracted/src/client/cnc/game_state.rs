@@ -424,6 +424,8 @@ struct GidOrchestration {
     pending_mesh_pid: Option<i64>,
     pending_game_ready_pid: Option<i64>,
     deferred_join_pushes: Option<Vec<super::fireframe::OutgoingPush>>,
+    /// (H491) When Start Battle began orchestrating this gid; the leave/start hold expires.
+    started_at: std::time::Instant,
 }
 
 pub enum MeshUpdateResult {
@@ -585,7 +587,47 @@ pub fn has_orchestration(gid: i64) -> bool {
 /// H382: the join handshake holds leave/reclaim only until the match is InGame. The
 /// orchestration entry stays for the whole match, so the host leaving a running game was skipped.
 pub fn orchestration_holds_leave(gid: i64) -> bool {
-    has_orchestration(gid) && get_phase(gid) != GamePhase::InGame
+    start_in_progress(gid)
+}
+
+/// (H491) Longest a Start Battle may take before it is treated as failed: dedicated connect
+/// (12 s) + GameReady wait (120 s) + the client's level load. A start that never reached InGame
+/// (relay refused, client gone, dedicated died) used to hold leaves and report "starting" forever:
+/// the lobby could not be left or reclaimed and re-joining it showed "Starting game.." at once.
+const START_HOLD: std::time::Duration = std::time::Duration::from_secs(240);
+
+fn orchestration_fresh(gid: i64) -> bool {
+    orchestration()
+        .lock()
+        .get(&gid)
+        .map(|o| o.started_at.elapsed() < START_HOLD)
+        .unwrap_or(false)
+}
+
+/// A Start Battle for `gid` is running: orchestrated, not InGame yet, inside `START_HOLD`.
+pub fn start_in_progress(gid: i64) -> bool {
+    orchestration_fresh(gid) && get_phase(gid) != GamePhase::InGame
+}
+
+/// Roster `starting` (caller holds the games lock): the latch, but only while a start is
+/// actually running -- for this gid or, for the host's own lobby (gid 1, latched by
+/// `mark_match_starting`), for the pool match that host started.
+fn roster_starting_locked(m: &HashMap<i64, CncGame>, gid: i64) -> bool {
+    let Some(game) = m.get(&gid) else {
+        return false;
+    };
+    if !game.starting {
+        return false;
+    }
+    let running = |g: i64, cg: &CncGame| cg.phase != GamePhase::InGame && orchestration_fresh(g);
+    if running(gid, game) {
+        return true;
+    }
+    let host = game.host_persona;
+    host > 0
+        && m
+            .iter()
+            .any(|(g, cg)| *g != gid && cg.host_persona == host && running(*g, cg))
 }
 
 pub fn has_deferred_join_pushes(gid: i64) -> bool {
@@ -611,6 +653,7 @@ pub fn begin_reset_orchestration(gid: i64, client_session_id: u64, dedicated_ses
             pending_mesh_pid: None,
             pending_game_ready_pid: None,
             deferred_join_pushes: None,
+            started_at: std::time::Instant::now(),
         },
     );
 }
@@ -783,6 +826,7 @@ pub fn defer_client_join_pushes(
         pending_mesh_pid: None,
         pending_game_ready_pid: None,
         deferred_join_pushes: None,
+        started_at: std::time::Instant::now(),
     });
     entry.client_session_id = client_session_id;
     if entry.join_pushes_released {
@@ -915,6 +959,7 @@ pub fn on_cmd220_delivered_to_dedicated(gid: i64) {
         pending_mesh_pid: None,
         pending_game_ready_pid: None,
         deferred_join_pushes: None,
+        started_at: std::time::Instant::now(),
     });
 
     let gid_spawn = gid;
@@ -3617,7 +3662,11 @@ pub fn dedicated_session_id_for_gid(gid: i64) -> Option<u64> {
 }
 
 pub fn reclaim_after_empty_humans(gid: i64) -> serde_json::Value {
-    if orchestration_holds_leave(gid) {
+    reclaim_after_empty_humans_ex(gid, false)
+}
+
+fn reclaim_after_empty_humans_ex(gid: i64, ignore_start_hold: bool) -> serde_json::Value {
+    if !ignore_start_hold && orchestration_holds_leave(gid) {
         tracing::info!(
             target: "cnc",
             "[CNC] reclaim skipped — match orchestration in progress (gid={gid})"
@@ -3742,11 +3791,15 @@ pub fn purge_persona_from_lobbies(persona_id: i64) {
             .collect()
     };
     for gid in gids {
-        let _ = leave_gameroom_ex(gid, persona_id, false);
-        crate::debug_println!(
-            "\x1b[38;2;255;215;0m[CNC]\x1b[0m purged persona {} from lobby gid={}",
+        // (H491) The player's Blaze session is gone (game closed / crashed): there is no join
+        // handshake left to protect, so the Start Battle hold does not apply. Held, an abandoned
+        // start kept the seat, the dedicated and the "starting" latch forever.
+        let body = leave_gameroom_impl(gid, persona_id, false, true);
+        crate::console_println!(
+            "[CNC] purged persona {} from lobby gid={} (Blaze session closed) -> {}",
             persona_id,
-            gid
+            gid,
+            body
         );
     }
 }
@@ -3768,6 +3821,15 @@ pub fn clear_lobby_humans(gid: i64) {
 }
 
 pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_json::Value {
+    leave_gameroom_impl(gid, persona_id, force_clear, false)
+}
+
+fn leave_gameroom_impl(
+    gid: i64,
+    persona_id: i64,
+    force_clear: bool,
+    ignore_start_hold: bool,
+) -> serde_json::Value {
     // (H473) "The session's player" only exists on a single-user desktop. On a shared server it is
     // one arbitrary player, and a leave with no pid removed them.
     let session_pid = if crate::nexus::identity::client_join_requires_login() {
@@ -3796,7 +3858,7 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
             .collect()
     };
     if humans_snapshot.is_empty() {
-        return reclaim_after_empty_humans(gid);
+        return reclaim_after_empty_humans_ex(gid, ignore_start_hold);
     }
 
     if persona_id > 0 && !humans_snapshot.iter().any(|&h| h == persona_id) {
@@ -3829,7 +3891,8 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
         });
     };
 
-    if orchestration_holds_leave(gid)
+    if !ignore_start_hold
+        && orchestration_holds_leave(gid)
         && (resolved_pid == 0 || resolved_pid == host_persona_for_gid(gid))
     {
         tracing::info!(
@@ -3867,14 +3930,14 @@ pub fn leave_gameroom_ex(gid: i64, persona_id: i64, force_clear: bool) -> serde_
     };
     match remaining {
         Some(0) if was_standby => {
-            let mut body = reclaim_after_empty_humans(gid);
+            let mut body = reclaim_after_empty_humans_ex(gid, ignore_start_hold);
             if let Some(obj) = body.as_object_mut() {
                 obj.insert("pid".into(), serde_json::json!(resolved_pid));
             }
             body
         }
         Some(0) => {
-            let mut body = reclaim_after_empty_humans(gid);
+            let mut body = reclaim_after_empty_humans_ex(gid, ignore_start_hold);
             if let Some(obj) = body.as_object_mut() {
                 obj.insert("pid".into(), serde_json::json!(resolved_pid));
             }
@@ -4075,7 +4138,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "allReady": all_ready,
         "map": if game.map_path.is_empty() { get_map_path_locked(gid) } else { game.map_path.clone() },
         "startCount": game.start_count,
-        "starting": game.starting,
+        "starting": roster_starting_locked(&m, gid),
         "players": players,
         "kicked": kicked_for_gid(gid),
         "serverLost": false,

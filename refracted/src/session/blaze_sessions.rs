@@ -213,7 +213,13 @@ pub fn unregister(id: u64) {
     if is_cnc {
         if !was_dedicated {
             if let Some(pid) = persona_id {
-                if pid > 0 {
+                // (H491) Only when the player has no other live Blaze session: the purge now
+                // also clears a seat held by a running Start Battle.
+                let still_connected = registry()
+                    .lock()
+                    .values()
+                    .any(|e| e.persona_id == Some(pid));
+                if pid > 0 && !still_connected {
                     crate::client::cnc::game_state::purge_persona_from_lobbies(pid as i64);
                     crate::client::cnc::game_state::clear_persona_match_lost(pid as i64);
                 }
