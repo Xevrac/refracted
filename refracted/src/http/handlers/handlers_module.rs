@@ -441,11 +441,8 @@ impl HttpHandler {
                         .with(|c| c.borrow().clone())
                         .unwrap_or_else(|| "none".into())
                 );
-                return Ok(HttpResponse::new(
-                    403,
-                    "application/json",
-                    br#"{"ok":false,"error":"missing_or_invalid_client","message":"Send X-Refracted-Client"}"#.to_vec(),
-                ));
+                // Same answer as an unknown path: nothing tells the caller what was missing.
+                return Ok(HttpResponse::new(404, "text/plain", b"Not Found".to_vec()));
             }
         }
 
