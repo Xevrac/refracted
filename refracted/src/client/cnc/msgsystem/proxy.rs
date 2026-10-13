@@ -28,7 +28,7 @@ pub const DEDICATED_SERVERHOST_PORT: u16 = 18387;
 // listening yet) is retried with a fresh attempt until the budget ends.
 const UPSTREAM_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 /// Wait for ServerHost (load-complete / cmd 220).
-const UPSTREAM_WAIT_BUDGET: Duration = Duration::from_secs(8);
+const UPSTREAM_WAIT_BUDGET: Duration = Duration::from_secs(30);
 const RELAY_CHUNK: usize = 4096;
 
 pub async fn try_connect_upstream_to(upstream: SocketAddr) -> Option<TcpStream> {

@@ -394,6 +394,11 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     if base == "cnc/lobby-chat" {
         return Some(handle_cnc_lobby_chat(is_post, query, body));
     }
+    // GET /cnc/port-probe?ports=18397,18398 — launcher pre-flight before a dedicated starts.
+    if base == "cnc/port-probe" && is_get {
+        let _ = body;
+        return Some(handle_cnc_port_probe(query));
+    }
     if base == "cnc/dedicated-pool" && is_get {
         let _ = body;
         return Some(HttpResponse::new(
@@ -479,6 +484,81 @@ fn handle_cnc_online_count() -> HttpResponse {
         "players": players,
         "servers": servers,
         "active": blaze_sessions::active_count(),
+    });
+    HttpResponse::new(200, "application/json", body.to_string().into_bytes())
+}
+
+const PORT_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
+const PORT_PROBE_MAX_PORTS: usize = 4;
+
+/// Connect back to the caller's own address on each requested TCP port (the launcher holds a
+/// listener on each). Only the requesting address is ever probed.
+fn handle_cnc_port_probe(query: Option<&str>) -> HttpResponse {
+    let Some(peer) = crate::http::handlers::handlers_module::current_http_peer() else {
+        return HttpResponse::new(500, "application/json", br#"{"ok":false,"error":"no peer address"}"#.to_vec());
+    };
+    let ip = peer.ip().to_canonical();
+    let ports: Vec<u16> = query
+        .unwrap_or("")
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .filter(|(k, _)| *k == "ports")
+        .flat_map(|(_, v)| {
+            percent_decode_plus(v)
+                .split(',')
+                .filter_map(|p| p.trim().parse::<u16>().ok())
+                .collect::<Vec<_>>()
+        })
+        .filter(|p| *p >= 1024)
+        .collect();
+    if ports.is_empty() || ports.len() > PORT_PROBE_MAX_PORTS {
+        return HttpResponse::new(
+            400,
+            "application/json",
+            br#"{"ok":false,"error":"ports= takes 1 to 4 ports >= 1024"}"#.to_vec(),
+        );
+    }
+    let probes: Vec<_> = ports
+        .iter()
+        .map(|&port| {
+            std::thread::spawn(move || {
+                let addr = std::net::SocketAddr::new(ip, port);
+                match std::net::TcpStream::connect_timeout(&addr, PORT_PROBE_TIMEOUT) {
+                    Ok(_) => (port, true, String::new()),
+                    Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
+                        (port, false, "no answer (inbound blocked by a firewall or tailnet ACL)".to_string())
+                    }
+                    Err(e) => (port, false, e.to_string()),
+                }
+            })
+        })
+        .collect();
+    let results: Vec<(u16, bool, String)> = probes
+        .into_iter()
+        .zip(ports.iter())
+        .map(|(h, &port)| h.join().unwrap_or((port, false, "probe failed".to_string())))
+        .collect();
+    let blocked: Vec<String> = results
+        .iter()
+        .filter(|(_, open, _)| !open)
+        .map(|(port, _, why)| format!("{port} ({why})"))
+        .collect();
+    if blocked.is_empty() {
+        crate::console_println!("[Dedicated pool] port pre-flight {} ports {:?}: open", ip, ports);
+    } else {
+        crate::console_println!(
+            "[Dedicated pool] port pre-flight {} BLOCKED: {}",
+            ip,
+            blocked.join(", ")
+        );
+    }
+    let body = serde_json::json!({
+        "ok": true,
+        "ip": ip.to_string(),
+        "results": results
+            .iter()
+            .map(|(port, open, why)| serde_json::json!({ "port": port, "open": open, "error": why }))
+            .collect::<Vec<_>>(),
     });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }

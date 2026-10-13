@@ -1404,7 +1404,10 @@ pub fn orchestrate_client_reset(
     if is_dedicated_blaze_session(client_session_id) {
         return None;
     }
-    if let Some(existing_sid) = assignments().lock().get(&gid).map(|a| a.dedicated_session_id) {
+    // The guard must drop before the body: it re-locks `assignments()` (parking_lot is not
+    // re-entrant), and an `if let` scrutinee's temporaries live through the whole body.
+    let existing = assignments().lock().get(&gid).map(|a| a.dedicated_session_id);
+    if let Some(existing_sid) = existing {
         if super::game_state::has_orchestration(gid) {
             return Some(existing_sid);
         }

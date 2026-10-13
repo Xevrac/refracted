@@ -89,7 +89,7 @@ fn create_game_options(
 
 /// H498: whole budget for reaching the dedicated's SimuCloud host. Each attempt gets
 /// `MAX_SERVER_RTT` (was 500 ms, which cancelled every handshake to a farther server).
-const CONNECT_BUDGET: Duration = Duration::from_secs(12);
+const CONNECT_BUDGET: Duration = Duration::from_secs(30);
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// Cold dedicated load can exceed 45s; wait up to this for GameReady.
 const GAME_READY_WAIT: Duration = Duration::from_secs(120);
@@ -432,7 +432,7 @@ async fn negotiate_type_ids(stream: &mut TcpStream) -> std::io::Result<(u16, u16
     ));
     write_simple_frame(stream, &pv).await?;
 
-    let deadline = Instant::now() + Duration::from_secs(8);
+    let deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < deadline {
         let frame = match read_simple_frame(stream).await {
             Ok(f) => f,
