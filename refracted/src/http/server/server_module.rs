@@ -291,7 +291,7 @@ impl HttpProtocolServer {
         let (method, path, host, body) = Self::parse_http_request(&request_str)?;
 
         // Handle the request
-        let response = http_handler.handle_request_from(addr, &host, &path, &method, &body)?;
+        let response = http_handler.handle_request_from(addr, &request_str, &host, &path, &method, &body)?;
 
         // Send HTTP response
         let response_bytes = Self::format_http_response(&response);
@@ -353,7 +353,7 @@ impl HttpProtocolServer {
             }
         };
         
-        let response = match http_handler.handle_request_from(addr, &host, &path, &method, &body) {
+        let response = match http_handler.handle_request_from(addr, &request_str, &host, &path, &method, &body) {
             Ok(r) => r,
             Err(e) => {
                 error!("[HTTP-1.1-TLS] Handler error for {} {}: {}", method, path, e);

@@ -526,7 +526,7 @@ fn handle_cnc_port_probe(query: Option<&str>) -> HttpResponse {
                 match std::net::TcpStream::connect_timeout(&addr, PORT_PROBE_TIMEOUT) {
                     Ok(_) => (port, true, String::new()),
                     Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                        (port, false, "no answer (inbound blocked by a firewall or tailnet ACL)".to_string())
+                        (port, false, "no answer".to_string())
                     }
                     Err(e) => (port, false, e.to_string()),
                 }

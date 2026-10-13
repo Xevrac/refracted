@@ -16,6 +16,35 @@ use std::time::{SystemTime, UNIX_EPOCH};
 thread_local! {
     static CURRENT_HTTP_PEER: std::cell::Cell<Option<std::net::SocketAddr>> =
         const { std::cell::Cell::new(None) };
+    static CURRENT_HTTP_CLIENT: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// `X-Refracted-Client` values allowed on the shell and `/cnc/*` routes.
+const REFRACTED_CLIENTS: &[&str] = &["game", "launcher", "server"];
+
+/// `X-Refracted-Client` of the request being handled on this thread (lower-cased), if sent.
+pub fn current_refracted_client() -> Option<String> {
+    CURRENT_HTTP_CLIENT.with(|c| c.borrow().clone())
+}
+
+/// `X-Refracted-Client` from a raw HTTP/1.1 request head.
+fn refracted_client_header(raw_request: &str) -> Option<String> {
+    raw_request
+        .split("\r\n\r\n")
+        .next()?
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split_once(':'))
+        .find(|(k, _)| k.trim().eq_ignore_ascii_case("x-refracted-client"))
+        .map(|(_, v)| v.trim().to_ascii_lowercase())
+}
+
+/// The shell (`/cnc/data/`, `/cncg2/`, `/config.cncg2`) and its API (`/cnc/*`) answer only the
+/// game, the launcher and dedicated servers, which send `X-Refracted-Client`.
+fn is_refracted_client_route(path: &str) -> bool {
+    let p = path.trim_start_matches('/');
+    p.starts_with("cnc/") || p.starts_with("cncg2/") || p == "config.cncg2" || p.starts_with("config.cncg2/")
 }
 
 /// Remote address of the HTTP/1.1 request being handled on this thread, if the server set it.
@@ -303,13 +332,17 @@ impl HttpHandler {
     pub fn handle_request_from(
         &self,
         peer: std::net::SocketAddr,
+        raw_request: &str,
         host: &str,
         path: &str,
         method: &str,
         body: &[u8],
     ) -> BlazeResult<HttpResponse> {
         let prev = CURRENT_HTTP_PEER.with(|c| c.replace(Some(peer)));
+        let prev_client =
+            CURRENT_HTTP_CLIENT.with(|c| c.replace(refracted_client_header(raw_request)));
         let result = self.handle_request(host, path, method, body);
+        CURRENT_HTTP_CLIENT.with(|c| *c.borrow_mut() = prev_client);
         CURRENT_HTTP_PEER.with(|c| c.set(prev));
         result
     }
@@ -387,6 +420,24 @@ impl HttpHandler {
                 status_code: None,
             };
             capture_http(http_capture);
+        }
+
+        if is_refracted_client_route(path) {
+            let client = current_refracted_client();
+            if !client.as_deref().is_some_and(|c| REFRACTED_CLIENTS.contains(&c)) {
+                crate::console_println!(
+                    "[Web] REFUSED {} {} from {}: X-Refracted-Client {}",
+                    method,
+                    path.split('?').next().unwrap_or(path),
+                    current_http_peer().map(|p| p.ip().to_string()).unwrap_or_else(|| "-".into()),
+                    client.map(|c| format!("'{c}' not allowed")).unwrap_or_else(|| "missing".into())
+                );
+                return Ok(HttpResponse::new(
+                    403,
+                    "application/json",
+                    br#"{"ok":false,"error":"missing_or_invalid_client","message":"Send X-Refracted-Client"}"#.to_vec(),
+                ));
+            }
         }
 
         if let Some(response) = crate::client::cnc::try_handle_cnc_post(method, path, body) {
