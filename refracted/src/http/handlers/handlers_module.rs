@@ -18,6 +18,8 @@ thread_local! {
         const { std::cell::Cell::new(None) };
     static CURRENT_HTTP_CLIENT: std::cell::RefCell<Option<String>> =
         const { std::cell::RefCell::new(None) };
+    static CURRENT_HTTP_USER_AGENT: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// `X-Refracted-Client` values allowed on the shell and `/cnc/*` routes.
@@ -28,16 +30,16 @@ pub fn current_refracted_client() -> Option<String> {
     CURRENT_HTTP_CLIENT.with(|c| c.borrow().clone())
 }
 
-/// `X-Refracted-Client` from a raw HTTP/1.1 request head.
-fn refracted_client_header(raw_request: &str) -> Option<String> {
+/// Header `name` from a raw HTTP/1.1 request head.
+fn request_header(raw_request: &str, name: &str) -> Option<String> {
     raw_request
         .split("\r\n\r\n")
         .next()?
         .lines()
         .skip(1)
         .filter_map(|line| line.split_once(':'))
-        .find(|(k, _)| k.trim().eq_ignore_ascii_case("x-refracted-client"))
-        .map(|(_, v)| v.trim().to_ascii_lowercase())
+        .find(|(k, _)| k.trim().eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.trim().to_string())
 }
 
 /// The shell (`/cnc/data/`, `/cncg2/`, `/config.cncg2`) and its API (`/cnc/*`) answer only the
@@ -339,9 +341,13 @@ impl HttpHandler {
         body: &[u8],
     ) -> BlazeResult<HttpResponse> {
         let prev = CURRENT_HTTP_PEER.with(|c| c.replace(Some(peer)));
-        let prev_client =
-            CURRENT_HTTP_CLIENT.with(|c| c.replace(refracted_client_header(raw_request)));
+        let prev_client = CURRENT_HTTP_CLIENT.with(|c| {
+            c.replace(request_header(raw_request, "x-refracted-client").map(|v| v.to_ascii_lowercase()))
+        });
+        let prev_agent = CURRENT_HTTP_USER_AGENT
+            .with(|c| c.replace(request_header(raw_request, "user-agent")));
         let result = self.handle_request(host, path, method, body);
+        CURRENT_HTTP_USER_AGENT.with(|c| *c.borrow_mut() = prev_agent);
         CURRENT_HTTP_CLIENT.with(|c| *c.borrow_mut() = prev_client);
         CURRENT_HTTP_PEER.with(|c| c.set(prev));
         result
@@ -426,11 +432,14 @@ impl HttpHandler {
             let client = current_refracted_client();
             if !client.as_deref().is_some_and(|c| REFRACTED_CLIENTS.contains(&c)) {
                 crate::console_println!(
-                    "[Web] REFUSED {} {} from {}: X-Refracted-Client {}",
+                    "[Web] REFUSED {} {} from {}: X-Refracted-Client {} (User-Agent: {})",
                     method,
                     path.split('?').next().unwrap_or(path),
                     current_http_peer().map(|p| p.ip().to_string()).unwrap_or_else(|| "-".into()),
-                    client.map(|c| format!("'{c}' not allowed")).unwrap_or_else(|| "missing".into())
+                    client.map(|c| format!("'{c}' not allowed")).unwrap_or_else(|| "missing".into()),
+                    CURRENT_HTTP_USER_AGENT
+                        .with(|c| c.borrow().clone())
+                        .unwrap_or_else(|| "none".into())
                 );
                 return Ok(HttpResponse::new(
                     403,
