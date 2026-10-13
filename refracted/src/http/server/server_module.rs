@@ -8,6 +8,29 @@ use rustls::ServerConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+/// Keep reading
+pub async fn read_rest_of_request_head<S: AsyncRead + Unpin>(
+    stream: &mut S,
+    buffer: &mut [u8],
+    mut filled: usize,
+) -> usize {
+    while filled > 0
+        && filled < buffer.len()
+        && !buffer[..filled].windows(4).any(|w| w == b"\r\n\r\n")
+    {
+        match tokio::time::timeout(
+            tokio::time::Duration::from_secs(5),
+            stream.read(&mut buffer[filled..]),
+        )
+        .await
+        {
+            Ok(Ok(n)) if n > 0 => filled += n,
+            _ => break,
+        }
+    }
+    filled
+}
 use tokio::net::TcpStream;
 use tokio_rustls::{server::TlsStream as ServerTlsStream, TlsAcceptor};
 use tracing::{error, info};
@@ -284,6 +307,7 @@ impl HttpProtocolServer {
         if bytes_read == 0 {
             return Ok(());
         }
+        let bytes_read = read_rest_of_request_head(&mut stream, &mut buffer, bytes_read).await;
 
         let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
 
@@ -343,6 +367,7 @@ impl HttpProtocolServer {
             bytes_read
         };
 
+        let final_bytes_read = read_rest_of_request_head(&mut stream, &mut buffer, final_bytes_read).await;
         let request_str = String::from_utf8_lossy(&buffer[..final_bytes_read]);
 
         let (method, path, host, body) = match Self::parse_http_request(&request_str) {

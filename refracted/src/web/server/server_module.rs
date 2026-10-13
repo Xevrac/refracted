@@ -331,6 +331,8 @@ impl WebProtocolServer {
             crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Connection closed by client {}", addr);
             return Ok(());
         }
+        let bytes_read =
+            crate::http::server::read_rest_of_request_head(&mut stream, &mut buffer, bytes_read).await;
 
         let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Request preview: {}", request_str.lines().next().unwrap_or(""));
@@ -400,6 +402,8 @@ impl WebProtocolServer {
         };
 
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Read {} bytes from {} (HTTP/1.1 over TLS)", final_bytes_read, addr);
+        let final_bytes_read =
+            crate::http::server::read_rest_of_request_head(&mut stream, &mut buffer, final_bytes_read).await;
         let request_str = String::from_utf8_lossy(&buffer[..final_bytes_read]);
         crate::debug_println!("\x1b[38;2;100;200;255m[Web]\x1b[0m Request preview: {}", request_str.lines().next().unwrap_or(""));
 
