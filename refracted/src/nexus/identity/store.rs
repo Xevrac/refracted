@@ -4,20 +4,6 @@ use mysql::{params, Pool};
 use crate::common::app_env::MysqlParams;
 
 #[derive(Debug, Clone)]
-pub struct UserRecord {
-    pub id: i64,
-    pub username: String,
-    pub email: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct PersonaRecord {
-    pub id: i64,
-    pub user_id: i64,
-    pub display_name: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct MatchStats {
     pub persona_id: i64,
     pub wins: i32,
@@ -62,6 +48,32 @@ pub struct LeaderRow {
     pub losses: i32,
 }
 
+/// One persona's totals as the Nexus reporting pages show them.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReportRow {
+    pub persona_id: i64,
+    pub user_id: Option<i64>,
+    pub display_name: Option<String>,
+    pub wins: i32,
+    pub losses: i32,
+    pub win_streak: i32,
+    pub loss_streak: i32,
+    /// Unix seconds (UTC).
+    pub updated_at: Option<i64>,
+    pub last_general_id: Option<i64>,
+    pub last_faction: Option<String>,
+    pub shortest_match_secs: Option<i32>,
+    pub best_win_secs: Option<i32>,
+}
+
+/// Realm-wide totals.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReportTotals {
+    pub personas: i64,
+    pub wins: i64,
+    pub losses: i64,
+}
+
 #[derive(Debug, Clone)]
 pub struct BoundSession {
     pub user_id: i64,
@@ -101,96 +113,32 @@ impl IdentityStore {
             .map_err(|e| format!("mysql get_conn: {e}"))
     }
 
-    /// Schema is owned by the frontend (`php artisan nexus:migrate`); refuse to boot without it.
-    pub fn verify_schema(&self) -> Result<(), String> {
-        const REQUIRED: &[&str] = &[
-            "users.id",
-            "users.secret_hash",
-            "users.secret_salt",
-            "users.discord_id",
-            "users.web_user_id",
-            "personas.id",
-            "personas.user_id",
-            "auth_sessions.token_hash",
-            "auth_sessions.jwt_id",
-            "auth_sessions.client_ip",
-            "auth_sessions.game_id",
-            "settings.key",
-            "signup_whitelist.discord_id",
-            "bans.discord_id",
-        ];
+    /// Bring the realm schema up to date. Refuses to boot on failure.
+    pub fn migrate(&self) -> Result<Vec<u32>, String> {
         let mut conn = self.conn()?;
-        let present: Vec<String> = conn
-            .query(
-                "SELECT CONCAT(TABLE_NAME, '.', COLUMN_NAME) FROM information_schema.COLUMNS \
-                 WHERE TABLE_SCHEMA = DATABASE()",
-            )
-            .map_err(|e| format!("mysql schema check: {e}"))?;
-        let missing: Vec<&str> = REQUIRED
-            .iter()
-            .copied()
-            .filter(|col| !present.iter().any(|p| p.eq_ignore_ascii_case(col)))
-            .collect();
-        if missing.is_empty() {
-            return Ok(());
-        }
-        Err(format!(
-            "nexus schema incomplete (missing {}); run `php artisan nexus:migrate --force` on the frontend",
-            missing.join(", ")
-        ))
-    }
-
-    pub fn user_count(&self) -> Result<i64, String> {
-        self.count("SELECT COUNT(*) FROM users")
+        super::super::realm_schema::migrate(&mut conn)
     }
 
     pub fn persona_count(&self) -> Result<i64, String> {
         self.count("SELECT COUNT(*) FROM personas")
     }
 
-    pub fn insert_user(&self, id: i64, username: &str, email: &str) -> Result<(), String> {
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-        let mut conn = self
-            .pool
-            .get_conn()
-            .map_err(|e| format!("mysql get_conn: {e}"))?;
+    /// Mirror the Nexus persona a verified ticket names, for leaderboards and chat tags.
+    pub fn upsert_persona(&self, persona_id: i64, user_id: i64, display_name: &str, name_tag: &str) -> Result<(), String> {
+        let mut conn = self.conn()?;
         conn.exec_drop(
-            "INSERT INTO users (id, username, email, created_at) VALUES (:id, :username, :email, :created_at)",
+            "INSERT INTO personas (id, user_id, display_name, name_tag, updated_at)
+             VALUES (:id, :user_id, :display_name, :name_tag, UTC_TIMESTAMP())
+             ON DUPLICATE KEY UPDATE user_id = :user_id, display_name = :display_name,
+                name_tag = :name_tag, updated_at = UTC_TIMESTAMP()",
             params! {
-                "id" => id,
-                "username" => username,
-                "email" => email,
-                "created_at" => now,
-            },
-        )
-        .map_err(|e| format!("mysql insert user: {e}"))
-    }
-
-    pub fn insert_persona(
-        &self,
-        id: i64,
-        user_id: i64,
-        display_name: &str,
-    ) -> Result<(), String> {
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-        let mut conn = self
-            .pool
-            .get_conn()
-            .map_err(|e| format!("mysql get_conn: {e}"))?;
-        conn.exec_drop(
-            "INSERT INTO personas (id, user_id, display_name, created_at) VALUES (:id, :user_id, :display_name, :created_at)",
-            params! {
-                "id" => id,
+                "id" => persona_id,
                 "user_id" => user_id,
                 "display_name" => display_name,
-                "created_at" => now,
+                "name_tag" => name_tag,
             },
         )
-        .map_err(|e| format!("mysql insert persona: {e}"))
+        .map_err(|e| format!("mysql persona mirror: {e}"))
     }
 
     /// Persona ids whose account carries a chat name tag (`developer` or `playtester`).
@@ -198,96 +146,14 @@ impl IdentityStore {
         let mut conn = self.conn()?;
         let rows: Vec<(i64, String)> = conn
             .query_map(
-                "SELECT p.id, u.name_tag \
-                 FROM personas p \
-                 INNER JOIN users u ON u.id = p.user_id \
-                 WHERE u.name_tag IN ('developer', 'playtester')",
+                "SELECT id, name_tag FROM personas WHERE name_tag IN ('developer', 'playtester')",
                 |(id, tag)| (id, tag),
             )
             .map_err(|e| format!("mysql name tags: {e}"))?;
         Ok(rows.into_iter().collect())
     }
 
-    pub fn personas_for_user(&self, user_id: i64) -> Result<Vec<PersonaRecord>, String> {
-        let mut conn = self
-            .pool
-            .get_conn()
-            .map_err(|e| format!("mysql get_conn: {e}"))?;
-        conn.exec_map(
-            "SELECT id, user_id, display_name FROM personas WHERE user_id = :user_id ORDER BY id",
-            params! { "user_id" => user_id },
-            |(id, user_id, display_name)| PersonaRecord {
-                id,
-                user_id,
-                display_name,
-            },
-        )
-        .map_err(|e| format!("mysql personas: {e}"))
-    }
-
-    /// Active account ban (permanent or not yet expired).
-    pub fn is_user_banned(&self, user_id: i64) -> Result<bool, String> {
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-        let mut conn = self.conn()?;
-        let row: Option<(i64,)> = conn
-            .exec_first(
-                "SELECT id FROM bans
-                 WHERE (user_id = :user_id
-                        OR discord_id = (SELECT u.discord_id FROM users u WHERE u.id = :user_id))
-                   AND lifted_at IS NULL
-                   AND (banned_until IS NULL OR banned_until > :now)
-                 LIMIT 1",
-                params! { "user_id" => user_id, "now" => now },
-            )
-            .map_err(|e| {
-                // Table may not exist until Nexus admin migration runs.
-                format!("mysql ban lookup: {e}")
-            })?;
-        Ok(row.is_some())
-    }
-
-    pub fn user_discord_id(&self, user_id: i64) -> Result<Option<String>, String> {
-        let mut conn = self.conn()?;
-        let row: Option<(Option<String>,)> = conn
-            .exec_first(
-                "SELECT discord_id FROM users WHERE id = :id",
-                params! { "id" => user_id },
-            )
-            .map_err(|e| format!("mysql discord lookup: {e}"))?;
-        Ok(row.and_then(|(d,)| d))
-    }
-
-    /// Active ban: `Some(None)` permanent, `Some(Some(unix))` until that time, `None` not banned.
-    pub fn active_ban_until(&self, user_id: i64) -> Result<Option<Option<i64>>, String> {
-        let now = chrono::Utc::now()
-            .format("%Y-%m-%d %H:%M:%S")
-            .to_string();
-        let mut conn = self.conn()?;
-        let row: Option<(Option<String>,)> = conn
-            .exec_first(
-                "SELECT CAST(banned_until AS CHAR) FROM bans
-                 WHERE (user_id = :user_id
-                        OR discord_id = (SELECT u.discord_id FROM users u WHERE u.id = :user_id))
-                   AND lifted_at IS NULL
-                   AND (banned_until IS NULL OR banned_until > :now)
-                 ORDER BY banned_until IS NULL DESC, banned_until DESC
-                 LIMIT 1",
-                params! { "user_id" => user_id, "now" => now },
-            )
-            .map_err(|e| format!("mysql ban lookup: {e}"))?;
-        Ok(row.map(|(until,)| {
-            until.and_then(|t| {
-                chrono::NaiveDateTime::parse_from_str(&t, "%Y-%m-%d %H:%M:%S")
-                    .ok()
-                    .map(|dt| dt.and_utc().timestamp())
-            })
-        }))
-    }
-
     pub fn match_stats(&self, persona_id: i64) -> Result<MatchStats, String> {
-        self.ensure_match_stats()?;
         let mut conn = self.conn()?;
         #[allow(clippy::type_complexity)]
         let row: Option<(i32, i32, i32, i32, Option<i64>, Option<String>, Option<i32>, Option<i32>)> = conn
@@ -335,7 +201,6 @@ impl IdentityStore {
         if persona_id <= 0 {
             return Err("persona id is required".into());
         }
-        self.ensure_match_stats()?;
         let now = chrono::Utc::now()
             .format("%Y-%m-%d %H:%M:%S")
             .to_string();
@@ -391,7 +256,6 @@ impl IdentityStore {
         ended_at: &str,
         details: &MatchDetails,
     ) -> Result<(), String> {
-        self.ensure_match_history()?;
         let mut conn = self.conn()?;
         conn.exec_drop(
             "INSERT INTO persona_match_history
@@ -411,7 +275,6 @@ impl IdentityStore {
 
     /// Newest first, at most `limit` rows.
     pub fn match_history(&self, persona_id: i64, limit: u32) -> Result<Vec<MatchEntry>, String> {
-        self.ensure_match_history()?;
         let mut conn = self.conn()?;
         #[allow(clippy::type_complexity)]
         let rows: Vec<(i32, String, Option<i32>, Option<i64>, Option<String>)> = conn
@@ -444,7 +307,6 @@ impl IdentityStore {
 
     /// Every persona with a reported match, ranked by wins, then fewest losses, then persona id.
     pub fn leaderboard(&self) -> Result<Vec<LeaderRow>, String> {
-        self.ensure_match_stats()?;
         let mut conn = self.conn()?;
         let rows: Vec<(i64, String, i32, i32)> = conn
             .query_map(
@@ -469,78 +331,51 @@ impl IdentityStore {
             .collect())
     }
 
-    fn ensure_match_history(&self) -> Result<(), String> {
+    pub fn report_totals(&self) -> Result<ReportTotals, String> {
         let mut conn = self.conn()?;
-        conn.query_drop(
-            "CREATE TABLE IF NOT EXISTS persona_match_history (
-                id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                persona_id BIGINT NOT NULL,
-                victory TINYINT NOT NULL,
-                ended_at DATETIME NOT NULL,
-                duration_secs INT NULL,
-                general_id BIGINT NULL,
-                faction VARCHAR(8) NULL,
-                KEY persona_ended (persona_id, ended_at)
-            )",
-        )
-        .map_err(|e| format!("mysql persona_match_history: {e}"))?;
-        self.ensure_columns(
-            "persona_match_history",
-            &[
-                ("duration_secs", "INT NULL"),
-                ("general_id", "BIGINT NULL"),
-                ("faction", "VARCHAR(8) NULL"),
-            ],
-        )
-    }
-
-    /// Add any of `columns` the table lacks (tables created before the column existed).
-    fn ensure_columns(&self, table: &str, columns: &[(&str, &str)]) -> Result<(), String> {
-        let mut conn = self.conn()?;
-        let have: Vec<String> = conn
-            .exec_map(
-                "SELECT COLUMN_NAME FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t",
-                params! { "t" => table },
-                |name: String| name.to_ascii_lowercase(),
+        let row: Option<(i64, i64, i64)> = conn
+            .query_first(
+                "SELECT COUNT(*), CAST(COALESCE(SUM(wins), 0) AS SIGNED), CAST(COALESCE(SUM(losses), 0) AS SIGNED)
+                 FROM persona_match_stats",
             )
-            .map_err(|e| format!("mysql columns of {table}: {e}"))?;
-        for (name, ddl) in columns {
-            if !have.iter().any(|h| h == name) {
-                conn.query_drop(format!("ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
-                    .map_err(|e| format!("mysql add {table}.{name}: {e}"))?;
-                tracing::info!("nexus: added column {table}.{name}");
-            }
-        }
-        Ok(())
+            .map_err(|e| format!("mysql report totals: {e}"))?;
+        let (personas, wins, losses) = row.unwrap_or((0, 0, 0));
+        Ok(ReportTotals { personas, wins, losses })
     }
 
-    fn ensure_match_stats(&self) -> Result<(), String> {
+    /// Most active personas first, or the one persona asked for.
+    pub fn report_rows(&self, persona_id: Option<i64>, limit: u32) -> Result<Vec<ReportRow>, String> {
         let mut conn = self.conn()?;
-        conn.query_drop(
-            "CREATE TABLE IF NOT EXISTS persona_match_stats (
-                persona_id BIGINT NOT NULL PRIMARY KEY,
-                wins INT NOT NULL DEFAULT 0,
-                losses INT NOT NULL DEFAULT 0,
-                win_streak INT NOT NULL DEFAULT 0,
-                loss_streak INT NOT NULL DEFAULT 0,
-                updated_at DATETIME NOT NULL,
-                last_general_id BIGINT NULL,
-                last_faction VARCHAR(8) NULL,
-                shortest_match_secs INT NULL,
-                best_win_secs INT NULL
-            )",
-        )
-        .map_err(|e| format!("mysql persona_match_stats: {e}"))?;
-        self.ensure_columns(
-            "persona_match_stats",
-            &[
-                ("last_general_id", "BIGINT NULL"),
-                ("last_faction", "VARCHAR(8) NULL"),
-                ("shortest_match_secs", "INT NULL"),
-                ("best_win_secs", "INT NULL"),
-            ],
-        )
+        let rows: Vec<mysql::Row> = conn
+            .exec(
+                "SELECT s.persona_id, p.user_id, p.display_name, s.wins, s.losses, s.win_streak, s.loss_streak,
+                        TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', s.updated_at), s.last_general_id, s.last_faction,
+                        s.shortest_match_secs, s.best_win_secs
+                 FROM persona_match_stats s
+                 LEFT JOIN personas p ON p.id = s.persona_id
+                 WHERE (:pid IS NULL OR s.persona_id = :pid)
+                 ORDER BY (s.wins + s.losses) DESC, s.persona_id ASC
+                 LIMIT :limit",
+                params! { "pid" => persona_id, "limit" => limit },
+            )
+            .map_err(|e| format!("mysql report rows: {e}"))?;
+        Ok(rows
+            .into_iter()
+            .map(|r| ReportRow {
+                persona_id: column(&r, 0).unwrap_or_default(),
+                user_id: column(&r, 1),
+                display_name: column(&r, 2),
+                wins: column(&r, 3).unwrap_or_default(),
+                losses: column(&r, 4).unwrap_or_default(),
+                win_streak: column(&r, 5).unwrap_or_default(),
+                loss_streak: column(&r, 6).unwrap_or_default(),
+                updated_at: column(&r, 7),
+                last_general_id: column(&r, 8),
+                last_faction: column(&r, 9),
+                shortest_match_secs: column(&r, 10),
+                best_win_secs: column(&r, 11),
+            })
+            .collect())
     }
 
     fn count(&self, sql: &str) -> Result<i64, String> {
@@ -552,4 +387,9 @@ impl IdentityStore {
             .map_err(|e| format!("mysql count: {e}"))?
             .ok_or_else(|| "mysql count returned no row".to_string())
     }
+}
+
+/// Nullable column `i` of `row`; NULL and unconvertible values are `None`.
+fn column<T: mysql::prelude::FromValue>(row: &mysql::Row, i: usize) -> Option<T> {
+    row.get_opt::<Option<T>, _>(i).and_then(Result::ok).flatten()
 }

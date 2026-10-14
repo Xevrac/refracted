@@ -174,14 +174,14 @@ fn bind_from_path(path: &Path) -> Result<(BoundSession, Option<String>), String>
     } else {
         return Err("handoff missing token".into());
     };
-    // Identity comes from DB lookup of the token — claimed ids must match the row.
+    // Identity comes from the signed ticket; claimed ids must match it.
     let bound = bind_mysql_client(presented, user_id, persona_id)?;
     let jwt = if payload.jwt.is_empty() {
         None
     } else {
         Some(payload.jwt)
     };
-    let _ = payload.display_name; // display comes from DB, not the handoff claim
+    let _ = payload.display_name; // display comes from the signed ticket, not the handoff claim
     Ok((bound, jwt))
 }
 

@@ -36,7 +36,7 @@ Env file (created next to rfrcli on first run as refracted.env):
   pass=
 
 datasource=json  localized testing only — JSON/manual personas from {exe}/data
-datasource=mysql production identity tables; game clients must authenticate (login later)
+datasource=mysql realm database (migrated at boot); game clients present a Nexus ticket
 
 Examples:
   rfrcli

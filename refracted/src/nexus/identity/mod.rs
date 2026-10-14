@@ -1,14 +1,19 @@
-//! Nexus identity: `users` and attached `personas`.
+//! Nexus identity on a realm. Nexus owns accounts and signs tickets; the realm verifies them
+//! offline and keeps its own database (personas mirror, match records).
 //!
 //! Desktop and headless `datasource=json` use JSON personas. Headless `datasource=mysql`
-//! requires client authentication (login/logout later).
+//! requires a Nexus ticket from every game client.
 
 mod store;
 mod auth;
 mod handoff;
+mod ticket;
 
-pub use store::{BoundSession, IdentityStore, LeaderRow, MatchDetails, MatchEntry, MatchStats, PersonaRecord, UserRecord};
-pub use auth::{assert_bound_identity, IssuedCredentials};
+pub use store::{
+    BoundSession, IdentityStore, LeaderRow, MatchDetails, MatchEntry, MatchStats, ReportRow,
+    ReportTotals,
+};
+pub use auth::assert_bound_identity;
 pub use handoff::{
     ensure_bound_from_handoff, handoff_file_present, handoff_path, try_bind_launcher_handoff,
 };
@@ -17,6 +22,7 @@ use crate::common::app_env::{AppEnv, Datasource};
 
 static IDENTITY: parking_lot::Mutex<Option<IdentityStore>> = parking_lot::Mutex::new(None);
 static BOUND_SESSION: parking_lot::Mutex<Option<BoundSession>> = parking_lot::Mutex::new(None);
+static TICKET_KEY: parking_lot::Mutex<Option<Vec<u8>>> = parking_lot::Mutex::new(None);
 /// JSON personas stay off until boot enables them.
 static JSON_PERSONAS_ALLOWED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -59,19 +65,33 @@ pub fn client_join_requires_login() -> bool {
     !json_personas_allowed()
 }
 
-/// Connect to MySQL and verify the frontend-owned Nexus schema.
+/// Connect to the realm database, migrate it, and start following Nexus revocations.
 pub fn init_mysql_identity(env: &AppEnv) -> Result<(), String> {
+    let key = ticket::parse_public_key(&env.nexus.ticket_public_key)
+        .map_err(|e| format!("{e}; set ticket_public_key in {}", env.path.display()))?;
     let store = IdentityStore::open_mysql(&env.mysql)?;
-    store.verify_schema()?;
-    let users = store.user_count()?;
+    let applied = store.migrate()?;
     let personas = store.persona_count()?;
     crate::nexus::log_nexus_to_blaze(format!(
-        "Identity: MySQL ({}), {users} users, {personas} personas, token pepper {}",
+        "Identity: realm {} on MySQL {} ({}), schema migrations applied {:?}, {personas} personas",
+        if env.nexus.realm.is_empty() { "-" } else { env.nexus.realm.as_str() },
+        env.mysql.database,
         env.environment.as_str(),
-        auth::pepper_fingerprint()
+        applied
     ));
+    *TICKET_KEY.lock() = Some(key);
     *IDENTITY.lock() = Some(store);
+    crate::nexus::revocations::start(&env.nexus);
     Ok(())
+}
+
+fn ticket_key() -> Result<Vec<u8>, String> {
+    TICKET_KEY.lock().clone().ok_or_else(|| "ticket public key is not loaded".into())
+}
+
+/// Active Nexus ban, from the revocation feed.
+pub fn is_user_banned(user_id: i64) -> bool {
+    crate::nexus::revocations::active_ban(user_id).is_some()
 }
 
 pub fn current_identity_store() -> Option<IdentityStore> {
@@ -88,8 +108,7 @@ pub fn bind_mysql_client(
         return Err("bind_mysql_client is only for datasource=mysql".into());
     }
     let store = current_identity_store().ok_or("mysql identity store is not ready")?;
-    let bound = store.bind_client(presented, claimed_user, claimed_persona)?;
-    record_bound_game(&store, presented);
+    let bound = store.bind_client(presented, &ticket_key()?, claimed_user, claimed_persona)?;
     *BOUND_SESSION.lock() = Some(bound.clone());
     crate::nexus::log_nexus_to_blaze(format!(
         "Signed in: {} (user {}, persona {})",
@@ -120,35 +139,14 @@ pub fn bind_presented_client(presented: &str) -> Result<BoundSession, ClientLogi
     }
     let store = current_identity_store()
         .ok_or_else(|| ClientLoginRefusal::Unauthorized("mysql identity store is not ready".into()))?;
-    let bound = store.resolve_presented(presented).map_err(|e| {
-        let Some(session) = store.presented_session(presented).ok().flatten() else {
-            return ClientLoginRefusal::Unauthorized(e);
-        };
-        match store.active_ban_until(session.user_id).ok().flatten() {
-            Some(until_unix) => ClientLoginRefusal::Banned {
-                until_unix,
-                user_id: session.user_id,
-                persona_id: session.persona_id,
-                discord_id: store.user_discord_id(session.user_id).ok().flatten(),
-            },
-            None => ClientLoginRefusal::Unauthorized(e),
-        }
-    })?;
-    record_bound_game(&store, presented);
+    let key = ticket_key().map_err(ClientLoginRefusal::Unauthorized)?;
+    let bound = store.resolve_presented(presented, &key)?;
     *BOUND_SESSION.lock() = Some(bound.clone());
     crate::nexus::log_nexus_to_blaze(format!(
         "Signed in: {} (user {}, persona {})",
         bound.display_name, bound.user_id, bound.persona_id
     ));
     Ok(bound)
-}
-
-/// A failed stamp must not refuse an otherwise valid login.
-fn record_bound_game(store: &IdentityStore, presented: &str) {
-    let game = crate::common::game::get_current_game_id();
-    if let Err(e) = store.record_session_game(presented, &game) {
-        tracing::warn!("nexus session game stamp failed: {e}");
-    }
 }
 
 /// Active bound Nexus session for this process (mysql only).
@@ -174,6 +172,14 @@ pub fn persona_match_history(persona_id: i64, limit: u32) -> Result<Vec<MatchEnt
 pub fn match_leaderboard() -> Result<Vec<LeaderRow>, String> {
     let store = current_identity_store().ok_or("mysql identity store is not ready")?;
     store.leaderboard()
+}
+
+pub fn report_totals() -> Result<ReportTotals, String> {
+    current_identity_store().ok_or("mysql identity store is not ready")?.report_totals()
+}
+
+pub fn report_rows(persona_id: Option<i64>, limit: u32) -> Result<Vec<ReportRow>, String> {
+    current_identity_store().ok_or("mysql identity store is not ready")?.report_rows(persona_id, limit)
 }
 
 pub fn record_persona_match(

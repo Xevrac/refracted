@@ -340,6 +340,10 @@ impl HttpHandler {
         method: &str,
         body: &[u8],
     ) -> BlazeResult<HttpResponse> {
+        let authorization = request_header(raw_request, "authorization");
+        if let Some(response) = crate::nexus::realm_api::try_handle(method, path, authorization.as_deref()) {
+            return Ok(response);
+        }
         let prev = CURRENT_HTTP_PEER.with(|c| c.replace(Some(peer)));
         let prev_client = CURRENT_HTTP_CLIENT.with(|c| {
             c.replace(request_header(raw_request, "x-refracted-client").map(|v| v.to_ascii_lowercase()))

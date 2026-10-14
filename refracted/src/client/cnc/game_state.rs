@@ -5724,7 +5724,7 @@ pub struct LiveGamePlayer {
 }
 
 /// A lobby or match as Nexus shows it: what it is, who is in it, and how far it has got.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct LiveGame {
     pub gid: i64,
     pub name: String,

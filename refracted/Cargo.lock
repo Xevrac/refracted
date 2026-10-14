@@ -3882,7 +3882,7 @@ dependencies = [
 
 [[package]]
 name = "refracted"
-version = "0.4.1952"
+version = "0.4.1954"
 dependencies = [
  "aes",
  "anyhow",
@@ -3911,6 +3911,7 @@ dependencies = [
  "rcgen",
  "resvg",
  "rfd",
+ "ring",
  "rustls 0.21.12",
  "rustls-pemfile",
  "serde",

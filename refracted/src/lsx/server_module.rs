@@ -1048,21 +1048,19 @@ impl LsxServer {
 </LSX>"#
                 );
             };
-            if let Some(store) = crate::nexus::identity::current_identity_store() {
-                if store.is_user_banned(bound.user_id).unwrap_or(false) {
-                    crate::nexus::identity::clear_bound_session();
-                    crate::nexus::log_nexus_to_blaze(format!(
-                        "Profile request refused: user {} is banned",
-                        bound.user_id
-                    ));
-                    return format!(
-                        r#"<LSX>
+            if crate::nexus::identity::is_user_banned(bound.user_id) {
+                crate::nexus::identity::clear_bound_session();
+                crate::nexus::log_nexus_to_blaze(format!(
+                    "Profile request refused: user {} is banned",
+                    bound.user_id
+                ));
+                return format!(
+                    r#"<LSX>
   <Response id="{id}" sender="EbisuSDK">
     <Error errorCode="43" errorName="ACCOUNT_BANNED" />
   </Response>
 </LSX>"#
-                    );
-                }
+                );
             }
             return format!(
                 r#"<LSX>

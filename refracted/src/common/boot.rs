@@ -72,7 +72,6 @@ pub fn boot_emulator(opts: BootOptions) -> Result<(), String> {
                     identity::disable_json_personas();
                     identity::init_mysql_identity(env)?;
                     let _ = identity::try_bind_launcher_handoff();
-                    crate::nexus::live_games::start();
                 }
             }
         }

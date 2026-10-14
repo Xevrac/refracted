@@ -111,7 +111,7 @@
         var out = {
             key: key,
             line: (last && last.generalId && !random)
-                ? ('Last played: ' + hit.faction + ' ' + general.label)
+                ? (hit.faction + ' ' + general.label)
                 : (random ? 'Random general each match' : (hit.faction + ' ' + general.label + ' general')),
             icon: ICON[key] ? (ICON_DIR + ICON[key]) : '',
             src: '',

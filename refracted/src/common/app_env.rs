@@ -27,8 +27,12 @@ database=refracted
 user=refracted
 pass=
 
-# must match NEXUS_TOKEN_PEPPER on the frontend
-token_pepper=
+# realm identity (datasource=mysql): realm code registered on Nexus, its API key,
+# and the Nexus ticket public key (php artisan nexus:ticket-keygen)
+realm=
+nexus_url=https://nexus.refracted.au
+realm_key=
+ticket_public_key=
 
 # in-game news: Aurora site base URL the shell polls (api/shell/news/{prod|dev})
 news_url=
@@ -96,6 +100,15 @@ pub struct MysqlParams {
     pub pass: String,
 }
 
+/// This realm's link to Nexus: who it is, where Nexus lives, and the key that signs tickets.
+#[derive(Debug, Clone, Default)]
+pub struct NexusRealmParams {
+    pub realm: String,
+    pub nexus_url: String,
+    pub realm_key: String,
+    pub ticket_public_key: String,
+}
+
 impl MysqlParams {
     pub fn host_port(&self) -> (String, u16) {
         parse_host_port(&self.host)
@@ -114,7 +127,7 @@ pub struct AppEnv {
     pub listen_host: Option<String>,
     pub data_dir: Option<PathBuf>,
     pub log_level: Option<String>,
-    pub token_pepper: Option<String>,
+    pub nexus: NexusRealmParams,
     pub news_url: Option<String>,
     pub news_dev_key: Option<String>,
 }
@@ -130,11 +143,6 @@ impl AppEnv {
         if let Some(level) = &self.log_level {
             if std::env::var_os("RUST_LOG").is_none() {
                 std::env::set_var("RUST_LOG", level);
-            }
-        }
-        if let Some(pepper) = &self.token_pepper {
-            if std::env::var_os("NEXUS_TOKEN_PEPPER").is_none() {
-                std::env::set_var("NEXUS_TOKEN_PEPPER", pepper);
             }
         }
         if let Some(url) = &self.news_url {
@@ -240,10 +248,13 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         .get("log_level")
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-    let token_pepper = map
-        .get("token_pepper")
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+    let field = |key: &str| map.get(key).map(|s| s.trim().to_string()).unwrap_or_default();
+    let nexus = NexusRealmParams {
+        realm: field("realm").to_ascii_uppercase(),
+        nexus_url: field("nexus_url").trim_end_matches('/').to_string(),
+        realm_key: field("realm_key"),
+        ticket_public_key: field("ticket_public_key"),
+    };
     let news_url = map
         .get("news_url")
         .map(|s| s.trim().to_string())
@@ -263,7 +274,7 @@ pub fn parse_app_env(path: PathBuf, content: &str) -> Result<AppEnv, String> {
         listen_host,
         data_dir,
         log_level,
-        token_pepper,
+        nexus,
         news_url,
         news_dev_key,
     })
@@ -430,6 +441,17 @@ pass=s3cret#hash
         assert_eq!(env.mysql.host, "db.internal:3307");
         assert_eq!(env.mysql.host_port(), ("db.internal".to_string(), 3307));
         assert_eq!(env.mysql.pass, "s3cret#hash");
+        assert!(env.nexus.realm.is_empty());
+    }
+
+    #[test]
+    fn parse_realm_link() {
+        let src = "realm=de\nnexus_url=https://nexus.example/\nrealm_key=k\nticket_public_key=pk\n";
+        let env = parse_app_env(PathBuf::from("x.env"), src).unwrap();
+        assert_eq!(env.nexus.realm, "DE");
+        assert_eq!(env.nexus.nexus_url, "https://nexus.example");
+        assert_eq!(env.nexus.realm_key, "k");
+        assert_eq!(env.nexus.ticket_public_key, "pk");
     }
 
     #[test]

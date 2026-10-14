@@ -2790,7 +2790,7 @@ pub fn cnc_effective_identity() -> (u64, String) {
 
 fn refuse_if_nexus_banned() -> BlazeResult<()> {
     use crate::common::error::BlazeError;
-    use crate::nexus::identity::{client_join_requires_login, current_bound_session, current_identity_store};
+    use crate::nexus::identity::{client_join_requires_login, current_bound_session, is_user_banned};
 
     if !client_join_requires_login() {
         return Ok(());
@@ -2798,24 +2798,15 @@ fn refuse_if_nexus_banned() -> BlazeResult<()> {
     let Some(bound) = current_bound_session() else {
         return Ok(());
     };
-    let Some(store) = current_identity_store() else {
+    if !is_user_banned(bound.user_id) {
         return Ok(());
-    };
-    match store.is_user_banned(bound.user_id) {
-        Ok(true) => {
-            crate::nexus::log_nexus_to_blaze(format!(
-                "Login refused: user {} is banned",
-                bound.user_id
-            ));
-            crate::nexus::identity::clear_bound_session();
-            Err(BlazeError::AccountBanned)
-        }
-        Ok(false) => Ok(()),
-        Err(e) => {
-            crate::nexus::log_nexus_to_blaze(format!("Ban check failed: {e}"));
-            Ok(())
-        }
     }
+    crate::nexus::log_nexus_to_blaze(format!(
+        "Login refused: user {} is banned",
+        bound.user_id
+    ));
+    crate::nexus::identity::clear_bound_session();
+    Err(BlazeError::AccountBanned)
 }
 
 /// Dev toggle: `RFR_DEBUG_AUTH=unauth|banned|banned:<N>m|h|d` refuses every game-client login (any datasource).
