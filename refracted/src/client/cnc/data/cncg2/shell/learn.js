@@ -13,6 +13,13 @@ CCApp.controller('LearnController', function($scope) {
         buttonText: "Play EU Tutorial"
     };
 
+    $scope.getTutorialText = function () {
+        if (!$scope.supportAurora()) {
+            return $scope.tutorialData.text;
+        }
+        return "Welcome to the Aurora tutorial section! Over time, this will become a hub of interactive training tools, designed to help you improve your skills and master Aurora. If you want to try some hands on training, try out the EU Tutorial. We recommend also taking a look at the guides under Support > Guides.";
+    };
+
     // ==========================================
     // 2. GUIDES DATA (Rich HTML Engine - Angular 1.1.5 Safe)
     // ==========================================
@@ -28,8 +35,14 @@ CCApp.controller('LearnController', function($scope) {
         { id: 'tech', title: "TECH TREE" },
         { id: 'hotkeys', title: "HOTKEYS" },
         { id: 'custom', title: "CUSTOMIZE" },
-        { id: 'modes', title: "GAME MODES" }
+        { id: 'modes', title: "GAME MODES" },
+        { id: 'tweaks', title: "TWEAKS", aurora: true }
     ];
+
+    /** Aurora-only books (aurora: true) are hidden in the original 2013 support view. */
+    $scope.guideBookVisible = function (book) {
+        return !book.aurora || $scope.supportAurora();
+    };
 
     $scope.activeGuideId = 'ui'; // Default active book
 
@@ -86,7 +99,24 @@ CCApp.controller('LearnController', function($scope) {
                 ]},
                 
                 { type: "h3", content: "Generals Portrait" },
-                { type: "p", content: "General's portrait at the top of the screen will display the current Generals in-game for both allied and enemy players. The house color for the General in game is displayed at the bottom of the portrait and the current general level displayed as stars on the portrait." }
+                { type: "p", content: "General's portrait at the top of the screen will display the current Generals in-game for both allied and enemy players. The house color for the General in game is displayed at the bottom of the portrait and the current general level displayed as stars on the portrait." },
+
+                { type: "h3", content: "Connection & Performance Warnings" },
+                { type: "p", content: "When something is getting in the way of a smooth game, a warning icon appears on the right-hand side of the screen, near the top. Nothing is shown while everything is running well, and each icon goes away by itself once things recover.<br>An <b style=\"color:#F2A93B;\">amber</b> icon is a warning. A <b style=\"color:#EE4B2B;\">red</b> icon means the problem is serious. If more than one problem happens at once, the icons stack one below the other." },
+                { type: "table", headers: [{content: "Icon", style: "width: 120px;"}, "What it means", "What you can do"], rows: [
+                    [{ type: "html", style: "padding: 10px; width: 120px; white-space: nowrap;", content: "<img src=\"images/learn/Guide_Net_LatencyWarning.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\"><img src=\"images/learn/Guide_Net_LatencySevere.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\">" },
+                     "<b>High Ping</b><br>Your orders are taking a long time to reach the server and come back, so units may react late when you command them.<br>Amber: ping over 100 ms. Red: ping over 200 ms.",
+                     { type: "list", items: ["Pause downloads, streaming or game updates", "Use a wired connection instead of Wi-Fi", "Play on the realm closest to you"] }],
+                    [{ type: "html", style: "padding: 10px; width: 120px; white-space: nowrap;", content: "<img src=\"images/learn/Guide_Net_JitterWarning.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\"><img src=\"images/learn/Guide_Net_JitterSevere.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\">" },
+                     "<b>Unstable Connection</b><br>Your ping keeps jumping up and down instead of staying steady, so units may move or respond unevenly even when your average ping looks fine. This is only checked once your ping is over 100 ms, because smaller swings do not affect the game.",
+                     { type: "list", items: ["Move closer to your router or use a cable", "Stop other devices on your network from streaming or downloading", "Restart your router if it keeps happening"] }],
+                    [{ type: "html", style: "padding: 10px; width: 120px; white-space: nowrap;", content: "<img src=\"images/learn/Guide_Net_FramerateWarning.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\"><img src=\"images/learn/Guide_Net_FramerateSevere.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\">" },
+                     "<b>Low Framerate</b><br>Your computer is struggling to draw the game smoothly. This comes from your PC, not your connection.<br>Amber: under 30 frames per second. Red: under 20.",
+                     { type: "list", items: ["Lower the graphics quality in Options > Graphics", "Close other programs running in the background", "Make sure your graphics drivers are up to date"] }]
+                ]},
+
+                { type: "h3", content: "Network Ping Display" },
+                { type: "p", content: "If you would like to see your ping all the time, turn on <b>Options > Interface > Advanced > Display Network Ping (ms)</b>. Your ping is then shown in milliseconds (ms) just below the match timer at the top of the screen. Lower is better: anything under 100 ms is good." }
             ]
         },
         'basic': {
@@ -348,13 +378,138 @@ CCApp.controller('LearnController', function($scope) {
         }
     };
 
+    // Aurora view of the books that describe services Aurora does not have (CP, Premium, Customize).
+    var auroraGuideOverrides = {
+        'tweaks': {
+            title: "TWEAKS",
+            blocks: [
+                { type: "p", content: "Tweaks are optional match rules the lobby host sets before the battle. Everyone in the lobby plays by the same tweaks, and the lobby shows when the host has changed anything from the defaults." },
+
+                { type: "h3", content: "Presets" },
+                { type: "p", content: "A preset is a named set of tweaks. Picking a preset sets every tweak at once; changing a tweak by hand turns the lobby into <b>Custom tweaks</b> until it matches a preset again." },
+                { type: "table", headers: [{ content: "Preset type", style: "width: 180px;" }, "What it is"], rows: [
+                    ["<b>Generals 2</b>", "Built in. The 2013 Alpha, also known as Generals 2, faithfully restored. Every lobby starts on it unless you choose another default."],
+                    ["<b>Generals Classic</b>", "Built in. Turns on the rules and gameplay changes inspired by Generals and Zero Hour."],
+                    ["<b>Your presets</b>", "Saved by you with <b>Save as preset</b>. Up to 12, each with a name of up to 24 characters. They are kept on this PC, so they follow you into every lobby you host here."],
+                    ["<b>Default preset</b>", "The preset whose star is lit. Every lobby you set up opens on it. Built-in presets cannot be deleted; deleting your default preset makes Generals 2 the default again."]
+                ]},
+
+                { type: "h3", content: "The tweaks" },
+                { type: "table", headers: [{ content: "Tweak", style: "width: 180px;" }, "What it does", { content: "Generals 2", style: "width: 90px;" }, { content: "Generals Classic", style: "width: 90px;" }], rows: [
+                    ["<b>Instant Selling</b>", "Selling a structure completes almost instantly instead of taking 10 seconds.", "Off", "Off"],
+                    ["<b>Rebuildable Derricks</b>", "A destroyed oil derrick leaves its oil well behind, so you can build a new derrick on it.", "On", "Off"],
+                    ["<b>Combat Tuning (Classic)</b>", "Generals-style armor: damage depends on the weapon type against the armor type. Replaces the game's bonus damage. See below.", "Off", "On"]
+                ]},
+                { type: "p", content: "Tech Tree, Special Abilities and Factions Only will be added as tweaks soon." },
+
+                { type: "h3", content: "Combat Tuning (Classic)" },
+                { type: "p", content: "With this tweak off, each weapon deals its normal damage plus a bonus against the armor types it is built to fight (for example, a rocket soldier's bonus against heavy armor). With it on, damage works as in Generals: every weapon belongs to a <b>weapon type</b>, every unit or structure has an <b>armor type</b>, and the weapon deals a set percentage of its damage against that armor. The unit's <b>armor rating</b> (0 to 8) then lowers the damage by a further 4% per point, so the toughest armor takes 68%." },
+                { type: "table", headers: [{ content: "Weapon type", style: "width: 180px;" }, "Infantry", "Light", "Heavy", "Structure", "Spec Ops"], rows: [
+                    ["<b>Small arms</b><br>rifles, machine guns, gatling guns, autocannons, pistols, shotguns", "100%", "50%", "20%", "25%", "75%"],
+                    ["<b>Sniper</b>", "100%", "10%", "5%", "5%", "100%"],
+                    ["<b>Armor-piercing</b><br>tank cannons, railguns, lasers", "25%", "100%", "100%", "75%", "50%"],
+                    ["<b>Explosive</b><br>rockets, RPGs, bombs, howitzers, grenades, flak", "35%", "100%", "100%", "100%", "75%"],
+                    ["<b>Flame</b><br>flamethrowers, napalm, molotovs", "150%", "50%", "25%", "100%", "100%"],
+                    ["<b>Toxin</b><br>toxin weapons, radiation", "150%", "50%", "20%", "25%", "100%"],
+                    ["<b>EMP</b>", "25%", "100%", "100%", "50%", "25%"]
+                ]},
+                { type: "p", content: "Example: a Ranger squad's rifles deal about 2 damage per volley to an APA heavy cannon tank, while an EU rocket squad deals about 41. Bring the right weapon for the target." },
+
+                { type: "h3", content: "Always on: props and clear shots" },
+                { type: "list", items: [
+                    "Fences, walls, barrels, crates and road barriers block shots, but break quickly: one rocket, shell or bomb destroys them, and any other weapon needs four hits. This is the same whatever tweaks are set.",
+                    "If you order a unit to attack something behind a building, it moves around the building to get a clear shot instead of firing into the wall. If there is no way round, it fires at the building."
+                ]},
+
+                { type: "h3", content: "Interface: the lobby options box" },
+                { type: "p", content: "The box under Team 2 sums up the lobby's rules. It reads <b>Vanilla game, default options set.</b> when nothing has changed:" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Summary_Vanilla.png", style: "max-width:100%;", alt: "Lobby options box, default options" },
+                { type: "p", content: "When tweaks are changed it shows a spanner and the preset name. The host clicks the box to open <b>Lobby Options</b>; other players click it to see what the host changed." },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Summary_Custom.png", style: "max-width:100%;", alt: "Lobby options box, Generals Classic preset" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Lobby_Vanilla.jpg", style: "width:100%;", alt: "Skirmish lobby with the lobby options box at the bottom right" },
+
+                { type: "h3", content: "Interface: the Lobby Options window" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Options_Window.png", style: "max-width:100%;", alt: "Lobby Options window" },
+                { type: "list", items: [
+                    "<b>Match password</b>: type a password and click <b>Set</b> to make the lobby private. Leave it blank for an open lobby.",
+                    "<b>Disallow Spectators</b>: closes the spectator seat.",
+                    "<b>Preset</b>: click a preset to apply it. The highlighted row is the active preset, and the line underneath describes it.",
+                    "<b>Star</b>: makes that preset your default for lobbies you set up.",
+                    "<b>&times;</b>: deletes one of your own presets. The built-in presets cannot be deleted.",
+                    "<b>Tweaks</b>: click to show or hide the list of tweaks, each with a short description.",
+                    "<b>Done</b>: closes the window. Your changes are already applied."
+                ]},
+
+                { type: "h3", content: "Interface: changing tweaks" },
+                { type: "p", content: "Open <b>Tweaks</b> and tick or untick a box. Each tweak has a one-line description under its name, and this page has the full details:" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Tweaks_Open_Hover.jpg", style: "width:100%;", alt: "Tweaks list with a description under each tweak" },
+                { type: "p", content: "Type in <b>Search tweaks</b> to filter the list by name or description:" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Tweaks_Search.png", style: "max-width:100%;", alt: "Searching tweaks for derrick" },
+                { type: "p", content: "When your tweaks no longer match a preset, no preset is highlighted and the lobby reads <b>Custom tweaks, not saved as a preset.</b>" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Preset_Custom_Mix.png", style: "max-width:100%;", alt: "Custom tweaks, not saved as a preset" },
+                { type: "p", content: "Every change is sent to the lobby straight away. Everyone except the host is un-readied, and the lobby chat shows <b>Notice: Host has modified lobby options!</b> so players can review the new rules." },
+
+                { type: "h3", content: "Interface: saving a preset" },
+                { type: "list", items: [
+                    "Set the tweaks you want, then click <b>Save as preset</b>.",
+                    "Type a name and click <b>Save</b>. Saving with the name of one of your presets replaces it; the names of the built-in presets are taken.",
+                    "Click the star on your new preset to open every lobby you set up with it."
+                ]},
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Save_Preset.png", style: "max-width:100%;", alt: "Naming a new preset" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Preset_Saved_Default.png", style: "max-width:100%;", alt: "Saved preset set as default" },
+
+                { type: "h3", content: "Interface: for players who are not the host" },
+                { type: "p", content: "Click the lobby options box to see the active preset and every option the host changed, with its default value:" },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Rules_Dialog.png", style: "max-width:100%;", alt: "Custom game dialog" }
+            ]
+        },
+        'custom': {
+            title: "CUSTOMIZE",
+            blocks: [
+                { type: "h3", content: "Generals" },
+                { type: "list", items: [
+                    "Each General has a specialty that grants them unique units, player powers and abilities.",
+                    "Pick your General on your slot in the lobby, next to your Faction.",
+                    "Set <b>Preferred Faction</b> and <b>Preferred General</b> under <b>Options > Gameplay > Lobby Defaults</b> to start every new lobby with them.",
+                    "Customising Generals and loadouts is coming soon under <b>Profile > Generals</b>."
+                ]}
+            ]
+        },
+        'modes': {
+            title: "GAME MODES",
+            blocks: [
+                { type: "h3", content: "General Selection" },
+                { type: "list", items: [
+                    "Choose your General on your slot in the lobby before the battle starts.",
+                    "The main menu shows the General you played last."
+                ]},
+                { type: "h3", content: "Find a match" },
+                { type: "list", items: [
+                    "Joins the closest server that already has players, or an empty one if none do, and opens its lobby."
+                ]},
+                { type: "h3", content: "Browse servers" },
+                { type: "list", items: [
+                    "Lists every server with its region, map, players, ping and version.",
+                    "Password-protected servers ask for the password when you join."
+                ]},
+                { type: "h3", content: "Skirmish lobby" },
+                { type: "list", items: [
+                    "Two teams face each other. Fill open seats with players or with <b>Add AI</b>, and set each AI's <b>Difficulty</b> on its slot.",
+                    "One player can watch from the <b>Spectator</b> seat.",
+                    "The host can <b>Change map</b> and set <b>Lobby Options</b>, including <b>Tweaks</b>, presets and a <b>Match password</b>.",
+                    "The host starts the match with <b>Start battle</b>."
+                ]}
+            ]
+        }
+    };
+
     $scope.setActiveGuide = function(bookId) {
         $scope.activeGuideId = bookId;
     };
 
     // Returns raw HTML string (Angular 1.1.x handles the injection via ng-bind-html-unsafe)
     $scope.getCurrentGuideHtml = function() {
-        var data = structuredGuideDatabase[$scope.activeGuideId];
+        var data = ($scope.supportAurora() && auroraGuideOverrides[$scope.activeGuideId]) || structuredGuideDatabase[$scope.activeGuideId];
         if (!data) {
             return '<p>Content for this guide is currently under construction.</p>';
         }
@@ -462,7 +617,7 @@ CCApp.controller('LearnController', function($scope) {
             }
         }
         
-        return html;
+        return $scope.supportAurora() ? $scope.auroraWording(html) : html;
     };
 
 });

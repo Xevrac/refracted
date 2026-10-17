@@ -188,6 +188,11 @@
                         </span>
                         <p class="opt-hint">Show Always keeps the chat on screen. Active opens it for a few seconds whenever anyone chats. Never shows it only when you open it (Enter).</p>
                     </div>
+                    <h4 class="opt-section" ng-show="auroraOptions">Advanced</h4>
+                    <div class="opt-group">
+                        <label class="opt-checkbox"><input type="checkbox" ng-model="settings.shownetworkping" ng-change="applyInterface()"> Display Network Ping (ms)</label>
+                        <p class="opt-hint">Shows your round-trip time to the server under the match timer.</p>
+                    </div>
                 </div>
 
                 <!-- Lobby defaults. Aurora shows them at the top of GAMEPLAY (the stylesheet orders this pane

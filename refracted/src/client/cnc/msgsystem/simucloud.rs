@@ -52,6 +52,8 @@ pub const CREATE_GAME_OPTIONS_UNLOCK_FULL_FACTION_ROSTER: u32 = 0x200;
 pub const CREATE_GAME_OPTIONS_INSTANT_SELLING: u32 = 0x400;
 /// Destroyed oil derricks can be rebuilt (husk cleared, oil well restored). Default on.
 pub const CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS: u32 = 0x800;
+/// H541: Generals-style armour instead of authored bonus damage. Default off.
+pub const CREATE_GAME_OPTIONS_GENERALS_ARMOR: u32 = 0x1000;
 
 fn create_game_options(
     enable_tech_tree: bool,
@@ -560,7 +562,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={}",
+        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={} generalsArmor={}",
         roster.len(),
         game.enable_special_abilities,
         game.enable_tech_tree,
@@ -568,7 +570,8 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         game.enable_infinite_resource_centers,
         game.enable_unlock_full_faction_roster,
         game.enable_instant_selling,
-        game.enable_rebuildable_derricks
+        game.enable_rebuildable_derricks,
+        game.enable_generals_armor
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -611,7 +614,11 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
                 game.enable_unlock_full_faction_roster,
                 game.enable_instant_selling,
                 game.enable_rebuildable_derricks,
-            ),
+            ) | if game.enable_generals_armor {
+                CREATE_GAME_OPTIONS_GENERALS_ARMOR
+            } else {
+                0
+            },
         ),
     };
     write_simple_frame(&mut stream, &create_frame).await?;

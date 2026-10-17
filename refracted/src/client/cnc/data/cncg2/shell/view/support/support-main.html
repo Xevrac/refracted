@@ -1,6 +1,22 @@
 <div class="support-container" ng-controller="SupportController">
-    
-    <div class="support-scroll-area">
+
+    <div class="guides-layout-container" ng-show="supportAurora()">
+        <div class="guides-sidebar">
+            <div class="sidebar-button-list">
+                <button class="btn-sidebar-item"
+                        ng-repeat="section in currentSections()"
+                        ng-class="{'active': activeSection() == section.id}"
+                        ng-click="setActiveSection(section.id)">
+                    {{ section.title }}
+                </button>
+            </div>
+        </div>
+        <div class="guides-main-panel">
+            <div class="guides-scroll-area support-article" ng-click="onArticleClick($event)" ng-bind-html-unsafe="getCurrentSectionHtml()"></div>
+        </div>
+    </div>
+
+    <div class="support-scroll-area" ng-hide="supportAurora()">
         <div ng-include="'view/support/faq.html'" ng-show="activeSubTab == 'FAQ'"></div>
         
         <div ng-include="'view/support/troubleshoot.html'" ng-show="activeSubTab == 'TROUBLESHOOT'"></div>

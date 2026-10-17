@@ -150,6 +150,10 @@
         <a href="" ng-show="activeTab == 'SUPPORT'" ng-class="{'au-subnav__on': activeSubTab == 'FAQ'}" ng-click="setSubTab('FAQ')">FAQ</a>
         <a href="" ng-show="activeTab == 'SUPPORT'" ng-class="{'au-subnav__on': activeSubTab == 'GUIDES'}" ng-click="setSubTab('GUIDES')">Guides</a>
         <a href="" ng-show="activeTab == 'SUPPORT'" ng-class="{'au-subnav__on': activeSubTab == 'TROUBLESHOOT'}" ng-click="setSubTab('TROUBLESHOOT')">Troubleshoot</a>
+        <span class="au-subnav__view" ng-show="activeTab == 'SUPPORT'">
+            <a href="" ng-class="{'au-subnav__on': supportView.mode != 'original'}" ng-click="setSupportView('aurora')" data-tip="Aurora layout and wording" data-tip-pos="below">Aurora</a>
+            <a href="" ng-class="{'au-subnav__on': supportView.mode == 'original'}" ng-click="setSupportView('original')" data-tip="As written for the 2013 Alpha" data-tip-pos="below">Original</a>
+        </span>
     </div>
 
     <div class="au-panel au-page" ng-show="activeTab == 'PROFILE'" ng-controller="ProfileController">

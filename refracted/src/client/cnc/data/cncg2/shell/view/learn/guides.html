@@ -4,7 +4,7 @@
         <div class="sidebar-button-list">
             
             <button class="btn-sidebar-item" 
-                    ng-repeat="book in guideBooks"
+                    ng-repeat="book in guideBooks | filter:guideBookVisible"
                     ng-class="{'active': activeGuideId == book.id}"
                     ng-click="setActiveGuide(book.id)">
                 {{ book.title }}

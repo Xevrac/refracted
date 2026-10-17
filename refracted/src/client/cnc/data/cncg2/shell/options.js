@@ -206,6 +206,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         movemodeattack: false,
         allowdeselect: true,
         usefriendorfoecolors: false,
+        shownetworkping: false,
         fullscreenResolution: asResolution(systemWidth, systemHeight),
         windowedResolution: systemWindowedResolution,
         overallgraphicsquality: OVERALL.Autodetect,
@@ -257,18 +258,17 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         { id: 'active', label: 'Active' },
         { id: 'never', label: 'Never' }
     ];
-    $scope.chatVisibility = 'active';
-    try {
-        var savedChatVisibility = localStorage.getItem(CHAT_VISIBILITY_KEY);
-        if (savedChatVisibility === 'always' || savedChatVisibility === 'never') {
-            $scope.chatVisibility = savedChatVisibility;
-        }
-    } catch (e) { /* ignore */ }
-    $scope.onChatVisibilityChange = function () {
+    function readCommittedChatVisibility() {
         try {
-            localStorage.setItem(CHAT_VISIBILITY_KEY, $scope.chatVisibility);
+            var saved = localStorage.getItem(CHAT_VISIBILITY_KEY);
+            if (saved === 'always' || saved === 'never') {
+                return saved;
+            }
         } catch (e) { /* ignore */ }
-    };
+        return 'active';
+    }
+    $scope.chatVisibility = readCommittedChatVisibility();
+    $scope.onChatVisibilityChange = function () {};
     // Placeholder defaults must never be applied/saved until /usersettings hydrates.
     $scope.settingsReady = false;
     $scope.settingsLoadError = false;
@@ -279,7 +279,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
     var lobbyDefaultsSnapshot = null;
     var lobbyDefaultsSaveCommitted = false;
     var settingsLoadSeq = 0;
-    var controlsResynced = false;
+    // Engine values as hydrated; OK sends only keys that differ from these.
+    var committedPayload = null;
 
     function refreshShellThemeHint() {
         var id = $scope.settings.shellUiThemeDefault || $scope.settings.shellUiTheme;
@@ -500,14 +501,6 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         $scope.settings.windowedResolution = asResolution($scope.settings.windowedwidth, $scope.settings.windowedheight);
     }
 
-    function applyPartial(partial) {
-        // Never push placeholder defaults into the engine before hydration.
-        if (!$scope.settingsReady || !partial) {
-            return;
-        }
-        executeShell('/usersettings/apply', partial);
-    }
-
     function clampInt(value, min, max, fallback) {
         var n = parseInt(value, 10);
         if (isNaN(n)) {
@@ -582,17 +575,6 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
     }
 
-    function buildControlsApplyPayload() {
-        syncCameraRotationLock();
-        return {
-            edgepan: $scope.settings.edgepan ? 1 : 0,
-            edgescrollspeed: Math.max(0, Math.min(100, Math.round($scope.settings.edgescrollspeed))),
-            // 0/1 — some Shell JSON paths drop boolean false; RMB camera is false.
-            middlemousecameradrag: $scope.settings.middlemousecameradrag ? 1 : 0,
-            allowcamerarotation: $scope.settings.allowcamerarotation ? 1 : 0
-        };
-    }
-
     function buildApplyPayloadFromSettings() {
         var fullParsed = parseResolution($scope.settings.fullscreenResolution);
         var windowParsed = parseResolution($scope.settings.windowedResolution);
@@ -619,10 +601,24 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             allowcamerarotation: $scope.settings.allowcamerarotation ? 1 : 0,
             movemodeattack: $scope.settings.movemodeattack ? 1 : 0,
             allowdeselect: $scope.settings.allowdeselect ? 1 : 0,
-            usefriendorfoecolors: $scope.settings.usefriendorfoecolors ? 1 : 0
+            usefriendorfoecolors: $scope.settings.usefriendorfoecolors ? 1 : 0,
+            shownetworkping: $scope.settings.shownetworkping ? 1 : 0
         };
         angular.extend(payload, buildGraphicsPayload());
         return payload;
+    }
+
+    function changedKeys(payload) {
+        var diff = {};
+        var any = false;
+        for (var key in payload) {
+            if (Object.prototype.hasOwnProperty.call(payload, key)
+                    && (!committedPayload || committedPayload[key] !== payload[key])) {
+                diff[key] = payload[key];
+                any = true;
+            }
+        }
+        return any ? diff : null;
     }
 
 
@@ -755,6 +751,9 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             $scope.settings.usefriendorfoecolors = asBool(
                 res.usefriendorfoecolors, $scope.settings.usefriendorfoecolors);
         }
+        if (res.shownetworkping != null) {
+            $scope.settings.shownetworkping = asBool(res.shownetworkping, $scope.settings.shownetworkping);
+        }
         // Coerce stringy graphics ints before readGraphicsFromResponse.
         var gKeys = [
             'overallgraphicsquality', 'texturequality', 'shadowquality', 'effectsquality',
@@ -799,12 +798,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
                     $scope.settingsReady = true;
                     $scope.settingsLoadError = false;
                 }
+                committedPayload = ok ? buildApplyPayloadFromSettings() : null;
                 digestSettingsUi();
-                // One resync after first hydrate — avoids applyProfileSettings spam on retries.
-                if ($scope.settingsReady && !controlsResynced) {
-                    controlsResynced = true;
-                    executeShell('/usersettings/apply', buildControlsApplyPayload());
-                }
                 if (typeof done === 'function') {
                     done($scope.settingsReady);
                 }
@@ -826,15 +821,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         $scope.optionsTab = tabName;
     };
 
-    $scope.applyGraphicsMode = function() {
-        if (!$scope.settingsReady) {
-            return;
-        }
-        applyPartial({
-            shellfullscreen: $scope.settings.shellfullscreen ? 1 : 0,
-            gamefullscreen: $scope.settings.gamefullscreen ? 1 : 0
-        });
-    };
+    // Option handlers edit the draft only; nothing reaches the engine until OK (actionSave).
+    $scope.applyGraphicsMode = function() {};
 
     $scope.applyFullscreenResolution = function() {
         if (!$scope.settingsReady) {
@@ -846,10 +834,6 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         $scope.settings.fullscreenwidth = parsed.width;
         $scope.settings.fullscreenheight = parsed.height;
-        applyPartial({
-            fullscreenwidth: parsed.width,
-            fullscreenheight: parsed.height
-        });
     };
 
     $scope.applyWindowedResolution = function() {
@@ -862,10 +846,6 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         $scope.settings.windowedwidth = parsed.width;
         $scope.settings.windowedheight = parsed.height;
-        applyPartial({
-            windowedwidth: parsed.width,
-            windowedheight: parsed.height
-        });
     };
 
     $scope.onOverallGraphicsChange = function() {
@@ -874,12 +854,9 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         var overall = sanitizeOverallForUi($scope.settings.overallgraphicsquality);
         $scope.settings.overallgraphicsquality = overall;
-        if (overall === OVERALL.Custom || overall === OVERALL.Autodetect) {
-            applyPartial(buildGraphicsPayload());
-            return;
+        if (overall !== OVERALL.Custom && overall !== OVERALL.Autodetect) {
+            applyPresetToSettings(overall);
         }
-        applyPresetToSettings(overall);
-        applyPartial(buildGraphicsPayload());
     };
 
     $scope.onGraphicsDetailChange = function() {
@@ -889,10 +866,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         if (!applyingOverallPreset && $scope.settings.overallgraphicsquality !== OVERALL.Custom) {
             $scope.settings.overallgraphicsquality = OVERALL.Custom;
         }
-        applyPartial(buildGraphicsPayload());
     };
-
-    var brightnessApplyTimer = null;
 
     $scope.onBrightnessChange = function() {
         if (!$scope.settingsReady) {
@@ -904,52 +878,22 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         if (!applyingOverallPreset && $scope.settings.overallgraphicsquality !== OVERALL.Custom) {
             $scope.settings.overallgraphicsquality = OVERALL.Custom;
         }
-        // Debounce + brightness-only payload. Full graphics apply every tick was the lag.
-        if (brightnessApplyTimer) {
-            $timeout.cancel(brightnessApplyTimer);
-        }
-        brightnessApplyTimer = $timeout(function () {
-            brightnessApplyTimer = null;
-            applyPartial({
-                brightness: $scope.settings.brightness,
-                overallgraphicsquality: $scope.settings.overallgraphicsquality
-            });
-        }, 180);
     };
 
     $scope.applyVolume = function() {
         if (!$scope.settingsReady) {
             return;
         }
-        var volume = Math.max(0, Math.min(100, Math.round($scope.settings.mastervolume)));
-        $scope.settings.mastervolume = volume;
-        executeShell('/usersettings/apply', {mastervolume: volume / 10}, function () {
-            executeShell('/usersettings/save');
-        });
+        $scope.settings.mastervolume = Math.max(0, Math.min(100, Math.round($scope.settings.mastervolume)));
     };
 
     $scope.applyControls = function() {
-        if (!$scope.settingsReady) {
-            return;
-        }
-        executeShell('/usersettings/apply', buildControlsApplyPayload(), function () {
-            // Persist to ProgramData\CNCO_DL\...\RtsProfileSettings.cfg
-            executeShell('/usersettings/save');
-        });
+        syncCameraRotationLock();
     };
 
-    $scope.applyGameplay = function() {
-        if (!$scope.settingsReady) {
-            return;
-        }
-        executeShell('/usersettings/apply', {
-            movemodeattack: $scope.settings.movemodeattack ? 1 : 0,
-            allowdeselect: $scope.settings.allowdeselect ? 1 : 0,
-            usefriendorfoecolors: $scope.settings.usefriendorfoecolors ? 1 : 0
-        }, function () {
-            executeShell('/usersettings/save');
-        });
-    };
+    $scope.applyGameplay = function() {};
+
+    $scope.applyInterface = function() {};
 
     $scope.onDefaultThemeChange = function() {
         if (!$scope.allowShellThemeSelect) {
@@ -964,12 +908,6 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             }
         }
         $scope.settings.shellUiTheme = id;
-        // Preview only until OK — persist both active + default on save.
-        if (window.CncShellTheme && CncShellTheme.apply) {
-            CncShellTheme.apply(id);
-        } else if (window.CncShellTheme && CncShellTheme.set) {
-            CncShellTheme.set(id);
-        }
         refreshShellThemeHint();
     };
 
@@ -988,8 +926,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         syncBrightnessPercent();
         syncResolutionModels();
-        applyPartial(buildApplyPayloadFromSettings());
-        executeShell('/usersettings/applyAudio');
+        $scope.chatVisibility = 'active';
         if ($scope.allowShellThemeSelect) {
             refreshShellThemeHint();
         }
@@ -1000,11 +937,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             return;
         }
         $scope.settingsSaving = true;
-        if (brightnessApplyTimer) {
-            $timeout.cancel(brightnessApplyTimer);
-            brightnessApplyTimer = null;
-        }
-        var payload = buildApplyPayloadFromSettings();
+        var payload = changedKeys(buildApplyPayloadFromSettings());
         var pendingTheme = null;
         var pendingDefaultTheme = null;
         if ($scope.allowShellThemeSelect) {
@@ -1033,13 +966,22 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
         // Apply + save persist. Do not wait on /usersettings/discard — retail discard
         // often omits _response in-game, which left OK stuck disabled.
-        executeShell('/usersettings/apply', payload, function () {
-            executeShell('/usersettings/save', null, function () {
-                executeShell('/usersettings/discard');
-                finishSave();
+        if (payload) {
+            executeShell('/usersettings/apply', payload, function () {
+                executeShell('/usersettings/save', null, function () {
+                    executeShell('/usersettings/discard');
+                    finishSave();
+                });
             });
-        });
-        executeShell('/usersettings/applyAudio');
+            if (payload.mastervolume != null) {
+                executeShell('/usersettings/applyAudio');
+            }
+        } else {
+            finishSave();
+        }
+        try {
+            localStorage.setItem(CHAT_VISIBILITY_KEY, $scope.chatVisibility);
+        } catch (e) { /* ignore */ }
         if ($scope.allowShellThemeSelect && window.CncShellTheme) {
             if (pendingTheme && CncShellTheme.set) {
                 CncShellTheme.set(pendingTheme);
@@ -1078,7 +1020,8 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
             $scope.settingsReady = false;
             $scope.settingsLoadError = false;
             $scope.settingsSaving = false;
-            controlsResynced = false;
+            committedPayload = null;
+            $scope.chatVisibility = readCommittedChatVisibility();
             loadUserSettings();
             loadDisplayConfig();
             loadGraphicsOptions();

@@ -242,16 +242,18 @@
                                    autocomplete="off"
                                    placeholder="Search tweaks">
                             <div class="au-lobby__tweaks-list">
-                                <label class="au-lobby__options-check"
-                                       ng-repeat="t in presetTweaks | filter:tweakMatches"
-                                       data-tip-pos="below"
-                                       data-tip="{{ t.tip }}">
+                                <label class="au-lobby__options-check au-lobby__tweak"
+                                       ng-repeat="t in presetTweaks | filter:tweakMatches">
                                     <input type="checkbox" ng-model="lobbyOptions[t.key]">
-                                    {{ t.label }}
+                                    <span class="au-lobby__tweak-text">
+                                        <span class="au-lobby__tweak-name">{{ t.label }}</span>
+                                        <span class="au-lobby__tweak-summary">{{ t.tip }}</span>
+                                    </span>
                                 </label>
                                 <div class="au-lobby__tweaks-empty"
                                      ng-show="!(presetTweaks | filter:tweakMatches).length">No tweaks match "{{ presetUi.query }}".</div>
                             </div>
+                            <p class="au-lobby__tweaks-more">Full details and examples: <b>Support &gt; Guides &gt; Tweaks</b></p>
                         </div>
                         <form class="au-lobby__preset-save" ng-show="presetUi.saving"
                               action="javascript:void(0)" ng-submit="confirmSavePreset()">

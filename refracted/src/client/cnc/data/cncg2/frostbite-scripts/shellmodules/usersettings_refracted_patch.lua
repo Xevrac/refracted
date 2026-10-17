@@ -162,6 +162,24 @@ local function refractedInstallUsersettingsGraphics()
 
   mod.userSettings.allowcamerarotation = cameraRotationBinding()
 
+  -- H532: Prism get/setShowNetworkPing → PrismOptions.cfg; the HUD readout reads it live.
+  mod.userSettings.shownetworkping = {
+    function()
+      if type(getShowNetworkPing) == "function" then
+        local ok, value = pcall(getShowNetworkPing)
+        if ok and value ~= nil then
+          return value
+        end
+      end
+      return 0
+    end,
+    function(nextValue)
+      if type(setShowNetworkPing) == "function" then
+        pcall(setShowNetworkPing, toProfileBool(nextValue) and 1 or 0)
+      end
+    end,
+  }
+
   local function borderlessBinding()
     return {
       function()
@@ -273,6 +291,7 @@ local function refractedInstallUsersettingsGraphics()
     movemodeattack = true,
     allowdeselect = true,
     usefriendorfoecolors = true,
+    shownetworkping = true,
   }
 
   local function applyFromPayload(payload)

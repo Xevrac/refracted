@@ -754,6 +754,7 @@
             enableUnlockFullFactionRoster: false,
             enableInstantSelling: false,
             enableRebuildableDerricks: true,
+            enableGeneralsArmor: false,
             disallowSpectators: false
         };
         $scope.colors = COLORS;
@@ -1929,6 +1930,7 @@
             { key: 'enableUnlockFullFactionRoster', label: 'Full faction roster', def: false },
             { key: 'enableInstantSelling', label: 'Instant selling', def: false },
             { key: 'enableRebuildableDerricks', label: 'Rebuildable derricks', def: true },
+            { key: 'enableGeneralsArmor', label: 'Combat tuning (classic)', def: false },
             { key: 'disallowSpectators', label: 'Spectators disallowed', def: false }
         ];
         $scope.optionValue = function (d) {
@@ -3362,6 +3364,7 @@
             $scope.lobbyOptions.enableUnlockFullFactionRoster = false;
             $scope.lobbyOptions.enableInstantSelling = false;
             $scope.lobbyOptions.enableRebuildableDerricks = true;
+            $scope.lobbyOptions.enableGeneralsArmor = false;
             $scope.lobbyOptions.disallowSpectators = false;
             $scope.gameId = '1';
             try {
@@ -3883,12 +3886,29 @@
             }
         }
 
+        function rosterHasLocal(data) {
+            var localPid = data.self ? Number(data.self) : localPersonaId();
+            var players = data.players || [];
+            var i;
+            for (i = 0; i < players.length; i++) {
+                if (players[i] && !players[i].isAi && rosterEntryIsLocal(players[i], localPid)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         function applyRosterFlags(data) {
             if (!data || !data.ok) {
                 return;
             }
             noteStartFailure(data);
             if (data.starting) {
+                // H520: a lobby that started without us is not ours to wait on.
+                if ($scope._joinStatus && !rosterHasLocal(data)) {
+                    forceServerLostKick('This match has already started.');
+                    return;
+                }
                 $scope._starting = true;
                 ensureStartWatch();
             }
@@ -3921,6 +3941,9 @@
                 }
                 if (data.enableRebuildableDerricks != null) {
                     $scope.lobbyOptions.enableRebuildableDerricks = !!data.enableRebuildableDerricks;
+                }
+                if (data.enableGeneralsArmor != null) {
+                    $scope.lobbyOptions.enableGeneralsArmor = !!data.enableGeneralsArmor;
                 }
                 if (data.disallowSpectators != null) {
                     $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;
@@ -4932,6 +4955,7 @@
             var factionsOnly = $scope.lobbyOptions.enableUnlockFullFactionRoster === true;
             var instantSelling = $scope.lobbyOptions.enableInstantSelling === true;
             var rebuildableDerricks = $scope.lobbyOptions.enableRebuildableDerricks === true;
+            var generalsArmor = $scope.lobbyOptions.enableGeneralsArmor === true;
             var disallowSpectators = $scope.lobbyOptions.disallowSpectators === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
@@ -4942,6 +4966,7 @@
                 factionsOnly: factionsOnly,
                 instantSelling: instantSelling,
                 rebuildableDerricks: rebuildableDerricks,
+                generalsArmor: generalsArmor,
                 disallowSpectators: disallowSpectators
             }).then(function (data) {
                 $timeout(function () {
@@ -4970,6 +4995,9 @@
                     }
                     if (data.enableRebuildableDerricks != null) {
                         $scope.lobbyOptions.enableRebuildableDerricks = !!data.enableRebuildableDerricks;
+                    }
+                    if (data.enableGeneralsArmor != null) {
+                        $scope.lobbyOptions.enableGeneralsArmor = !!data.enableGeneralsArmor;
                     }
                     if (data.disallowSpectators != null) {
                         $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;

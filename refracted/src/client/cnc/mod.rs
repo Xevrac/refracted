@@ -1462,10 +1462,28 @@ fn parse_disallow_spectators(query: Option<&str>, body: &[u8]) -> Option<bool> {
         .or(from_query)
 }
 
+/// H541: `generalsArmor` / `enableGeneralsArmor` on `/cnc/lobby-options` (query or JSON body).
+fn parse_generals_armor(query: Option<&str>, body: &[u8]) -> Option<bool> {
+    const KEYS: [&str; 2] = ["generalsArmor", "enableGeneralsArmor"];
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            KEYS.contains(&k)
+                .then(|| parse_opt_bool_str(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| KEYS.iter().find_map(|k| v.get(*k).and_then(json_opt_bool)))
+        .or(from_query)
+}
+
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling, rebuildable) =
         parse_gid_pid_match_options(query, body);
     let disallow_spectators = parse_disallow_spectators(query, body);
+    let generals_armor = parse_generals_armor(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1481,14 +1499,19 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && instant_selling.is_none()
         && rebuildable.is_none()
         && disallow_spectators.is_none()
+        && generals_armor.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, or disallowSpectators required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, or disallowSpectators required"}"#.to_vec(),
         );
     }
-    let options_before = (game_state::match_options(gid), game_state::spectators_disallowed(gid));
+    let options_before = (
+        game_state::match_options(gid),
+        game_state::spectators_disallowed(gid),
+        game_state::generals_armor_enabled(gid),
+    );
     let mut resp = game_state::set_match_options(
         gid,
         pid,
@@ -1531,7 +1554,21 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             );
         }
         resp["disallowSpectators"] = serde_json::json!(game_state::spectators_disallowed(gid));
-        let options_after = (game_state::match_options(gid), game_state::spectators_disallowed(gid));
+        if let Some(enabled) = generals_armor {
+            game_state::set_generals_armor(gid, pid, enabled);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} generalsArmor={}",
+                gid,
+                pid,
+                enabled
+            );
+        }
+        resp["enableGeneralsArmor"] = serde_json::json!(game_state::generals_armor_enabled(gid));
+        let options_after = (
+            game_state::match_options(gid),
+            game_state::spectators_disallowed(gid),
+            game_state::generals_armor_enabled(gid),
+        );
         if options_after != options_before {
             // Everyone reviews the new rules before readying up again.
             game_state::unready_all_but_host(gid);
@@ -3424,6 +3461,15 @@ pub fn handle_game_manager_join_game(payload: &[u8]) -> BlazeResult<Bytes> {
             name
         );
         return Err(crate::common::error::BlazeError::AuthorizationRequired);
+    }
+    if game_state::start_in_progress(gid) && !game_state::is_player_in_game(gid, pid) {
+        crate::console_println!(
+            "[Lobby] gid={} REJECTED join by {} \"{}\": match starting (H520)",
+            gid,
+            pid,
+            name
+        );
+        return Err(crate::common::error::BlazeError::GameFull);
     }
     if game_state::join_denied_for(gid, pid) {
         crate::console_println!(

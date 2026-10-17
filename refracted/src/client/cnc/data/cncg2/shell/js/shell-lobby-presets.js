@@ -16,9 +16,11 @@
     /** lobbyOptions keys a preset sets, with the Generals 2 value. */
     var TWEAKS = [
         { key: 'enableInstantSelling', label: 'Instant Selling', def: false,
-          tip: 'Structure sell completes in ~0.01 seconds' },
+          tip: 'Structures sell instantly instead of after 10 seconds.' },
         { key: 'enableRebuildableDerricks', label: 'Rebuildable Derricks', def: true,
-          tip: 'Allow rebuilding of destroyed oil derricks' },
+          tip: 'A destroyed oil derrick leaves its well, so you can build a new one.' },
+        { key: 'enableGeneralsArmor', label: 'Combat Tuning (Classic)', def: false,
+          tip: 'Generals-style damage: each weapon type is strong or weak against each armor type.' },
         { key: 'enableTechTree', label: 'Tech Tree', def: true, soon: true },
         { key: 'enableSpecialAbilities', label: 'Special Abilities', def: true, soon: true },
         { key: 'enableUnlockFullFactionRoster', label: 'Factions Only', def: false, soon: true }
@@ -50,7 +52,7 @@
           values: factoryValues() },
         { id: 'classic', label: 'Generals Classic', builtin: true,
           blurb: 'All game rules and gameplay changes inspired by Generals and Zero Hour are turned ON, get the best of both worlds.',
-          values: withValues({ enableRebuildableDerricks: false }) }
+          values: withValues({ enableRebuildableDerricks: false, enableGeneralsArmor: true }) }
     ];
 
     var state = null;

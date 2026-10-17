@@ -212,4 +212,161 @@ CCApp.controller('SupportController', function($scope) {
         }
     ];
 
+    // Aurora view: the same topics, rewritten for Aurora. The lists above stay as the Original view.
+    var auroraContent = {
+        FAQ: [
+            { id: 'game', title: "THE GAME", entries: [
+                { q: "What is Aurora?", a: "Aurora brings back <b>Command & Conquer (2013)</b>, the Generals 2 Alpha that was cancelled before its online services launched. It runs on <b>Refracted</b>, which stands in for those online services, and <b>Prism</b>, which patches the game client and the dedicated servers." },
+                { q: "Is Aurora finished?", a: "No. Aurora is a work in progress, and the game itself was still in Alpha when development stopped. Features come back build by build, and anything you see may change. Your build numbers are shown at the top left of the main menu." },
+                { q: "Does Aurora cost anything?", a: "No. Aurora is a free hobby project. There is no store, currency or membership, and every map is available to everyone. If you would like to help the project, use <b>Support us</b> in the bottom bar." },
+                { q: "Is an internet connection required to play?", a: "Yes. Matches run on dedicated servers: the game logic lives on the server and every player connects to it. This keeps lag with the player who has it (the shared lag of earlier C&C titles is a thing of the past) and makes cheating harder." },
+                { q: "Will Aurora be expanded?", a: "The goal is to bring back everything the 2013 Alpha had. New features are announced in the <b>News</b> panel on the Play page as they arrive." },
+                { q: "Will there be single-player content?", a: "You can already play against AI in a skirmish lobby. There is no campaign; the Alpha never had one. A tutorial mission is coming soon under <b>Support > Play tutorial</b>." },
+                { q: "Why was the game called Command & Conquer, not Generals 2?", a: "EA planned Command & Conquer as a live service rather than a single game. It started in the Generals universe, but the name left room to grow beyond it." }
+            ]},
+            { id: 'factions', title: "FACTIONS", table: 'factions',
+              intro: "You can play as one of three Factions.",
+              rows: [
+                ["The Asia-Pacific Alliance (APA)", "A conglomerate of allied Asian countries.", "Emphasis on hordes of low-level Units, backed by individual high-level Units."],
+                ["The European Union (EU)", "A high-tech, centralized single-state entity comprising all of Western and Northern Europe.", "Classic Command & Conquer, designed to be pick-up-and-play."],
+                ["The Global Liberation Army (GLA)", "A stateless terrorist organization, encompassing insurgent groups from all corners of the globe.", "Finesse-oriented, with stealth, sabotage and self-destruction."]
+              ]},
+            { id: 'start', title: "GETTING STARTED", entries: [
+                { q: "Is there a guide for beginners?", a: "Yes. <b>Support > Guides</b> covers the interface, controls, resources, structures, production and more. A tutorial mission for the EU is coming soon.", action: { text: "GUIDES", tab: 'SUPPORT', subTab: 'GUIDES' } },
+                { q: "How do I play with a friend?", a: "Both of you open <b>Browse servers</b> on the Play page and join the same server. The lobby host can set a <b>Match password</b> to keep the seats for you. Invites are coming soon." },
+                { q: "Can I deselect units?", a: "Yes. Turn on <b>Options > Gameplay > Allow Deselect</b>." },
+                { q: "Is unit movement via left-click supported?", a: "Not at the moment. Units move with right-click, and the command bar sits at the bottom of the screen." },
+                { q: "How can I give feedback?", a: "Pass it on to the Aurora team (Xevrac and Nemo). Include the build numbers from the top left of the main menu (<b>RFR</b>, <b>PRISM</b> and <b>CNC</b>) so we know which build you were playing." }
+            ]},
+            { id: 'features', title: "BALANCE & FEATURES", entries: [
+                { q: "A unit, ability or player power seems too strong. Will it be fixed?", a: "Aurora uses the game's own 2013 balance data rather than making up new values, so units should play as they did in the Alpha. If something looks wrong, tell us: it may be a bug in how a rule is applied." },
+                { q: "Will there be a replay feature?", a: "There is no replay feature at the moment." },
+                { q: "Will there be support for mods and custom maps?", a: "Not at the moment. Lobby hosts can change how a match plays under <b>Lobby Options > Tweaks</b> and save their settings as a preset." }
+            ]}
+        ],
+        TROUBLESHOOT: [
+            { id: 'problems', title: "COMMON PROBLEMS", table: 'problems', rows: [
+                ["The game froze.", "Close it with Windows Task Manager and start it again from the <b>Refracted launcher</b>. Aurora is a work in progress, so freezes can happen. If it keeps happening, let the Aurora team know."],
+                ["Find a match shows an error.", "Click <b>OK</b> and try again, or pick a server yourself with <b>Browse servers</b>. If it keeps failing, restart the game."],
+                ["The game crashes when a match starts.", "Players on different versions can crash when they connect to each other. Make sure the launcher has updated Prism, and check the <b>Version</b> column in <b>Browse servers</b> before you join."],
+                ["An error appears while signing in.", "Close the game and start it again from the <b>Refracted launcher</b>. If that does not help, contact the Aurora team."],
+                ["Units react late or the game stutters.", "Look for the warning icons at the top right of the screen. <b>Support > Guides > User Interface</b> explains each one and what you can do about it."],
+                ["No servers are listed.", "Click <b>Refresh</b> in <b>Browse servers</b>. The <b>servers online</b> count at the bottom right of the main menu shows how many are running."]
+            ]},
+            { id: 'account', title: "ACCOUNT & UPDATES", entries: [
+                { q: "What do I need to play?", a: "Aurora requires Refracted. Start the game from the <b>Refracted launcher</b>: it signs you in and installs Prism for you." },
+                { q: "How do I keep Aurora up to date?", a: "The Refracted launcher checks for Prism updates when you start it and installs them before the game launches." }
+            ]},
+            { id: 'menus', title: "MENUS & SETTINGS", entries: [
+                { q: "How do I open the options?", a: "Click <b>Options</b> in the bottom bar of the main menu. In a match, press <b>Esc</b> and choose <b>Options</b>." },
+                { q: "How do I adjust my graphics settings?", a: "Open <b>Options > Graphics</b>. You can set the fullscreen and windowed resolutions, switch to windowed mode and change the graphics quality." },
+                { q: "How do I access the tutorial?", a: "Open <b>Support > Play tutorial</b>. The EU tutorial mission is coming soon; until then, <b>Support > Guides</b> covers the basics." },
+                { q: "How do I exit the game from the main menu?", a: "Click <b>Quit</b> in the bottom bar." }
+            ]},
+            { id: 'generals', title: "GENERALS & FACTIONS", entries: [
+                { q: "How do I select a General?", a: "Pick your General on your slot in the lobby. To start every new lobby with the same one, set <b>Preferred Faction</b> and <b>Preferred General</b> under <b>Options > Gameplay > Lobby Defaults</b>. The main menu shows the General you played last." },
+                { q: "How do I pick my faction?", a: "Choose your <b>Faction</b> on your slot in the lobby, next to your General." },
+                { q: "Can I customise my Generals?", a: "Not yet. Customising Generals and loadouts is coming soon under <b>Profile > Generals</b>." }
+            ]},
+            { id: 'matchmaking', title: "MATCHMAKING", entries: [
+                { q: "How do I find a match?", a: "Click <b>Find a match</b> on the Play page. Aurora joins the closest server that already has players, or an empty one if none do, and opens its lobby." },
+                { q: "How do I pick a server myself?", a: "Click <b>Browse servers</b> on the Play page. Each server is listed with its region, map, players, ping and version." },
+                { q: "How do I leave a lobby?", a: "Click <b>Leave</b> in the lobby to return to the main menu." },
+                { q: "Can I choose the map?", a: "Find a match takes the map the server is on. To choose, check the <b>Map</b> column in <b>Browse servers</b>, or, as lobby host, use <b>Change map</b>." },
+                { q: "Can a friend and I team up against other players?", a: "Yes. The lobby has two teams: join the same team and fill the other seats with players or AI." },
+                { q: "How do I exit a game in progress?", a: "Press <b>Esc</b> to open the game menu. <b>Surrender</b> ends the match as a loss, and <b>Quit game</b> closes the game." }
+            ]},
+            { id: 'skirmish', title: "SKIRMISH", entries: [
+                { q: "Can I play against AI?", a: "Yes. In a skirmish lobby, click <b>Add AI</b> under a team and set its <b>Difficulty</b> on its slot. AI can go on either team, so you can play alongside it or against it." },
+                { q: "Is there a campaign?", a: "No. There is no campaign; the 2013 Alpha did not have one." }
+            ]},
+            { id: 'friends', title: "FRIENDS & CHAT", entries: [
+                { q: "How do I add friends?", a: "Aurora does not have a friends list yet. To play together, join the same server through <b>Browse servers</b>. Invites are coming soon." },
+                { q: "How do I chat with other players?", a: "Use the lobby chat (<b>Message the lobby</b>) to talk to everyone in your lobby." }
+            ]},
+            { id: 'profile', title: "PROFILE", entries: [
+                { q: "How do I unlock achievements?", a: "Achievements unlock by doing specific things in a match. Open <b>Profile > Achievements</b> from the Play page to see which ones are available and which you have." },
+                { q: "How do I view my statistics?", a: "Open <b>Profile</b> from the Play page. It has tabs for your Overview, Statistics, Match history and Leaderboards. Records are kept per realm, so each realm has its own wins and losses." }
+            ]},
+            { id: 'help', title: "GETTING HELP", entries: [
+                { q: "Can't find your answer here?", a: "Check the <b>News</b> panel on the Play page for known issues and new builds, then contact the Aurora team (Xevrac and Nemo). Include your build numbers from the top left of the main menu (<b>RFR</b>, <b>PRISM</b> and <b>CNC</b>)." }
+            ]}
+        ]
+    };
+
+    var activeSections = { FAQ: 'game', TROUBLESHOOT: 'problems' };
+
+    $scope.currentSections = function () {
+        return auroraContent[$scope.activeSubTab] || [];
+    };
+
+    $scope.activeSection = function () {
+        return activeSections[$scope.activeSubTab];
+    };
+
+    $scope.setActiveSection = function (id) {
+        activeSections[$scope.activeSubTab] = id;
+    };
+
+    $scope.onArticleClick = function ($event) {
+        var el = $event.target;
+        if (!el || !el.getAttribute || !el.getAttribute('data-tab')) {
+            return;
+        }
+        $scope.setTab(el.getAttribute('data-tab'));
+        $scope.setSubTab(el.getAttribute('data-subtab'));
+    };
+
+    function entryHtml(entry) {
+        var html = '<h3>' + entry.q + '</h3><p>' + entry.a;
+        if (entry.action) {
+            html += ' <a class="support-action" data-tab="' + entry.action.tab + '" data-subtab="' + entry.action.subTab + '">' + entry.action.text + '</a>';
+        }
+        return html + '</p>';
+    }
+
+    function tableHtml(headers, widths, rows) {
+        var html = '<table><tr>';
+        for (var h = 0; h < headers.length; h++) {
+            html += '<th style="padding: 10px;' + (widths[h] ? ' width: ' + widths[h] + ';' : '') + '">' + headers[h] + '</th>';
+        }
+        html += '</tr>';
+        for (var r = 0; r < rows.length; r++) {
+            html += '<tr>';
+            for (var c = 0; c < rows[r].length; c++) {
+                html += '<td style="padding: 10px;">' + (c === 0 ? '<b>' + rows[r][c] + '</b>' : rows[r][c]) + '</td>';
+            }
+            html += '</tr>';
+        }
+        return html + '</table>';
+    }
+
+    $scope.getCurrentSectionHtml = function () {
+        var sections = auroraContent[$scope.activeSubTab];
+        if (!sections) {
+            return '';
+        }
+        var section = sections[0];
+        for (var s = 0; s < sections.length; s++) {
+            if (sections[s].id === activeSections[$scope.activeSubTab]) {
+                section = sections[s];
+            }
+        }
+
+        var html = '<h2 class="guide-page-header">' + section.title + '</h2>';
+        if (section.intro) {
+            html += '<p>' + section.intro + '</p>';
+        }
+        if (section.table === 'factions') {
+            html += tableHtml(["Faction", "Who they are", "Play style"], ['220px'], section.rows);
+        } else if (section.table === 'problems') {
+            html += tableHtml(["Problem", "What to do"], ['320px'], section.rows);
+        } else {
+            for (var i = 0; i < section.entries.length; i++) {
+                html += entryHtml(section.entries[i]);
+            }
+        }
+        return html;
+    };
+
 });

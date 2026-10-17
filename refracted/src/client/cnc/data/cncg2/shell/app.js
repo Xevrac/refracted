@@ -543,11 +543,9 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     $scope.activeSubTab = '';
 
     var PLAYTEST_LOCKED_TABS = {
-        PROFILE: 1,
         CUSTOMIZE: 1,
         WATCH: 1,
-        LEARN: 1,
-        SUPPORT: 1
+        LEARN: 1
     };
 
     $scope.playtestNavLocked = function (tabName) {
@@ -558,6 +556,31 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
     function auroraShell() {
         return !!(window.CncShellTheme && CncShellTheme.family() === 'aurora');
     }
+
+    /** Support pages: Aurora layout and wording, or the 2013 Alpha original. */
+    var SUPPORT_VIEW_KEY = 'cnc_shell_support_view';
+    $scope.supportView = { mode: 'aurora' };
+    try {
+        if (window.localStorage && localStorage.getItem(SUPPORT_VIEW_KEY) === 'original') {
+            $scope.supportView.mode = 'original';
+        }
+    } catch (e) {}
+
+    $scope.setSupportView = function (mode) {
+        $scope.supportView.mode = mode;
+        try { localStorage.setItem(SUPPORT_VIEW_KEY, mode); } catch (e) {}
+    };
+
+    $scope.supportAurora = function () {
+        return auroraShell() && $scope.supportView.mode !== 'original';
+    };
+
+    /** The game is Aurora; references to the series and earlier titles keep their name. */
+    $scope.auroraWording = function (text) {
+        return String(text).replace(/(classic |previous )?Command & Conquer( titles)?/g, function (m, pre, post) {
+            return (pre || post) ? m : 'Aurora';
+        });
+    };
 
     $scope.setTab = function(tabName) {
         if (tabName === 'LEARN' && auroraShell()) {

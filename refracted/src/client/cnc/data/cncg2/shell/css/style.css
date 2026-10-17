@@ -199,6 +199,14 @@ body.cc-theme {
     text-decoration: none;
     border-color: #fff;
 }
+.btn-massive-green.btn-soon,
+.btn-massive-green.btn-soon:hover {
+    background-color: #444;
+    background-image: none;
+    border-color: #111;
+    color: #888;
+    cursor: default;
+}
 
 /* =========================================================================
    BLOCK-SPECIFIC FORMATION
