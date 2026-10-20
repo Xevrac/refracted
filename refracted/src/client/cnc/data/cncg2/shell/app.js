@@ -745,16 +745,6 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         }, window.CncNews.refreshCooldownMs);
     };
 
-    // Aurora (Alternate): the feature banner leads with the newest article.
-    var FEATURE_FALLBACK = 'view/image/lobby-card-art/monsoon.png';
-    $scope.featureImage = function () {
-        var lead = $scope.newsEntries[0];
-        if (lead && lead.image) {
-            return lead.image;
-        }
-        return $rootScope.playtest ? playtestHero : FEATURE_FALLBACK;
-    };
-
     $scope.activeNewsArticle = null;
     $scope.openArticle = function(article) {
         if (!article) {

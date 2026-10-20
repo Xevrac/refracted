@@ -112,7 +112,10 @@ CCApp.controller('LearnController', function($scope) {
                      { type: "list", items: ["Move closer to your router or use a cable", "Stop other devices on your network from streaming or downloading", "Restart your router if it keeps happening"] }],
                     [{ type: "html", style: "padding: 10px; width: 120px; white-space: nowrap;", content: "<img src=\"images/learn/Guide_Net_FramerateWarning.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\"><img src=\"images/learn/Guide_Net_FramerateSevere.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\">" },
                      "<b>Low Framerate</b><br>Your computer is struggling to draw the game smoothly. This comes from your PC, not your connection.<br>Amber: under 30 frames per second. Red: under 20.",
-                     { type: "list", items: ["Lower the graphics quality in Options > Graphics", "Close other programs running in the background", "Make sure your graphics drivers are up to date"] }]
+                     { type: "list", items: ["Lower the graphics quality in Options > Graphics", "Close other programs running in the background", "Make sure your graphics drivers are up to date"] }],
+                    [{ type: "html", style: "padding: 10px; width: 120px; white-space: nowrap;", content: "<img src=\"images/learn/Guide_Net_ServerWarning.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\"><img src=\"images/learn/Guide_Net_ServerSevere.png\" alt=\"\" style=\"width:48px; height:48px; margin-right:6px;\">" },
+                     "<b>Server Falling Behind</b><br>The game server cannot keep up with the match, so units may pause and then jump forward for everyone in the game. This comes from the server, not your PC or your connection.<br>Amber: the server is running below 90% of normal speed. Red: below 70%.",
+                     { type: "list", items: ["If you host the server, lower its tick rate to 30 Hz (or 10 Hz) in the launcher's Servers tab", "If you host the server, close other heavy programs on that computer", "If someone else hosts it, let them know or try another server"] }]
                 ]},
 
                 { type: "h3", content: "Network Ping Display" },

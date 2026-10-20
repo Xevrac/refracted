@@ -1,4 +1,4 @@
-/* GENERATED: Aurora (Default). Do not edit here.
+/* GENERATED: Aurora. Do not edit here.
    Source: refracted/tools/cnc-shell-webdev/aurora/src/*.css, built by build.py in that folder.
    Sizes are rem against a 1920x1080 reference (1rem = 16px at 1080p); js/shell-theme.js scales the root. */
 /* ---- 00-base.css ---- */
@@ -86,8 +86,6 @@ input[type="text"], input[type="password"] {
 .au-play__btn,
 .au-panel,
 .au-plate,
-.au-me,
-.au-feature,
 .au-lobby__slot,
 .au-lobby__spectator,
 .au-lobby__summary,
@@ -686,8 +684,6 @@ input[type="text"], input[type="password"] {
     text-transform: uppercase;
     color: #a1a4a8;
 }
-
-/* ---- Aurora (Alternate): player card, feature banner, news strip ---- */
 
 
 /* ---- News article: a dialog over the main menu. The veil darkens the menu, which stays
@@ -1311,7 +1307,7 @@ input[type="text"], input[type="password"] {
     background: center center / cover no-repeat;
     opacity: 0.3;
 }
-/* The stage is drawn as a recon print: drained of colour in Default, cyan in Alternate.
+/* The stage is drawn as a recon print, drained of colour.
    Filters are the only way to do that here; without them the map simply shows in colour.
    No blur: the engine paints in software and would redo it on every repaint of the stage. */
 
@@ -2935,7 +2931,7 @@ html[data-au-page="chat"] body { font-size: 0.875rem; }
 .au-play > :nth-child(2) { animation-delay: 0.06s; }
 .au-play > :nth-child(3) { animation-delay: 0.12s; }
 .au-play > :nth-child(4) { animation-delay: 0.18s; }
-.au-news, .au-feature { animation: au-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s backwards; }
+.au-news { animation: au-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s backwards; }
 
 .au-news__item { animation: au-fade 0.4s ease-out 0.26s backwards; }
 .au-news__item:nth-child(2) { animation-delay: 0.33s; }
@@ -2943,9 +2939,8 @@ html[data-au-page="chat"] body { font-size: 0.875rem; }
 .au-news__item:nth-child(n+4) { animation-delay: 0.47s; }
 .au-general { animation: au-from-right 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.08s backwards; }
 .au-plate { animation: au-rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) 0.34s backwards; }
-.au-me { animation: au-drop 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s backwards; }
 /* Bars fill from the left */
-.au-plate__bar u, .au-me__bar u, .au-prof__wl u {
+.au-plate__bar u, .au-prof__wl u {
     transform-origin: left center;
     animation: au-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.5s backwards;
 }

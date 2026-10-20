@@ -1,8 +1,8 @@
 # Command & Conquer — shell UI (in-game WebKit host)
 
 The shell runs in the game's embedded WebKit: EAWebKit 16.4 (`EAWebKit16.dll` behind Prism's facade
-`EAWebkit.dll`), WebKit of late 2015 (flexbox, transforms, transitions, filters, ES6). It draws Classic,
-Aurora (Default) and Aurora (Alternate).
+`EAWebkit.dll`), WebKit of late 2015 (flexbox, transforms, transitions, filters, ES6). It draws Classic
+and Aurora.
 
 There is no 13.2 fallback. If `EAWebKit16.dll` cannot be loaded the facade shows an error and stops the
 game (`prism/titles/cnc/eawebkit/README.md`). See "Compatibility" for what the engine allows.
@@ -22,8 +22,7 @@ Pickable from **OPTIONS → INTERFACE**:
 | Id | Name | Root |
 |----|------|------|
 | `classic` | Classic | Original Generals 2 layout (`view/roots/classic.html` + `view/home.html`) |
-| `aurora` | Aurora (Default) | Concept sheet 2G-1: your general over the battlefield, gunmetal panels (`view/roots/aurora.html` + `view/home-aurora.html`) |
-| `aurora-alt` | Aurora (Alternate) | Concept sheet 2A-3: same templates; classic backdrop, cyan readouts, wide feature banner |
+| `aurora` | Aurora | Concept sheet 2G-1: your general over the battlefield, gunmetal panels (`view/roots/aurora.html` + `view/home-aurora.html`) |
 
 Persistence (per-machine, per game install):
 1. Shell UI theme — `localStorage` key `cnc_shell_ui_theme` in the shell WebKit profile (`CNCO_DL\0\webkit` on retail)
@@ -31,7 +30,7 @@ Persistence (per-machine, per game install):
 
 These are client-side only. Refracted does not write shell prefs to its host filesystem.
 
-Legacy id `cnc-alpha` maps to `classic`.
+Legacy id `cnc-alpha` maps to `classic`; any other unknown id (such as the removed `aurora-alt`) falls back to `aurora`.
 
 ### Stylesheets
 
@@ -42,14 +41,13 @@ Every `<link rel="stylesheet" data-shell-css="...">` names the theme it belongs 
 | Theme | Stylesheet |
 |-------|------------|
 | Classic | `lib/bootstrap/*.css`, `css/*.css`, `css/themes/cnc-alpha.css` |
-| Aurora (Default) | `css/themes/aurora.css` |
-| Aurora (Alternate) | `css/themes/aurora-alt.css` |
+| Aurora | `css/themes/aurora.css` |
 
 A new page (or a new stylesheet) has to carry the attribute, or it loads under every theme.
 
-### The two Aurora themes
+### The Aurora stylesheet
 
-`css/themes/aurora.css` and `css/themes/aurora-alt.css` are **generated**. Edit the source and rebuild:
+`css/themes/aurora.css` is **generated**. Edit the source and rebuild:
 
 ```text
 refracted/tools/cnc-shell-webdev/aurora/src/00-base.css      fonts, reset, frames, buttons, dialogs, tooltips
@@ -62,20 +60,17 @@ refracted/tools/cnc-shell-webdev/aurora/src/00-base.css      fonts, reset, frame
 python refracted/tools/cnc-shell-webdev/aurora/build.py
 ```
 
-This WebKit has no `var()`, so `build.py` substitutes the palette (the `THEMES` table at its top) and
-writes one complete stylesheet per theme. Source syntax beyond plain CSS:
+This WebKit has no `var()`, so `build.py` substitutes the palette (the `PALETTE` table at its top) and
+writes one complete stylesheet. Source syntax beyond plain CSS:
 
 | Syntax | Meaning |
 |--------|---------|
 | `@{accent}`, `@{line/0.26}` | a palette colour, optionally at an alpha |
 | `120u` | 120 px on the 1920x1080 reference frame (written out as `7.5rem`) |
-| `/*@default*/ ... /*@end*/`, `/*@alt*/ ... /*@end*/` | rules for one theme only |
 
-Both themes share one accent, light blue (`accent` in the palette); ready green, quit red and the
-house colours are not themed. Corner ticks are the `tick` token, at 40% in both themes (corner blue in
-Default, cyan in Alternate), and only on the main menu cards and the lobby's player cards, spectator box
-and lobby options; other panels and modals have the hairline border alone. Template differences between the two (feature banner, player card,
-which stats block shows) are `ng-if="shellUiTheme == ..."` in `view/home-aurora.html`.
+The accent is light blue (`accent` in the palette); ready green, quit red and the house colours are not
+themed. Corner ticks are the `tick` token, the corner blue at 40%, and only on the main menu cards and the
+lobby's player cards, spectator box and lobby options; other panels and modals have the hairline border alone.
 
 ### Layout scale
 
@@ -85,7 +80,7 @@ and resize, so the layout keeps its proportions at any resolution: wider windows
 left and right blocks, taller ones gain space above the nav bar. A page drawn in a small view declares its
 own frame with `<html data-au-ref="WxH">` (`ingame_chat.html`: `630x245`).
 
-Aurora (Default) shows the preferred general (OPTIONS → GAMEPLAY → Lobby defaults) on the main menu and
+Aurora shows the preferred general (OPTIONS → GAMEPLAY → Lobby defaults) on the main menu and
 bust portraits on lobby cards. The general shown is the one the player last played (Refracted
 records it with each game report: `/cnc/match-record` `lastGeneralId`), else the preferred general.
 `js/shell-general-art.js` maps a general to its menu art (next section); the lobby busts come from the
@@ -157,7 +152,7 @@ view/image/lobby-warmaps/<minimap name>.jpg      e.g. view/image/lobby-warmaps/D
 | Ideal size | **1904 x 1224** (14:9; covers 4K with room), JPG around quality 85 |
 | Minimum | 812 x 522 |
 | Other ratios | drawn centred with `cover`, so the excess is cropped evenly |
-| Colour | natural: the stylesheet drains it (Default) or tints it cyan (Alternate) and lays the grid and vignette on top |
+| Colour | natural: the stylesheet drains it and lays the grid and vignette on top |
 | Keep clear | the map name chip (top left, about 36% x 11%) and the Change map button (top right, about 17% x 11%) |
 
 Minimap names: `Alpha_Tutorial`, `DM_Smalltown_1v1_CR`, `DM_KapuKai_1v1_JKS`, `DM_Oasis_2v2_JT`,
@@ -262,7 +257,7 @@ stays on the server and is only needed on the playtest server.
 Articles are typed blocks (`paragraph`, `heading`, `list` with one nested level, `divider`), never
 HTML; `view/newsbar.html` (Classic) and `view/home-aurora.html` (Aurora) render them with text bindings only.
 
-Aurora layout: in the panel (Default) and the strip (Alternate) the date is a small line above the title,
+Aurora layout: in the news panel the date is a small line above the title,
 with a `Pinned` tag in front of it for pinned articles; the feed sends a full date ("Sat Oct 03 2026"), which
 does not fit a side column. An article opens as a dialog over the main menu (`.au-article-veil` darkens the
 menu, `.au-article` is the 1000u box centred on it): the box is as tall as the article needs and its body

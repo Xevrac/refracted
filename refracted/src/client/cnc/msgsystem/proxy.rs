@@ -15,8 +15,8 @@ use super::log::{
 };
 use super::messages::{
     decode_client_hello, decode_load_map_id, decode_protocol_version_auth_token,
-    ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID, LOAD_MAP_TYPE_ID,
-    PLACED_BUILD_COMPLETED_TYPE_ID, PROTOCOL_VERSION_TYPE_ID, START_GAME_TYPE_ID,
+    ALLOW_INPUT_CHANGE_TYPE_ID, CLIENT_HELLO_TYPE_ID, GAME_DEFEAT_TYPE_ID, GAME_VICTORY_TYPE_ID,
+    LOAD_MAP_TYPE_ID, PLACED_BUILD_COMPLETED_TYPE_ID, PROTOCOL_VERSION_TYPE_ID, START_GAME_TYPE_ID,
 };
 use super::wire::SimpleFrame;
 
@@ -187,7 +187,8 @@ pub async fn relay_pair(
             upstream_peer,
             RelayLog::ServerToClient,
             match_gid,
-            None,
+            // (H591) read only: who receives GameDefeat/GameVictory. S2C never carries ClientHello.
+            Some(&hello_persona),
         )
         .await;
         // Upstream died — close the client side.
@@ -281,6 +282,30 @@ where
                     // Lobby GameReady color= hit the frontend RtsClient; re-push once the
                     // match instance exists so Blaze→A9FED0 can fill map[persona].
                     crate::client::cnc::enqueue_native_house_color_attr_for_gid(gid);
+                }
+            }
+            // (H591) Dedicated→client GameDefeat/GameVictory: this seat's match is over and the
+            // dedicated has already dropped it (Join.NotifyPeerLeft; the last one reclaims the
+            // level). The client keeps its MsgSys connection open on the result screen and goes
+            // back to its own lobby without a leave-game, so H488's close never comes and the row
+            // stayed InGame 1/2 on an idle server. Leave here; the later close is then a no-op.
+            if matches!(direction, RelayLog::ServerToClient)
+                && (frame.type_id == GAME_DEFEAT_TYPE_ID || frame.type_id == GAME_VICTORY_TYPE_ID)
+            {
+                let pid = hello_persona
+                    .map(|p| p.load(std::sync::atomic::Ordering::Relaxed) as i64)
+                    .unwrap_or(0);
+                if let Some(gid) = start_gid.filter(|g| *g > 0) {
+                    if pid > 0 {
+                        log_rts_system(
+                            peer,
+                            &format!(
+                                "{} to pid={pid} gid={gid}: seat leaves the match",
+                                if frame.type_id == GAME_DEFEAT_TYPE_ID { "GameDefeat" } else { "GameVictory" }
+                            ),
+                        );
+                        super::super::game_state::note_client_left_match(gid, pid);
+                    }
                 }
             }
             let extra = if frame.type_id == LOAD_MAP_TYPE_ID {

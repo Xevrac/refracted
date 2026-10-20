@@ -241,9 +241,9 @@ body.ingame-classic .options-modal-overlay {
 }
 
 /* =========================================================================
-   Aurora themes: the pause menu docks to the right edge and Return to Game leads.
+   Aurora: the pause menu docks to the right edge and Return to Game leads.
    The markup keeps the original order (Classic is unchanged); the old flexbox
-   ordinal groups reorder it here. Aurora (Alternate) restates colours at the end.
+   ordinal groups reorder it here.
    ========================================================================= */
 .pause-menu-title {
     display: none;

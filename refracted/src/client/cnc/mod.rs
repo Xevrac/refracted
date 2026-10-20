@@ -897,21 +897,26 @@ fn enqueue_native_house_color_attr(gid: i64) {
         .filter(|p| !p.is_ai)
         .map(|p| p.persona_id as u64)
         .collect();
+    // H607: the Chinook-name tweak rides the same push. The client has no other view of lobby
+    // options (they reach only the dedicated, as CreateGameOptions), and its PlayerAttributeUpdated
+    // hook (1201450, H604) already reads these attrs. Always an explicit 1/0, so a later lobby
+    // without the tweak turns it back off.
+    let chinook = if game_state::chinook_name_enabled(gid) { "1" } else { "0" };
     for p in players {
         if p.is_ai {
             continue;
         }
-        let Some(hex) = p
+        let hex = p
             .attribs
             .get(game_state::ATTR_HOUSE_COLOR)
             .cloned()
             .or_else(|| p.attribs.get("_color").cloned())
-            .and_then(|s| game_state::normalize_house_color(&s))
-        else {
-            continue;
-        };
+            .and_then(|s| game_state::normalize_house_color(&s));
         let mut attrs = IndexMap::new();
-        attrs.insert(game_state::ATTR_HOUSE_COLOR.to_string(), hex);
+        if let Some(hex) = hex {
+            attrs.insert(game_state::ATTR_HOUSE_COLOR.to_string(), hex);
+        }
+        attrs.insert("chinook".to_string(), chinook.to_string());
         let Ok(pushes) = fireframe::pushes_after_set_player_attributes(gid, p.persona_id, &attrs)
         else {
             continue;
@@ -1479,11 +1484,29 @@ fn parse_generals_armor(query: Option<&str>, body: &[u8]) -> Option<bool> {
         .or(from_query)
 }
 
+/// H607: `chinookName` / `enableChinookName` on `/cnc/lobby-options` (query or JSON body).
+fn parse_chinook_name(query: Option<&str>, body: &[u8]) -> Option<bool> {
+    const KEYS: [&str; 2] = ["chinookName", "enableChinookName"];
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            KEYS.contains(&k)
+                .then(|| parse_opt_bool_str(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| KEYS.iter().find_map(|k| v.get(*k).and_then(json_opt_bool)))
+        .or(from_query)
+}
+
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling, rebuildable) =
         parse_gid_pid_match_options(query, body);
     let disallow_spectators = parse_disallow_spectators(query, body);
     let generals_armor = parse_generals_armor(query, body);
+    let chinook_name = parse_chinook_name(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1500,17 +1523,19 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && rebuildable.is_none()
         && disallow_spectators.is_none()
         && generals_armor.is_none()
+        && chinook_name.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, or disallowSpectators required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, chinookName, or disallowSpectators required"}"#.to_vec(),
         );
     }
     let options_before = (
         game_state::match_options(gid),
         game_state::spectators_disallowed(gid),
         game_state::generals_armor_enabled(gid),
+        game_state::chinook_name_enabled(gid),
     );
     let mut resp = game_state::set_match_options(
         gid,
@@ -1564,10 +1589,21 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             );
         }
         resp["enableGeneralsArmor"] = serde_json::json!(game_state::generals_armor_enabled(gid));
+        if let Some(enabled) = chinook_name {
+            game_state::set_chinook_name(gid, pid, enabled);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} chinookName={}",
+                gid,
+                pid,
+                enabled
+            );
+        }
+        resp["enableChinookName"] = serde_json::json!(game_state::chinook_name_enabled(gid));
         let options_after = (
             game_state::match_options(gid),
             game_state::spectators_disallowed(gid),
             game_state::generals_armor_enabled(gid),
+            game_state::chinook_name_enabled(gid),
         );
         if options_after != options_before {
             // Everyone reviews the new rules before readying up again.

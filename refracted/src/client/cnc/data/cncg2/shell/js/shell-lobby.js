@@ -755,6 +755,7 @@
             enableInstantSelling: false,
             enableRebuildableDerricks: true,
             enableGeneralsArmor: false,
+            enableChinookName: false,
             disallowSpectators: false
         };
         $scope.colors = COLORS;
@@ -803,7 +804,7 @@
             return avatarForSlot(slot);
         };
 
-        // Aurora (Default) lobby cards show the game's bust portrait (view/image/portraits, copied from
+        // Aurora lobby cards show the game's bust portrait (view/image/portraits, copied from
         // UTFWinAssets/images/UserPortraits); the square icon stays the <img cc-fallback-src>.
         $scope.slotPortrait = function (slot) {
             var icon = avatarForSlot(slot);
@@ -1931,6 +1932,7 @@
             { key: 'enableInstantSelling', label: 'Instant selling', def: false },
             { key: 'enableRebuildableDerricks', label: 'Rebuildable derricks', def: true },
             { key: 'enableGeneralsArmor', label: 'Combat tuning (classic)', def: false },
+            { key: 'enableChinookName', label: 'Chinook (Zero Hour name)', def: false },
             { key: 'disallowSpectators', label: 'Spectators disallowed', def: false }
         ];
         $scope.optionValue = function (d) {
@@ -3365,6 +3367,7 @@
             $scope.lobbyOptions.enableInstantSelling = false;
             $scope.lobbyOptions.enableRebuildableDerricks = true;
             $scope.lobbyOptions.enableGeneralsArmor = false;
+            $scope.lobbyOptions.enableChinookName = false;
             $scope.lobbyOptions.disallowSpectators = false;
             $scope.gameId = '1';
             try {
@@ -3944,6 +3947,9 @@
                 }
                 if (data.enableGeneralsArmor != null) {
                     $scope.lobbyOptions.enableGeneralsArmor = !!data.enableGeneralsArmor;
+                }
+                if (data.enableChinookName != null) {
+                    $scope.lobbyOptions.enableChinookName = !!data.enableChinookName;
                 }
                 if (data.disallowSpectators != null) {
                     $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;
@@ -4956,6 +4962,7 @@
             var instantSelling = $scope.lobbyOptions.enableInstantSelling === true;
             var rebuildableDerricks = $scope.lobbyOptions.enableRebuildableDerricks === true;
             var generalsArmor = $scope.lobbyOptions.enableGeneralsArmor === true;
+            var chinookName = $scope.lobbyOptions.enableChinookName === true;
             var disallowSpectators = $scope.lobbyOptions.disallowSpectators === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
@@ -4967,6 +4974,7 @@
                 instantSelling: instantSelling,
                 rebuildableDerricks: rebuildableDerricks,
                 generalsArmor: generalsArmor,
+                chinookName: chinookName,
                 disallowSpectators: disallowSpectators
             }).then(function (data) {
                 $timeout(function () {
@@ -4998,6 +5006,9 @@
                     }
                     if (data.enableGeneralsArmor != null) {
                         $scope.lobbyOptions.enableGeneralsArmor = !!data.enableGeneralsArmor;
+                    }
+                    if (data.enableChinookName != null) {
+                        $scope.lobbyOptions.enableChinookName = !!data.enableChinookName;
                     }
                     if (data.disallowSpectators != null) {
                         $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;

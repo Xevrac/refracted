@@ -1278,6 +1278,7 @@ fn game_tweaks_customized(game: &CncGame) -> bool {
         || game.enable_instant_selling
         || !game.enable_rebuildable_derricks
         || game.enable_generals_armor
+        || game.enable_chinook_name
 }
 
 #[derive(Clone, Debug)]
@@ -1310,6 +1311,9 @@ pub struct CncGame {
     pub enable_rebuildable_derricks: bool,
     /// H541: Generals-style armour (CreateGameOptions 0x1000). Default off: authored bonus damage.
     pub enable_generals_armor: bool,
+    /// H607: lobby tweak, the EU Harvester is shown as "Chinook" (Zero Hour name). Client-only:
+    /// sent to every member as player ATTR `chinook` with `color`. Default off.
+    pub enable_chinook_name: bool,
     /// Host lobby tweak: nobody may take the spectator seat. Default off.
     pub disallow_spectators: bool,
     pub starting: bool,
@@ -1476,6 +1480,16 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
     if let Some(v) = generals_armor {
         if let Some(game) = games().lock().get_mut(&dedicated_gid) {
             game.enable_generals_armor = v;
+        }
+    }
+    let chinook_name = games()
+        .lock()
+        .iter()
+        .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+        .map(|(_, game)| game.enable_chinook_name);
+    if let Some(v) = chinook_name {
+        if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+            game.enable_chinook_name = v;
         }
     }
     let source = {
@@ -1733,6 +1747,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
             enable_generals_armor: false,
+            enable_chinook_name: false,
             disallow_spectators: false,
             starting: false,
             replicated_wire: None,
@@ -1784,6 +1799,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_instant_selling = false;
     game.enable_rebuildable_derricks = true;
     game.enable_generals_armor = false;
+    game.enable_chinook_name = false;
     game.disallow_spectators = false;
     game.replicated_wire = None;
     game.pros_wire = None;
@@ -2223,6 +2239,27 @@ pub fn generals_armor_enabled(gid: i64) -> bool {
         .lock()
         .get(&gid)
         .map(|g| g.enable_generals_armor)
+        .unwrap_or(false)
+}
+
+/// H607: host lobby tweak Chinook name. False when the game is missing or the caller is not host.
+pub fn set_chinook_name(gid: i64, persona_id: i64, enabled: bool) -> bool {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return false;
+    };
+    if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+        return false;
+    }
+    game.enable_chinook_name = enabled;
+    true
+}
+
+pub fn chinook_name_enabled(gid: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_chinook_name)
         .unwrap_or(false)
 }
 
@@ -3267,6 +3304,11 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         .get(&gid)
         .map(|g| g.enable_generals_armor)
         .unwrap_or(false);
+    let enable_chinook_name = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_chinook_name)
+        .unwrap_or(false);
     let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = games()
         .lock()
         .get(&gid)
@@ -3305,6 +3347,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_instant_selling,
         enable_rebuildable_derricks,
         enable_generals_armor,
+        enable_chinook_name,
         disallow_spectators,
         starting: false,
         replicated_wire: None,
@@ -3479,6 +3522,7 @@ pub fn seed_from_join(gid: i64) {
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
             enable_generals_armor: false,
+            enable_chinook_name: false,
             disallow_spectators: false,
             starting: false,
             replicated_wire: None,
@@ -4355,6 +4399,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableInstantSelling": game.enable_instant_selling,
         "enableRebuildableDerricks": game.enable_rebuildable_derricks,
         "enableGeneralsArmor": game.enable_generals_armor,
+        "enableChinookName": game.enable_chinook_name,
         "disallowSpectators": game.disallow_spectators,
         "spectatorOpen": spectator_seat_open(gid, game, 0),
         "allReady": all_ready,

@@ -1,7 +1,7 @@
 <div class="au-dash" ng-controller="DashboardController"
      ng-class="{'au-dash--tab': activeTab != 'LIVE', 'au-dash--article': activeNewsArticle}">
 
-    <!-- Aurora (Default): the preferred general, standing on the nav bar at the right edge.
+    <!-- Aurora: the preferred general, standing on the nav bar at the right edge.
          Art and sizes: see "General art" in the shell README. -->
     <div class="au-general" ng-if="shellUiTheme == 'aurora' && generalArt"
          ng-class="{'au-general--bust': generalArt.bust, 'au-general--fit': generalArt.fit}"
@@ -22,15 +22,6 @@
                 <p class="alert-popup-credits">Credits to Xevrac and Nemo for reviving Command &amp; Conquer (2013).</p>
             </div>
         </span>
-    </div>
-
-    <!-- Aurora (Alternate): player card, top right -->
-    <div class="au-me" ng-if="shellUiTheme == 'aurora-alt'" ng-show="activeTab == 'LIVE'">
-        <img class="au-me__face" ng-src="{{ generalIcon }}" ng-show="generalIcon" alt="">
-        <div class="au-me__body">
-            <strong class="au-me__name">{{ playerName }}</strong>
-            <span class="au-me__record"><b>{{ wins }}</b> Wins<i></i><b class="au-me__loss">{{ losses }}</b> Losses</span>
-        </div>
     </div>
 
     <div class="au-live" ng-show="activeTab == 'LIVE'">
@@ -62,18 +53,6 @@
         </div>
 
         <div class="au-live__main">
-            <!-- Aurora (Alternate): wide feature banner, leads with the newest article -->
-            <div class="au-feature" ng-if="shellUiTheme == 'aurora-alt'"
-                 ng-click="openArticle(newsEntries[0])"
-                 ng-class="{'au-feature--link': newsEntries.length}">
-                <div class="au-feature__art" ng-style="{'background-image': 'url(' + featureImage() + ')'}"></div>
-                <div class="au-feature__cap">
-                    <em class="au-feature__tag" ng-show="newsEntries.length">Latest</em>
-                    <strong>{{ newsEntries.length ? newsEntries[0].title : playerName }}</strong>
-                    <span>{{ newsEntries.length ? newsEntries[0].summary : 'No news right now.' }}</span>
-                </div>
-            </div>
-
             <div class="au-panel au-news">
                 <div class="au-news__head">
                     <span class="au-news__title">News</span>
@@ -95,7 +74,7 @@
             </div>
         </div>
 
-        <!-- Aurora (Default): record plate on the general -->
+        <!-- Aurora: record plate on the general -->
         <div class="au-plate" ng-if="shellUiTheme == 'aurora'">
             <div class="au-plate__id">
                 <strong class="au-plate__name">{{ playerName }}</strong>

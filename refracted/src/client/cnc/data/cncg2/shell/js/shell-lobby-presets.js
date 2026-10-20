@@ -21,6 +21,8 @@
           tip: 'A destroyed oil derrick leaves its well, so you can build a new one.' },
         { key: 'enableGeneralsArmor', label: 'Combat Tuning (Classic)', def: false,
           tip: 'Generals-style damage: each weapon type is strong or weak against each armor type.' },
+        { key: 'enableChinookName', label: 'Chinook (Zero Hour name)', def: false,
+          tip: 'The EU Harvester is called the Chinook, as in Zero Hour. Name only: the unit plays the same.' },
         { key: 'enableTechTree', label: 'Tech Tree', def: true, soon: true },
         { key: 'enableSpecialAbilities', label: 'Special Abilities', def: true, soon: true },
         { key: 'enableUnlockFullFactionRoster', label: 'Factions Only', def: false, soon: true }
@@ -52,7 +54,7 @@
           values: factoryValues() },
         { id: 'classic', label: 'Generals Classic', builtin: true,
           blurb: 'All game rules and gameplay changes inspired by Generals and Zero Hour are turned ON, get the best of both worlds.',
-          values: withValues({ enableRebuildableDerricks: false, enableGeneralsArmor: true }) }
+          values: withValues({ enableRebuildableDerricks: false, enableGeneralsArmor: true, enableChinookName: true }) }
     ];
 
     var state = null;

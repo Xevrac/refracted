@@ -233,7 +233,7 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
     $scope.cameraRotationLocked = false;
     $scope.shellThemeOptions = (window.CncShellTheme && CncShellTheme.list) ? CncShellTheme.list() : [
         { id: 'classic', label: 'Classic' },
-        { id: 'aurora', label: 'Aurora (Default)' }
+        { id: 'aurora', label: 'Aurora' }
     ];
     $scope.allowShellThemeSelect = !!$scope.$root.allowShellThemeSelect;
     $scope.lobbyFactionOptions = (window.CncLobbyDefaults && CncLobbyDefaults.factions)

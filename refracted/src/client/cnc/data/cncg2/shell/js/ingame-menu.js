@@ -25,7 +25,6 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         body.className = String(body.className || '')
             .replace(/\bcc-theme--classic\b/g, '')
             .replace(/\bcc-theme--cnc-alpha\b/g, '')
-            .replace(/\bcc-theme--aurora-alt\b/g, '')
             .replace(/\bcc-theme--aurora\b/g, '')
             .replace(/\bingame-aurora\b/g, '')
             .replace(/\bingame-classic\b/g, '')

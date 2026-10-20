@@ -27,6 +27,9 @@ pub const PLACED_BUILD_COMPLETED_TYPE_ID: u16 = 110;
 pub const SERVER_HELLO_TYPE_ID: u16 = 200;
 pub const SERVER_READY_TO_START_TYPE_ID: u16 = 201;
 pub const START_GAME_TYPE_ID: u16 = 215;
+// (H591) Match-over results the dedicated sends a seat (client-channel-catalog wireId space).
+pub const GAME_DEFEAT_TYPE_ID: u16 = 80;
+pub const GAME_VICTORY_TYPE_ID: u16 = 83;
 
 pub const DEFAULT_PLAYER_HANDLE: u32 = 1;
 pub const DEFAULT_PERSONA_ID: u64 = 1_201_618_778;

@@ -1,12 +1,10 @@
 /**
- * Shell UI theme — Classic, Aurora (Default), Aurora (Alternate).
+ * Shell UI theme — Classic, Aurora. A saved theme id that no longer exists falls back to Aurora.
  *
  * Stylesheets: every <link data-shell-css="..."> lists the themes it belongs to. Only the
  * active theme's links stay in the document, so the classic stylesheets (Bootstrap included)
- * and the Aurora ones never mix. Each Aurora theme is one generated stylesheet:
- * css/themes/aurora.css and css/themes/aurora-alt.css (tools/cnc-shell-webdev/aurora).
- * Both Aurora themes share the Aurora templates; the alternate also carries
- * body.cc-theme--aurora-alt.
+ * and the Aurora ones never mix. Aurora is one generated stylesheet, css/themes/aurora.css
+ * (tools/cnc-shell-webdev/aurora).
  *
  * Scale: the Aurora stylesheets are written in rem against a reference window
  * (1920x1080, or <html data-au-ref="WxH">). fitRoot() sets the root font size to
@@ -34,23 +32,13 @@
         },
         aurora: {
             id: 'aurora',
-            label: 'Aurora (Default)',
+            label: 'Aurora',
             bodyClass: 'cc-theme--aurora',
             family: 'aurora',
             rootTemplate: 'view/roots/aurora.html',
             homeTemplate: 'view/home-aurora.html',
             lobbyTemplate: 'view/lobby/lobby-aurora.html',
-            hint: 'Aurora (Default) puts your general over the battlefield, in gunmetal with light blue accents.'
-        },
-        'aurora-alt': {
-            id: 'aurora-alt',
-            label: 'Aurora (Alternate)',
-            bodyClass: 'cc-theme--aurora cc-theme--aurora-alt',
-            family: 'aurora',
-            rootTemplate: 'view/roots/aurora.html',
-            homeTemplate: 'view/home-aurora.html',
-            lobbyTemplate: 'view/lobby/lobby-aurora.html',
-            hint: 'Aurora (Alternate) keeps the classic backdrop, with cyan readouts and a wide feature banner.'
+            hint: 'Aurora puts your general over the battlefield, in gunmetal with light blue accents.'
         }
     };
     THEMES['cnc-alpha'] = THEMES.classic;
@@ -58,7 +46,7 @@
     var listeners = [];
     var sheetSlots = null;
 
-    /** Closed beta playtest (DebugShell, devWrapper.html): Aurora (Default) only. */
+    /** Closed beta playtest (DebugShell, devWrapper.html): Aurora only. */
     function playtestLocked() {
         return global.__CNC_PLAYTEST === true;
     }
@@ -196,7 +184,6 @@
         el.className = String(el.className)
             .replace(/\bcc-theme--cnc-alpha\b/g, '')
             .replace(/\bcc-theme--classic\b/g, '')
-            .replace(/\bcc-theme--aurora-alt\b/g, '')
             .replace(/\bcc-theme--aurora\b/g, '')
             .replace(/\s+/g, ' ')
             .replace(/^\s+|\s+$/g, '');
@@ -258,8 +245,7 @@
         var lock = playtestLocked();
         return [
             { id: 'classic', label: THEMES.classic.label, locked: lock },
-            { id: 'aurora', label: THEMES.aurora.label, locked: false },
-            { id: 'aurora-alt', label: THEMES['aurora-alt'].label, locked: lock }
+            { id: 'aurora', label: THEMES.aurora.label, locked: false }
         ];
     }
 
@@ -267,7 +253,7 @@
         return meta(id || get()).hint;
     }
 
-    /** 'aurora' for both Aurora themes, 'classic' otherwise. */
+    /** 'aurora' for Aurora, 'classic' otherwise. */
     function family(id) {
         return meta(id || get()).family;
     }
