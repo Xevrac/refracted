@@ -208,7 +208,7 @@
         playtestGenerals = [];
         list = generalsForFaction('EU');
         for (i = 0; i < list.length; i++) {
-            if (list[i].key === 'EU_ClassicGeneral') {
+            if (CncPlaytest.allowsGeneral(list[i].id)) {
                 playtestGenerals.push(list[i]);
             }
         }
@@ -2239,7 +2239,9 @@
                 return;
             }
             if (playtestOn()) {
-                slot.general = CncPlaytest.euClassicId;
+                slot.general = CncPlaytest.allowsGeneral(generalId)
+                    ? Number(generalId)
+                    : CncPlaytest.euClassicId;
             } else {
                 slot.general = $scope.mapForcesTutorial
                     ? tutorialGeneralId(slot.faction)

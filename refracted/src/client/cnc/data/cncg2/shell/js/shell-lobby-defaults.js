@@ -202,7 +202,9 @@
             return prefs;
         }
         prefs.faction = 'EU';
-        prefs.general = CncPlaytest.euClassicId;
+        if (!CncPlaytest.allowsGeneral(prefs.general)) {
+            prefs.general = CncPlaytest.euClassicId;
+        }
         prefs.random = false;
         return prefs;
     }

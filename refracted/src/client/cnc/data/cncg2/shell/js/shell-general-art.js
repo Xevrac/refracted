@@ -83,8 +83,8 @@
      */
     function current(last) {
         var playtest = !!(global.CncPlaytest && CncPlaytest.on && CncPlaytest.on());
-        if (playtest) {
-            last = null; // the closed beta plays EU Classic only, whatever was played before
+        if (playtest && last && !CncPlaytest.allowsGeneral(last.generalId)) {
+            last = null; // the playtest plays EU Classic / Airforce / Experimental only
         }
         var hit = last && last.generalId ? findById(last.generalId) : null;
         var random = false;
@@ -94,7 +94,9 @@
             if (global.CncPlaytest && CncPlaytest.on && CncPlaytest.on()) {
                 prefs.random = false;
                 prefs.faction = 'EU';
-                prefs.general = CncPlaytest.euClassicId;
+                if (!CncPlaytest.allowsGeneral(prefs.general)) {
+                    prefs.general = CncPlaytest.euClassicId;
+                }
             }
             random = !!prefs.random;
             hit = findById(prefs.general);
