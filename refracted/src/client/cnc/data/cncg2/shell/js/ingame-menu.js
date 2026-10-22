@@ -515,6 +515,10 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
     }
 
     function onPauseShown() {
+        // (H641) Only a view the player can see may spend the parked entrance.
+        if (document.visibilityState === 'hidden') {
+            return;
+        }
         replayPauseEntrance();
     }
 
@@ -530,7 +534,8 @@ CCApp.controller('IngameMenuController', function ($scope, $rootScope) {
         onPauseShown();
     });
     window.addEventListener('focus', onPauseShown);
-    window.addEventListener('pageshow', onPauseShown);
+    // (H641) No 'pageshow': it fires once at load, while the game holds the view hidden, and
+    // played the parked entrance off screen, so the first Esc showed a finished menu.
     // A parked menu is off-screen, so it must never miss its entrance: any input reaching the
     // view also plays it (a no-op unless parked).
     document.addEventListener('mousemove', onPauseShown, true);
