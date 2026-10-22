@@ -466,6 +466,20 @@ CCApp.controller('LearnController', function($scope) {
                 { type: "image-wrap", src: "images/learn/Guide_Tweaks_Rules_Dialog.png", style: "max-width:100%;", alt: "Custom game dialog" }
             ]
         },
+        'hotkeys': {
+            title: "HOTKEYS",
+            blocks: [
+                { type: "table", headers: [{ content: "Key", style: "width: 180px;" }, "What it does"], rows: [
+                    ["<b>Esc</b>", "In-game, opens the game menu. While navigating the menus, Esc acts as a back button."],
+                    ["<b>A</b>", "Attack move. Selected units move to the target and attack any enemies they meet on the way."],
+                    ["<b>S</b>", "Stop. Selected units and defensive structures stop and cancel their move or attack order."],
+                    ["<b>Alt + Enter</b>", "Toggle full screen."],
+                    ["<b>Ctrl + Click</b>", "Units bypass any enemies they encounter and move to the target."],
+                    ["<b>Ctrl + 1-9</b>", "Assign units and / or structures to a control group."],
+                    ["<b>1-9</b>", "Press once to select the control group. Press twice to jump the camera to it."]
+                ]}
+            ]
+        },
         'custom': {
             title: "CUSTOMIZE",
             blocks: [
