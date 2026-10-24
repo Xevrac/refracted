@@ -21,6 +21,8 @@
           tip: 'A destroyed oil derrick leaves its well, so you can build a new one.' },
         { key: 'enableGeneralsArmor', label: 'Combat Tuning (Classic)', def: false,
           tip: 'Generals-style damage: each weapon type is strong or weak against each armor type.' },
+        { key: 'enableShowResourcesInFog', label: 'Resources Through Fog', def: true,
+          tip: 'Supply stashes and oil wells are drawn under the fog and on the minimap from the start. The fog itself stays closed.' },
         { key: 'enableChinookName', label: 'Chinook (Zero Hour name)', def: false,
           tip: 'The EU Harvester is called the Chinook, as in Zero Hour. Name only: the unit plays the same.' },
         { key: 'enableTechTree', label: 'Tech Tree', def: true, soon: true },

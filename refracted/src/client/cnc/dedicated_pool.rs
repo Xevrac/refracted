@@ -29,6 +29,8 @@ struct PendingEnginePeer {
     name: Option<String>,
     version: Option<String>,
     region: Option<String>,
+    content: Option<String>,
+    editor: bool,
 }
 
 fn pool() -> &'static Mutex<HashMap<u64, DedicatedServerEntry>> {
@@ -218,6 +220,14 @@ pub struct DedicatedServerEntry {
     /// (H476) Two-letter country code of the server (`-Prism.Region`, else its Windows region).
     #[serde(default)]
     pub region: Option<String>,
+    /// (H651) Key of the content packages the dedicated mounted (`vanilla` when none). Only a
+    /// client with the same key can play on it; `None` is a server older than the report.
+    #[serde(default)]
+    pub content: Option<String>,
+    /// The dedicated runs the RefractEd editor listener. It is never handed lobby or matchmaking games and is
+    /// not listed in the server browser, so nobody can edit a live match (docs: prism-liveed-guard).
+    #[serde(default)]
+    pub editor: bool,
 }
 
 /// (H476) Version and region as reported by the dedicated (`/cnc/dedicated-engine-peer`).
@@ -225,10 +235,24 @@ pub struct DedicatedServerEntry {
 pub struct ServerBuildLabel {
     pub version: Option<String>,
     pub region: Option<String>,
+    pub content: Option<String>,
+    /// `editor=1`: the dedicated runs the editor listener.
+    pub editor: bool,
+}
+
+/// (H651) `vanilla` or `<name>@<version>~<digest8>` joined by `+` (prism.content `ContentKey`).
+pub fn sanitize_content_key(raw: &str) -> Option<String> {
+    let t = raw.trim();
+    (!t.is_empty()
+        && t.len() <= 256
+        && t
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '@' | '~' | '+')))
+    .then(|| t.to_string())
 }
 
 impl ServerBuildLabel {
-    pub fn from_raw(version: &str, region: &str) -> Self {
+    pub fn from_raw(version: &str, region: &str, content: &str) -> Self {
         let version = version.trim();
         let version = (!version.is_empty()
             && version.len() <= 64
@@ -239,7 +263,8 @@ impl ServerBuildLabel {
         let region = region.trim();
         let region = (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
             .then(|| region.to_ascii_uppercase());
-        Self { version, region }
+        let content = sanitize_content_key(content);
+        Self { version, region, content, editor: false }
     }
 }
 
@@ -250,6 +275,10 @@ fn apply_build_label_on_entry(e: &mut DedicatedServerEntry, label: &ServerBuildL
     if label.region.is_some() {
         e.region = label.region.clone();
     }
+    if label.content.is_some() {
+        e.content = label.content.clone();
+    }
+    e.editor = label.editor;
 }
 
 /// Seconds to wait after unload before sending cmd 220.
@@ -264,7 +293,8 @@ pub fn recycle_cmd220_wait_secs(entry: &DedicatedServerEntry) -> u64 {
 
 /// True when this dedicated can take a new `resetDedicatedServer`.
 pub fn is_assignable(entry: &DedicatedServerEntry) -> bool {
-    entry.creator_registered
+    !entry.editor
+        && entry.creator_registered
         && recycle_cmd220_wait_secs(entry) == 0
         && matches!(
             entry.state,
@@ -914,11 +944,13 @@ fn bind_engine_peer_report(blaze_session_id: u64, report: &PendingEnginePeer) ->
             &ServerBuildLabel {
                 version: report.version.clone(),
                 region: report.region.clone(),
+                content: report.content.clone(),
+                editor: report.editor,
             },
         );
     }
     crate::console_println!(
-        "[Dedicated pool] session #{} instance {} report: udp={} msgsys={:?} simucloud={:?} name={:?} version={:?} region={:?}",
+        "[Dedicated pool] session #{} instance {} report: udp={} msgsys={:?} simucloud={:?} name={:?} version={:?} region={:?} content={:?} editor={}",
         blaze_session_id,
         report.instance,
         report.port,
@@ -926,7 +958,9 @@ fn bind_engine_peer_report(blaze_session_id: u64, report: &PendingEnginePeer) ->
         report.simu_cloud,
         report.name,
         report.version,
-        report.region
+        report.region,
+        report.content,
+        report.editor
     );
     true
 }
@@ -968,6 +1002,8 @@ pub fn note_dedicated_engine_peer_report(
         name: name.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string),
         version: label.version.clone(),
         region: label.region.clone(),
+        content: label.content.clone(),
+        editor: label.editor,
     };
     if let Some(sid) = blaze_session_id.filter(|&s| s != 0) {
         return if bind_engine_peer_report(sid, &report) {
@@ -1149,6 +1185,8 @@ fn ensure_pool_entry(blaze_session_id: u64) {
             configured_name: None,
             version: None,
             region: None,
+            content: None,
+            editor: false,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1177,6 +1215,8 @@ fn ensure_pool_entry(blaze_session_id: u64) {
             configured_name: None,
             version: None,
             region: None,
+            content: None,
+            editor: false,
             persona_id: None,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -1837,6 +1877,8 @@ pub fn sync_from_blaze_sessions() {
             configured_name: None,
             version: None,
             region: None,
+            content: None,
+            editor: false,
             persona_id: s.persona_id,
             state: DedicatedPoolState::Connected,
             current_gid: None,
@@ -2029,6 +2071,42 @@ mod tests {
         assert!(clnt_qualifies_for_pool("cnc.server"));
         assert!(clnt_qualifies_for_pool("SomeServerThing"));
         assert!(!clnt_qualifies_for_pool("RtsBlazeClient"));
+    }
+
+    #[test]
+    fn editor_servers_are_never_assignable() {
+        let mut entry = super::DedicatedServerEntry {
+            blaze_session_id: 7,
+            peer: String::new(),
+            clnt: Some("RtsBlazeServer".to_string()),
+            display_name: None,
+            server_hostname: None,
+            persona_id: None,
+            state: super::DedicatedPoolState::Idle,
+            current_gid: None,
+            game_name: None,
+            last_event_unix_secs: 0,
+            creator_registered: true,
+            current_map: None,
+            previous_map: None,
+            unload_requested_at: None,
+            network_inip_ip: None,
+            network_inip_port: None,
+            network_exip_ip: None,
+            network_exip_port: None,
+            engine_peer_udp_port: None,
+            msg_sys_tcp_port: None,
+            simu_cloud_tcp_port: None,
+            qos_port: None,
+            configured_name: None,
+            version: None,
+            region: None,
+            content: None,
+            editor: false,
+        };
+        assert!(super::is_assignable(&entry));
+        entry.editor = true;
+        assert!(!super::is_assignable(&entry));
     }
 
     #[test]

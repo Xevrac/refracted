@@ -54,6 +54,8 @@ pub const CREATE_GAME_OPTIONS_INSTANT_SELLING: u32 = 0x400;
 pub const CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS: u32 = 0x800;
 /// H541: Generals-style armour instead of authored bonus damage. Default off.
 pub const CREATE_GAME_OPTIONS_GENERALS_ARMOR: u32 = 0x1000;
+/// H658: neutral stashes and oil wells drawn under fog and on the minimap from match start. Default on.
+pub const CREATE_GAME_OPTIONS_SHOW_RESOURCES_IN_FOG: u32 = 0x2000;
 
 fn create_game_options(
     enable_tech_tree: bool,
@@ -562,7 +564,7 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={} generalsArmor={}",
+        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={} generalsArmor={} showResourcesInFog={}",
         roster.len(),
         game.enable_special_abilities,
         game.enable_tech_tree,
@@ -571,7 +573,8 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         game.enable_unlock_full_faction_roster,
         game.enable_instant_selling,
         game.enable_rebuildable_derricks,
-        game.enable_generals_armor
+        game.enable_generals_armor,
+        game.enable_show_resources_in_fog
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -616,6 +619,10 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
                 game.enable_rebuildable_derricks,
             ) | if game.enable_generals_armor {
                 CREATE_GAME_OPTIONS_GENERALS_ARMOR
+            } else {
+                0
+            } | if game.enable_show_resources_in_fog {
+                CREATE_GAME_OPTIONS_SHOW_RESOURCES_IN_FOG
             } else {
                 0
             },

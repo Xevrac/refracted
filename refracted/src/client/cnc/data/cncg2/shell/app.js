@@ -910,6 +910,10 @@ CCApp.controller('DashboardController', function($scope, $timeout, $rootScope) {
         if (game) {
             publishBuild('buildGame', game);
         }
+        // (H651) Content key of the packages this client mounted ("vanilla" when none).
+        if (body.content) {
+            publishBuild('buildContent', body.content);
+        }
         if (body.debugDll === true || body.debugDll === 1 || body.debugDll === '1') {
             $rootScope.showDebugTools = true;
         }

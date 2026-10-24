@@ -568,6 +568,7 @@ fn handle_cnc_build_info(query: Option<&str>) -> HttpResponse {
         client_reported_prism_version(query),
         client_reported_debug_dll(query),
         client_reported_game_build(query),
+        client_reported_content(query),
     );
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
@@ -617,6 +618,19 @@ fn client_reported_game_build(query: Option<&str>) -> Option<String> {
     None
 }
 
+/// (H651) Content key of the client's mounted packages, attached by the client Prism.
+fn client_reported_content(query: Option<&str>) -> Option<String> {
+    let q = query?;
+    for pair in q.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            if k == "content" {
+                return dedicated_pool::sanitize_content_key(&percent_decode_plus(v));
+            }
+        }
+    }
+    None
+}
+
 fn client_reported_debug_dll(query: Option<&str>) -> bool {
     let Some(q) = query else {
         return false;
@@ -635,6 +649,7 @@ fn shell_build_info_json(
     client_prism: Option<String>,
     debug_dll: bool,
     game_build: Option<String>,
+    content: Option<String>,
 ) -> serde_json::Value {
     let rfr = env!("CARGO_PKG_VERSION").to_string();
     let cnc = game_build
@@ -648,6 +663,7 @@ fn shell_build_info_json(
         "cnc_rl": CNC_RL_BUILD,
         "gamebuild": game_build,
         "debugDll": debug_dll,
+        "content": content,
     })
 }
 
@@ -1501,12 +1517,30 @@ fn parse_chinook_name(query: Option<&str>, body: &[u8]) -> Option<bool> {
         .or(from_query)
 }
 
+/// H658: `showResourcesInFog` / `enableShowResourcesInFog` on `/cnc/lobby-options`.
+fn parse_show_resources_in_fog(query: Option<&str>, body: &[u8]) -> Option<bool> {
+    const KEYS: [&str; 2] = ["showResourcesInFog", "enableShowResourcesInFog"];
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            KEYS.contains(&k)
+                .then(|| parse_opt_bool_str(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| KEYS.iter().find_map(|k| v.get(*k).and_then(json_opt_bool)))
+        .or(from_query)
+}
+
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling, rebuildable) =
         parse_gid_pid_match_options(query, body);
     let disallow_spectators = parse_disallow_spectators(query, body);
     let generals_armor = parse_generals_armor(query, body);
     let chinook_name = parse_chinook_name(query, body);
+    let show_resources_in_fog = parse_show_resources_in_fog(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1524,11 +1558,12 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && disallow_spectators.is_none()
         && generals_armor.is_none()
         && chinook_name.is_none()
+        && show_resources_in_fog.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, chinookName, or disallowSpectators required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, chinookName, showResourcesInFog, or disallowSpectators required"}"#.to_vec(),
         );
     }
     let options_before = (
@@ -1536,6 +1571,7 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         game_state::spectators_disallowed(gid),
         game_state::generals_armor_enabled(gid),
         game_state::chinook_name_enabled(gid),
+        game_state::show_resources_in_fog_enabled(gid),
     );
     let mut resp = game_state::set_match_options(
         gid,
@@ -1599,11 +1635,23 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
             );
         }
         resp["enableChinookName"] = serde_json::json!(game_state::chinook_name_enabled(gid));
+        if let Some(enabled) = show_resources_in_fog {
+            game_state::set_show_resources_in_fog(gid, pid, enabled);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} showResourcesInFog={}",
+                gid,
+                pid,
+                enabled
+            );
+        }
+        resp["enableShowResourcesInFog"] =
+            serde_json::json!(game_state::show_resources_in_fog_enabled(gid));
         let options_after = (
             game_state::match_options(gid),
             game_state::spectators_disallowed(gid),
             game_state::generals_armor_enabled(gid),
             game_state::chinook_name_enabled(gid),
+            game_state::show_resources_in_fog_enabled(gid),
         );
         if options_after != options_before {
             // Everyone reviews the new rules before readying up again.
@@ -1651,6 +1699,8 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     let mut name = String::new();
     let mut version = String::new();
     let mut region = String::new();
+    let mut content = String::new();
+    let mut editor = false;
     let mut instance = String::new();
     let parse_u16 = |v: &str| percent_decode_plus(v).parse().unwrap_or(0);
     let parse_kv = |k: &str,
@@ -1688,6 +1738,14 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
                 }
                 if k == "region" {
                     region = percent_decode_plus(v);
+                    continue;
+                }
+                if k == "content" {
+                    content = percent_decode_plus(v);
+                    continue;
+                }
+                if k == "editor" {
+                    editor = percent_decode_plus(v).trim() == "1";
                     continue;
                 }
                 if k == "instance" {
@@ -1799,7 +1857,10 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
         (simu_cloud != 0).then_some(simu_cloud),
         (qos != 0).then_some(qos),
         (!name.trim().is_empty()).then_some(name.as_str()),
-        &dedicated_pool::ServerBuildLabel::from_raw(&version, &region),
+        &dedicated_pool::ServerBuildLabel {
+            editor,
+            ..dedicated_pool::ServerBuildLabel::from_raw(&version, &region, &content)
+        },
     );
     match note {
         dedicated_pool::EnginePeerNote::Rejected => HttpResponse::new(
@@ -2463,7 +2524,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
     let p = crate::common::user_profile::get_current_profile();
     if !crate::nexus::identity::json_personas_allowed() {
         // Nexus identity comes from the Blaze login; the local JSON profile would be a different persona.
-        let build = shell_build_info_json(None, false, None);
+        let build = shell_build_info_json(None, false, None, None);
         let script = format!("<script>window.__CNC_PROFILE={{}};window.__CNC_BUILD={};</script>", build);
         return insert_head_script(s, &script, html);
     }
@@ -2474,7 +2535,7 @@ fn inject_profile_script(html: &[u8]) -> Vec<u8> {
         "personaId": p.persona_id,
         "userId": p.user_id,
     });
-    let build = shell_build_info_json(None, false, None);
+    let build = shell_build_info_json(None, false, None, None);
     let script = format!(
         "<script>window.__CNC_PROFILE={};window.__CNC_BUILD={};</script>",
         json, build

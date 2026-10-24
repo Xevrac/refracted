@@ -1278,6 +1278,7 @@ fn game_tweaks_customized(game: &CncGame) -> bool {
         || game.enable_instant_selling
         || !game.enable_rebuildable_derricks
         || game.enable_generals_armor
+        || !game.enable_show_resources_in_fog
         || game.enable_chinook_name
 }
 
@@ -1311,6 +1312,9 @@ pub struct CncGame {
     pub enable_rebuildable_derricks: bool,
     /// H541: Generals-style armour (CreateGameOptions 0x1000). Default off: authored bonus damage.
     pub enable_generals_armor: bool,
+    /// H658: neutral stashes and oil wells drawn under fog and on the minimap from match
+    /// start (CreateGameOptions 0x2000). Default on. Off: shown once seen.
+    pub enable_show_resources_in_fog: bool,
     /// H607: lobby tweak, the EU Harvester is shown as "Chinook" (Zero Hour name). Client-only:
     /// sent to every member as player ATTR `chinook` with `color`. Default off.
     pub enable_chinook_name: bool,
@@ -1480,6 +1484,16 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
     if let Some(v) = generals_armor {
         if let Some(game) = games().lock().get_mut(&dedicated_gid) {
             game.enable_generals_armor = v;
+        }
+    }
+    let show_resources_in_fog = games()
+        .lock()
+        .iter()
+        .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+        .map(|(_, game)| game.enable_show_resources_in_fog);
+    if let Some(v) = show_resources_in_fog {
+        if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+            game.enable_show_resources_in_fog = v;
         }
     }
     let chinook_name = games()
@@ -1747,6 +1761,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
             enable_generals_armor: false,
+            enable_show_resources_in_fog: true,
             enable_chinook_name: false,
             disallow_spectators: false,
             starting: false,
@@ -1799,6 +1814,7 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_instant_selling = false;
     game.enable_rebuildable_derricks = true;
     game.enable_generals_armor = false;
+    game.enable_show_resources_in_fog = true;
     game.enable_chinook_name = false;
     game.disallow_spectators = false;
     game.replicated_wire = None;
@@ -2240,6 +2256,28 @@ pub fn generals_armor_enabled(gid: i64) -> bool {
         .get(&gid)
         .map(|g| g.enable_generals_armor)
         .unwrap_or(false)
+}
+
+/// H658: host lobby tweak Show Resources Through Fog. False when the game is missing or the
+/// caller is not host.
+pub fn set_show_resources_in_fog(gid: i64, persona_id: i64, enabled: bool) -> bool {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return false;
+    };
+    if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+        return false;
+    }
+    game.enable_show_resources_in_fog = enabled;
+    true
+}
+
+pub fn show_resources_in_fog_enabled(gid: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_show_resources_in_fog)
+        .unwrap_or(true)
 }
 
 /// H607: host lobby tweak Chinook name. False when the game is missing or the caller is not host.
@@ -3304,6 +3342,11 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         .get(&gid)
         .map(|g| g.enable_generals_armor)
         .unwrap_or(false);
+    let enable_show_resources_in_fog = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_show_resources_in_fog)
+        .unwrap_or(true);
     let enable_chinook_name = games()
         .lock()
         .get(&gid)
@@ -3347,6 +3390,7 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_instant_selling,
         enable_rebuildable_derricks,
         enable_generals_armor,
+        enable_show_resources_in_fog,
         enable_chinook_name,
         disallow_spectators,
         starting: false,
@@ -3522,6 +3566,7 @@ pub fn seed_from_join(gid: i64) {
             enable_instant_selling: false,
             enable_rebuildable_derricks: true,
             enable_generals_armor: false,
+            enable_show_resources_in_fog: true,
             enable_chinook_name: false,
             disallow_spectators: false,
             starting: false,
@@ -4399,6 +4444,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableInstantSelling": game.enable_instant_selling,
         "enableRebuildableDerricks": game.enable_rebuildable_derricks,
         "enableGeneralsArmor": game.enable_generals_armor,
+        "enableShowResourcesInFog": game.enable_show_resources_in_fog,
         "enableChinookName": game.enable_chinook_name,
         "disallowSpectators": game.disallow_spectators,
         "spectatorOpen": spectator_seat_open(gid, game, 0),
@@ -5416,8 +5462,9 @@ pub fn browser_game_list_json() -> serde_json::Value {
         let Some(sid) = dedicated_session_id else {
             continue;
         };
+        // Editor servers (RefractEd listener) are never listed: nobody joins a session being edited.
         let alive = crate::client::cnc::dedicated_pool::get_entry(sid)
-            .map(|e| e.creator_registered)
+            .map(|e| e.creator_registered && !e.editor)
             .unwrap_or(false);
         if !alive {
             continue;
@@ -5512,6 +5559,8 @@ pub fn browser_game_list_json() -> serde_json::Value {
             // (H476) The shell compares `version` with its own Prism build; `region` is the flag.
             "version": pool_entry.as_ref().and_then(|e| e.version.clone()),
             "region": pool_entry.as_ref().and_then(|e| e.region.clone()),
+            // (H651) The shell compares `content` with its own content key like `version`.
+            "content": pool_entry.as_ref().and_then(|e| e.content.clone()),
         }));
     }
     drop(map);
@@ -5522,6 +5571,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
             continue;
         }
         let show = entry.creator_registered
+            && !entry.editor
             && matches!(
                 entry.state,
                 crate::client::cnc::dedicated_pool::DedicatedPoolState::Idle
@@ -5564,6 +5614,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "passwordProtected": false,
             "version": entry.version.clone(),
             "region": entry.region.clone(),
+            "content": entry.content.clone(),
         }));
     }
 

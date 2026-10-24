@@ -755,6 +755,7 @@
             enableInstantSelling: false,
             enableRebuildableDerricks: true,
             enableGeneralsArmor: false,
+            enableShowResourcesInFog: true,
             enableChinookName: false,
             disallowSpectators: false
         };
@@ -1932,6 +1933,7 @@
             { key: 'enableInstantSelling', label: 'Instant selling', def: false },
             { key: 'enableRebuildableDerricks', label: 'Rebuildable derricks', def: true },
             { key: 'enableGeneralsArmor', label: 'Combat tuning (classic)', def: false },
+            { key: 'enableShowResourcesInFog', label: 'Resources shown through fog', def: true },
             { key: 'enableChinookName', label: 'Chinook (Zero Hour name)', def: false },
             { key: 'disallowSpectators', label: 'Spectators disallowed', def: false }
         ];
@@ -2993,6 +2995,42 @@
             return d === 0 ? 'ok' : (d < 0 ? 'outdated' : 'newer');
         }
 
+        // ---- Server content parity (H651) ----
+        // Same rule as the Prism build: a server and a client play together only when the content
+        // packages they mounted (Update\) match. "vanilla" = none; else "<name>@<ver>~<hash>+...".
+        function localContentKey() {
+            return String($rootScope.buildContent || '');
+        }
+
+        function contentNames(key) {
+            if (!key || key === 'vanilla') {
+                return 'no mods';
+            }
+            var parts = String(key).split('+');
+            var names = [];
+            var i;
+            for (i = 0; i < parts.length; i++) {
+                names.push(parts[i].split('~')[0].replace('@', ' v'));
+            }
+            return names.join(', ');
+        }
+
+        // 'ok' | 'mod-required' | 'vanilla-only' | 'mods-differ'
+        function serverContentState(g) {
+            var mine = localContentKey();
+            if (!mine) {
+                return 'ok';   // this client did not report its content: nothing to compare
+            }
+            var theirs = String((g && g.content) || 'vanilla');
+            if (theirs === mine) {
+                return 'ok';
+            }
+            if (theirs === 'vanilla') {
+                return 'vanilla-only';
+            }
+            return mine === 'vanilla' ? 'mod-required' : 'mods-differ';
+        }
+
         // Marks rows this client cannot play on as not joinable, so the browser greys them out and
         // the Join button, the Joinable filter and Find a match all skip them.
         function annotateServerVersions(games) {
@@ -3003,6 +3041,9 @@
                     continue;
                 }
                 g.versionState = serverVersionState(g);
+                if (g.versionState === 'ok') {
+                    g.versionState = serverContentState(g);
+                }
                 if (g.versionState !== 'ok') {
                     g.joinable = false;
                 }
@@ -3017,12 +3058,29 @@
             if (g && g.versionState === 'newer') {
                 return 'Update required';
             }
+            if (g && g.versionState === 'mod-required') {
+                return 'Mod required';
+            }
+            if (g && g.versionState === 'vanilla-only') {
+                return 'Vanilla only';
+            }
+            if (g && g.versionState === 'mods-differ') {
+                return 'Different mods';
+            }
             return (g && g.phase) || '';
         };
 
         $scope.browserVersionTip = function (g) {
             if (!g || !g.versionState || g.versionState === 'ok') {
                 return '';
+            }
+            if (g.versionState === 'mod-required' || g.versionState === 'mods-differ') {
+                return 'This server runs ' + contentNames(g.content) + '; you run ' + contentNames(localContentKey()) +
+                    '. Enable the same content and restart the game to join.';
+            }
+            if (g.versionState === 'vanilla-only') {
+                return 'This server runs no mods. Disable your content (' + contentNames(localContentKey()) +
+                    ') and restart the game to join.';
             }
             var theirs = prismBuildKey(g.version) || 'an older build';
             return g.versionState === 'newer'
@@ -3234,7 +3292,7 @@
                             if (!populated && (idlePool <= 0 || !target)) {
                                 if (!target && otherBuild > 0) {
                                     failFind('No servers on your version (Prism ' + localPrismBuild() +
-                                        ') are available, check back later.');
+                                        ', ' + contentNames(localContentKey()) + ') are available, check back later.');
                                 } else if (stabilizingIn > 0) {
                                     failFind('Server is still recycling — try again in a moment.');
                                 } else {
@@ -3369,6 +3427,7 @@
             $scope.lobbyOptions.enableInstantSelling = false;
             $scope.lobbyOptions.enableRebuildableDerricks = true;
             $scope.lobbyOptions.enableGeneralsArmor = false;
+            $scope.lobbyOptions.enableShowResourcesInFog = true;
             $scope.lobbyOptions.enableChinookName = false;
             $scope.lobbyOptions.disallowSpectators = false;
             $scope.gameId = '1';
@@ -3949,6 +4008,9 @@
                 }
                 if (data.enableGeneralsArmor != null) {
                     $scope.lobbyOptions.enableGeneralsArmor = !!data.enableGeneralsArmor;
+                }
+                if (data.enableShowResourcesInFog != null) {
+                    $scope.lobbyOptions.enableShowResourcesInFog = !!data.enableShowResourcesInFog;
                 }
                 if (data.enableChinookName != null) {
                     $scope.lobbyOptions.enableChinookName = !!data.enableChinookName;
@@ -4964,6 +5026,7 @@
             var instantSelling = $scope.lobbyOptions.enableInstantSelling === true;
             var rebuildableDerricks = $scope.lobbyOptions.enableRebuildableDerricks === true;
             var generalsArmor = $scope.lobbyOptions.enableGeneralsArmor === true;
+            var showResourcesInFog = $scope.lobbyOptions.enableShowResourcesInFog !== false;
             var chinookName = $scope.lobbyOptions.enableChinookName === true;
             var disallowSpectators = $scope.lobbyOptions.disallowSpectators === true;
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
@@ -4976,6 +5039,7 @@
                 instantSelling: instantSelling,
                 rebuildableDerricks: rebuildableDerricks,
                 generalsArmor: generalsArmor,
+                showResourcesInFog: showResourcesInFog,
                 chinookName: chinookName,
                 disallowSpectators: disallowSpectators
             }).then(function (data) {
@@ -5008,6 +5072,9 @@
                     }
                     if (data.enableGeneralsArmor != null) {
                         $scope.lobbyOptions.enableGeneralsArmor = !!data.enableGeneralsArmor;
+                    }
+                    if (data.enableShowResourcesInFog != null) {
+                        $scope.lobbyOptions.enableShowResourcesInFog = !!data.enableShowResourcesInFog;
                     }
                     if (data.enableChinookName != null) {
                         $scope.lobbyOptions.enableChinookName = !!data.enableChinookName;
