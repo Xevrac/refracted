@@ -1,54 +1,14 @@
 <div class="cc-lobby" ng-controller="ShellLobbyController" ng-click="closeMenus()">
-    <!-- Matchmake: find a match (browse optional) -->
+    <!-- Find a match: no map pick. This view is only the search; it joins the lowest-ping populated
+         server (an idle one when none is populated) and opens its lobby. -->
     <div class="cc-lobby__body cc-lobby__body--matchmake" ng-show="lobbyView == 'matchmake'">
-        <div class="cc-lobby__stage cc-lobby__stage--matchmake">
-            <div class="cc-lobby__matchmake-head">
-                <h2>FIND A MATCH</h2>
-                <p>Pick a map, then find a match. Join a populated lobby when available, or an idle server.</p>
-            </div>
-            <div class="cc-lobby__map-cards" ng-click="$event.stopPropagation()">
-                <button type="button"
-                        class="cc-lobby__map-card"
-                        ng-repeat="m in maps"
-                        ng-class="{on: m.id == selectedMap.id, disabled: mapPlaytestBlocked(m)}"
-                        ng-click="selectMap(m)">
-                    <span class="cc-lobby__map-card-veil" aria-hidden="true"></span>
-                    <span class="cc-lobby__map-card-accent" ng-style="{'background-color': m.accent}" aria-hidden="true"></span>
-                    <span class="cc-lobby__map-card-mode">{{ mapModeLabel(m) }}</span>
-                    <span class="cc-lobby__map-card-name">{{ m.label }}</span>
-                    <span class="cc-lobby__map-card-status" ng-if="mapPlaytestBlocked(m)">Not Available</span>
-                    <span class="cc-lobby__map-card-check" ng-show="m.id == selectedMap.id" aria-hidden="true"></span>
-                </button>
-            </div>
-            <div class="cc-lobby__matchmake-meta">
-                <span>Selected: {{ selectedMap.label }} ({{ mapModeLabel(selectedMap) }})</span>
-                <span>Players: {{ matchmakeMinPlayers }}–{{ matchmakeMaxPlayers }}</span>
-            </div>
-            <div class="cc-lobby__actions">
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--exit" ng-click="exitLobby()">EXIT</button>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--browse" ng-click="findServers()"
-                        ng-disabled="_findingMatch">BROWSE</button>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="findMatch()"
-                        ng-disabled="_findingMatch">{{ _findingMatch ? 'FINDING…' : 'FIND MATCH' }}</button>
-            </div>
-        </div>
-        <aside class="cc-lobby__rail">
-            <div class="cc-sidebar cc-lobby__sidebar" ng-include="'view/sidebar.html'" ng-controller="DashboardController"></div>
-        </aside>
         <div class="cc-lobby__modal" ng-show="_findingMatch || _matchError || _joinStatus">
             <div class="cc-lobby__modal-box">
-                <div ng-show="_findingMatch && !_matchError">Finding match..</div>
+                <div ng-show="_findingMatch && !_matchError">Finding the closest server..</div>
                 <div ng-show="_joinStatus && !_findingMatch && !_matchError">{{ _joinStatus }}</div>
                 <div ng-show="_matchError">{{ _matchError }}</div>
                 <button type="button" class="cc-lobby__btn cc-lobby__btn--ok" ng-show="_matchError"
                         ng-click="dismissMatchError()">OK</button>
-            </div>
-        </div>
-        <div class="cc-lobby__modal" ng-show="serverLostError">
-            <div class="cc-lobby__modal-box">
-                <div>{{ serverLostError }}</div>
-                <button type="button" class="cc-lobby__btn cc-lobby__btn--ok"
-                        ng-click="dismissServerLostError()">OK</button>
             </div>
         </div>
     </div>
@@ -184,7 +144,7 @@
                             <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
                             <div class="cc-lobby__names">
                                 <div class="cc-lobby__codename">{{ slot.codename }}</div>
-                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="nameTagClass(slot)">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="nameTagClass(slot)">{{ slot.displayName }}</div><div class="cc-lobby__slot-mods" ng-if="slotModProgress(slot)">{{ slotModProgress(slot) | uppercase }}</div>
                                 <div class="cc-lobby__ai" ng-if="slot.isAi">
                                     <span>AI:</span>
                                     <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
@@ -291,7 +251,7 @@
                             <img class="cc-lobby__faction" ng-src="{{ factionIcon(slot) }}" alt="">
                             <div class="cc-lobby__names">
                                 <div class="cc-lobby__codename">{{ slot.codename }}</div>
-                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="nameTagClass(slot)">{{ slot.displayName }}</div>
+                                <div class="cc-lobby__player" ng-if="!slot.isAi" ng-class="nameTagClass(slot)">{{ slot.displayName }}</div><div class="cc-lobby__slot-mods" ng-if="slotModProgress(slot)">{{ slotModProgress(slot) | uppercase }}</div>
                                 <div class="cc-lobby__ai" ng-if="slot.isAi">
                                     <span>AI:</span>
                                     <button type="button" ng-repeat="d in diffs" ng-class="{on: slot.difficulty == d}" ng-click="setDifficulty(slot, d)">{{ d }}</button>
@@ -427,6 +387,33 @@
                     <div class="cc-lobby__preset-error" ng-show="presetUi.error">{{ presetUi.error }}</div>
                 </div>
 
+                <div class="cc-lobby__options-section" ng-show="lobbyMods.length">
+                    <button type="button" class="cc-lobby__tweaks-toggle"
+                            ng-class="{open: modsUi.open}"
+                            ng-click="toggleLobbyMods()">MODS ({{ lobbyModsSummary() | uppercase }})</button>
+                    <div class="cc-lobby__tweaks-body" ng-show="modsUi.open">
+                        <input type="text" class="cc-lobby__password-input cc-lobby__tweaks-search"
+                               ng-model="modsUi.query"
+                               autocomplete="off"
+                               placeholder="Search mods">
+                        <div class="cc-lobby__tweaks-list">
+                            <label class="cc-lobby__options-check cc-lobby__mod"
+                                   ng-repeat="m in lobbyMods | filter:lobbyModMatches"
+                                   data-tip-pos="below"
+                                   data-tip="{{ lobbyModClassTip(m) }} By {{ m.author }}, key {{ m.fingerprint }}, {{ lobbyModContents(m) }}, {{ lobbyModSize(m) }}.">
+                                <input type="checkbox" ng-model="m.on"
+                                       ng-disabled="m.class != 'live' || !isLobbyHost()"
+                                       ng-change="lobbyModChanged(m)">
+                                {{ m.name | uppercase }} V{{ m.version }} <span class="cc-lobby__mod-badge">{{ m.class == 'live' ? 'LIVE' : 'ALWAYS ON' }}</span>
+                            </label>
+                            <div class="cc-lobby__options-note cc-lobby__tweaks-empty"
+                                 ng-show="!(lobbyMods | filter:lobbyModMatches).length">NO MODS MATCH "{{ modsUi.query | uppercase }}".</div>
+                            <div class="cc-lobby__options-note" ng-show="modsUi.error">{{ modsUi.error }}</div>
+                            <div class="cc-lobby__options-note" ng-show="myShareUnreachable()">PLAYERS WITHOUT THESE MODS CAN'T DOWNLOAD THEM FROM YOU: YOUR ROUTER DIDN'T OPEN A PORT (TURN ON UPNP OR NAT-PMP).</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="cc-lobby__options-actions">
                     <button type="button" class="cc-lobby__btn cc-lobby__btn--browse cc-lobby__preset-save-btn"
                             ng-hide="presetUi.saving"
@@ -440,15 +427,26 @@
              ng-click="closeMapPicker()">
             <div class="cc-lobby__modal-box cc-lobby__maps-modal" ng-click="$event.stopPropagation()">
                 <h3 class="cc-lobby__maps-modal-title">MAPS</h3>
+                <div class="cc-lobby__maps-tabs" role="tablist">
+                    <button type="button" class="cc-lobby__btn cc-lobby__maps-tab" role="tab"
+                            ng-class="{on: mapPickerTab != 'custom'}" ng-click="setMapPickerTab('game')">Game maps</button>
+                    <button type="button" class="cc-lobby__btn cc-lobby__maps-tab" role="tab"
+                            ng-class="{on: mapPickerTab == 'custom'}" ng-click="setMapPickerTab('custom')">Custom maps</button>
+                    <button type="button" class="cc-lobby__btn cc-lobby__maps-tab cc-lobby__maps-tab--refresh"
+                            ng-show="mapPickerTab == 'custom'" ng-disabled="customMaps.loading"
+                            ng-click="refreshCustomMaps()" title="Look again for custom maps">{{ customMaps.loading ? 'Looking...' : 'Refresh' }}</button>
+                </div>
                 <div class="cc-lobby__maps-split">
                     <div class="cc-lobby__maps-list-cell">
                         <div class="cc-lobby__maps-list">
+                            <div class="cc-lobby__maps-empty" ng-show="mapPickerTab == 'custom' && customMapsMessage()">{{ customMapsMessage() }}</div>
                             <div class="cc-lobby__maps-row"
-                                 ng-repeat="m in maps"
+                                 ng-repeat="m in maps | filter:mapTabFilter"
                                  ng-class="{on: m.id == pickerMap().id, disabled: mapPlaytestBlocked(m)}"
                                  ng-click="previewMapInPicker(m)">
                                 <span class="cc-lobby__maps-row-name">{{ m.label }}</span>
                                 <span class="cc-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
+                                <span class="cc-lobby__maps-row-mod" ng-if="m.custom">{{ m.modName }}</span>
                                 <span class="cc-lobby__map-card-status" ng-if="mapPlaytestBlocked(m)">Not Available</span>
                             </div>
                         </div>
@@ -468,12 +466,38 @@
                             <strong>{{ pickerMap().label }}</strong>
                             <span>{{ mapModeLabel(pickerMap()) }}</span>
                             <span ng-show="pickerMap().slots">{{ mapPlayerLabel(pickerMap()) }}</span>
+                            <p class="cc-lobby__maps-preview-note" ng-if="pickerMap().custom">Custom map from <b>{{ pickerMap().modName }}</b><span ng-if="pickerMap().sourceLabel">, based on {{ pickerMap().sourceLabel }}</span>. Everyone in the lobby needs this mod installed.</p>
                         </div>
                     </div>
                 </div>
                 <div class="cc-lobby__options-actions">
                     <button type="button" class="cc-lobby__btn" ng-click="closeMapPicker()">CANCEL</button>
                     <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-disabled="mapPlaytestBlocked(pickerMap())" ng-click="confirmMapPicker()">SELECT</button>
+                </div>
+            </div>
+        </div>
+        <div class="cc-lobby__modal cc-lobby__modal--mods" ng-show="modDl.open">
+            <div class="cc-lobby__modal-box">
+                <h3 class="cc-lobby__maps-modal-title">MODS NEEDED</h3>
+                <div ng-hide="modDl.state">
+                    <div class="cc-lobby__options-note">Download them from the players in this lobby? Each one is checked against its author's signature first.</div>
+                    <div class="cc-lobby__options-note" ng-repeat="m in modDl.missing">
+                        <b>{{ m.name | uppercase }} V{{ m.version }}</b> by {{ m.author }} (key {{ m.fingerprint }}), {{ lobbyModSize(m) }}:
+                        {{ modAuthorChanged(m) ? 'NOT THE AUTHOR OF YOUR COPY' : (modAuthorTrusted(m) ? 'author you trusted before' : 'new author') }}
+                    </div>
+                    <div class="cc-lobby__options-note">Your game restarts after installing; then rejoin this lobby.</div>
+                    <button type="button" class="cc-lobby__btn" ng-click="leaveForMods()">LEAVE</button>
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startModDownload()">DOWNLOAD AND JOIN</button>
+                </div>
+                <div ng-show="modDl.state && modDl.state != 'failed' && modDl.state != 'restart'">{{ modDlStateLabel() | uppercase }}</div>
+                <div ng-show="modDl.state == 'failed'">
+                    <div>{{ modDl.error }}</div>
+                    <button type="button" class="cc-lobby__btn" ng-click="leaveForMods()">LEAVE</button>
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="startModDownload()">RETRY</button>
+                </div>
+                <div ng-show="modDl.state == 'restart'">
+                    <div>THE MODS ARE INSTALLED. RESTART THE GAME, THEN REJOIN THIS LOBBY.</div>
+                    <button type="button" class="cc-lobby__btn cc-lobby__btn--start" ng-click="restartForMods()">QUIT GAME</button>
                 </div>
             </div>
         </div>

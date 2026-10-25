@@ -1168,3 +1168,8 @@ button.btn-alert-marker.btn-alert-marker--debug:hover::before {
 .cc-shell-quit-progress__box p {
     margin: 0;
 }
+/* PLAY's bar under it: browse servers | quit */
+.play-dropdown-wrapper--split { display: -webkit-box; display: -webkit-flex; display: flex; }
+.play-dropdown-wrapper--split .btn-play-dropdown { width: 50%; -webkit-box-flex: 1; -webkit-flex: 1 1 50%; flex: 1 1 50%; }
+.play-dropdown-wrapper--split .btn-play-dropdown:first-child { border-radius: 0 0 0 8px; border-right-color: #0f5ca5; }
+.play-dropdown-wrapper--split .btn-play-dropdown:last-child { border-radius: 0 0 8px 0; border-left: 0; }

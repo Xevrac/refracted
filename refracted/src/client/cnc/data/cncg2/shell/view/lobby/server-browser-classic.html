@@ -22,7 +22,7 @@
         <div class="cc-lobby-browser__list">
             <div class="cc-lobby-browser__row cc-lobby-browser__row--head">
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--lock" data-tip="Password"></span>
-                <span class="cc-lobby-browser__col cc-lobby-browser__col--custom" data-tip="Custom tweaks"></span>
+                <span class="cc-lobby-browser__col cc-lobby-browser__col--custom" data-tip="Custom tweaks, content and maps"></span>
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--server">Server</span>
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--map">Map</span>
                 <span class="cc-lobby-browser__col cc-lobby-browser__col--players">Players</span>
@@ -40,6 +40,8 @@
                     </span>
                     <span class="cc-lobby-browser__col cc-lobby-browser__col--custom">
                         <span class="cc-lobby-browser__custom" ng-show="g.customTweaks" data-tip="Custom tweaks applied"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="2.4 1.8" d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5"/></svg></span>
+                        <span class="cc-lobby-browser__custom" ng-show="browserHasCustomContent(g)" data-tip="Custom content"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M5 5h4.5a2.5 2.5 0 0 1 5 0H19v4.5a2.5 2.5 0 0 1 0 5V19h-4.5a2.5 2.5 0 0 0-5 0H5v-4.5a2.5 2.5 0 0 0 0-5z"/></svg></span>
+                        <span class="cc-lobby-browser__custom" ng-show="browserHasCustomMaps(g)" data-tip="Custom maps"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3.5 6l5.5-2 6 2 5.5-2v14l-5.5 2-6-2-5.5 2z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 4v14M15 6v14"/></svg></span>
                     </span>
                     <span class="cc-lobby-browser__col cc-lobby-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
                     <span class="cc-lobby-browser__col cc-lobby-browser__col--map">{{ browserMapLabel(g) }}</span>
@@ -69,6 +71,8 @@
                     <li><span>PING</span><strong>{{ formatPing(selectedBrowserGame) }}</strong></li>
                     <li><span>STATE</span><strong>{{ browserStateLabel(selectedBrowserGame) }}</strong></li>
                     <li><span>VERSION</span><strong>{{ selectedBrowserGame.version || 'UNKNOWN' }}</strong></li>
+                    <li><span>MODS</span><strong>{{ browserModsLabel(selectedBrowserGame) }}</strong></li>
+                    <li ng-show="browserHasCustomMaps(selectedBrowserGame)"><span>CUSTOM MAPS</span><strong>{{ browserMapModsLabel(selectedBrowserGame) }}</strong></li>
                     <li><span>PASSWORD</span><strong>{{ selectedBrowserGame.passwordProtected ? 'YES' : 'NO' }}</strong></li>
                     <li><span>ID</span><strong>{{ selectedBrowserGame.gid || '—' }}</strong></li>
                 </ul>

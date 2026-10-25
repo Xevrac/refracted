@@ -216,7 +216,8 @@
     }
 
     function mapBlockedByPlaytest(map) {
-        return playtestOn() && CncPlaytest.mapBlocked(map);
+        // A custom map is the player's own level under test, so playtest's map lock doesn't apply.
+        return playtestOn() && !(map && map.custom) && CncPlaytest.mapBlocked(map);
     }
 
     function firstAvailableMap() {
@@ -522,6 +523,129 @@
         return out;
     }
 
+    // Custom maps: the new levels in the lobby server's mods (content-custom-maps). The server
+    // reports each mod's maps.json with the mods it offers; GET /cnc/lobby-mods returns them per mod.
+    // Each becomes a MAPS entry with `custom: true`, so the picker, pips, the server browser and
+    // guests' lookups by path treat it like a built-in map.
+    var MODE_BY_PLAYERS = { 1: 'SOLO', 2: '1v1', 4: '2v2', 6: '3v3', 8: '4v4' };
+    var customMapsState = { loaded: false, count: 0 };
+
+    function builtInMapByPath(path) {
+        var want = String(path || '').toLowerCase();
+        var i;
+        for (i = 0; i < MAPS.length; i++) {
+            if (!MAPS[i].custom && MAPS[i].path && String(MAPS[i].path).toLowerCase() === want) {
+                return MAPS[i];
+            }
+        }
+        return null;
+    }
+
+    // A start that stayed where the source map has one keeps that map's hand-placed pip.
+    function customStart(s, source) {
+        var i;
+        var o;
+        if (source && source.starts && s.x != null && s.z != null) {
+            for (i = 0; i < source.starts.length; i++) {
+                o = source.starts[i];
+                if (o.x != null && o.z != null && o.u != null && o.v != null &&
+                        Math.abs(o.x - s.x) < 8 && Math.abs(o.z - s.z) < 8) {
+                    return { id: s.id, x: s.x, z: s.z, u: o.u, v: o.v };
+                }
+            }
+        }
+        return s.x != null && s.z != null ? { id: s.id, x: s.x, z: s.z } : { id: s.id };
+    }
+
+    // A copy of a built-in map shows that map's minimap, crop and art (its minimap is the same picture),
+    // unless the editor sent a top-down snapshot of the copy: that picture and its world rectangle win.
+    function customMapEntry(c) {
+        var snapshot = c.minimapData && c.minimapBounds ? c.minimapData : '';
+        var source = c.source ? builtInMapByPath(c.source) : null;
+        var leaf = String(c.path).split('/').pop();
+        var players = Math.max(1, Math.min(8, Number(c.players) || (c.starts ? c.starts.length : 0) || 2));
+        var starts = [];
+        var i;
+        for (i = 0; c.starts && i < c.starts.length; i++) {
+            if (Number(c.starts[i].id) > 0) {
+                starts.push(customStart({ id: Number(c.starts[i].id), x: c.starts[i].x, z: c.starts[i].z }, snapshot ? null : source));
+            }
+        }
+        var minimap = source ? source.minimap : (c.minimap || (leaf + '.png'));
+        if (snapshot) {
+            return {
+                id: 'custom:' + String(c.path).toLowerCase(),
+                custom: true,
+                label: c.label || leaf,
+                path: c.path,
+                slots: players,
+                startCount: players,
+                mode: MODE_BY_PLAYERS[players] || (players + 'P'),
+                modName: c.mod || '',
+                modVersion: Number(c.version) || 1,
+                sourceLabel: source ? source.label : '',
+                minimap: '',
+                lobbyMinimap: snapshot,
+                image: snapshot,
+                cardImage: snapshot,
+                accent: source ? source.accent : '#7a9cc6',
+                texCrop: null,
+                world: c.minimapBounds,
+                starts: starts
+            };
+        }
+        return {
+            id: 'custom:' + String(c.path).toLowerCase(),
+            custom: true,
+            label: c.label || leaf,
+            path: c.path,
+            slots: players,
+            startCount: players,
+            mode: MODE_BY_PLAYERS[players] || (players + 'P'),
+            modName: c.mod || '',
+            modVersion: Number(c.version) || 1,
+            sourceLabel: source ? source.label : '',
+            minimap: minimap,
+            image: minimapUrl(minimap),
+            cardImage: source && source.cardImage ? source.cardImage : minimapUrl(minimap),
+            accent: source ? source.accent : '#7a9cc6',
+            texCrop: source ? source.texCrop : null,
+            world: source ? source.world : (c.bounds || null),
+            warFit: source ? source.warFit : undefined,
+            starts: starts
+        };
+    }
+
+    function clearCustomMaps() {
+        var i;
+        for (i = MAPS.length - 1; i >= 0; i--) {
+            if (MAPS[i].custom) {
+                MAPS.splice(i, 1);
+            }
+        }
+        customMapsState.loaded = false;
+        customMapsState.count = 0;
+    }
+
+    // Replaces the custom entries in MAPS with the maps of the lobby server's mods.
+    function setCustomMapsFromMods(mods) {
+        clearCustomMaps();
+        var added = 0;
+        var i;
+        var j;
+        for (i = 0; mods && i < mods.length; i++) {
+            var maps = mods[i] && mods[i].maps ? mods[i].maps : [];
+            for (j = 0; j < maps.length; j++) {
+                if (maps[j] && maps[j].path && !builtInMapByPath(maps[j].path)) {
+                    MAPS.push(customMapEntry(maps[j]));
+                    added++;
+                }
+            }
+        }
+        customMapsState.loaded = true;
+        customMapsState.count = added;
+    }
+
     function applyLobbyDefaultsToSlot(slot, map) {
         if (!slot) {
             return;
@@ -717,6 +841,49 @@
 
     CCApp.controller('ShellLobbyController', function ($scope, $rootScope, $timeout) {
         $scope.maps = MAPS;
+        // Map picker tabs: the game's maps, or Custom maps (levels from installed mods).
+        $scope.mapPickerTab = 'game';
+        $scope.customMaps = customMapsState;
+        $scope.mapTabFilter = function (m) {
+            return !!(m && m.custom) === ($scope.mapPickerTab === 'custom') && customMapPlayable(m);
+        };
+        $scope.refreshCustomMaps = function () {
+            refreshLobbyMods();
+        };
+        function focusCustomMapIfNeeded() {
+            var focus = $scope.mapPickerFocus;
+            if ($scope.mapPickerTab === 'custom' && (!focus || !focus.custom || MAPS.indexOf(focus) < 0)) {
+                $scope.mapPickerFocus = firstCustomMap();
+            }
+        }
+        $scope.setMapPickerTab = function (tab) {
+            $scope.mapPickerTab = tab === 'custom' ? 'custom' : 'game';
+            var focus = $scope.mapPickerFocus;
+            if ($scope.mapPickerTab === 'custom') {
+                $scope.mapPickerFocus = focus && focus.custom ? focus : firstCustomMap();
+                $scope.refreshCustomMaps();
+            } else if (!focus || focus.custom) {
+                $scope.mapPickerFocus = $scope.selectedMap && !$scope.selectedMap.custom ? $scope.selectedMap : firstAvailableMap();
+            }
+        };
+        $scope.customMapsMessage = function () {
+            if (!customMapsState.loaded) {
+                return 'Custom maps come from the lobby\'s server. Join or set up a lobby to see them.';
+            }
+            if (!customMapsState.count) {
+                return 'This server has no custom maps.';
+            }
+            return '';
+        };
+        function firstCustomMap() {
+            var i;
+            for (i = 0; i < MAPS.length; i++) {
+                if (MAPS[i].custom) {
+                    return MAPS[i];
+                }
+            }
+            return null;
+        }
         $scope.playtest = playtestOn();
         $scope.mapPlaytestBlocked = function (map) {
             return mapBlockedByPlaytest(map);
@@ -1575,6 +1742,7 @@
             $scope.lobbyOptionsOpen = false;
             closeColorPicker();
             $scope.mapPickerFocus = $scope.selectedMap || MAPS[0];
+            $scope.mapPickerTab = $scope.mapPickerFocus && $scope.mapPickerFocus.custom ? 'custom' : 'game';
             $scope.mapPickerDevOverride = false;
             $scope.mapPickerOpen = true;
         };
@@ -2073,6 +2241,449 @@
             $scope.applyLobbyMatchOptions();
         }
 
+        // ---- Mods in the lobby (content-lobby-mods) ----
+        // The lobby's server reports its verified mods; restart-class ones are mounted at its start
+        // and always on, live ones the host turns on and off here like a tweak.
+        $scope.lobbyMods = [];
+        $scope.modsUi = { open: false, query: '', error: '', loaded: false };
+        var lobbyModsFetchedAt = 0;
+        var lobbyModsSig = '';
+        function refreshLobbyMods() {
+            var gid = $scope.gameId;
+            if (!$scope._joinedGameroom || !gid) {
+                lobbyModsSig = '';
+                $scope.lobbyMods = [];
+                $scope.modsUi.loaded = false;
+                clearCustomMaps();
+                lobbyModsChanged();
+                return;
+            }
+            lobbyModsFetchedAt = Date.now();
+            httpRequest('GET', '/cnc/lobby-mods?gid=' + encodeURIComponent(gid)).then(function (data) {
+                $timeout(function () {
+                    if (String($scope.gameId) !== String(gid)) {
+                        return;
+                    }
+                    if (data && data.ok && angular.isArray(data.mods)) {
+                        // An unchanged list keeps its objects: new ones re-render the lobby and replay its animations.
+                        var sig = gid + '|' + angular.toJson(data.mods);
+                        if (sig === lobbyModsSig && $scope.modsUi.loaded) {
+                            return;
+                        }
+                        lobbyModsSig = sig;
+                        $scope.lobbyMods = data.mods;
+                        $scope.modsUi.loaded = true;
+                        setCustomMapsFromMods(data.mods);
+                        focusCustomMapIfNeeded();
+                        keepSelectedMapAvailable();
+                        lobbyModsChanged();
+                    }
+                });
+            });
+        }
+        function maybeRefreshLobbyMods() {
+            if (Date.now() - lobbyModsFetchedAt > 10000) {
+                refreshLobbyMods();
+            }
+        }
+        $scope.$watch(function () {
+            return ($scope._joinedGameroom ? '1' : '0') + '|' + $scope.gameId;
+        }, function () {
+            refreshLobbyMods();
+        });
+        $scope.toggleLobbyMods = function () {
+            $scope.modsUi.open = !$scope.modsUi.open;
+            if ($scope.modsUi.open) {
+                refreshLobbyMods();
+            }
+        };
+        $scope.lobbyModMatches = function (m) {
+            var q = String($scope.modsUi.query || '').toLowerCase().replace(/^\s+|\s+$/g, '');
+            var hay = (m.name + ' ' + m.author).toLowerCase();
+            var words = q ? q.split(/\s+/) : [];
+            var i;
+            for (i = 0; i < words.length; i++) {
+                if (hay.indexOf(words[i]) < 0) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $scope.lobbyModsSummary = function () {
+            var on = 0;
+            var i;
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if ($scope.lobbyMods[i].on) {
+                    on++;
+                }
+            }
+            return on === 0 ? 'none on' : (on === 1 ? '1 on' : on + ' on');
+        };
+        $scope.lobbyModCount = function () {
+            var on = 0;
+            var i;
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if ($scope.lobbyMods[i].on) {
+                    on++;
+                }
+            }
+            return on;
+        };
+        $scope.lobbyModNames = function () {
+            var names = [];
+            var i;
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if ($scope.lobbyMods[i].on) {
+                    names.push($scope.lobbyMods[i].name);
+                }
+            }
+            return names.join(', ');
+        };
+        $scope.lobbyModSize = function (m) {
+            var b = Number(m && m.bytes) || 0;
+            if (b >= 1073741824) {
+                return (b / 1073741824).toFixed(1) + ' GB';
+            }
+            if (b >= 1048576) {
+                return Math.max(1, Math.round(b / 1048576)) + ' MB';
+            }
+            return Math.max(1, Math.round(b / 1024)) + ' KB';
+        };
+        $scope.lobbyModContents = function (m) {
+            var parts = [];
+            var n = m && m.levels ? m.levels.length : 0;
+            if (n) {
+                parts.push(n === 1 ? '1 map' : n + ' maps');
+            }
+            if (m && m.patches) {
+                parts.push(m.patches === 1 ? '1 value change' : m.patches + ' value changes');
+            }
+            return parts.length ? parts.join(', ') : 'other content';
+        };
+        $scope.lobbyModClassTip = function (m) {
+            return m && m.class === 'live'
+                ? 'Can be switched between matches.'
+                : 'Loaded with the server. Players need it to join.';
+        };
+        // This player has the mod when its content key lists the same name and version.
+        $scope.haveLobbyMod = function (m) {
+            var key = String($rootScope.buildContent || '');
+            var parts = key.split('+');
+            var want = String(m.name) + '@' + String(m.version) + '~';
+            var i;
+            for (i = 0; i < parts.length; i++) {
+                if (parts[i].indexOf(want) === 0) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        $scope.lobbyModChanged = function (m) {
+            if (!$scope.isLobbyHost() || !m || m.class !== 'live') {
+                refreshLobbyMods();
+                return;
+            }
+            var ids = [];
+            var i;
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if ($scope.lobbyMods[i].class === 'live' && $scope.lobbyMods[i].on) {
+                    ids.push($scope.lobbyMods[i].id);
+                }
+            }
+            $scope.modsUi.error = '';
+            httpRequest('POST', '/cnc/lobby-mods?gid=' + encodeURIComponent($scope.gameId) +
+                '&pid=' + encodeURIComponent(localPersonaId() || 0), { enabled: ids }).then(function (data) {
+                $timeout(function () {
+                    if (data && data.ok && data.mods) {
+                        lobbyModsSig = $scope.gameId + '|' + angular.toJson(data.mods);
+                        $scope.lobbyMods = data.mods;
+                        keepSelectedMapAvailable();
+                        lobbyModsChanged();
+                    } else {
+                        $scope.modsUi.error = (data && data.error) ? 'Not changed: ' + data.error + '.' : 'Not changed: the server did not answer.';
+                        refreshLobbyMods();
+                    }
+                });
+            });
+        };
+        // A custom map can be picked only when the lobby's server has its mod and the mod is on. Before
+        // the server's list arrives (or from a server too old to report one) the map list is unfiltered.
+        function lobbyModOn(name) {
+            var i;
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if (String($scope.lobbyMods[i].name).toLowerCase() === String(name || '').toLowerCase()) {
+                    return !!$scope.lobbyMods[i].on;
+                }
+            }
+            return false;
+        }
+        function customMapPlayable(m) {
+            return !m || !m.custom || !$scope.modsUi.loaded || lobbyModOn(m.modName);
+        }
+        // ---- Mod downloads (content-lobby-mods "Joining a lobby with mods") ----
+        // Every player who has the lobby's mods shares them; a player who lacks one is asked, every
+        // time, whether to download it from the lobby. Prism does the transfer and the checks; the
+        // backend only says who shares where and collects progress.
+        $scope.modDl = { open: false, missing: [], state: '', error: '', done: 0, total: 0, mod: '' };
+        $scope.modShare = { status: null };
+        var sharingKey = '';
+        var askedKey = '';
+        var contentReportedGid = '';
+        var modStatusTimer = null;
+
+        function readStore(key) {
+            try {
+                return JSON.parse(window.localStorage.getItem(key) || '{}') || {};
+            } catch (e) {
+                return {};
+            }
+        }
+        function writeStore(key, value) {
+            try {
+                window.localStorage.setItem(key, JSON.stringify(value));
+            } catch (e) { /* storage off: trust is only remembered for this session */ }
+        }
+        function onLobbyMods() {
+            var out = [];
+            var i;
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if ($scope.lobbyMods[i].on) {
+                    out.push($scope.lobbyMods[i]);
+                }
+            }
+            return out;
+        }
+        function missingLobbyMods() {
+            var out = [];
+            var on = onLobbyMods();
+            var i;
+            for (i = 0; i < on.length; i++) {
+                if (!$scope.haveLobbyMod(on[i])) {
+                    out.push(on[i]);
+                }
+            }
+            return out;
+        }
+        function runPrism(line) {
+            if (window.CncProbe && CncProbe.runGame) {
+                CncProbe.runGame(line);
+            }
+        }
+        function lobbyModsChanged() {
+            var gid = $scope.gameId;
+            var pid = localPersonaId();
+            if (!$scope._joinedGameroom || !gid || !pid) {
+                if (sharingKey) {
+                    runPrism('prism.mods share off');
+                    sharingKey = '';
+                }
+                return;
+            }
+            if (contentReportedGid !== String(gid) && $rootScope.buildContent) {
+                contentReportedGid = String(gid);
+                httpRequest('POST', '/cnc/mod-share/content?gid=' + encodeURIComponent(gid) + '&pid=' + encodeURIComponent(pid) +
+                    '&key=' + encodeURIComponent($rootScope.buildContent));
+            }
+            var ids = [];
+            var on = onLobbyMods();
+            var i;
+            for (i = 0; i < on.length; i++) {
+                if ($scope.haveLobbyMod(on[i])) {
+                    ids.push(on[i].id);
+                }
+            }
+            var key = gid + '|' + ids.join(',');
+            if (key !== sharingKey) {
+                if (ids.length) {
+                    runPrism('prism.mods share ' + gid + ' ' + pid + ' ' + ids.join(','));
+                } else if (sharingKey) {
+                    runPrism('prism.mods share off');
+                }
+                sharingKey = ids.length ? key : '';
+            }
+            var missing = missingLobbyMods();
+            var askKey = gid + '|' + missing.map(function (m) { return m.id; }).join(',');
+            if (missing.length && askKey !== askedKey && !$scope.modDl.open) {
+                askedKey = askKey;
+                $scope.modDl = { open: true, missing: missing, state: '', error: '', done: 0, total: 0, mod: '' };
+            }
+            startModStatusPoll();
+        }
+        function startModStatusPoll() {
+            if (modStatusTimer || !$scope._joinedGameroom) {
+                return;
+            }
+            modStatusTimer = $timeout(function tick() {
+                modStatusTimer = null;
+                if (!$scope._joinedGameroom || !$scope.gameId) {
+                    return;
+                }
+                httpRequest('GET', '/cnc/mod-share/status?gid=' + encodeURIComponent($scope.gameId)).then(function (data) {
+                    $timeout(function () {
+                        if (data && data.ok && angular.toJson(data) !== angular.toJson($scope.modShare.status)) {
+                            $scope.modShare.status = data;
+                            applyMyModProgress(data);
+                        }
+                        startModStatusPoll();
+                    }, $scope.modDl.open && $scope.modDl.state ? 1000 : 4000);
+                });
+            }, 0);
+        }
+        function progressFor(pid, data) {
+            var list = (data || $scope.modShare.status || {}).progress || [];
+            var i;
+            for (i = 0; i < list.length; i++) {
+                if (String(list[i].pid) === String(pid)) {
+                    return list[i];
+                }
+            }
+            return null;
+        }
+        function applyMyModProgress(data) {
+            if (!$scope.modDl.state || $scope.modDl.state === 'restart') {
+                return;
+            }
+            var p = progressFor(localPersonaId(), data);
+            if (!p) {
+                return;
+            }
+            $scope.modDl.state = p.state;
+            $scope.modDl.done = Number(p.done) || 0;
+            $scope.modDl.total = Number(p.total) || 0;
+            $scope.modDl.mod = p.mod;
+            $scope.modDl.error = p.state === 'failed' ? (p.error || 'The download failed.') : '';
+            if (p.state === 'restart') {
+                rememberModAuthors($scope.modDl.missing);
+                try {
+                    window.localStorage.setItem('cnc_rejoin_gid', String($scope.gameId));
+                } catch (e) { /* ignore */ }
+            }
+        }
+        function rememberModAuthors(mods) {
+            var trusted = readStore('cnc_trusted_authors');
+            var byName = readStore('cnc_mod_authors');
+            var i;
+            for (i = 0; i < mods.length; i++) {
+                trusted[mods[i].key] = { author: mods[i].author, fingerprint: mods[i].fingerprint };
+                byName[String(mods[i].name).toLowerCase()] = mods[i].key;
+            }
+            writeStore('cnc_trusted_authors', trusted);
+            writeStore('cnc_mod_authors', byName);
+        }
+        $scope.modAuthorTrusted = function (m) {
+            return !!readStore('cnc_trusted_authors')[m.key];
+        };
+        // A mod with a name this player installed before, from a different key.
+        $scope.modAuthorChanged = function (m) {
+            var known = readStore('cnc_mod_authors')[String(m.name).toLowerCase()];
+            return !!known && known !== m.key;
+        };
+        $scope.modDlTotalSize = function () {
+            var b = 0;
+            var i;
+            for (i = 0; i < $scope.modDl.missing.length; i++) {
+                b += Number($scope.modDl.missing[i].bytes) || 0;
+            }
+            return $scope.lobbyModSize({ bytes: b });
+        };
+        $scope.modDlPercent = function () {
+            return $scope.modDl.total > 0 ? Math.min(100, Math.round($scope.modDl.done * 100 / $scope.modDl.total)) : 0;
+        };
+        $scope.modDlStateLabel = function () {
+            var s = $scope.modDl.state;
+            if (s === 'connecting') {
+                return 'Connecting to a player who has the mods..';
+            }
+            if (s === 'downloading') {
+                return 'Downloading ' + $scope.modDlPercent() + '%';
+            }
+            if (s === 'verifying' || s === 'installed' || s === 'queued') {
+                return 'Checking and installing..';
+            }
+            return 'Starting..';
+        };
+        $scope.startModDownload = function () {
+            var ids = [];
+            var keep = [];
+            var i;
+            for (i = 0; i < $scope.modDl.missing.length; i++) {
+                ids.push($scope.modDl.missing[i].id);
+            }
+            for (i = 0; i < $scope.lobbyMods.length; i++) {
+                if ($scope.lobbyMods[i].class === 'restart') {
+                    keep.push($scope.lobbyMods[i].name);
+                }
+            }
+            $scope.modDl.state = 'connecting';
+            $scope.modDl.error = '';
+            runPrism('prism.mods fetch ' + $scope.gameId + ' ' + localPersonaId() + ' ' + ids.join(',') + ' ' + (keep.length ? keep.join(',') : '-'));
+            startModStatusPoll();
+        };
+        $scope.leaveForMods = function () {
+            $scope.modDl.open = false;
+            $scope.leaveGameRoom();
+        };
+        $scope.restartForMods = function () {
+            runPrism('RtsClient.quit');
+        };
+        // Slot line for everyone: who is still getting the lobby's mods.
+        $scope.slotModProgress = function (slot) {
+            if (!slot || slot.isAi || !slot.pid) {
+                return '';
+            }
+            var p = progressFor(slot.pid);
+            if (!p || p.state === 'restart') {
+                return '';
+            }
+            if (p.state === 'failed') {
+                return 'Mod download failed';
+            }
+            if (p.state === 'downloading' && p.total > 0) {
+                return 'Getting mods ' + Math.round(p.done * 100 / p.total) + '%';
+            }
+            return 'Getting mods..';
+        };
+        // Host: players whose game doesn't run the server's content can't start the match yet.
+        function playersWithoutServerContent() {
+            var st = $scope.modShare.status;
+            if (!st || !st.serverContent || !st.content) {
+                return [];
+            }
+            var names = [];
+            var all = ($scope.team1 || []).concat($scope.team2 || []);
+            var i;
+            for (i = 0; i < all.length; i++) {
+                var s = all[i];
+                if (!s || !s.occupied || s.isAi || !s.pid) {
+                    continue;
+                }
+                var key = st.content[String(s.pid)];
+                if (key && key !== st.serverContent) {
+                    names.push(s.displayName || 'A player');
+                }
+            }
+            return names;
+        }
+        // The lobby's own share warning: this player has the mods but nobody outside can reach them.
+        $scope.myShareUnreachable = function () {
+            var st = $scope.modShare.status;
+            var pid = String(localPersonaId());
+            var i;
+            for (i = 0; st && st.sharers && i < st.sharers.length; i++) {
+                if (String(st.sharers[i].pid) === pid) {
+                    return !st.sharers[i].reachable;
+                }
+            }
+            return false;
+        };
+
+        function keepSelectedMapAvailable() {
+            var sel = $scope.selectedMap;
+            if (sel && sel.custom && !customMapPlayable(sel) && $scope.isLobbyHost()) {
+                $scope.selectMap(firstAvailableMap());
+            }
+        }
+
         $scope.lobbyRulesOpen = false;
         $scope.openLobbySummary = function ($event) {
             if ($scope.isLobbyHost && $scope.isLobbyHost()) {
@@ -2082,7 +2693,7 @@
             if ($event && $event.stopPropagation) {
                 $event.stopPropagation();
             }
-            if ($scope.lobbyCustomized()) {
+            if ($scope.lobbyCustomized() || $scope.lobbyMods.length) {
                 $scope.lobbyRulesOpen = true;
             }
         };
@@ -2422,40 +3033,9 @@
             }
         };
 
+        // Find a match has no map pick, so the browser lists every server.
         function applyBrowserFilter(games) {
-            if (!games || !games.length) {
-                return [];
-            }
-            // Aurora has no map-pick step any more, so its browser lists every server.
-            if (auroraQuickMatch()) {
-                return games.slice(0);
-            }
-            var wantPath = $scope.mapPath || '';
-            var wantLeaf = wantPath ? wantPath.split('/').pop() : '';
-            var out = [];
-            var i;
-            for (i = 0; i < games.length; i++) {
-                var g = games[i];
-                if (!g) {
-                    continue;
-                }
-                if (g.isStandby || g.kind === 'standby' || g.map === 'Standby') {
-                    out.push(g);
-                    continue;
-                }
-                if (!wantPath) {
-                    out.push(g);
-                    continue;
-                }
-                if (g.mapPath && g.mapPath === wantPath) {
-                    out.push(g);
-                    continue;
-                }
-                if (g.map && wantLeaf && String(g.map).toLowerCase() === String(wantLeaf).toLowerCase()) {
-                    out.push(g);
-                }
-            }
-            return out.length ? out : games;
+            return games && games.length ? games.slice(0) : [];
         }
 
         function refreshPingForRows(rows) {
@@ -2552,10 +3132,13 @@
             var path = g.mapPath || '';
             var leaf = g.map || (path ? path.split('/').pop() : '');
             var i;
-            for (i = 0; i < MAPS.length; i++) {
-                if (path && MAPS[i].path && String(MAPS[i].path).toLowerCase() === String(path).toLowerCase()) {
+            // Exact path first: a custom copy can share its leaf with a built-in map.
+            for (i = 0; path && i < MAPS.length; i++) {
+                if (MAPS[i].path && String(MAPS[i].path).toLowerCase() === String(path).toLowerCase()) {
                     return MAPS[i];
                 }
+            }
+            for (i = 0; i < MAPS.length; i++) {
                 if (leaf && MAPS[i].path && MAPS[i].path.split('/').pop() === leaf) {
                     return MAPS[i];
                 }
@@ -3031,6 +3614,33 @@
             return mine === 'vanilla' ? 'mod-required' : 'mods-differ';
         }
 
+        // Every package in the server's content key is one it offers (signed, same name and version),
+        // so a player can get them all by downloading in the lobby (content-lobby-mods).
+        function serverModsDownloadable(g) {
+            var key = String((g && g.content) || '');
+            var offered = (g && g.mods) || [];
+            if (!key || key === 'vanilla' || !offered.length) {
+                return false;
+            }
+            var parts = key.split('+');
+            var i;
+            var j;
+            for (i = 0; i < parts.length; i++) {
+                var nv = parts[i].split('~')[0];
+                var found = false;
+                for (j = 0; j < offered.length; j++) {
+                    if (offered[j] && nv === String(offered[j].name) + '@' + String(offered[j].version)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         // Marks rows this client cannot play on as not joinable, so the browser greys them out and
         // the Join button, the Joinable filter and Find a match all skip them.
         function annotateServerVersions(games) {
@@ -3044,7 +3654,13 @@
                 if (g.versionState === 'ok') {
                     g.versionState = serverContentState(g);
                 }
-                if (g.versionState !== 'ok') {
+                // Mods this player can download in the lobby don't stop a join from the browser;
+                // Find a match still skips the server (needsMods).
+                g.needsMods = (g.versionState === 'mod-required' || g.versionState === 'mods-differ') && serverModsDownloadable(g);
+                if (g.needsMods) {
+                    g.versionState = 'mods-download';
+                }
+                if (g.versionState !== 'ok' && g.versionState !== 'mods-download') {
                     g.joinable = false;
                 }
             }
@@ -3067,7 +3683,41 @@
             if (g && g.versionState === 'mods-differ') {
                 return 'Different mods';
             }
+            if (g && g.versionState === 'mods-download') {
+                return 'Mods: download on join';
+            }
             return (g && g.phase) || '';
+        };
+
+        function browserModNames(g, mapsOnly) {
+            var names = [];
+            var i;
+            for (i = 0; i < ((g && g.mods) || []).length; i++) {
+                var m = g.mods[i];
+                if (m && (!mapsOnly || m.maps)) {
+                    names.push(String(m.name) + ' v' + String(m.version));
+                }
+            }
+            return names;
+        }
+
+        // Server browser icons: mods of any kind, and mods that add maps.
+        $scope.browserHasCustomContent = function (g) {
+            return !!g && (browserModNames(g, false).length > 0 || (!!g.content && g.content !== 'vanilla'));
+        };
+
+        $scope.browserHasCustomMaps = function (g) {
+            return browserModNames(g, true).length > 0;
+        };
+
+        // Server details: the mods the server runs, and those that add maps.
+        $scope.browserModsLabel = function (g) {
+            var names = browserModNames(g, false);
+            return names.length ? names.join(', ') : ($scope.browserHasCustomContent(g) ? contentNames(g.content) : 'None');
+        };
+
+        $scope.browserMapModsLabel = function (g) {
+            return browserModNames(g, true).join(', ');
         };
 
         $scope.browserVersionTip = function (g) {
@@ -3077,6 +3727,9 @@
             if (g.versionState === 'mod-required' || g.versionState === 'mods-differ') {
                 return 'This server runs ' + contentNames(g.content) + '; you run ' + contentNames(localContentKey()) +
                     '. Enable the same content and restart the game to join.';
+            }
+            if (g.versionState === 'mods-download') {
+                return 'This server runs ' + contentNames(g.content) + '. Join to download them from the lobby; your game restarts after.';
             }
             if (g.versionState === 'vanilla-only') {
                 return 'This server runs no mods. Disable your content (' + contentNames(localContentKey()) +
@@ -3109,19 +3762,6 @@
             $scope._lobbyFullError = '';
         };
 
-        function mapMatchesSelected(g) {
-            var wantPath = $scope.mapPath || '';
-            if (!wantPath) {
-                return true;
-            }
-            if (g.mapPath && g.mapPath === wantPath) {
-                return true;
-            }
-            var wantLeaf = wantPath.split('/').pop();
-            return !!(g.map && wantLeaf &&
-                String(g.map).toLowerCase() === String(wantLeaf).toLowerCase());
-        }
-
         function poolAssignableCount(pool) {
             if (!pool) {
                 return 0;
@@ -3142,15 +3782,11 @@
             return Math.max(0, pool.assignableIn);
         }
 
-        function auroraQuickMatch() {
-            return !!(window.CncShellTheme && CncShellTheme.family && CncShellTheme.family() === 'aurora');
-        }
-
         function joinableMatchRows(games) {
             var out = [];
             var i;
             for (i = 0; i < (games || []).length; i++) {
-                if (gameHasRoom(games[i]) && !games[i].passwordProtected) {
+                if (gameHasRoom(games[i]) && !games[i].passwordProtected && !games[i].needsMods) {
                     out.push(games[i]);
                 }
             }
@@ -3224,18 +3860,6 @@
                 }
             }
             if (populated.length) {
-                // Classic still picks a map first; Aurora joins any map.
-                if (!auroraQuickMatch()) {
-                    var onMap = [];
-                    for (i = 0; i < populated.length; i++) {
-                        if (mapMatchesSelected(populated[i])) {
-                            onMap.push(populated[i]);
-                        }
-                    }
-                    if (onMap.length) {
-                        populated = onMap;
-                    }
-                }
                 populated.sort(byPingThenHumans);
                 return populated[0];
             }
@@ -3256,9 +3880,6 @@
             }
             $scope._findingMatch = true;
             $scope._matchError = '';
-            if (!auroraQuickMatch()) {
-                syncMapToServer();
-            }
 
             function failFind(msg) {
                 $scope._findingMatch = false;
@@ -3316,14 +3937,14 @@
             });
         };
 
-        // Aurora has no map-pick screen: 'matchmake' is only the searching state. Arriving there from
+        // No theme has a map-pick screen: 'matchmake' is only the searching state. Arriving there from
         // "Find a match" starts the search; arriving any other way (leaving a lobby, Back from the
         // browser, a lost server) goes straight home, where the root modal shows any error.
         $scope.$watch(function () {
             return $rootScope.lobbyOpen + '|' + $rootScope.lobbyView + '|' + !!$rootScope.quickMatchPending +
                 '|' + !!$scope._findingMatch + '|' + !!$scope._matchError + '|' + !!$scope._joinStatus;
         }, function () {
-            if (!$rootScope.lobbyOpen || $rootScope.lobbyView !== 'matchmake' || !auroraQuickMatch()) {
+            if (!$rootScope.lobbyOpen || $rootScope.lobbyView !== 'matchmake') {
                 return;
             }
             if ($rootScope.quickMatchPending) {
@@ -3456,6 +4077,7 @@
             if (!data) {
                 return;
             }
+            maybeRefreshLobbyMods();
             var current = ($scope.selectedMap && $scope.selectedMap.path) || '';
             if (String(current).toLowerCase() === String(data.map || '').toLowerCase()) {
                 return;
@@ -4387,6 +5009,11 @@
                 return;
             }
             if ($scope._joinedGameroom && !$scope.isLobbyHost()) {
+                return;
+            }
+            var withoutMods = $scope._joinedGameroom ? playersWithoutServerContent() : [];
+            if (withoutMods.length) {
+                $scope._startError = 'Waiting for ' + withoutMods.join(', ') + ' to get this server\'s mods and restart.';
                 return;
             }
             if ($scope._joinedGameroom && !$scope._startReadyConfirmed && remoteHumanCount() > 0) {

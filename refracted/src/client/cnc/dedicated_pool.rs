@@ -890,6 +890,15 @@ fn instance_sessions() -> &'static Mutex<HashMap<String, u64>> {
     INSTANCE_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// The instance key a server's Blaze login carried (its engine-peer reports use the same key).
+pub fn instance_for_session(session: u64) -> Option<String> {
+    instance_sessions()
+        .lock()
+        .iter()
+        .find(|(_, s)| **s == session)
+        .map(|(k, _)| k.clone())
+}
+
 fn session_for_instance(key: &str) -> Option<u64> {
     instance_sessions().lock().get(key).copied()
 }

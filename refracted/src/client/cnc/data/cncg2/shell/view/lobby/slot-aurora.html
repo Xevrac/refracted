@@ -10,6 +10,7 @@
     <strong ng-class="nameTagClass(slot)">{{ slot.isAi ? 'AI' : (slot.displayName || slot.codename) }}<em
         class="au-lobby__host-tag" ng-if="slot.isHost || (slot.isLocal && isLobbyHost())">Host</em><em
         class="au-lobby__host-tag au-lobby__diff-tag" ng-if="slot.isAi">{{ difficultyLabel(slot) }}</em></strong>
+    <span class="au-lobby__slot-mods" ng-if="slotModProgress(slot)">{{ slotModProgress(slot) }}</span>
     <span class="au-lobby__general" ng-if="!slot.invitePending"><img
         ng-src="{{ factionIcon(slot) }}" alt=""><i>{{ slot.faction }}</i><b>{{ slot.codename }}</b></span>
 </div>

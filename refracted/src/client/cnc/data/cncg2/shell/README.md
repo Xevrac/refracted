@@ -237,6 +237,23 @@ backing out half-way strands the seat or the match on the server. On the error d
 (`_startError`, `_matchError`, `_lobbyFullError`) Esc is the OK button. Quitting (`quittingOpen`) already
 ignores Esc in the shell and in the pause menu. Any new held dialog must be added to that check.
 
+## Custom maps
+
+The map picker's **Custom maps** tab lists the new levels in the lobby server's mods. The dedicated
+server sends each mod's `maps.json` (written by RefractEd's File > Build Mod) with the mods it
+offers; `GET /cnc/lobby-mods` returns them per mod and `shell-lobby.js` turns each into a `MAPS`
+entry with `custom: true`. The backend reads no game folder for this. A map with the editor's top-down
+snapshot (`minimapData`, a JPEG data URI, with `minimapBounds`) shows that picture and places start pips
+by its rectangle; otherwise a copy of a built-in map reuses that map's minimap, crop and art.
+
+## Mods in the lobby
+
+Lobby Options has a **Mods** section (spec `content-lobby-mods` in refracted.toolset): the lobby
+server's verified mods from `GET /cnc/lobby-mods`, live ones switched by the host. A player missing
+a mod that is on gets the download dialog; the shell drives Prism with `prism.mods share|fetch`
+console lines (`gameclient.execute`) and reads progress from `/cnc/mod-share/status`. Custom maps are
+listed only when the lobby's server has their mod on.
+
 ## News (NEWS panel)
 
 Articles come from the Aurora site (`refracted_cnc/frontend`, admin page `/news`), not from this

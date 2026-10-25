@@ -5561,6 +5561,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "region": pool_entry.as_ref().and_then(|e| e.region.clone()),
             // (H651) The shell compares `content` with its own content key like `version`.
             "content": pool_entry.as_ref().and_then(|e| e.content.clone()),
+            "mods": super::lobby_mods::browser_summary(sid),
         }));
     }
     drop(map);
@@ -5615,6 +5616,7 @@ pub fn browser_game_list_json() -> serde_json::Value {
             "version": entry.version.clone(),
             "region": entry.region.clone(),
             "content": entry.content.clone(),
+            "mods": super::lobby_mods::browser_summary(entry.blaze_session_id),
         }));
     }
 

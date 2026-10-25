@@ -26,8 +26,11 @@
                 <button class="btn btn-faction-texture" title="Select Faction"></button>
             </div>
             <div class="play-btn-stack">
-                <button class="btn btn-massive-play" ng-click="openLobby()">PLAY</button>
-                <div class="play-dropdown-wrapper">
+                <button class="btn btn-massive-play" ng-click="quickMatch()" title="Quick match, any map">PLAY</button>
+                <div class="play-dropdown-wrapper play-dropdown-wrapper--split">
+                    <button type="button" class="btn btn-play-dropdown" ng-click="openServerBrowser()">
+                        <span class="mode-text">browse</span>
+                    </button>
                     <button type="button" class="btn btn-play-dropdown" ng-click="openConfirmQuit()">
                         <span class="mode-text">quit</span>
                     </button>

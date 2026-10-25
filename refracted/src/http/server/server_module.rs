@@ -31,6 +31,38 @@ pub async fn read_rest_of_request_head<S: AsyncRead + Unpin>(
     }
     filled
 }
+
+/// Largest request (head and body) read off an HTTP/1.1 connection.
+pub const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+
+/// Where the request ends: the head plus its `Content-Length` body; `None` until the head is complete.
+pub fn request_end(bytes: &[u8]) -> Option<usize> {
+    let head_end = bytes.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
+    let length = String::from_utf8_lossy(&bytes[..head_end])
+        .lines()
+        .filter_map(|line| line.split_once(':'))
+        .find(|(key, _)| key.trim().eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, value)| value.trim().parse::<usize>().ok())
+        .unwrap_or(0);
+    Some(head_end.saturating_add(length).min(MAX_REQUEST_BYTES))
+}
+
+/// Keep reading until the body the head announces is in: a single read can stop part way through it.
+pub async fn read_rest_of_request_body<S: AsyncRead + Unpin>(stream: &mut S, buffer: &mut Vec<u8>, mut filled: usize) -> usize {
+    let Some(end) = request_end(&buffer[..filled]) else {
+        return filled;
+    };
+    if buffer.len() < end {
+        buffer.resize(end, 0);
+    }
+    while filled < end {
+        match tokio::time::timeout(tokio::time::Duration::from_secs(5), stream.read(&mut buffer[filled..end])).await {
+            Ok(Ok(n)) if n > 0 => filled += n,
+            _ => break,
+        }
+    }
+    filled
+}
 use tokio::net::TcpStream;
 use tokio_rustls::{server::TlsStream as ServerTlsStream, TlsAcceptor};
 use tracing::{error, info};
@@ -308,6 +340,7 @@ impl HttpProtocolServer {
             return Ok(());
         }
         let bytes_read = read_rest_of_request_head(&mut stream, &mut buffer, bytes_read).await;
+        let bytes_read = read_rest_of_request_body(&mut stream, &mut buffer, bytes_read).await;
 
         let request_str = String::from_utf8_lossy(&buffer[..bytes_read]);
 
@@ -368,6 +401,7 @@ impl HttpProtocolServer {
         };
 
         let final_bytes_read = read_rest_of_request_head(&mut stream, &mut buffer, final_bytes_read).await;
+        let final_bytes_read = read_rest_of_request_body(&mut stream, &mut buffer, final_bytes_read).await;
         let request_str = String::from_utf8_lossy(&buffer[..final_bytes_read]);
 
         let (method, path, host, body) = match Self::parse_http_request(&request_str) {
@@ -627,5 +661,38 @@ impl HttpProtocolServer {
         let mut out = header.into_bytes();
         out.extend_from_slice(&response.body);
         out
+    }
+}
+
+#[cfg(test)]
+mod request_tests {
+    use super::*;
+
+    #[test]
+    fn request_end_covers_the_announced_body() {
+        let head = b"POST /cnc/dedicated-engine-peer HTTP/1.1\r\nHost: x\r\nContent-Length: 5000\r\n\r\n{";
+        let head_len = head.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+        assert_eq!(request_end(head), Some(head_len + 5000));
+    }
+
+    #[test]
+    fn request_end_waits_for_the_head_and_caps_the_body() {
+        assert_eq!(request_end(b"GET / HTTP/1.1\r\nHost: x\r\n"), None);
+        assert_eq!(request_end(b"GET / HTTP/1.1\r\n\r\n"), Some(18));
+        assert_eq!(request_end(b"POST / HTTP/1.1\r\ncontent-length: 999999999999\r\n\r\n"), Some(MAX_REQUEST_BYTES));
+    }
+
+    #[tokio::test]
+    async fn reads_a_body_that_arrives_after_the_head() {
+        let (mut client, mut server) = tokio::io::duplex(64);
+        let body = "x".repeat(10_000);
+        let request = format!("POST / HTTP/1.1\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
+        let writer = tokio::spawn(async move { client.write_all(request.as_bytes()).await.unwrap() });
+        let mut buffer = vec![0u8; 4096];
+        let n = server.read(&mut buffer).await.unwrap();
+        let n = read_rest_of_request_head(&mut server, &mut buffer, n).await;
+        let n = read_rest_of_request_body(&mut server, &mut buffer, n).await;
+        writer.await.unwrap();
+        assert!(String::from_utf8_lossy(&buffer[..n]).ends_with(&body));
     }
 }

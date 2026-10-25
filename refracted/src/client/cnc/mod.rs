@@ -3,6 +3,9 @@
 
 pub mod dedicated_pool;
 pub mod fireframe;
+mod custom_maps;
+mod lobby_mods;
+mod mod_share;
 mod flags;
 pub mod game_reporting;
 pub mod game_state;
@@ -410,6 +413,30 @@ pub fn try_handle_cnc_post(method: &str, path: &str, body: &[u8]) -> Option<Http
     // POST /cnc/dedicated-engine-peer — EnginePeerInit game UDP (not Blaze QoS).
     if base == "cnc/dedicated-engine-peer" && is_post {
         return Some(handle_cnc_dedicated_engine_peer(query, body));
+    }
+    // GET/POST /cnc/lobby-mods — the lobby's server's mods and which the host turned on.
+    if base == "cnc/lobby-mods" && is_get {
+        return Some(lobby_mods::handle_get(query));
+    }
+    if base == "cnc/lobby-mods" && is_post {
+        return Some(lobby_mods::handle_post(query, body));
+    }
+    // /cnc/mod-share/* — player-to-player mod downloads: who shares where, tokens, progress.
+    if let Some(action) = base.strip_prefix("cnc/mod-share/") {
+        let r = match (action, is_get, is_post) {
+            ("advertise", _, true) => Some(mod_share::handle_advertise(query)),
+            ("withdraw", _, true) => Some(mod_share::handle_withdraw(query)),
+            ("plan", true, _) => Some(mod_share::handle_plan(query)),
+            ("reverse-request", _, true) => Some(mod_share::handle_reverse_request(query)),
+            ("reverse", true, _) => Some(mod_share::handle_reverse(query)),
+            ("progress", _, true) => Some(mod_share::handle_progress(query)),
+            ("content", _, true) => Some(mod_share::handle_content(query)),
+            ("status", true, _) => Some(mod_share::handle_status(query)),
+            _ => None,
+        };
+        if r.is_some() {
+            return r;
+        }
     }
     // GET /cnc/utfwin/images/MiniMap/*.png — UTFWinAssets from the game bin.
     if is_get && base.starts_with("cnc/utfwin/") {
@@ -1702,6 +1729,8 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
     let mut content = String::new();
     let mut editor = false;
     let mut instance = String::new();
+    // The server's verified mods, from the JSON body (content-lobby-mods).
+    let mut offered_mods: Option<Vec<serde_json::Value>> = None;
     let parse_u16 = |v: &str| percent_decode_plus(v).parse().unwrap_or(0);
     let parse_kv = |k: &str,
                     v: &str,
@@ -1769,6 +1798,9 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
         let text = text.trim();
         if text.starts_with('{') {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
+                if let Some(m) = v.get("mods") {
+                    offered_mods = Some(lobby_mods::sanitize_offered_mods(m));
+                }
                 if session == 0 {
                     session = v
                         .get("session")
@@ -1862,6 +1894,9 @@ fn handle_cnc_dedicated_engine_peer(query: Option<&str>, body: &[u8]) -> HttpRes
             ..dedicated_pool::ServerBuildLabel::from_raw(&version, &region, &content)
         },
     );
+    if let Some(mods) = offered_mods {
+        lobby_mods::note_offered(&instance, mods);
+    }
     match note {
         dedicated_pool::EnginePeerNote::Rejected => HttpResponse::new(
             400,

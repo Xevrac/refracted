@@ -139,11 +139,12 @@
                 <!-- Lobby options in one line, the size of the spectator box. Host: opens the options;
                      others: lists what the host changed. -->
                 <div class="au-lobby__summary"
-                     ng-class="{'au-lobby__summary--click': isLobbyHost() || lobbyCustomized(), 'au-lobby__summary--custom': lobbyCustomized()}"
+                     ng-class="{'au-lobby__summary--click': isLobbyHost() || lobbyCustomized() || lobbyMods.length, 'au-lobby__summary--custom': lobbyCustomized()}"
                      ng-click="openLobbySummary($event)"
                      data-tip="{{ isLobbyHost() ? 'Change lobby options' : '' }}">
-                    <span class="au-lobby__summary-line" ng-hide="lobbyCustomized()">Vanilla game, default options set.</span>
+                    <span class="au-lobby__summary-line" ng-hide="lobbyCustomized()">{{ lobbyModCount() ? 'Default options set.' : 'Vanilla game, default options set.' }}</span>
                     <span class="au-lobby__summary-line" ng-show="lobbyCustomized()"><svg class="au-lobby__spanner" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg><u>{{ presetSummary() }}, click to learn more!</u></span>
+                    <span class="au-lobby__summary-mods" ng-show="lobbyModCount()"><svg class="au-lobby__summary-puzzle" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M5 5h4.5a2.5 2.5 0 0 1 5 0H19v4.5a2.5 2.5 0 0 1 0 5V19h-4.5a2.5 2.5 0 0 0-5 0H5v-4.5a2.5 2.5 0 0 0 0-5z"/></svg>{{ lobbyModCount() == 1 ? '1 mod' : lobbyModCount() + ' mods' }}</span>
                 </div>
             </div>
         </div>
@@ -268,6 +269,40 @@
                         <span class="au-lobby__preset-error" ng-show="presetUi.error">{{ presetUi.error }}</span>
                     </div>
 
+                    <!-- Mods: the lobby server's verified mods (content-lobby-mods). Live ones switch per match;
+                         restart-class ones load with the server and are always on. -->
+                    <div class="au-lobby__tweaks au-lobby__mods" ng-show="lobbyMods.length">
+                        <button type="button" class="au-lobby__tweaks-toggle"
+                                ng-class="{open: modsUi.open}"
+                                ng-click="toggleLobbyMods()">Mods <span class="au-lobby__mods-count">({{ lobbyModsSummary() }})</span></button>
+                        <div class="au-lobby__tweaks-body" ng-show="modsUi.open">
+                            <input type="text" class="au-lobby__password-input au-lobby__tweaks-search"
+                                   ng-model="modsUi.query"
+                                   autocomplete="off"
+                                   placeholder="Search mods">
+                            <div class="au-lobby__tweaks-list">
+                                <label class="au-lobby__options-check au-lobby__tweak au-lobby__mod"
+                                       ng-repeat="m in lobbyMods | filter:lobbyModMatches"
+                                       ng-class="{'au-lobby__mod--fixed': m.class != 'live'}">
+                                    <input type="checkbox" ng-model="m.on"
+                                           ng-disabled="m.class != 'live' || !isLobbyHost()"
+                                           ng-change="lobbyModChanged(m)">
+                                    <span class="au-lobby__tweak-text">
+                                        <span class="au-lobby__tweak-name">{{ m.name }} <em>v{{ m.version }}</em>
+                                            <span class="au-lobby__mod-badge" ng-class="{'au-lobby__mod-badge--live': m.class == 'live'}"
+                                                  data-tip-pos="below" data-tip="{{ lobbyModClassTip(m) }}">{{ m.class == 'live' ? 'Live' : 'Always on' }}</span>
+                                        </span>
+                                        <span class="au-lobby__tweak-summary">by {{ m.author }} &middot; key {{ m.fingerprint }} &middot; {{ lobbyModContents(m) }} &middot; {{ lobbyModSize(m) }}</span>
+                                    </span>
+                                </label>
+                                <div class="au-lobby__tweaks-empty"
+                                     ng-show="!(lobbyMods | filter:lobbyModMatches).length">No mods match "{{ modsUi.query }}".</div>
+                            </div>
+                            <p class="au-lobby__tweaks-more" ng-show="modsUi.error">{{ modsUi.error }}</p>
+                            <p class="au-lobby__tweaks-more" ng-show="myShareUnreachable()">Players without these mods can't download them from you: your router didn't open a port (turn on UPnP or NAT-PMP, or ask your ISP about carrier-grade NAT). They can still download from other players who have them.</p>
+                        </div>
+                    </div>
+
                     <div class="au-lobby__options-actions">
                         <button type="button" class="au-btn au-btn--ghost"
                                 ng-hide="presetUi.saving"
@@ -281,15 +316,26 @@
                  ng-click="closeMapPicker()">
                 <div class="au-lobby__modal-box au-lobby__maps-modal" ng-click="$event.stopPropagation()">
                     <h3 class="au-lobby__maps-modal-title">Maps</h3>
+                    <div class="au-lobby__maps-tabs" role="tablist">
+                        <button type="button" class="au-btn au-btn--ghost au-lobby__maps-tab" role="tab"
+                                ng-class="{on: mapPickerTab != 'custom'}" ng-click="setMapPickerTab('game')">Game maps</button>
+                        <button type="button" class="au-btn au-btn--ghost au-lobby__maps-tab" role="tab"
+                                ng-class="{on: mapPickerTab == 'custom'}" ng-click="setMapPickerTab('custom')">Custom maps</button>
+                        <button type="button" class="au-btn au-btn--ghost au-lobby__maps-tab au-lobby__maps-tab--refresh"
+                                ng-show="mapPickerTab == 'custom'" ng-disabled="customMaps.loading"
+                                ng-click="refreshCustomMaps()" title="Look again for custom maps">{{ customMaps.loading ? 'Looking...' : 'Refresh' }}</button>
+                    </div>
                     <div class="au-lobby__maps-split">
                         <div class="au-lobby__maps-list-cell">
                             <div class="au-lobby__maps-list">
+                                <div class="au-lobby__maps-empty" ng-show="mapPickerTab == 'custom' && customMapsMessage()">{{ customMapsMessage() }}</div>
                                 <div class="au-lobby__maps-row"
-                                     ng-repeat="m in maps"
+                                     ng-repeat="m in maps | filter:mapTabFilter"
                                      ng-class="{on: m.id == pickerMap().id, disabled: m.comingSoon || mapPlaytestBlocked(m)}"
                                      ng-attr-aria-disabled="{{(m.comingSoon || mapPlaytestBlocked(m)) ? 'true' : 'false'}}"
                                      ng-click="previewMapInPicker(m, $event)">
                                     <span class="au-lobby__maps-row-name">{{ m.label }}</span>
+                                    <span class="au-lobby__maps-row-mod" ng-if="m.custom">{{ m.modName }}</span>
                                     <span class="au-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
                                     <span class="au-lobby__maps-row-status" ng-if="mapPlaytestBlocked(m)"
                                           data-tip="Not Available">Not Available</span>
@@ -310,9 +356,12 @@
                                       title="Start {{ sp.id }}">{{ sp.id }}</span>
                             </div>
                             <div class="au-lobby__maps-preview-meta">
-                                <strong>{{ pickerMap().label }}</strong>
-                                <span>{{ mapModeLabel(pickerMap()) }}</span>
-                                <span ng-show="pickerMap().slots">{{ mapPlayerLabel(pickerMap()) }}</span>
+                                <strong title="{{ pickerMap().label }}">{{ pickerMap().label }}</strong>
+                                <div class="au-lobby__maps-preview-facts">
+                                    <span>{{ mapModeLabel(pickerMap()) }}</span>
+                                    <span ng-show="pickerMap().slots">{{ mapPlayerLabel(pickerMap()) }}</span>
+                                </div>
+                                <p class="au-lobby__maps-preview-note" ng-if="pickerMap().custom">Custom map from <b>{{ pickerMap().modName }}</b><span ng-if="pickerMap().sourceLabel">, based on {{ pickerMap().sourceLabel }}</span>. Everyone in the lobby needs this mod installed.</p>
                             </div>
                         </div>
                     </div>
@@ -350,8 +399,49 @@
                     <div class="au-lobby__summary-row" ng-repeat="d in lobbyOptionDefs" ng-show="optionChanged(d)">
                         <span>{{ d.label }}</span><b>{{ optionValue(d) ? 'On' : 'Off' }} <em>(default {{ d.def ? 'On' : 'Off' }})</em></b>
                     </div>
+                    <p class="au-lobby__rules-copy" ng-show="lobbyModNames()">Mods this match uses:</p>
+                    <div class="au-lobby__summary-row" ng-repeat="m in lobbyMods" ng-show="m.on">
+                        <span>{{ m.name }} v{{ m.version }} <em>by {{ m.author }} (key {{ m.fingerprint }})</em></span>
+                        <b>{{ haveLobbyMod(m) ? 'You have it' : 'You need it' }}</b>
+                    </div>
                     <div class="au-lobby__options-actions">
                         <button type="button" class="au-btn au-btn--primary" ng-click="lobbyRulesOpen = false">OK</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Missing mods (content-lobby-mods): asked every time a download is needed. -->
+            <div class="au-lobby__modal au-lobby__modal--mods" ng-show="modDl.open">
+                <div class="au-lobby__modal-box au-lobby__rules" ng-click="$event.stopPropagation()">
+                    <h3 class="au-dialog__title">This lobby uses mods you don't have</h3>
+                    <div ng-hide="modDl.state">
+                        <p class="au-lobby__rules-copy">Download them from the players in this lobby? Each one is checked against its author's signature before it is installed.</p>
+                        <div class="au-lobby__summary-row au-lobby__moddl-row" ng-repeat="m in modDl.missing">
+                            <span>{{ m.name }} v{{ m.version }} <em>{{ lobbyModContents(m) }}, {{ lobbyModSize(m) }}</em><br>
+                                <em>by {{ m.author }}, key {{ m.fingerprint }}</em></span>
+                            <b ng-class="{'au-lobby__moddl-warn': modAuthorChanged(m)}">{{ modAuthorChanged(m) ? 'Not the author of your copy of ' + m.name : (modAuthorTrusted(m) ? 'Author you trusted before' : 'New author') }}</b>
+                        </div>
+                        <p class="au-lobby__rules-copy">{{ modDlTotalSize() }} in all. Your game restarts after installing, then rejoin this lobby. Mods this server doesn't run are switched off.</p>
+                        <div class="au-lobby__options-actions">
+                            <button type="button" class="au-btn au-btn--ghost" ng-click="leaveForMods()">Leave</button>
+                            <button type="button" class="au-btn au-btn--primary" ng-click="startModDownload()">Download and join</button>
+                        </div>
+                    </div>
+                    <div ng-show="modDl.state && modDl.state != 'failed' && modDl.state != 'restart'">
+                        <div class="au-lobby__search-line"><i class="au-spinner"></i>{{ modDlStateLabel() }}</div>
+                        <div class="au-lobby__moddl-bar"><span ng-style="{width: modDlPercent() + '%'}"></span></div>
+                    </div>
+                    <div ng-show="modDl.state == 'failed'">
+                        <p class="au-lobby__rules-copy">{{ modDl.error }}</p>
+                        <div class="au-lobby__options-actions">
+                            <button type="button" class="au-btn au-btn--ghost" ng-click="leaveForMods()">Leave</button>
+                            <button type="button" class="au-btn au-btn--primary" ng-click="startModDownload()">Retry</button>
+                        </div>
+                    </div>
+                    <div ng-show="modDl.state == 'restart'">
+                        <p class="au-lobby__rules-copy">The mods are installed and checked. Restart the game to play them, then rejoin this lobby from the server browser.</p>
+                        <div class="au-lobby__options-actions">
+                            <button type="button" class="au-btn au-btn--primary" ng-click="restartForMods()">Quit game</button>
+                        </div>
                     </div>
                 </div>
             </div>

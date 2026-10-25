@@ -42,6 +42,12 @@
                         <span class="au-browser__custom" ng-show="g.customTweaks" data-tip="Custom tweaks applied">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="2.4 1.8" d="M12 2.5l8.5 4.75v9.5L12 21.5l-8.5-4.75v-9.5z"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3.5 7.25L12 12l8.5-4.75M12 12v9.5"/></svg>
                         </span>
+                        <span class="au-browser__custom" ng-show="browserHasCustomContent(g)" data-tip="Custom content">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M5 5h4.5a2.5 2.5 0 0 1 5 0H19v4.5a2.5 2.5 0 0 1 0 5V19h-4.5a2.5 2.5 0 0 0-5 0H5v-4.5a2.5 2.5 0 0 0 0-5z"/></svg>
+                        </span>
+                        <span class="au-browser__custom" ng-show="browserHasCustomMaps(g)" data-tip="Custom maps">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" d="M3.5 6l5.5-2 6 2 5.5-2v14l-5.5 2-6-2-5.5 2z"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 4v14M15 6v14"/></svg>
+                        </span>
                     </span>
                     <span class="au-browser__col au-browser__col--server">{{ g.name || ('Game ' + g.gid) }}</span>
                     <span class="au-browser__col au-browser__col--map">{{ browserMapLabel(g) }}</span>
@@ -72,6 +78,8 @@
                     <li><span>Ping</span><b>{{ formatPing(selectedBrowserGame) }}</b></li>
                     <li><span>State</span><b>{{ browserStateLabel(selectedBrowserGame) }}</b></li>
                     <li><span>Version</span><b>{{ selectedBrowserGame.version || 'Unknown' }}</b></li>
+                    <li><span>Mods</span><b class="au-browser__stats-list" title="{{ browserModsLabel(selectedBrowserGame) }}">{{ browserModsLabel(selectedBrowserGame) }}</b></li>
+                    <li ng-show="browserHasCustomMaps(selectedBrowserGame)"><span>Custom maps</span><b class="au-browser__stats-list" title="{{ browserMapModsLabel(selectedBrowserGame) }}">{{ browserMapModsLabel(selectedBrowserGame) }}</b></li>
                     <li><span>Region</span><b>{{ selectedBrowserGame.region || '—' }}</b></li>
                     <li><span>Password</span><b>{{ selectedBrowserGame.passwordProtected ? 'Yes' : 'No' }}</b></li>
                     <li><span>ID</span><b>{{ selectedBrowserGame.gid || '—' }}</b></li>

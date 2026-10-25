@@ -2001,15 +2001,15 @@
 }
 
 .cc-lobby-browser__col--lock { width: 4%; text-align: center; }
-.cc-lobby-browser__col--custom { width: 4%; text-align: center; }
-.cc-lobby-browser__col--server { width: 26%; }
+.cc-lobby-browser__col--custom { width: 8%; text-align: center; white-space: nowrap; }
+.cc-lobby-browser__col--server { width: 22%; }
 
 /* Dashed cube: the game runs custom tweaks (Generals Classic or a custom mix). */
 .cc-lobby-browser__custom {
     display: inline-block;
     width: 14px;
     height: 14px;
-    margin-top: 10px;
+    margin: 10px 1px 0;
     color: #c9a227;
     vertical-align: top;
 }
@@ -2946,3 +2946,19 @@
 .cc-lobby__color-ribbon--pick:hover {
     border-color: #fff;
 }
+
+/* Map picker: Game maps / Custom maps tabs */
+.cc-lobby__maps-tabs { display: flex; gap: 0.5rem; margin: -0.75rem 0 1rem; }
+.cc-lobby__maps-tab { opacity: 0.6; }
+.cc-lobby__maps-tab.on { opacity: 1; box-shadow: inset 0 -2px 0 currentColor; }
+.cc-lobby__maps-tab--refresh { margin-left: auto; opacity: 0.85; }
+.cc-lobby__maps-empty { padding: 1rem; line-height: 1.4; opacity: 0.75; }
+.cc-lobby__maps-row-mod { display: inline-block; margin: 2px 0 0 8px; padding: 0 4px; border: 1px solid #3a3a3a; color: #8a8a8a; font-size: 10px; letter-spacing: 0.04em; vertical-align: top; }
+.cc-lobby__maps-row .cc-lobby__maps-row-mode { display: inline-block; }
+.cc-lobby__maps-preview-note { margin: 8px 0 0; color: #8a8a8a; font-size: 11px; line-height: 1.45; }
+.cc-lobby__maps-preview-note b { font-weight: normal; color: #ececec; }
+
+/* Lobby Options: Mods (content-lobby-mods) */
+.cc-lobby__mod-badge { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; font-size: 10px; opacity: 0.75; }
+
+.cc-lobby__slot-mods { font-size: 10px; color: #ffd27f; }
