@@ -400,6 +400,9 @@ local function refractedInstallUsersettingsGraphics()
     end
   end
 
+  -- Saved camera flags (PrismOptions.cfg / profile) are not pushed to console vars by retail.
+  mod.syncProfileCameraConsole()
+
   print("[refracted] graphics bridge: usersettings schema patch applied routes=" .. tostring(rebound))
   return true
 end

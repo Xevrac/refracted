@@ -880,11 +880,23 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
         }
     };
 
+    // The slider is heard as it moves: the volume goes to the engine (apply + applyAudio, not saved) a moment after
+    // the last change. OK saves it; Cancel's discard puts the saved volume back.
+    var volumePreview = null;
     $scope.applyVolume = function() {
         if (!$scope.settingsReady) {
             return;
         }
         $scope.settings.mastervolume = Math.max(0, Math.min(100, Math.round($scope.settings.mastervolume)));
+        if (volumePreview) {
+            $timeout.cancel(volumePreview);
+        }
+        volumePreview = $timeout(function() {
+            volumePreview = null;
+            executeShell('/usersettings/apply', { mastervolume: $scope.settings.mastervolume / 10 }, function () {
+                executeShell('/usersettings/applyAudio');
+            });
+        }, 80);
     };
 
     $scope.applyControls = function() {
@@ -1002,7 +1014,13 @@ CCApp.controller('OptionsController', function($scope, $timeout) {
     };
 
     $scope.actionCancel = function() {
+        if (volumePreview) {
+            $timeout.cancel(volumePreview);
+            volumePreview = null;
+        }
+        // Discard often answers no _response in-game; requests run in order, so applyAudio follows it.
         executeShell('/usersettings/discard');
+        executeShell('/usersettings/applyAudio');
         $scope.settingsReady = false;
         $scope.settingsLoadError = false;
         loadUserSettings();
