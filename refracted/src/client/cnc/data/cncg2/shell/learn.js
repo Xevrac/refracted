@@ -36,7 +36,8 @@ CCApp.controller('LearnController', function($scope) {
         { id: 'hotkeys', title: "HOTKEYS" },
         { id: 'custom', title: "CUSTOMIZE" },
         { id: 'modes', title: "GAME MODES" },
-        { id: 'tweaks', title: "TWEAKS", aurora: true }
+        { id: 'tweaks', title: "TWEAKS", aurora: true },
+        { id: 'mods', title: "MODS", aurora: true }
     ];
 
     /** Aurora-only books (aurora: true) are hidden in the original 2013 support view. */
@@ -401,7 +402,11 @@ CCApp.controller('LearnController', function($scope) {
                 { type: "table", headers: [{ content: "Tweak", style: "width: 180px;" }, "What it does", { content: "Generals 2", style: "width: 90px;" }, { content: "Generals Classic", style: "width: 90px;" }], rows: [
                     ["<b>Instant Selling</b>", "Selling a structure completes almost instantly instead of taking 10 seconds.", "Off", "Off"],
                     ["<b>Rebuildable Derricks</b>", "A destroyed oil derrick leaves its oil well behind, so you can build a new derrick on it.", "On", "Off"],
-                    ["<b>Combat Tuning (Classic)</b>", "Generals-style armor: damage depends on the weapon type against the armor type. Replaces the game's bonus damage. See below.", "Off", "On"]
+                    ["<b>Combat Tuning (Classic)</b>", "Generals-style armor: damage depends on the weapon type against the armor type. Replaces the game's bonus damage. See below.", "Off", "On"],
+                    ["<b>Resources Through Fog</b>", "Supply stashes and oil wells are drawn under the fog and on the minimap from the start. The fog itself stays closed.", "On", "On"],
+                    ["<b>Generals Skill Tree</b>", "Zero Hour-style general ranks: you choose which general powers to unlock and level with rank points. See below.", "Off", "On"],
+                    ["<b>Missed Shots</b>", "Weapons can miss: each shot hits at the weapon's authored hit rate (Recon Squad 90%, rebels 70%, base defence guns 80%). A missed shot does no damage.", "Off", "Off"],
+                    ["<b>Chinook (Zero Hour name)</b>", "The EU Harvester is called the Chinook, as in Zero Hour. Name only: the unit plays the same.", "Off", "On"]
                 ]},
                 { type: "p", content: "Tech Tree, Special Abilities and Factions Only will be added as tweaks soon." },
 
@@ -417,6 +422,22 @@ CCApp.controller('LearnController', function($scope) {
                     ["<b>EMP</b>", "25%", "100%", "100%", "50%", "25%"]
                 ]},
                 { type: "p", content: "Example: a Ranger squad's rifles deal about 2 damage per volley to an APA heavy cannon tank, while an EU rocket squad deals about 41. Bring the right weapon for the target." },
+
+                { type: "h3", content: "Generals Skill Tree" },
+                { type: "p", content: "This tweak decides how your general powers open and level up. Either way, your general ranks up as you destroy enemy units and structures: the more they cost, the faster you rank." },
+                { type: "table", headers: [{ content: "", style: "width: 180px;" }, "What happens"], rows: [
+                    ["<b>Off</b><br>(Generals 2)", { type: "list", items: [
+                        "Powers open by themselves: two at the start of the match, two more at rank 2 and one more at rank 3. Your general's own power opens first.",
+                        "A power levels up as you use it: it reaches &#9733;&#9733; after its 2nd use and &#9733;&#9733;&#9733; after its 5th. Its cooldown carries on as before.",
+                        "The superweapon stays in the fifth slot of the power bar. It is greyed out until you build it."
+                    ]}],
+                    ["<b>On</b><br>(Generals Classic)", { type: "list", items: [
+                        "Each new rank gives you skill points. Click the rank star to open the skill tree, then click a power to unlock it or raise its level, up to &#9733;&#9733;&#9733;.",
+                        "The rank star keeps pulsing while you have a point to spend.",
+                        "Stronger powers need a higher rank before you can pick them, and there are not enough points to max out every power, so choose.",
+                        "The superweapon is not on the power bar, which holds six general powers. Select your superweapon building and fire it from the button in its panel."
+                    ]}]
+                ]},
 
                 { type: "h3", content: "Always on: props and clear shots" },
                 { type: "list", items: [
@@ -436,10 +457,12 @@ CCApp.controller('LearnController', function($scope) {
                 { type: "list", items: [
                     "<b>Match password</b>: type a password and click <b>Set</b> to make the lobby private. Leave it blank for an open lobby.",
                     "<b>Disallow Spectators</b>: closes the spectator seat.",
+                    "<b>Game mode</b>: Red vs Green, Free for all or Team select. See <b>Game Modes</b>.",
                     "<b>Preset</b>: click a preset to apply it. The highlighted row is the active preset, and the line underneath describes it.",
                     "<b>Star</b>: makes that preset your default for lobbies you set up.",
                     "<b>&times;</b>: deletes one of your own presets. The built-in presets cannot be deleted.",
                     "<b>Tweaks</b>: click to show or hide the list of tweaks, each with a short description.",
+                    "<b>Mods</b>: shown when the server has mods. See <b>Mods</b>.",
                     "<b>Done</b>: closes the window. Your changes are already applied."
                 ]},
 
@@ -511,11 +534,81 @@ CCApp.controller('LearnController', function($scope) {
                 ]},
                 { type: "h3", content: "Skirmish lobby" },
                 { type: "list", items: [
-                    "Two teams face each other. Fill open seats with players or with <b>Add AI</b>, and set each AI's <b>Difficulty</b> on its slot.",
+                    "Seats are in two columns. Fill open seats with players or with <b>Add AI</b>, and set each AI's <b>Difficulty</b> on its slot.",
                     "One player can watch from the <b>Spectator</b> seat.",
-                    "The host can <b>Change map</b> and set <b>Lobby Options</b>, including <b>Tweaks</b>, presets and a <b>Match password</b>.",
+                    "The host can <b>Change map</b> and set <b>Lobby Options</b>, including the <b>Game mode</b>, <b>Tweaks</b>, presets, <b>Mods</b> and a <b>Match password</b>.",
                     "The host starts the match with <b>Start battle</b>."
-                ]}
+                ]},
+
+                { type: "h3", content: "Lobby game modes" },
+                { type: "p", content: "The host picks the game mode in <b>Lobby Options &gt; Game mode</b>. The seats stay in two columns; the mode decides who fights whom." },
+                { type: "image-wrap", src: "images/learn/Guide_Tweaks_Options_Window.png", style: "max-width:100%;", alt: "Lobby Options window with the Game mode choice" },
+                { type: "table", headers: [{ content: "Game mode", style: "width: 180px;" }, "Who fights whom"], rows: [
+                    ["<b>Red vs Green</b><br>(default)", "The left column fights the right column. Your column's header is green and the enemy's is red."],
+                    ["<b>Free for all</b>", "Every seat fights every other seat, including the seats in its own column. Both headers read <b>Free for all</b> in grey."],
+                    ["<b>Team select</b>", "Each player and AI picks a team from 1 to 6. Seats with the same number are allies; everyone else is an enemy. A seat with no pick plays for its column: left is Team 1, right is Team 2. Both headers read <b>Teams</b>, and every card shows its team."]
+                ]},
+                { type: "p", content: "Red vs Green: your column green, the other red." },
+                { type: "image-wrap", src: "images/learn/Guide_Lobby_Mode_RedVsGreen.jpg", style: "width:100%;", alt: "Lobby in Red vs Green" },
+                { type: "p", content: "Free for all: four seats, and each one fights the other three." },
+                { type: "image-wrap", src: "images/learn/Guide_Lobby_Mode_FreeForAll.jpg", style: "width:100%;", alt: "Lobby in Free for all" },
+                { type: "p", content: "Team select: Commander and Viper sit in different columns but both picked Team 1, so they are allies against the two AIs on Team 2." },
+                { type: "image-wrap", src: "images/learn/Guide_Lobby_Mode_TeamSelect.jpg", style: "width:100%;", alt: "Lobby in Team select" },
+                { type: "p", content: "In Team select, open a card's menu with its arrow and pick a number under <b>Team</b>. You set your own team; the host sets the AI teams." },
+                { type: "image-wrap", src: "images/learn/Guide_Lobby_Team_Picker.png", style: "max-width:100%;", alt: "Card menu with the Team picker" },
+                { type: "p", content: "Changing the game mode un-readies everyone except the host, and the chat shows <b>Notice: Host has modified lobby options!</b> Changing your own team un-readies you." },
+
+                { type: "h3", content: "Choosing a map" },
+                { type: "list", items: [
+                    "The host clicks <b>Change map</b>. <b>Game maps</b> lists the maps that come with the game; <b>Custom maps</b> lists the maps in the server's mods (see <b>Mods</b>).",
+                    "Each map shows how many players it is for, for example <b>2 players</b> or <b>6 players</b>. Special maps show their mode instead, such as <b>TUTORIAL</b> or <b>ONSLAUGHT</b>.",
+                    "The custom map list refreshes every time the picker opens and every time you click a tab.",
+                    "Maps marked <b>SOON</b> cannot be played yet."
+                ]},
+                { type: "image-wrap", src: "images/learn/Guide_Maps_Game_Maps.png", style: "max-width:100%;", alt: "Map picker, Game maps tab" }
+            ]
+        },
+        'mods': {
+            title: "MODS",
+            blocks: [
+                { type: "p", content: "A mod is a package of extra game content made by a player: new maps, changed values such as a unit's health, or both. Each mod is signed by its author, so the game can check that nobody changed it on the way to you." },
+
+                { type: "h3", content: "Where mods come from" },
+                { type: "list", items: [
+                    "Mods are installed in the game folder under <b>Update</b>, one folder per mod. Deleting a mod's folder removes it.",
+                    "A server offers every checked mod it has installed. The lobby can only use the mods of its server.",
+                    "The server browser's <b>Mods</b> line lists the selected server's mods."
+                ]},
+                { type: "table", headers: [{ content: "Kind", style: "width: 180px;" }, "What it means"], rows: [
+                    ["<b>Live</b>", "Adds new maps only. The host switches it on or off for each match."],
+                    ["<b>Always on</b>", "Changes the game's data. It is loaded when the server starts, so it is on in every match, and every player needs it to join."]
+                ]},
+
+                { type: "h3", content: "Mods in the lobby" },
+                { type: "p", content: "When a match uses mods, the lobby options box reads <b>Default options set.</b> and counts them on the right:" },
+                { type: "image-wrap", src: "images/learn/Guide_Mods_Summary.png", style: "max-width:100%;", alt: "Lobby options box with 1 mod" },
+                { type: "p", content: "The host opens <b>Lobby Options &gt; Mods</b>. The heading counts the mods that are on, for example <b>(1 ON)</b>. Each mod shows its name and version, <b>Live</b> or <b>Always on</b>, its author, its key, what it holds and its size. Type in <b>Search mods</b> to filter the list by name or author." },
+                { type: "image-wrap", src: "images/learn/Guide_Mods_Options_Panel.png", style: "max-width:100%;", alt: "Lobby Options with the Mods list open" },
+                { type: "list", items: [
+                    "Tick a Live mod to use it in this match; untick it to leave it out. <b>Always on</b> mods cannot be unticked.",
+                    "The <b>key</b> is the author's signature, four groups of four characters. The same author always has the same key.",
+                    "Other players click the lobby options box to see <b>Mods this match uses</b>, with <b>You have it</b> or <b>You need it</b> next to each."
+                ]},
+
+                { type: "h3", content: "Custom maps" },
+                { type: "p", content: "Maps from mods that are on appear under <b>Change map &gt; Custom maps</b>. The preview names the mod the map comes from. Everyone in the lobby needs that mod." },
+                { type: "p", content: "Example: the custom map <b>gen_RANKDefconBalancedZHv1</b> comes as a mod. With the mod on, the host picks it from the Custom maps tab like any other map:" },
+                { type: "image-wrap", src: "images/learn/Guide_Maps_Custom_Maps.png", style: "max-width:100%;", alt: "Map picker, Custom maps tab" },
+                { type: "p", content: "If the tab reads <b>This server has no custom maps.</b>, the server has no mods with maps, or the host has not switched them on." },
+
+                { type: "h3", content: "Joining a lobby with mods you don't have" },
+                { type: "list", items: [
+                    "The game asks <b>This lobby uses mods you don't have</b> and lists each mod with its size and author: <b>New author</b>, <b>Author you trusted before</b>, or a warning when the author is not the one of your copy of that mod.",
+                    "<b>Download and join</b> gets the mods from the other players in the lobby. Each one is checked against its author's signature before it is installed. <b>Leave</b> leaves the lobby.",
+                    "While you download, your card shows <b>Getting mods</b> with the progress to everyone in the lobby.",
+                    "When the mods are installed, the game asks you to restart. Start the game again and rejoin the lobby from the server browser."
+                ]},
+                { type: "p", content: "Players who have the lobby's mods share them with the others automatically. The files go straight from player to player. If your router did not open a port, players can't download from you, but they can still download from others who have the mods. Turning on UPnP or NAT-PMP on your router usually fixes it." }
             ]
         }
     };

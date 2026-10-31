@@ -56,6 +56,11 @@ pub const CREATE_GAME_OPTIONS_REBUILDABLE_DERRICKS: u32 = 0x800;
 pub const CREATE_GAME_OPTIONS_GENERALS_ARMOR: u32 = 0x1000;
 /// H658: neutral stashes and oil wells drawn under fog and on the minimap from match start. Default on.
 pub const CREATE_GAME_OPTIONS_SHOW_RESOURCES_IN_FOG: u32 = 0x2000;
+/// Generals Skill Tree: Zero Hour-style general ranks; kill XP by victim cost, rank points unlock
+/// and level general powers. Default off.
+pub const CREATE_GAME_OPTIONS_GENERALS_SKILL_TREE: u32 = 0x4000;
+/// H701: shots roll against the authored RtsShotConfigData.HitRate; a miss deals nothing. Default off.
+pub const CREATE_GAME_OPTIONS_MISS_SHOTS: u32 = 0x8000;
 
 fn create_game_options(
     enable_tech_tree: bool,
@@ -334,12 +339,21 @@ fn allegiance_for_team(team: i32) -> Vec<f32> {
     levels
 }
 
+/// Match team by lobby game mode. Free for all gives each seat a unique non-zero team: the
+/// dedicated clamps a human's Team < 1 to 1 (Join.cs), so 0 would ally every human.
 fn roster_from_game(game: &super::super::game_state::CncGame) -> Vec<PlayerInfo> {
+    use super::super::game_state::LobbyGameMode;
     let gid = game.gid;
     game.players
         .iter()
-        .map(|p| {
-            let team = i32_attr(&p.attribs, "_team").unwrap_or(p.team).max(1);
+        .enumerate()
+        .map(|(index, p)| {
+            let side = i32_attr(&p.attribs, "_team").unwrap_or(p.team).max(1);
+            let team = match game.lobby_game_mode {
+                LobbyGameMode::RedVsGreen => side,
+                LobbyGameMode::FreeForAll => index as i32 + 1,
+                LobbyGameMode::TeamSelect => super::super::game_state::seat_match_team(p, side),
+            };
             let start_point = super::super::game_state::effective_startpoint_for_player(gid, p)
                 .max(0);
             let start_point = if start_point > 0 {
@@ -564,8 +578,9 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
     };
 
     log_sim_milestone(&format!(
-        "Starting match setup -- map \"{map_name}\", {} player(s), specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={} generalsArmor={} showResourcesInFog={}",
+        "Starting match setup -- map \"{map_name}\", {} player(s), gameMode={} specialAbilities={} techTree={} oilEconomy={} infiniteResources={} factionsOnly={} instantSelling={} rebuildableDerricks={} generalsArmor={} showResourcesInFog={} generalsSkillTree={} missShots={}",
         roster.len(),
+        game.lobby_game_mode.as_str(),
         game.enable_special_abilities,
         game.enable_tech_tree,
         game.enable_oil_economy,
@@ -574,7 +589,9 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
         game.enable_instant_selling,
         game.enable_rebuildable_derricks,
         game.enable_generals_armor,
-        game.enable_show_resources_in_fog
+        game.enable_show_resources_in_fog,
+        game.enable_generals_skill_tree,
+        game.enable_miss_shots
     ));
     for p in &roster {
         log_sim_debug(&format!(
@@ -623,6 +640,14 @@ pub async fn orchestrate_create_game(gid: i64) -> std::io::Result<()> {
                 0
             } | if game.enable_show_resources_in_fog {
                 CREATE_GAME_OPTIONS_SHOW_RESOURCES_IN_FOG
+            } else {
+                0
+            } | if game.enable_generals_skill_tree {
+                CREATE_GAME_OPTIONS_GENERALS_SKILL_TREE
+            } else {
+                0
+            } | if game.enable_miss_shots {
+                CREATE_GAME_OPTIONS_MISS_SHOTS
             } else {
                 0
             },

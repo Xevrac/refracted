@@ -9,7 +9,8 @@
 <div class="au-lobby__meta">
     <strong ng-class="nameTagClass(slot)">{{ slot.isAi ? 'AI' : (slot.displayName || slot.codename) }}<em
         class="au-lobby__host-tag" ng-if="slot.isHost || (slot.isLocal && isLobbyHost())">Host</em><em
-        class="au-lobby__host-tag au-lobby__diff-tag" ng-if="slot.isAi">{{ difficultyLabel(slot) }}</em></strong>
+        class="au-lobby__host-tag au-lobby__diff-tag" ng-if="slot.isAi">{{ difficultyLabel(slot) }}</em><em
+        class="au-lobby__host-tag au-lobby__team-tag" ng-if="showSeatTeams() && !slot.invitePending">Team {{ seatTeam(slot) }}</em></strong>
     <span class="au-lobby__slot-mods" ng-if="slotModProgress(slot)">{{ slotModProgress(slot) }}</span>
     <span class="au-lobby__general" ng-if="!slot.invitePending"><img
         ng-src="{{ factionIcon(slot) }}" alt=""><i>{{ slot.faction }}</i><b>{{ slot.codename }}</b></span>
@@ -17,10 +18,12 @@
 <div class="au-lobby__slot-side">
     <div class="au-lobby__slot-state">
         <!-- Start location, picked on the battle map; ? = not picked (random). -->
+        <!-- The lobby host sets an AI's start here (canChangeStartpoint: host-owned AI, not ready-locked). -->
         <span class="au-lobby__start-box"
               ng-if="!slot.invitePending"
-              ng-class="{'au-lobby__start-box--set': startpointLabel(slot.startpoint) != '?'}"
-              data-tip="{{ startpointLabel(slot.startpoint) == '?' ? 'Random start: pick one on the map' : 'Start location ' + startpointLabel(slot.startpoint) }}">{{ startpointLabel(slot.startpoint) }}</span>
+              ng-class="{'au-lobby__start-box--set': startpointLabel(slot.startpoint) != '?', 'au-lobby__start-box--pick': slot.isAi && canChangeStartpoint(slot)}"
+              ng-click="slot.isAi && openStartModal(slot, $event)"
+              data-tip="{{ slot.isAi && canChangeStartpoint(slot) ? 'Start location ' + startpointLabel(slot.startpoint) + ': click to change' : (startpointLabel(slot.startpoint) == '?' ? 'Random start: pick one on the map' : 'Start location ' + startpointLabel(slot.startpoint)) }}">{{ startpointLabel(slot.startpoint) }}</span>
         <div class="au-lobby__ready" ng-class="{on: slot.ready}"
              ng-if="!slot.invitePending && !slot.isAi"
              data-tip="{{ slot.ready ? 'Ready' : 'Not ready' }}"
@@ -75,5 +78,13 @@
                 ng-click="openCustomColorPicker(slot, $event)"
                 data-tip="Custom colour"
                 data-tip-pos="below"></button>
+    </div>
+    <div ng-if="showSeatTeams()">
+        <div class="au-lobby__slot-menu-label">Team</div>
+        <div class="au-lobby__pick-row">
+            <a href="" class="au-lobby__pick au-lobby__pick--faction" ng-repeat="n in matchTeamChoices"
+               ng-class="{active: seatTeam(slot) == n, disabled: !canChangeSeatTeam(slot)}"
+               ng-click="setSeatTeam(slot, n, $event)">{{ n }}</a>
+        </div>
     </div>
 </div>

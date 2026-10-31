@@ -2955,6 +2955,8 @@
 .cc-lobby__maps-empty { padding: 1rem; line-height: 1.4; opacity: 0.75; }
 .cc-lobby__maps-row-mod { display: inline-block; margin: 2px 0 0 8px; padding: 0 4px; border: 1px solid #3a3a3a; color: #8a8a8a; font-size: 10px; letter-spacing: 0.04em; vertical-align: top; }
 .cc-lobby__maps-row .cc-lobby__maps-row-mode { display: inline-block; }
+.cc-lobby__team-tag { margin-left: 6px; color: #8a8a8a; font-size: 10px; letter-spacing: 0.04em; }
+.cc-lobby__mode-row .cc-lobby__btn { margin-right: 6px; }
 .cc-lobby__maps-preview-note { margin: 8px 0 0; color: #8a8a8a; font-size: 11px; line-height: 1.45; }
 .cc-lobby__maps-preview-note b { font-weight: normal; color: #ececec; }
 

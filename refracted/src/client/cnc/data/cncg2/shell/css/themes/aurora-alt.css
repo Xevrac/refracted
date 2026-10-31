@@ -1115,6 +1115,8 @@ input[type="text"], input[type="password"] {
 .au-lobby__team.au-lobby__team--foe .au-lobby__team-head { border-bottom-color: #ff5a52; color: #ff5a52; }
 /* Watching from the spectator seat: neither team is yours, both grey. */
 .au-lobby__team.au-lobby__team--spectating .au-lobby__team-head { border-bottom-color: #46abbb; color: #46abbb; }
+/* Free for all / Team select (lobbyGameMode): no sides, both heads neutral. */
+.au-lobby__team.au-lobby__team--neutral .au-lobby__team-head { border-bottom-color: #cccccc; color: #cccccc; }
 
 .au-lobby__slot {
     height: 6.5rem;
@@ -1169,6 +1171,7 @@ input[type="text"], input[type="password"] {
     color: #3d9eff;
 }
 .au-lobby__diff-tag--pick { cursor: pointer; }
+.au-lobby__team-tag { color: #cccccc; }
 .au-lobby__diff-tag--pick:hover { color: #7cc0ff; }
 .au-lobby__general {
     display: flex;
@@ -1221,6 +1224,8 @@ input[type="text"], input[type="password"] {
     color: #46abbb;
 }
 .au-lobby__start-box--set { border-color: #3d9eff; background: rgba(61, 158, 255, 0.18); color: #ffffff; }
+.au-lobby__start-box--pick { cursor: pointer; }
+.au-lobby__start-box--pick:hover { border-color: #ffffff; color: #ffffff; }
 .au-lobby__ready {
     width: 1.5625rem;
     height: 1.5625rem;
@@ -1688,6 +1693,7 @@ input[type="text"], input[type="password"] {
 
 /* Presets: one per row, the active one lit; star = default for lobbies you set up. */
 .au-lobby__presets { padding-top: 1.25rem; }
+.au-lobby__options-section + .au-lobby__options-section { padding-top: 1.25rem; }
 .au-lobby__preset-list { max-height: 15.5rem; overflow-y: auto; border: 1px solid rgba(95, 233, 255, 0.2); }
 .au-lobby__preset {
     display: flex;
@@ -1815,6 +1821,7 @@ input[type="text"], input[type="password"] {
     border: 1px solid rgba(95, 233, 255, 0.3);
     background: #070f13;
 }
+.au-lobby__maps-preview-art .au-lobby__map-grid { background-size: 5.25rem 5.25rem; box-shadow: inset 0 0 4.5rem rgba(0, 0, 0, 0.5); }
 .au-lobby__maps-preview-meta { margin-top: 1rem; font-size: 1.0625rem; color: #46abbb; }
 .au-lobby__maps-preview-meta strong { display: block; overflow: hidden; font-size: 1.625rem; line-height: 1.25; color: #ffffff; text-overflow: ellipsis; white-space: nowrap; }
 .au-lobby__maps-preview-facts { display: flex; gap: 0.875rem; margin-top: 0.25rem; }

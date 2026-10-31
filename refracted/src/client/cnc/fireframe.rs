@@ -657,6 +657,7 @@ pub fn pushes_game_ready_attrib(gid: i64) -> BlazeResult<Vec<OutgoingPush>> {
     attrs.insert("serverid".to_string(), serverid);
     attrs.insert("GameReady".to_string(), "1".to_string());
     super::game_state::apply_password_flag_to_attrs(gid, &mut attrs);
+    super::game_state::apply_house_color_attrs(gid, &mut attrs);
     let body = super::build_game_manager_notify_game_attrib_change(gid, &attrs)?;
     let wire = notification_envelope(0x0004, 0x0050, &body);
     let pl = wire.len();

@@ -23,6 +23,10 @@
           tip: 'Generals-style damage: each weapon type is strong or weak against each armor type.' },
         { key: 'enableShowResourcesInFog', label: 'Resources Through Fog', def: true,
           tip: 'Supply stashes and oil wells are drawn under the fog and on the minimap from the start. The fog itself stays closed.' },
+        { key: 'enableGeneralsSkillTree', label: 'Generals Skill Tree', def: false,
+          tip: 'Zero Hour-style general ranks: kills earn XP by the victim\'s cost, and rank points unlock and level general powers from the rank star.' },
+        { key: 'enableMissShots', label: 'Missed Shots', def: false,
+          tip: 'Weapons can miss: each shot hits at the weapon\'s authored hit rate (Recon Squad 90%, rebels 70%, base defence guns 80%). A missed shot does no damage.' },
         { key: 'enableChinookName', label: 'Chinook (Zero Hour name)', def: false,
           tip: 'The EU Harvester is called the Chinook, as in Zero Hour. Name only: the unit plays the same.' },
         { key: 'enableTechTree', label: 'Tech Tree', def: true, soon: true },
@@ -56,7 +60,7 @@
           values: factoryValues() },
         { id: 'classic', label: 'Generals Classic', builtin: true,
           blurb: 'All game rules and gameplay changes inspired by Generals and Zero Hour are turned ON, get the best of both worlds.',
-          values: withValues({ enableRebuildableDerricks: false, enableGeneralsArmor: true, enableChinookName: true }) }
+          values: withValues({ enableRebuildableDerricks: false, enableGeneralsArmor: true, enableChinookName: true, enableGeneralsSkillTree: true }) }
     ];
 
     var state = null;

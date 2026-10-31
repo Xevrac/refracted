@@ -863,7 +863,7 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
         }
     }
-    game_state::set_map_selection(gid, &path, start_count);
+    let removed_ai = game_state::set_map_selection(gid, &path, start_count);
     tracing::info!(
         target: "cnc",
         "[CNC] select-map gid={} path=\"{}\" start_count={}",
@@ -871,7 +871,13 @@ fn handle_cnc_select_map(query: Option<&str>, body: &[u8]) -> HttpResponse {
         path,
         start_count
     );
-    let body = serde_json::json!({ "ok": true, "gid": gid, "path": path, "startCount": start_count });
+    let body = serde_json::json!({
+        "ok": true,
+        "gid": gid,
+        "path": path,
+        "startCount": start_count,
+        "removedAi": removed_ai,
+    });
     HttpResponse::new(200, "application/json", body.to_string().into_bytes())
 }
 
@@ -978,7 +984,8 @@ fn enqueue_native_house_color_attr(gid: i64) {
     }
 }
 
-/// Query or JSON: `gid`, `pid` (0 = host), `faction`, `team`, `startpoint`, `general`, `isai`, `color`.
+/// Query or JSON: `gid`, `pid` (0 = host), `faction`, `team`, `startpoint`, `general`, `isai`, `color`,
+/// `matchTeam` (Team select, 1..=6).
 fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
     use crate::client::cnc::game_state;
     use indexmap::IndexMap;
@@ -1009,6 +1016,15 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
             }
             "color" | "_color" | "housecolor" | "houseColor" => {
                 attrs.insert("color".into(), v);
+            }
+            "matchteam" | "matchTeam" | "_matchteam" => {
+                if v
+                    .trim()
+                    .parse::<i32>()
+                    .map_or(false, |t| (1..=game_state::LOBBY_MATCH_TEAMS).contains(&t))
+                {
+                    attrs.insert(game_state::ATTR_MATCH_TEAM.into(), v.trim().to_string());
+                }
             }
             _ => {}
         }
@@ -1054,6 +1070,9 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
             "_color",
             "housecolor",
             "houseColor",
+            "matchteam",
+            "matchTeam",
+            "_matchteam",
         ] {
             if let Some(s) = v.get(key).and_then(|x| {
                 x.as_str()
@@ -1111,6 +1130,17 @@ fn handle_cnc_player_attrs(query: Option<&str>, body: &[u8]) -> HttpResponse {
         } else if !game_state::may_act_as_lobby_host(gid, persona) {
             let body = serde_json::json!({ "ok": false, "error": "host_only", "gid": gid });
             return HttpResponse::new(403, "application/json", body.to_string().into_bytes());
+        }
+    }
+    if is_ai_attrs {
+        if let Err(code) = game_state::prepare_new_lobby_ai(gid, pid, &mut attrs) {
+            crate::console_println!(
+                "[Lobby] gid={} REJECTED AI seat: lobby full ({})",
+                gid,
+                game_state::seat_summary(gid)
+            );
+            let body = serde_json::json!({ "ok": false, "gid": gid, "pid": pid, "rejected": [code] });
+            return HttpResponse::new(409, "application/json", body.to_string().into_bytes());
         }
     }
     if pid > 0 && !is_ai_attrs && game_state::lobby_full_for(gid, pid) {
@@ -1561,6 +1591,60 @@ fn parse_show_resources_in_fog(query: Option<&str>, body: &[u8]) -> Option<bool>
         .or(from_query)
 }
 
+/// `generalsSkillTree` / `enableGeneralsSkillTree` on `/cnc/lobby-options`.
+fn parse_generals_skill_tree(query: Option<&str>, body: &[u8]) -> Option<bool> {
+    const KEYS: [&str; 2] = ["generalsSkillTree", "enableGeneralsSkillTree"];
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            KEYS.contains(&k)
+                .then(|| parse_opt_bool_str(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| KEYS.iter().find_map(|k| v.get(*k).and_then(json_opt_bool)))
+        .or(from_query)
+}
+
+/// H701: `missShots` / `enableMissShots` on `/cnc/lobby-options`.
+fn parse_miss_shots(query: Option<&str>, body: &[u8]) -> Option<bool> {
+    const KEYS: [&str; 2] = ["missShots", "enableMissShots"];
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            KEYS.contains(&k)
+                .then(|| parse_opt_bool_str(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| KEYS.iter().find_map(|k| v.get(*k).and_then(json_opt_bool)))
+        .or(from_query)
+}
+
+/// `gameMode` on `/cnc/lobby-options`: `redVsGreen`, `freeForAll` or `teamSelect`.
+fn parse_game_mode(query: Option<&str>, body: &[u8]) -> Option<game_state::LobbyGameMode> {
+    let from_query = query.and_then(|q| {
+        q.split('&').find_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            (k == "gameMode")
+                .then(|| game_state::LobbyGameMode::parse(&percent_decode_plus(v)))
+                .flatten()
+        })
+    });
+    serde_json::from_slice::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| {
+            v.get("gameMode")
+                .and_then(|m| m.as_str())
+                .and_then(game_state::LobbyGameMode::parse)
+        })
+        .or(from_query)
+}
+
 fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let (gid, pid, special, tech, oil, infinite, full_roster, instant_selling, rebuildable) =
         parse_gid_pid_match_options(query, body);
@@ -1568,6 +1652,9 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
     let generals_armor = parse_generals_armor(query, body);
     let chinook_name = parse_chinook_name(query, body);
     let show_resources_in_fog = parse_show_resources_in_fog(query, body);
+    let generals_skill_tree = parse_generals_skill_tree(query, body);
+    let miss_shots = parse_miss_shots(query, body);
+    let game_mode = parse_game_mode(query, body);
     if gid <= 0 {
         return HttpResponse::new(
             400,
@@ -1586,11 +1673,14 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         && generals_armor.is_none()
         && chinook_name.is_none()
         && show_resources_in_fog.is_none()
+        && generals_skill_tree.is_none()
+        && miss_shots.is_none()
+        && game_mode.is_none()
     {
         return HttpResponse::new(
             400,
             "application/json",
-            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, chinookName, showResourcesInFog, or disallowSpectators required"}"#.to_vec(),
+            br#"{"ok":false,"error":"specialAbilities, techTree, oilEconomy, infiniteResourceCenters, factionsOnly, instantSelling, rebuildableDerricks, generalsArmor, chinookName, showResourcesInFog, generalsSkillTree, missShots, gameMode, or disallowSpectators required"}"#.to_vec(),
         );
     }
     let options_before = (
@@ -1599,6 +1689,9 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         game_state::generals_armor_enabled(gid),
         game_state::chinook_name_enabled(gid),
         game_state::show_resources_in_fog_enabled(gid),
+        game_state::generals_skill_tree_enabled(gid),
+        game_state::miss_shots_enabled(gid),
+        game_state::lobby_game_mode(gid),
     );
     let mut resp = game_state::set_match_options(
         gid,
@@ -1673,12 +1766,46 @@ fn handle_cnc_lobby_options(query: Option<&str>, body: &[u8]) -> HttpResponse {
         }
         resp["enableShowResourcesInFog"] =
             serde_json::json!(game_state::show_resources_in_fog_enabled(gid));
+        if let Some(enabled) = generals_skill_tree {
+            game_state::set_generals_skill_tree(gid, pid, enabled);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} generalsSkillTree={}",
+                gid,
+                pid,
+                enabled
+            );
+        }
+        resp["enableGeneralsSkillTree"] =
+            serde_json::json!(game_state::generals_skill_tree_enabled(gid));
+        if let Some(enabled) = miss_shots {
+            game_state::set_miss_shots(gid, pid, enabled);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} missShots={}",
+                gid,
+                pid,
+                enabled
+            );
+        }
+        resp["enableMissShots"] = serde_json::json!(game_state::miss_shots_enabled(gid));
+        if let Some(mode) = game_mode {
+            game_state::set_lobby_game_mode(gid, pid, mode);
+            crate::debug_println!(
+                "\x1b[38;2;255;215;0m[CNC]\x1b[0m lobby-options gid={} pid={} gameMode={}",
+                gid,
+                pid,
+                mode.as_str()
+            );
+        }
+        resp["gameMode"] = serde_json::json!(game_state::lobby_game_mode(gid).as_str());
         let options_after = (
             game_state::match_options(gid),
             game_state::spectators_disallowed(gid),
             game_state::generals_armor_enabled(gid),
             game_state::chinook_name_enabled(gid),
             game_state::show_resources_in_fog_enabled(gid),
+            game_state::generals_skill_tree_enabled(gid),
+            game_state::miss_shots_enabled(gid),
+            game_state::lobby_game_mode(gid),
         );
         if options_after != options_before {
             // Everyone reviews the new rules before readying up again.

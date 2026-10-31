@@ -28,7 +28,7 @@
         <div class="au-lobby__room">
             <div class="au-lobby__col au-lobby__col--left">
                 <div class="au-lobby__team au-lobby__team--1" ng-class="teamRelationClass(1)">
-                    <div class="au-lobby__team-head">Team 1</div>
+                    <div class="au-lobby__team-head">{{ teamHeadLabel(1) }}</div>
                     <div class="au-lobby__slot"
                          ng-repeat="slot in team1"
                          ng-show="slot.occupied"
@@ -39,7 +39,7 @@
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(1) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="au-lobby__open-seat">Open seat</span>
                         <button type="button" class="au-btn au-btn--sm" ng-show="canSwapTo(1)" ng-disabled="swapLocked()" ng-click="swapTeam(1)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
-                        <button type="button" class="au-btn au-btn--sm" ng-show="canAddPlayers()" ng-click="addAi(1)">Add AI</button>
+                        <button type="button" class="au-btn au-btn--sm" ng-show="canAddAi()" ng-click="addAi(1)">Add AI</button>
                         <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--sm" disabled>Invite</button></span>
                     </div>
                 </div>
@@ -121,7 +121,7 @@
 
             <div class="au-lobby__col au-lobby__col--right">
                 <div class="au-lobby__team au-lobby__team--2" ng-class="teamRelationClass(2)">
-                    <div class="au-lobby__team-head">Team 2</div>
+                    <div class="au-lobby__team-head">{{ teamHeadLabel(2) }}</div>
                     <div class="au-lobby__slot"
                          ng-repeat="slot in team2"
                          ng-show="slot.occupied"
@@ -132,7 +132,7 @@
                     <div class="au-lobby__team-actions" ng-show="teamHasEmpty(2) && !isSoloMap() && (canAddPlayers() || _joinedGameroom)">
                         <span class="au-lobby__open-seat">Open seat</span>
                         <button type="button" class="au-btn au-btn--sm" ng-show="canSwapTo(2)" ng-disabled="swapLocked()" ng-click="swapTeam(2)">{{ localIsSpectator() ? 'Join' : 'Swap' }}</button>
-                        <button type="button" class="au-btn au-btn--sm" ng-show="canAddPlayers()" ng-click="addAi(2)">Add AI</button>
+                        <button type="button" class="au-btn au-btn--sm" ng-show="canAddAi()" ng-click="addAi(2)">Add AI</button>
                         <span class="au-lobby__soon" data-tip="Coming soon!"><button type="button" class="au-btn au-btn--sm" disabled>Invite</button></span>
                     </div>
                 </div>
@@ -206,6 +206,15 @@
                                    ng-model="lobbyOptions.disallowSpectators">
                             Disallow Spectators
                         </label>
+                    </div>
+
+                    <div class="au-lobby__options-section">
+                        <div class="au-lobby__options-section-label">Game mode</div>
+                        <div class="au-lobby__pick-row">
+                            <a href="" class="au-lobby__pick au-lobby__pick--faction" ng-repeat="gm in gameModes"
+                               ng-class="{active: lobbyGameMode() == gm.id}"
+                               ng-click="setLobbyGameMode(gm.id, $event)">{{ gm.label }}</a>
+                        </div>
                     </div>
 
                     <!-- Presets cascade the tweaks: pick one, or open Tweaks to adjust and save your own. -->
@@ -321,9 +330,6 @@
                                 ng-class="{on: mapPickerTab != 'custom'}" ng-click="setMapPickerTab('game')">Game maps</button>
                         <button type="button" class="au-btn au-btn--ghost au-lobby__maps-tab" role="tab"
                                 ng-class="{on: mapPickerTab == 'custom'}" ng-click="setMapPickerTab('custom')">Custom maps</button>
-                        <button type="button" class="au-btn au-btn--ghost au-lobby__maps-tab au-lobby__maps-tab--refresh"
-                                ng-show="mapPickerTab == 'custom'" ng-disabled="customMaps.loading"
-                                ng-click="refreshCustomMaps()" title="Look again for custom maps">{{ customMaps.loading ? 'Looking...' : 'Refresh' }}</button>
                     </div>
                     <div class="au-lobby__maps-split">
                         <div class="au-lobby__maps-list-cell">
@@ -335,7 +341,6 @@
                                      ng-attr-aria-disabled="{{(m.comingSoon || mapPlaytestBlocked(m)) ? 'true' : 'false'}}"
                                      ng-click="previewMapInPicker(m, $event)">
                                     <span class="au-lobby__maps-row-name">{{ m.label }}</span>
-                                    <span class="au-lobby__maps-row-mod" ng-if="m.custom">{{ m.modName }}</span>
                                     <span class="au-lobby__maps-row-mode">{{ mapModeLabel(m) }}</span>
                                     <span class="au-lobby__maps-row-status" ng-if="mapPlaytestBlocked(m)"
                                           data-tip="Not Available">Not Available</span>
@@ -347,9 +352,10 @@
                         <div class="au-lobby__maps-preview-cell">
                             <div class="au-lobby__maps-preview-art">
                                 <div class="au-lobby__map-crop">
-                                    <img ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
+                                    <img class="au-lobby__map-img" ng-src="{{ lobbyMinimapSrc(pickerMap()) }}"
                                          ng-style="minimapCropStyle(pickerMap())" alt="">
                                 </div>
+                                <div class="au-lobby__map-grid"></div>
                                 <span class="au-lobby__pip au-lobby__pip--preview"
                                       ng-repeat="sp in pickerMapStartpoints()"
                                       ng-style="pickerStartPipStyle(sp)"
@@ -358,8 +364,7 @@
                             <div class="au-lobby__maps-preview-meta">
                                 <strong title="{{ pickerMap().label }}">{{ pickerMap().label }}</strong>
                                 <div class="au-lobby__maps-preview-facts">
-                                    <span>{{ mapModeLabel(pickerMap()) }}</span>
-                                    <span ng-show="pickerMap().slots">{{ mapPlayerLabel(pickerMap()) }}</span>
+                                    <span>{{ mapFactsLabel(pickerMap()) }}</span>
                                 </div>
                                 <p class="au-lobby__maps-preview-note" ng-if="pickerMap().custom">Custom map from <b>{{ pickerMap().modName }}</b><span ng-if="pickerMap().sourceLabel">, based on {{ pickerMap().sourceLabel }}</span>. Everyone in the lobby needs this mod installed.</p>
                             </div>

@@ -18,6 +18,12 @@ pub const ATTR_PASSWORD_FLAG: &str = "_password";
 pub const ATTR_PASSWORD_SECRET: &str = "_spw";
 /// Player ATTR `color` (RRGGBB).
 pub const ATTR_HOUSE_COLOR: &str = "color";
+/// Player ATTR `_matchteam`: the seat's picked team in Team select (1..=LOBBY_MATCH_TEAMS).
+pub const ATTR_MATCH_TEAM: &str = "_matchteam";
+/// Teams a seat can pick in Team select.
+pub const LOBBY_MATCH_TEAMS: i32 = 6;
+/// Game attribute key carrying one seat's house colour: `color:<persona>`.
+pub const ATTR_HOUSE_COLOR_PREFIX: &str = "color:";
 /// Lobby palette (RGB hex, no '#').
 pub const SELECTABLE_HOUSE_COLORS: &[&str] = &[
     "3A7BD5", "2AA8A0", "3FBF4A", "E6B322", "E67E22", "C0392B", "ECECEC", "8E44AD",
@@ -1279,6 +1285,8 @@ fn game_tweaks_customized(game: &CncGame) -> bool {
         || !game.enable_rebuildable_derricks
         || game.enable_generals_armor
         || !game.enable_show_resources_in_fog
+        || game.enable_generals_skill_tree
+        || game.enable_miss_shots
         || game.enable_chinook_name
 }
 
@@ -1315,16 +1323,62 @@ pub struct CncGame {
     /// H658: neutral stashes and oil wells drawn under fog and on the minimap from match
     /// start (CreateGameOptions 0x2000). Default on. Off: shown once seen.
     pub enable_show_resources_in_fog: bool,
+    /// Generals Skill Tree: Zero Hour-style general ranks (CreateGameOptions 0x4000). Default off.
+    pub enable_generals_skill_tree: bool,
+    /// H701: weapons miss at their authored HitRate (CreateGameOptions 0x8000). Default off.
+    pub enable_miss_shots: bool,
     /// H607: lobby tweak, the EU Harvester is shown as "Chinook" (Zero Hour name). Client-only:
     /// sent to every member as player ATTR `chinook` with `color`. Default off.
     pub enable_chinook_name: bool,
     /// Host lobby tweak: nobody may take the spectator seat. Default off.
     pub disallow_spectators: bool,
+    /// Host lobby option: how seats become match teams. Default Red vs Green.
+    pub lobby_game_mode: LobbyGameMode,
     pub starting: bool,
     /// Flat `ReplicatedGameData` wire bytes last sent in `NotifyGameSetup` / `getFullGameData`.
     replicated_wire: Option<Vec<u8>>,
     /// `PROS` roster rows last sent in `NotifyGameSetup` (reused for `getFullGameData`).
     pros_wire: Option<Vec<Vec<u8>>>,
+}
+
+/// Lobby game mode (`gameMode` on `/cnc/lobby-options`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LobbyGameMode {
+    /// Two sides: the left column is team 1, the right column team 2.
+    #[default]
+    RedVsGreen,
+    /// Every seat is a team of its own.
+    FreeForAll,
+    /// Every seat picks its team (`_matchteam`).
+    TeamSelect,
+}
+
+impl LobbyGameMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LobbyGameMode::RedVsGreen => "redVsGreen",
+            LobbyGameMode::FreeForAll => "freeForAll",
+            LobbyGameMode::TeamSelect => "teamSelect",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "redvsgreen" => Some(LobbyGameMode::RedVsGreen),
+            "freeforall" => Some(LobbyGameMode::FreeForAll),
+            "teamselect" => Some(LobbyGameMode::TeamSelect),
+            _ => None,
+        }
+    }
+}
+
+/// Team select: the seat's picked team, else `side` (its lobby column).
+pub fn seat_match_team(p: &CncPlayer, side: i32) -> i32 {
+    p.attribs
+        .get(ATTR_MATCH_TEAM)
+        .and_then(|t| t.trim().parse::<i32>().ok())
+        .filter(|t| (1..=LOBBY_MATCH_TEAMS).contains(t))
+        .unwrap_or_else(|| side.max(1))
 }
 
 fn join_password_auth() -> &'static Mutex<HashMap<(i64, i64), Instant>> {
@@ -1496,6 +1550,26 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
             game.enable_show_resources_in_fog = v;
         }
     }
+    let generals_skill_tree = games()
+        .lock()
+        .iter()
+        .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+        .map(|(_, game)| game.enable_generals_skill_tree);
+    if let Some(v) = generals_skill_tree {
+        if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+            game.enable_generals_skill_tree = v;
+        }
+    }
+    let miss_shots = games()
+        .lock()
+        .iter()
+        .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+        .map(|(_, game)| game.enable_miss_shots);
+    if let Some(v) = miss_shots {
+        if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+            game.enable_miss_shots = v;
+        }
+    }
     let chinook_name = games()
         .lock()
         .iter()
@@ -1504,6 +1578,16 @@ pub fn adopt_host_lobby_match_options_into(dedicated_gid: i64) {
     if let Some(v) = chinook_name {
         if let Some(game) = games().lock().get_mut(&dedicated_gid) {
             game.enable_chinook_name = v;
+        }
+    }
+    let game_mode = games()
+        .lock()
+        .iter()
+        .find(|(g, game)| **g != dedicated_gid && game.host_persona == host)
+        .map(|(_, game)| game.lobby_game_mode);
+    if let Some(v) = game_mode {
+        if let Some(game) = games().lock().get_mut(&dedicated_gid) {
+            game.lobby_game_mode = v;
         }
     }
     let source = {
@@ -1674,6 +1758,30 @@ pub fn apply_password_flag_to_attrs(gid: i64, attrs: &mut IndexMap<String, Strin
     }
 }
 
+/// `color:<persona>` = `RRGGBB` for every seat with a house colour, AI seats included.
+///
+/// H665: the client's house-colour map (persona -> ARGB) is filled from a player-attribute
+/// update for `color` (sub_1201450), which Blaze drops for AI personas as an unknown local
+/// player, or from these game attributes (sub_1204D70). With neither, an AI seat's colour is 0:
+/// no colour on its HUD avatar, its structures or its minimap pips.
+/// Locks `games()`: never call it while holding that lock.
+pub fn apply_house_color_attrs(gid: i64, attrs: &mut IndexMap<String, String>) {
+    let colors: Vec<(i64, String)> = games()
+        .lock()
+        .get(&gid)
+        .map(|g| {
+            g.players
+                .iter()
+                .filter(|p| p.persona_id != 0)
+                .filter_map(|p| house_color_from_attrs(&p.attribs).map(|hex| (p.persona_id, hex)))
+                .collect()
+        })
+        .unwrap_or_default();
+    for (pid, hex) in colors {
+        attrs.insert(format!("{}{}", ATTR_HOUSE_COLOR_PREFIX, pid), hex);
+    }
+}
+
 pub fn apply_password_secret_to_attrs(gid: i64, attrs: &mut IndexMap<String, String>) {
     let secret = games()
         .lock()
@@ -1753,6 +1861,7 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             dedicated_session_id: Some(dedicated_session_id),
             is_standby: true,
             password: String::new(),
+            lobby_game_mode: LobbyGameMode::RedVsGreen,
             enable_special_abilities: true,
             enable_tech_tree: true,
             enable_oil_economy: false,
@@ -1762,6 +1871,8 @@ pub fn ensure_standby_game(gid: i64, hostname: &str, dedicated_session_id: u64) 
             enable_rebuildable_derricks: true,
             enable_generals_armor: false,
             enable_show_resources_in_fog: true,
+            enable_generals_skill_tree: false,
+            enable_miss_shots: false,
             enable_chinook_name: false,
             disallow_spectators: false,
             starting: false,
@@ -1815,8 +1926,11 @@ pub fn reset_standby_after_pool_return(gid: i64) {
     game.enable_rebuildable_derricks = true;
     game.enable_generals_armor = false;
     game.enable_show_resources_in_fog = true;
+    game.enable_generals_skill_tree = false;
+    game.enable_miss_shots = false;
     game.enable_chinook_name = false;
     game.disallow_spectators = false;
+    game.lobby_game_mode = LobbyGameMode::RedVsGreen;
     game.replicated_wire = None;
     game.pros_wire = None;
     if let Some(name) = restore_name {
@@ -2280,6 +2394,48 @@ pub fn show_resources_in_fog_enabled(gid: i64) -> bool {
         .unwrap_or(true)
 }
 
+/// Host lobby tweak Generals Skill Tree. False when the game is missing or the caller is not host.
+pub fn set_generals_skill_tree(gid: i64, persona_id: i64, enabled: bool) -> bool {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return false;
+    };
+    if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+        return false;
+    }
+    game.enable_generals_skill_tree = enabled;
+    true
+}
+
+/// H701: host lobby tweak Miss Shots. False when the game is missing or the caller is not host.
+pub fn set_miss_shots(gid: i64, persona_id: i64, enabled: bool) -> bool {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return false;
+    };
+    if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+        return false;
+    }
+    game.enable_miss_shots = enabled;
+    true
+}
+
+pub fn miss_shots_enabled(gid: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_miss_shots)
+        .unwrap_or(false)
+}
+
+pub fn generals_skill_tree_enabled(gid: i64) -> bool {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_generals_skill_tree)
+        .unwrap_or(false)
+}
+
 /// H607: host lobby tweak Chinook name. False when the game is missing or the caller is not host.
 pub fn set_chinook_name(gid: i64, persona_id: i64, enabled: bool) -> bool {
     let mut m = games().lock();
@@ -2299,6 +2455,26 @@ pub fn chinook_name_enabled(gid: i64) -> bool {
         .get(&gid)
         .map(|g| g.enable_chinook_name)
         .unwrap_or(false)
+}
+
+pub fn set_lobby_game_mode(gid: i64, persona_id: i64, mode: LobbyGameMode) -> bool {
+    let mut m = games().lock();
+    let Some(game) = m.get_mut(&gid) else {
+        return false;
+    };
+    if persona_id > 0 && game.host_persona > 0 && persona_id != game.host_persona {
+        return false;
+    }
+    game.lobby_game_mode = mode;
+    true
+}
+
+pub fn lobby_game_mode(gid: i64) -> LobbyGameMode {
+    games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.lobby_game_mode)
+        .unwrap_or_default()
 }
 
 pub fn spectators_disallowed(gid: i64) -> bool {
@@ -3347,11 +3523,26 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         .get(&gid)
         .map(|g| g.enable_show_resources_in_fog)
         .unwrap_or(true);
+    let enable_generals_skill_tree = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_generals_skill_tree)
+        .unwrap_or(false);
+    let enable_miss_shots = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.enable_miss_shots)
+        .unwrap_or(false);
     let enable_chinook_name = games()
         .lock()
         .get(&gid)
         .map(|g| g.enable_chinook_name)
         .unwrap_or(false);
+    let lobby_game_mode = games()
+        .lock()
+        .get(&gid)
+        .map(|g| g.lobby_game_mode)
+        .unwrap_or_default();
     let (dedicated_session_id, password, enable_special_abilities, enable_tech_tree, enable_oil_economy, enable_infinite_resource_centers, enable_unlock_full_faction_roster, enable_instant_selling, enable_rebuildable_derricks) = games()
         .lock()
         .get(&gid)
@@ -3391,8 +3582,11 @@ pub fn seed_from_reset(request_payload: &[u8], gid: i64) {
         enable_rebuildable_derricks,
         enable_generals_armor,
         enable_show_resources_in_fog,
+        enable_generals_skill_tree,
+        enable_miss_shots,
         enable_chinook_name,
         disallow_spectators,
+        lobby_game_mode,
         starting: false,
         replicated_wire: None,
         pros_wire: None,
@@ -3558,6 +3752,7 @@ pub fn seed_from_join(gid: i64) {
             dedicated_session_id: None,
             is_standby: false,
             password: String::new(),
+            lobby_game_mode: LobbyGameMode::RedVsGreen,
             enable_special_abilities: true,
             enable_tech_tree: true,
             enable_oil_economy: false,
@@ -3567,6 +3762,8 @@ pub fn seed_from_join(gid: i64) {
             enable_rebuildable_derricks: true,
             enable_generals_armor: false,
             enable_show_resources_in_fog: true,
+            enable_generals_skill_tree: false,
+            enable_miss_shots: false,
             enable_chinook_name: false,
             disallow_spectators: false,
             starting: false,
@@ -3914,6 +4111,98 @@ pub fn remove_lobby_ai(gid: i64, persona_id: i64) -> bool {
         refresh_pros_wire_for_gid(gid);
     }
     removed
+}
+
+/// Drop AI seats past the map's start points, newest first.
+fn trim_lobby_ai_to_capacity(gid: i64) -> Vec<i64> {
+    let excess_ai: Vec<i64> = {
+        let m = games().lock();
+        let Some(game) = m.get(&gid) else {
+            return Vec::new();
+        };
+        let excess = seated_player_count(game, 0).saturating_sub(lobby_capacity(gid, game));
+        game.players
+            .iter()
+            .rev()
+            .filter(|p| p.is_ai)
+            .take(excess)
+            .map(|p| p.persona_id)
+            .collect()
+    };
+    for &pid in &excess_ai {
+        remove_lobby_ai(gid, pid);
+    }
+    if !excess_ai.is_empty() {
+        crate::console_println!(
+            "[Lobby] gid={} map has fewer seats: removed AI {:?} ({})",
+            gid,
+            excess_ai,
+            seat_summary(gid)
+        );
+    }
+    excess_ai
+}
+
+/// Selectable generals per faction (RtsGeneral ServerIds, tutorial generals excluded).
+const LOBBY_AI_GENERALS: &[(&str, &[&str])] = &[
+    ("APA", &["2914080600", "3919700239", "1259669531", "73570905", "1113071128", "3042903044"]),
+    ("EU", &["232716472", "76852445", "162564633", "1523019091", "2373292237", "3943761922"]),
+    ("GLA", &["580378690", "1632710820", "1975634889", "2905920036", "2837579969", "901813698"]),
+];
+
+/// Host Add AI: refuse a new AI seat once the map's start points are taken, else give it a
+/// random faction, general and free house colour. An existing AI seat passes through unchanged.
+pub fn prepare_new_lobby_ai(
+    gid: i64,
+    persona_id: i64,
+    attrs: &mut IndexMap<String, String>,
+) -> Result<(), &'static str> {
+    let pid = if persona_id == 0 {
+        synthetic_ai_persona(startpoint_from_attrs(attrs))
+    } else {
+        persona_id
+    };
+    let tutorial = is_alpha_tutorial_map(&get_map_path(gid));
+    let used: HashSet<String> = {
+        let m = games().lock();
+        match m.get(&gid) {
+            Some(game) => {
+                if game.players.iter().any(|p| p.is_ai && p.persona_id == pid) {
+                    return Ok(());
+                }
+                if seated_player_count(game, 0) >= lobby_capacity(gid, game) {
+                    return Err("lobby_full");
+                }
+                game.players
+                    .iter()
+                    .filter_map(|p| house_color_from_attrs(&p.attribs))
+                    .collect()
+            }
+            None => HashSet::new(),
+        }
+    };
+    let mut rng = rand::thread_rng();
+    if !tutorial {
+        let (faction, generals) = LOBBY_AI_GENERALS[rng.gen_range(0..LOBBY_AI_GENERALS.len())];
+        attrs.insert("_faction".to_string(), faction.to_string());
+        attrs.insert(
+            "_general".to_string(),
+            generals[rng.gen_range(0..generals.len())].to_string(),
+        );
+    }
+    let free: Vec<&str> = SELECTABLE_HOUSE_COLORS
+        .iter()
+        .copied()
+        .filter(|c| !used_conflicts_house_color(c, &used))
+        .collect();
+    let hex = if free.is_empty() {
+        pick_unique_house_color(&used, None, None)
+    } else {
+        free[rng.gen_range(0..free.len())].to_string()
+    };
+    attrs.shift_remove("_color");
+    attrs.insert(ATTR_HOUSE_COLOR.to_string(), hex);
+    Ok(())
 }
 
 pub fn is_standby_game(gid: i64) -> bool {
@@ -4290,6 +4579,7 @@ pub fn seat_signature(gid: i64, persona_id: i64) -> Option<Vec<String>> {
         get("_general"),
         get(ATTR_HOUSE_COLOR),
         get("_color"),
+        get(ATTR_MATCH_TEAM),
     ])
 }
 
@@ -4406,6 +4696,7 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
                 "name": p.display_name,
                 "slot": p.slot,
                 "team": p.team,
+                "matchTeam": seat_match_team(p, p.team),
                 "startpoint": startpoint,
                 "faction": p.attribs.get("_faction").cloned().unwrap_or_default(),
                 "general": p.attribs.get("_general").cloned().unwrap_or_default(),
@@ -4445,8 +4736,11 @@ pub fn lobby_roster_json(gid: i64) -> serde_json::Value {
         "enableRebuildableDerricks": game.enable_rebuildable_derricks,
         "enableGeneralsArmor": game.enable_generals_armor,
         "enableShowResourcesInFog": game.enable_show_resources_in_fog,
+        "enableGeneralsSkillTree": game.enable_generals_skill_tree,
+        "enableMissShots": game.enable_miss_shots,
         "enableChinookName": game.enable_chinook_name,
         "disallowSpectators": game.disallow_spectators,
+        "gameMode": game.lobby_game_mode.as_str(),
         "spectatorOpen": spectator_seat_open(gid, game, 0),
         "allReady": all_ready,
         "map": if game.map_path.is_empty() { get_map_path_locked(gid) } else { game.map_path.clone() },
@@ -4523,9 +4817,15 @@ pub fn set_map_path(gid: i64, map_path: &str) {
     set_map_selection(gid, map_path, 0);
 }
 
-pub fn set_map_selection(gid: i64, map_path: &str, start_count: i32) {
+/// Returns the AI seats dropped because the new map has fewer start points.
+pub fn set_map_selection(gid: i64, map_path: &str, start_count: i32) -> Vec<i64> {
     write_pending_map(gid, map_path, start_count);
     clamp_lobby_startpoints(gid, start_count);
+    if start_count > 0 {
+        trim_lobby_ai_to_capacity(gid)
+    } else {
+        Vec::new()
+    }
 }
 
 pub fn adopt_host_lobby_pending_into(dedicated_gid: i64) -> Option<String> {

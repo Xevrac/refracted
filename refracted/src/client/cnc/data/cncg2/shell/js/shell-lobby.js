@@ -426,7 +426,8 @@
             teamNum: 1,
             startpoint: 0,
             pid: 0,
-            nameTag: ''
+            nameTag: '',
+            matchTeam: 0
         };
     }
 
@@ -557,6 +558,17 @@
         return s.x != null && s.z != null ? { id: s.id, x: s.x, z: s.z } : { id: s.id };
     }
 
+    // The editor's snapshot is drawn as the game draws its minimap: +X right, min Z at the top (as the
+    // hand-placed pips of Smalltown, Monsoon and Overpass show). worldToUv puts max Z at the top.
+    function snapshotStart(s, ext) {
+        var dx = ext.maxX - ext.minX;
+        var dz = ext.maxZ - ext.minZ;
+        if (s.x == null || s.z == null || dx < 1 || dz < 1) {
+            return s;
+        }
+        return { id: s.id, x: s.x, z: s.z, u: (s.x - ext.minX) / dx, v: (s.z - ext.minZ) / dz };
+    }
+
     // A copy of a built-in map shows that map's minimap, crop and art (its minimap is the same picture),
     // unless the editor sent a top-down snapshot of the copy: that picture and its world rectangle win.
     function customMapEntry(c) {
@@ -568,7 +580,9 @@
         var i;
         for (i = 0; c.starts && i < c.starts.length; i++) {
             if (Number(c.starts[i].id) > 0) {
-                starts.push(customStart({ id: Number(c.starts[i].id), x: c.starts[i].x, z: c.starts[i].z }, snapshot ? null : source));
+                starts.push(snapshot
+                    ? snapshotStart({ id: Number(c.starts[i].id), x: c.starts[i].x, z: c.starts[i].z }, c.minimapBounds)
+                    : customStart({ id: Number(c.starts[i].id), x: c.starts[i].x, z: c.starts[i].z }, source));
             }
         }
         var minimap = source ? source.minimap : (c.minimap || (leaf + '.png'));
@@ -861,10 +875,10 @@
             var focus = $scope.mapPickerFocus;
             if ($scope.mapPickerTab === 'custom') {
                 $scope.mapPickerFocus = focus && focus.custom ? focus : firstCustomMap();
-                $scope.refreshCustomMaps();
             } else if (!focus || focus.custom) {
                 $scope.mapPickerFocus = $scope.selectedMap && !$scope.selectedMap.custom ? $scope.selectedMap : firstAvailableMap();
             }
+            $scope.refreshCustomMaps();
         };
         $scope.customMapsMessage = function () {
             if (!customMapsState.loaded) {
@@ -923,8 +937,11 @@
             enableRebuildableDerricks: true,
             enableGeneralsArmor: false,
             enableShowResourcesInFog: true,
+            enableGeneralsSkillTree: false,
+            enableMissShots: false,
             enableChinookName: false,
-            disallowSpectators: false
+            disallowSpectators: false,
+            gameMode: 'redVsGreen'
         };
         $scope.colors = COLORS;
         $scope.diffs = DIFFS;
@@ -954,6 +971,7 @@
         $scope._joinStatus = '';
         $scope.matchmakeMinPlayers = 2;
         $scope.matchmakeMaxPlayers = 8;
+        var aiAddSeq = 0;
         $scope.team1 = makeTeam(3, 1);
         $scope.team2 = makeTeam(3, 2);
         $scope.team1[0] = fillLocalSlot($rootScope.playerName, $scope.selectedMap);
@@ -1105,19 +1123,37 @@
             };
         };
 
+        // Player-count modes (1v1, 3v3, SOLO, 4P) read as "N players"; named modes keep their name.
+        function isCountMode(mode) {
+            return !mode || /^(\d+v\d+|SOLO|\d+P)$/i.test(String(mode));
+        }
+
         $scope.mapModeLabel = function (map) {
             if (!map) {
                 return '';
             }
-            return map.mode || ((map.slots || 2) + 'P');
+            return isCountMode(map.mode) ? $scope.mapPlayerLabel(map) : map.mode;
         };
 
         $scope.mapPlayerLabel = function (map) {
-            var n = map && Number(map.slots);
+            var n = map && (Number(map.slots) || Number(map.startCount));
             if (!n) {
                 return '';
             }
             return n === 1 ? '1 player' : (n + ' players');
+        };
+
+        // "2 players", or a named mode with its seats: "ONSLAUGHT, 6 players".
+        $scope.mapFactsLabel = function (map) {
+            if (!map) {
+                return '';
+            }
+            var mode = $scope.mapModeLabel(map);
+            var n = Number(map.slots) || Number(map.startCount) || 0;
+            if (isCountMode(map.mode) || n < 2) {
+                return mode;
+            }
+            return mode + ', ' + $scope.mapPlayerLabel(map);
         };
 
         $scope.pickerMap = function () {
@@ -1677,10 +1713,19 @@
             if (Number(map.slots) === 1) {
                 clearExtraOccupiedSlotsForSolo();
             }
+            if (!$scope._adoptingMap) {
+                trimAiToMapSeats();
+            }
             rebuildStartChoices();
             assignDefaultStartpoints();
             clampStartpointsToMap(true);
-            syncMapToServer();
+            syncMapToServer().then(function (data) {
+                if (data && data.removedAi && data.removedAi.length) {
+                    $timeout(function () {
+                        clearRemovedAi(data.removedAi);
+                    });
+                }
+            });
         };
 
         function clearExtraOccupiedSlotsForSolo() {
@@ -1745,6 +1790,7 @@
             $scope.mapPickerTab = $scope.mapPickerFocus && $scope.mapPickerFocus.custom ? 'custom' : 'game';
             $scope.mapPickerDevOverride = false;
             $scope.mapPickerOpen = true;
+            $scope.refreshCustomMaps();
         };
 
         $scope.closeMapPicker = function () {
@@ -1927,17 +1973,9 @@
             $scope.setDifficulty(slot, DIFFS[(at + 1) % DIFFS.length]);
         };
 
-        // "3v3, 6 start locations"
+        // "6 players"
         $scope.mapTagLine = function (map) {
-            if (!map) {
-                return '';
-            }
-            var mode = $scope.mapModeLabel(map);
-            if (mode && /^\d+V\d+$/.test(mode)) {
-                mode = mode.toLowerCase();
-            }
-            var n = mapStartCount(map);
-            return mode + (n > 1 ? ', ' + n + ' start locations' : '');
+            return $scope.mapFactsLabel(map);
         };
 
         $scope.chatUserClass = function (msg) {
@@ -2102,6 +2140,8 @@
             { key: 'enableRebuildableDerricks', label: 'Rebuildable derricks', def: true },
             { key: 'enableGeneralsArmor', label: 'Combat tuning (classic)', def: false },
             { key: 'enableShowResourcesInFog', label: 'Resources shown through fog', def: true },
+            { key: 'enableGeneralsSkillTree', label: 'Generals skill tree', def: false },
+            { key: 'enableMissShots', label: 'Missed shots', def: false },
             { key: 'enableChinookName', label: 'Chinook (Zero Hour name)', def: false },
             { key: 'disallowSpectators', label: 'Spectators disallowed', def: false }
         ];
@@ -2928,7 +2968,7 @@
         };
 
         $scope.addAi = function (team) {
-            if ($scope.isSoloMap && $scope.isSoloMap()) {
+            if (!$scope.canAddAi()) {
                 return;
             }
             var slots = team === 2 ? $scope.team2 : $scope.team1;
@@ -2955,12 +2995,86 @@
                     slot.teamNum = team;
                     slot.startpoint = unusedStartpoint(slot);
                     ensureAiPersonaId(slot);
+                    slot.aiSeq = ++aiAddSeq;
                     slots[i] = slot;
-                    syncPlayerAttrsToServer(slot, true);
+                    syncPlayerAttrsToServer(slot, true).then(function (data) {
+                        $timeout(function () {
+                            applyServerAiSeat(slot, data);
+                        });
+                    });
                     return;
                 }
             }
         };
+
+        // The host holds AI seats locally; take the faction, general and colour the server rolled.
+        function applyServerAiSeat(slot, data) {
+            var slots;
+            var idx;
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+            if (data.ok === false && data.rejected && data.rejected.indexOf('lobby_full') >= 0) {
+                slots = Number(slot.teamNum) === 2 ? $scope.team2 : $scope.team1;
+                idx = slots.indexOf(slot);
+                if (idx >= 0) {
+                    var cleared = emptySlot();
+                    cleared.teamNum = slot.teamNum;
+                    cleared.startpoint = 0;
+                    slots.splice(idx, 1, cleared);
+                }
+                return;
+            }
+            var attrs = data.attrs || {};
+            if (attrs._faction) {
+                slot.faction = normalizeFaction(attrs._faction);
+            }
+            if (attrs._general) {
+                slot.general = Number(attrs._general) || slot.general;
+            }
+            if (attrs.colorCss || attrs.color) {
+                slot.color = attrs.colorCss || cssHouseColor(attrs.color);
+            }
+            slot.codename = codenameForSlot(slot);
+            slot.avatar = avatarForSlot(slot);
+        }
+
+        // Newest AI seats leave first when the map has fewer start points than occupied seats.
+        function trimAiToMapSeats() {
+            var over = seatedPlayerCount() - mapStartCount($scope.selectedMap);
+            var ai = [];
+            var t;
+            var i;
+            var teams = [$scope.team1, $scope.team2];
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    if (teams[t][i] && teams[t][i].occupied && teams[t][i].isAi) {
+                        ai.push({ team: t + 1, index: i, seq: teams[t][i].aiSeq || 0 });
+                    }
+                }
+            }
+            ai.sort(function (a, b) { return b.seq - a.seq; });
+            for (i = 0; i < ai.length && over > 0; i++, over--) {
+                $scope.clearSlot(ai[i].team, ai[i].index);
+            }
+        }
+
+        function clearRemovedAi(pids) {
+            var teams = [$scope.team1, $scope.team2];
+            var t;
+            var i;
+            if (!pids || !pids.length) {
+                return;
+            }
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    var s = teams[t][i];
+                    if (s && s.occupied && s.isAi && pids.indexOf(Number(s.pid)) >= 0) {
+                        $scope.clearSlot(t + 1, i);
+                    }
+                }
+            }
+        }
 
         $scope.inviteFriend = function (team) {
             if ($scope.isSoloMap && $scope.isSoloMap()) {
@@ -3315,7 +3429,66 @@
 
         /** Team head colour from the local player's view, like Friend or Foe in a match: your team
             green, the other red. A spectator sees both grey; no seat yet, both neutral. */
+        // Lobby game mode (host option, synced from the roster): Red vs Green sides, Free for all
+        // (every seat its own team) or Team select (every seat picks a team).
+        $scope.gameModes = [
+            { id: 'redVsGreen', label: 'Red vs Green' },
+            { id: 'freeForAll', label: 'Free for all' },
+            { id: 'teamSelect', label: 'Team select' }
+        ];
+        $scope.matchTeamChoices = [1, 2, 3, 4, 5, 6];
+        $scope.lobbyGameMode = function () {
+            var mode = $scope.lobbyOptions && $scope.lobbyOptions.gameMode;
+            return mode === 'freeForAll' || mode === 'teamSelect' ? mode : 'redVsGreen';
+        };
+        $scope.setLobbyGameMode = function (mode, $event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if (!$scope.isLobbyHost || !$scope.isLobbyHost()) {
+                return;
+            }
+            $scope.lobbyOptions.gameMode = mode;
+        };
+        $scope.teamHeadLabel = function (teamNum) {
+            var mode = $scope.lobbyGameMode();
+            if (mode === 'freeForAll') {
+                return 'Free for all';
+            }
+            if (mode === 'teamSelect') {
+                return 'Teams';
+            }
+            return 'Team ' + teamNum;
+        };
+        $scope.showSeatTeams = function () {
+            return $scope.lobbyGameMode() === 'teamSelect';
+        };
+        // The seat's picked team, else its column (left 1, right 2).
+        $scope.seatTeam = function (slot) {
+            var t = Number(slot && slot.matchTeam);
+            if (t >= 1 && t <= 6) {
+                return t;
+            }
+            return slot && Number(slot.teamNum) === 2 ? 2 : 1;
+        };
+        $scope.canChangeSeatTeam = function (slot) {
+            return !!(slot && slot.occupied && !slot.invitePending && !slot.isSpectator && !slotLocked(slot));
+        };
+        $scope.setSeatTeam = function (slot, team, $event) {
+            if ($event && $event.stopPropagation) {
+                $event.stopPropagation();
+            }
+            if (!$scope.canChangeSeatTeam(slot) || !$scope.showSeatTeams()) {
+                return;
+            }
+            slot.matchTeam = Number(team) || 0;
+            syncPlayerAttrsToServer(slot);
+        };
+
         $scope.teamRelationClass = function (teamNum) {
+            if ($scope.lobbyGameMode() !== 'redVsGreen') {
+                return 'au-lobby__team--neutral';
+            }
             if ($scope.localIsSpectator && $scope.localIsSpectator()) {
                 return 'au-lobby__team--spectating';
             }
@@ -4049,8 +4222,11 @@
             $scope.lobbyOptions.enableRebuildableDerricks = true;
             $scope.lobbyOptions.enableGeneralsArmor = false;
             $scope.lobbyOptions.enableShowResourcesInFog = true;
+            $scope.lobbyOptions.enableGeneralsSkillTree = false;
+            $scope.lobbyOptions.enableMissShots = false;
             $scope.lobbyOptions.enableChinookName = false;
             $scope.lobbyOptions.disallowSpectators = false;
+            $scope.lobbyOptions.gameMode = 'redVsGreen';
             $scope.gameId = '1';
             try {
                 sessionStorage.removeItem('cnc_match_gid');
@@ -4119,6 +4295,9 @@
             }
             if (p.difficulty) {
                 s.difficulty = p.difficulty;
+            }
+            if (p.matchTeam != null) {
+                s.matchTeam = Number(p.matchTeam) || 0;
             }
             if (p.startpoint != null) {
                 s.startpoint = clampStartIdToMap(p.startpoint);
@@ -4634,11 +4813,20 @@
                 if (data.enableShowResourcesInFog != null) {
                     $scope.lobbyOptions.enableShowResourcesInFog = !!data.enableShowResourcesInFog;
                 }
+                if (data.enableGeneralsSkillTree != null) {
+                    $scope.lobbyOptions.enableGeneralsSkillTree = !!data.enableGeneralsSkillTree;
+                }
+                if (data.enableMissShots != null) {
+                    $scope.lobbyOptions.enableMissShots = !!data.enableMissShots;
+                }
                 if (data.enableChinookName != null) {
                     $scope.lobbyOptions.enableChinookName = !!data.enableChinookName;
                 }
                 if (data.disallowSpectators != null) {
                     $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;
+                }
+                if (data.gameMode) {
+                    $scope.lobbyOptions.gameMode = data.gameMode;
                 }
             }
             $scope.spectatorOpen = !!data.spectatorOpen;
@@ -4847,6 +5035,26 @@
             return !$scope.isSoloMap() && $scope.isLobbyHost();
         };
 
+        // Player seats taken (humans, AI, invites); the spectator seat is not one of them.
+        function seatedPlayerCount() {
+            var teams = [$scope.team1, $scope.team2];
+            var n = 0;
+            var t;
+            var i;
+            for (t = 0; t < teams.length; t++) {
+                for (i = 0; i < teams[t].length; i++) {
+                    if (teams[t][i] && teams[t][i].occupied && !teams[t][i].isSpectator) {
+                        n += 1;
+                    }
+                }
+            }
+            return n;
+        }
+
+        $scope.canAddAi = function () {
+            return $scope.canAddPlayers() && seatedPlayerCount() < mapStartCount($scope.selectedMap);
+        };
+
         function remoteHumanCount() {
             if ($scope.isSoloMap()) {
                 return 0;
@@ -4967,6 +5175,9 @@
             q += slot.isAi ? '&isai=1' : '&isai=0';
             if (slot.difficulty) {
                 q += '&difficulty=' + encodeURIComponent(difficultyAttrValue(slot.difficulty));
+            }
+            if (Number(slot.matchTeam) >= 1) {
+                q += '&matchteam=' + encodeURIComponent(slot.matchTeam);
             }
             var req = httpRequest('POST', withKey(q), colorWire ? { color: colorWire } : null);
             return {
@@ -5654,8 +5865,11 @@
             var rebuildableDerricks = $scope.lobbyOptions.enableRebuildableDerricks === true;
             var generalsArmor = $scope.lobbyOptions.enableGeneralsArmor === true;
             var showResourcesInFog = $scope.lobbyOptions.enableShowResourcesInFog !== false;
+            var generalsSkillTree = $scope.lobbyOptions.enableGeneralsSkillTree === true;
+            var missShots = $scope.lobbyOptions.enableMissShots === true;
             var chinookName = $scope.lobbyOptions.enableChinookName === true;
             var disallowSpectators = $scope.lobbyOptions.disallowSpectators === true;
+            var gameMode = $scope.lobbyGameMode();
             httpRequest('POST', '/cnc/lobby-options?gid=' + encodeURIComponent(gid) +
                 '&pid=' + encodeURIComponent(localPid || 0), {
                 specialAbilities: special,
@@ -5667,8 +5881,11 @@
                 rebuildableDerricks: rebuildableDerricks,
                 generalsArmor: generalsArmor,
                 showResourcesInFog: showResourcesInFog,
+                generalsSkillTree: generalsSkillTree,
+                missShots: missShots,
                 chinookName: chinookName,
-                disallowSpectators: disallowSpectators
+                disallowSpectators: disallowSpectators,
+                gameMode: gameMode
             }).then(function (data) {
                 $timeout(function () {
                     if (!data || data.ok === false) {
@@ -5703,11 +5920,20 @@
                     if (data.enableShowResourcesInFog != null) {
                         $scope.lobbyOptions.enableShowResourcesInFog = !!data.enableShowResourcesInFog;
                     }
+                    if (data.enableGeneralsSkillTree != null) {
+                        $scope.lobbyOptions.enableGeneralsSkillTree = !!data.enableGeneralsSkillTree;
+                    }
+                    if (data.enableMissShots != null) {
+                        $scope.lobbyOptions.enableMissShots = !!data.enableMissShots;
+                    }
                     if (data.enableChinookName != null) {
                         $scope.lobbyOptions.enableChinookName = !!data.enableChinookName;
                     }
                     if (data.disallowSpectators != null) {
                         $scope.lobbyOptions.disallowSpectators = !!data.disallowSpectators;
+                    }
+                    if (data.gameMode) {
+                        $scope.lobbyOptions.gameMode = data.gameMode;
                     }
                     // A seated spectator may have been moved into a team or removed.
                     startRosterPoll();
